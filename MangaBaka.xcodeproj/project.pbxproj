@@ -250,6 +250,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					9DC498596D253759DE9847E7 = {
+						DevelopmentTeam = 5AF2LBU5A3;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -365,6 +366,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5AF2LBU5A3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = MangaBaka;
@@ -459,6 +461,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5AF2LBU5A3;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "";
 				INFOPLIST_KEY_CFBundleDisplayName = MangaBaka;

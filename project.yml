@@ -51,6 +51,9 @@ targets:
         # pipeline until someone answered it by hand.
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         CODE_SIGN_STYLE: Automatic
+        # Team "Abdirahman Mohamed". Set here so Xcode and Xcode Cloud resolve
+        # signing without anyone picking it from a dropdown by hand.
+        DEVELOPMENT_TEAM: 5AF2LBU5A3
 
   MangaBakaTests:
     type: bundle.unit-test
