@@ -1,0 +1,9 @@
+// Base build settings shared by all configurations.
+//
+// Secrets.xcconfig is gitignored and optional. It carries a personal access
+// token for local development only. The app works without it: every discovery
+// endpoint is public (51 of 77 operations need no auth), so an unauthenticated
+// build is fully functional for browsing.
+#include? "Secrets.xcconfig"
+
+MB_API_BASE_URL = https:/$()/api.mangabaka.org

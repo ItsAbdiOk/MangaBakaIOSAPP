@@ -1,0 +1,40 @@
+name: API contract
+
+# The golden fixtures under MangaBakaTests/Fixtures are frozen snapshots of
+# MangaBaka's real responses. If MangaBaka changes its response shape, the app
+# breaks in production while every unit test still passes, because the fixtures
+# never change. This job is the thing that notices.
+#
+# Deliberately separate from CI so a MangaBaka outage never blocks a pull
+# request.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  contract:
+    name: Live response still matches the recorded fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare live response against the fixture
+        id: check
+        run: python3 Scripts/check-api-contract.py
+        continue-on-error: true
+
+      - name: Interpret the result
+        run: |
+          # Exit 2 means MangaBaka was unreachable, which is their problem, not
+          # a contract break. Only exit 1 should page anyone.
+          if [ "${{ steps.check.outcome }}" = "failure" ]; then
+            python3 Scripts/check-api-contract.py
+            status=$?
+            if [ "$status" = "2" ]; then
+              echo "::warning::MangaBaka unreachable; contract not verified this run."
+              exit 0
+            fi
+            exit 1
+          fi

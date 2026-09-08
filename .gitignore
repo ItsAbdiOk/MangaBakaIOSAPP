@@ -37,3 +37,7 @@ fastlane/test_output
 # Local agent instructions
 CLAUDE.md
 .claude/
+
+# Local secrets — never commit. A build containing a PAT grants account access
+# to anyone holding the binary.
+Configs/Secrets.xcconfig

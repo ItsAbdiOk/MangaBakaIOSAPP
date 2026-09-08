@@ -1,0 +1,48 @@
+{
+  "status": 200,
+  "data": [
+    {
+      "id": 1,
+      "state": "active",
+      "merged_with": null,
+      "titles": [
+        { "language": "ja", "traits": ["native"], "title": "NATIVE", "is_primary": true },
+        { "language": "en", "traits": ["official"], "title": "ENGLISH OFFICIAL", "is_primary": true },
+        { "language": "ja-Latn", "traits": [], "title": "ROMANISED", "is_primary": true }
+      ],
+      "cover": {
+        "raw": "https://example.invalid/raw.jpg",
+        "x150": "https://example.invalid/x150@1/a.jpg",
+        "x250": "https://example.invalid/x250@1/a.jpg",
+        "x350": "https://example.invalid/x350@1/a.jpg",
+        "blurhash": "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+        "width": 200,
+        "height": 300
+      },
+      "description": "Control fixture with a known answer.",
+      "authors": ["AUTHOR"],
+      "artists": null,
+      "status": "completed",
+      "rating": 80,
+      "type": "manga",
+      "content_rating": "safe"
+    },
+    {
+      "id": 2,
+      "state": "merged",
+      "merged_with": 1,
+      "titles": null,
+      "cover": {
+        "raw": null, "x150": null, "x250": null, "x350": null,
+        "blurhash": null, "width": null, "height": null
+      },
+      "description": null,
+      "authors": null,
+      "artists": null,
+      "status": null,
+      "rating": null,
+      "type": null,
+      "content_rating": null
+    }
+  ]
+}

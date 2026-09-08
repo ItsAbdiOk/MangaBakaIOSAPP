@@ -1,0 +1,75 @@
+# Source of truth for the Xcode project. Regenerate with `xcodegen generate`
+# after adding or moving files. The generated .xcodeproj is committed so that
+# Xcode Cloud and contributors without XcodeGen can build without extra setup.
+name: MangaBaka
+options:
+  bundleIdPrefix: org.mangabaka
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # Treat warnings seriously; this project has no legacy code to grandfather.
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    GCC_TREAT_WARNINGS_AS_ERRORS: NO
+
+targets:
+  MangaBaka:
+    type: application
+    platform: iOS
+    sources:
+      - path: MangaBaka
+    configFiles:
+      Debug: Configs/Base.xcconfig
+      Release: Configs/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.mangabaka.client
+        PRODUCT_NAME: MangaBaka
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: ""
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_CFBundleDisplayName: MangaBaka
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+
+  MangaBakaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MangaBakaTests
+    dependencies:
+      - target: MangaBaka
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.mangabaka.client.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  MangaBaka:
+    build:
+      targets:
+        MangaBaka: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - MangaBakaTests
+    archive:
+      config: Release

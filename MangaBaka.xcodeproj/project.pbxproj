@@ -1,0 +1,589 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0281A81A4ABE53247CFB8FFC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 992B4C3370C6C0E11826751F /* PrivacyInfo.xcprivacy */; };
+		07F17EF16F50DB02B3C04627 /* TokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA0FAE13665B4C11439C5A4 /* TokenProvider.swift */; };
+		137C347F5DC0E831E5D3F97D /* APIEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71C46FF149BB331347BEAA9 /* APIEnvelope.swift */; };
+		17423DB0B7630B34E45FF791 /* DisplayTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */; };
+		2FA0DF5FFDF1CAEB853A0C2A /* FixtureLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F15759A5A1518C7E2D5E148 /* FixtureLoading.swift */; };
+		36EE0D59969208E71A0896B4 /* rising.json in Resources */ = {isa = PBXBuildFile; fileRef = 71998B36D08E3ED54E1F4FCD /* rising.json */; };
+		3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */; };
+		419BEF328CDCDDA07952ED80 /* control.json in Resources */ = {isa = PBXBuildFile; fileRef = DA80EE3FE0BAFFD883C3E1CA /* control.json */; };
+		57EA4CE2CA7131054C2D65C0 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 166476A45012A0A1CA8CC678 /* DiscoveryView.swift */; };
+		65671680C3A3FCFCC622D1DA /* DiscoveryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19625640EFE5804B9914AC5A /* DiscoveryModelTests.swift */; };
+		6F91F7BEA60D38535C99EF57 /* MangaBakaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */; };
+		75A8D0061B5A643927B9A778 /* SeriesDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCE8ED9E1CBA46CA151CAA3 /* SeriesDecodingTests.swift */; };
+		7A987A3AF44B426997FA5891 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A568F72990CB4BDB3E9056 /* APIClientTests.swift */; };
+		7C57A22D6C3165B034A9541C /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8062597275E0B6DC97413D /* APIError.swift */; };
+		8CA95EE271F957CF994C441D /* DiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AD059C53BAEA132448A4AE6 /* DiscoveryModel.swift */; };
+		98731D006DCABF3074A98475 /* Series.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4206810500D4CA99B1B9CC9E /* Series.swift */; };
+		B372A2E1C17161C7F07ADC43 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 04AD7D515B0213C308B00D73 /* Assets.xcassets */; };
+		B8EBCA8DAAEF29E50F74D9FC /* CoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C99014FFFB9D8B7223D1E11C /* CoverTests.swift */; };
+		C52D86F53A03486BBF37B0AE /* DisplayTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDF0A3AE179F1D34BFD5528 /* DisplayTitleTests.swift */; };
+		C842EE3ACBBE8460529055B4 /* Cover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3440196B7B97089F879464B5 /* Cover.swift */; };
+		C9EF0551F00248CEFE4FA7B3 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE087391B9F524F4BCFEAE1A /* APIClient.swift */; };
+		CA630D9DA3BA2C6F59016D15 /* SeriesTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F995CD0464E8C04EF8D4401 /* SeriesTitle.swift */; };
+		E9C082F0B780450E23C5BF86 /* RequestBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B45FF8662C3905B86528A1 /* RequestBudgetTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		948002B494EA981835D84292 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5BC8B5608F4EF21D2EB7EF42 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9DC498596D253759DE9847E7;
+			remoteInfo = MangaBaka;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		04AD7D515B0213C308B00D73 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		166476A45012A0A1CA8CC678 /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
+		19625640EFE5804B9914AC5A /* DiscoveryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryModelTests.swift; sourceTree = "<group>"; };
+		1F995CD0464E8C04EF8D4401 /* SeriesTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesTitle.swift; sourceTree = "<group>"; };
+		1FCE8ED9E1CBA46CA151CAA3 /* SeriesDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesDecodingTests.swift; sourceTree = "<group>"; };
+		2AD059C53BAEA132448A4AE6 /* DiscoveryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryModel.swift; sourceTree = "<group>"; };
+		2D8299C7A8EFA18511A4FA97 /* MangaBaka.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MangaBaka.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3440196B7B97089F879464B5 /* Cover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cover.swift; sourceTree = "<group>"; };
+		34B45FF8662C3905B86528A1 /* RequestBudgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestBudgetTests.swift; sourceTree = "<group>"; };
+		4206810500D4CA99B1B9CC9E /* Series.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Series.swift; sourceTree = "<group>"; };
+		4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayTitle.swift; sourceTree = "<group>"; };
+		4EA0FAE13665B4C11439C5A4 /* TokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenProvider.swift; sourceTree = "<group>"; };
+		59A568F72990CB4BDB3E9056 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
+		6F15759A5A1518C7E2D5E148 /* FixtureLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FixtureLoading.swift; sourceTree = "<group>"; };
+		71998B36D08E3ED54E1F4FCD /* rising.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = rising.json; sourceTree = "<group>"; };
+		7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLProtocolStub.swift; sourceTree = "<group>"; };
+		89A3F36BE4913A5F397493A2 /* MangaBakaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MangaBakaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		992B4C3370C6C0E11826751F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		9A8062597275E0B6DC97413D /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
+		9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaBakaApp.swift; sourceTree = "<group>"; };
+		9FDF0A3AE179F1D34BFD5528 /* DisplayTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayTitleTests.swift; sourceTree = "<group>"; };
+		AA349396FAB90CB436854197 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		C99014FFFB9D8B7223D1E11C /* CoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverTests.swift; sourceTree = "<group>"; };
+		CE087391B9F524F4BCFEAE1A /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		D71C46FF149BB331347BEAA9 /* APIEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEnvelope.swift; sourceTree = "<group>"; };
+		DA80EE3FE0BAFFD883C3E1CA /* control.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = control.json; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		099DCB1693FCE74489658452 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		24279BDA9CD5554CD460F717 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				DA80EE3FE0BAFFD883C3E1CA /* control.json */,
+				71998B36D08E3ED54E1F4FCD /* rising.json */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		2583BA85D383DA6E726A4DDE /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				04AD7D515B0213C308B00D73 /* Assets.xcassets */,
+				992B4C3370C6C0E11826751F /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		25F2C916276D7659FFF00A58 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				B43106F58099E6DACB2AC4D8 /* Discovery */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		3A4BF51EE0F27CD7DEC2CA1E /* MangaBaka */ = {
+			isa = PBXGroup;
+			children = (
+				099DCB1693FCE74489658452 /* App */,
+				C3DABE93CA6B8C27BA112A53 /* Core */,
+				25F2C916276D7659FFF00A58 /* Features */,
+				2583BA85D383DA6E726A4DDE /* Resources */,
+			);
+			path = MangaBaka;
+			sourceTree = "<group>";
+		};
+		4ED64E5657DD1EBA36DD64C2 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				AA349396FAB90CB436854197 /* Base.xcconfig */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
+		5E1C584A059CBA5477A2E5AB /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				3440196B7B97089F879464B5 /* Cover.swift */,
+				4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */,
+				4206810500D4CA99B1B9CC9E /* Series.swift */,
+				1F995CD0464E8C04EF8D4401 /* SeriesTitle.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		89F9FA14FD3F8B988496ACBE = {
+			isa = PBXGroup;
+			children = (
+				4ED64E5657DD1EBA36DD64C2 /* Configs */,
+				3A4BF51EE0F27CD7DEC2CA1E /* MangaBaka */,
+				9601F9FF505DB84191E7A799 /* MangaBakaTests */,
+				C5D60635B1D5551B614A5779 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9601F9FF505DB84191E7A799 /* MangaBakaTests */ = {
+			isa = PBXGroup;
+			children = (
+				24279BDA9CD5554CD460F717 /* Fixtures */,
+				59A568F72990CB4BDB3E9056 /* APIClientTests.swift */,
+				C99014FFFB9D8B7223D1E11C /* CoverTests.swift */,
+				19625640EFE5804B9914AC5A /* DiscoveryModelTests.swift */,
+				9FDF0A3AE179F1D34BFD5528 /* DisplayTitleTests.swift */,
+				6F15759A5A1518C7E2D5E148 /* FixtureLoading.swift */,
+				34B45FF8662C3905B86528A1 /* RequestBudgetTests.swift */,
+				1FCE8ED9E1CBA46CA151CAA3 /* SeriesDecodingTests.swift */,
+				7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */,
+			);
+			path = MangaBakaTests;
+			sourceTree = "<group>";
+		};
+		B43106F58099E6DACB2AC4D8 /* Discovery */ = {
+			isa = PBXGroup;
+			children = (
+				2AD059C53BAEA132448A4AE6 /* DiscoveryModel.swift */,
+				166476A45012A0A1CA8CC678 /* DiscoveryView.swift */,
+			);
+			path = Discovery;
+			sourceTree = "<group>";
+		};
+		C3DABE93CA6B8C27BA112A53 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				5E1C584A059CBA5477A2E5AB /* Model */,
+				C7C93B9E33FA6BFCC127720B /* Networking */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		C5D60635B1D5551B614A5779 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				2D8299C7A8EFA18511A4FA97 /* MangaBaka.app */,
+				89A3F36BE4913A5F397493A2 /* MangaBakaTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C7C93B9E33FA6BFCC127720B /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				CE087391B9F524F4BCFEAE1A /* APIClient.swift */,
+				D71C46FF149BB331347BEAA9 /* APIEnvelope.swift */,
+				9A8062597275E0B6DC97413D /* APIError.swift */,
+				4EA0FAE13665B4C11439C5A4 /* TokenProvider.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9DC498596D253759DE9847E7 /* MangaBaka */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 041F1BBE7C5B046C32161332 /* Build configuration list for PBXNativeTarget "MangaBaka" */;
+			buildPhases = (
+				073B2A7DC05A648B8EE9FFB5 /* Sources */,
+				65FB8B14B6B882CCE8AC01AE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MangaBaka;
+			packageProductDependencies = (
+			);
+			productName = MangaBaka;
+			productReference = 2D8299C7A8EFA18511A4FA97 /* MangaBaka.app */;
+			productType = "com.apple.product-type.application";
+		};
+		CF721BEAE0525E14F479BBEB /* MangaBakaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 33E15DCF088D861F52004311 /* Build configuration list for PBXNativeTarget "MangaBakaTests" */;
+			buildPhases = (
+				DA5B7600B22DC99577B66FDB /* Sources */,
+				85096FE5980D441A7A611D08 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				584506E389616368F50DCEDB /* PBXTargetDependency */,
+			);
+			name = MangaBakaTests;
+			packageProductDependencies = (
+			);
+			productName = MangaBakaTests;
+			productReference = 89A3F36BE4913A5F397493A2 /* MangaBakaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5BC8B5608F4EF21D2EB7EF42 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					9DC498596D253759DE9847E7 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = CFDE0D2DF659C51B46839ABD /* Build configuration list for PBXProject "MangaBaka" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 89F9FA14FD3F8B988496ACBE;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C5D60635B1D5551B614A5779 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9DC498596D253759DE9847E7 /* MangaBaka */,
+				CF721BEAE0525E14F479BBEB /* MangaBakaTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		65FB8B14B6B882CCE8AC01AE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B372A2E1C17161C7F07ADC43 /* Assets.xcassets in Resources */,
+				0281A81A4ABE53247CFB8FFC /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		85096FE5980D441A7A611D08 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				419BEF328CDCDDA07952ED80 /* control.json in Resources */,
+				36EE0D59969208E71A0896B4 /* rising.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		073B2A7DC05A648B8EE9FFB5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C9EF0551F00248CEFE4FA7B3 /* APIClient.swift in Sources */,
+				137C347F5DC0E831E5D3F97D /* APIEnvelope.swift in Sources */,
+				7C57A22D6C3165B034A9541C /* APIError.swift in Sources */,
+				C842EE3ACBBE8460529055B4 /* Cover.swift in Sources */,
+				8CA95EE271F957CF994C441D /* DiscoveryModel.swift in Sources */,
+				57EA4CE2CA7131054C2D65C0 /* DiscoveryView.swift in Sources */,
+				17423DB0B7630B34E45FF791 /* DisplayTitle.swift in Sources */,
+				6F91F7BEA60D38535C99EF57 /* MangaBakaApp.swift in Sources */,
+				98731D006DCABF3074A98475 /* Series.swift in Sources */,
+				CA630D9DA3BA2C6F59016D15 /* SeriesTitle.swift in Sources */,
+				07F17EF16F50DB02B3C04627 /* TokenProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA5B7600B22DC99577B66FDB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A987A3AF44B426997FA5891 /* APIClientTests.swift in Sources */,
+				B8EBCA8DAAEF29E50F74D9FC /* CoverTests.swift in Sources */,
+				65671680C3A3FCFCC622D1DA /* DiscoveryModelTests.swift in Sources */,
+				C52D86F53A03486BBF37B0AE /* DisplayTitleTests.swift in Sources */,
+				2FA0DF5FFDF1CAEB853A0C2A /* FixtureLoading.swift in Sources */,
+				E9C082F0B780450E23C5BF86 /* RequestBudgetTests.swift in Sources */,
+				75A8D0061B5A643927B9A778 /* SeriesDecodingTests.swift in Sources */,
+				3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		584506E389616368F50DCEDB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9DC498596D253759DE9847E7 /* MangaBaka */;
+			targetProxy = 948002B494EA981835D84292 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		34C39D6D78897AAE8244343C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MangaBaka.app/MangaBaka";
+			};
+			name = Debug;
+		};
+		76E798A48DA325D4B0E1BD2B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA349396FAB90CB436854197 /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				INFOPLIST_KEY_CFBundleDisplayName = MangaBaka;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client;
+				PRODUCT_NAME = MangaBaka;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		85F6AE3F0B59ADB5B1DEF9C7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		974A054674D9ED98805BEF73 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA349396FAB90CB436854197 /* Base.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "";
+				INFOPLIST_KEY_CFBundleDisplayName = MangaBaka;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client;
+				PRODUCT_NAME = MangaBaka;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A8A8917C9AF1EF8960F4F793 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MangaBaka.app/MangaBaka";
+			};
+			name = Release;
+		};
+		B1EEFCC830B00B3CCEDE6D82 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_TREAT_WARNINGS_AS_ERRORS = NO;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		041F1BBE7C5B046C32161332 /* Build configuration list for PBXNativeTarget "MangaBaka" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				974A054674D9ED98805BEF73 /* Debug */,
+				76E798A48DA325D4B0E1BD2B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		33E15DCF088D861F52004311 /* Build configuration list for PBXNativeTarget "MangaBakaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				34C39D6D78897AAE8244343C /* Debug */,
+				A8A8917C9AF1EF8960F4F793 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CFDE0D2DF659C51B46839ABD /* Build configuration list for PBXProject "MangaBaka" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				85F6AE3F0B59ADB5B1DEF9C7 /* Debug */,
+				B1EEFCC830B00B3CCEDE6D82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5BC8B5608F4EF21D2EB7EF42 /* Project object */;
+}
