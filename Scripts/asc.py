@@ -116,7 +116,11 @@ def app_id() -> str:
 
 
 def cmd_status() -> None:
-    """Recent Xcode Cloud runs, newest first."""
+    """Recent Xcode Cloud runs, newest first.
+
+    Explicitly sorted: the API returns oldest first by default, which hides the
+    builds anyone actually asks about.
+    """
     products = get("ciProducts").get("data", [])
     product = next(
         (p for p in products if p["attributes"].get("name") in ("MangaBaka", "BakaManga")),
@@ -125,7 +129,7 @@ def cmd_status() -> None:
     if product is None:
         sys.exit("error: no Xcode Cloud product found for this account.")
 
-    runs = get(f"ciProducts/{product['id']}/buildRuns", limit=8).get("data", [])
+    runs = get(f"ciProducts/{product['id']}/buildRuns", limit=10, sort="-number").get("data", [])
     if not runs:
         print("No Xcode Cloud runs yet.")
         return
@@ -169,7 +173,7 @@ def cmd_why(run_id: str | None) -> None:
         products = get("ciProducts").get("data", [])
         if not products:
             sys.exit("error: no Xcode Cloud product found.")
-        runs = get(f"ciProducts/{products[0]['id']}/buildRuns", limit=10).get("data", [])
+        runs = get(f"ciProducts/{products[0]['id']}/buildRuns", limit=10, sort="-number").get("data", [])
         failed = next(
             (r for r in runs if r["attributes"].get("completionStatus") not in (None, "SUCCEEDED")),
             None,
