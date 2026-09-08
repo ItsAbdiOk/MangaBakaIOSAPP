@@ -47,25 +47,37 @@ targets:
     configFiles:
       Debug: Configs/Base.xcconfig
       Release: Configs/Base.xcconfig
+    # A real Info.plist rather than a generated one, because the app reads two
+    # build settings at runtime and INFOPLIST_KEY_* only supports Apple's own
+    # known keys — custom names are silently dropped, which is why MB_PAT never
+    # reached the app.
+    #
+    # MB_PAT resolves to empty in any build without a local
+    # Configs/Secrets.xcconfig, which includes every Xcode Cloud build, so a
+    # TestFlight or App Store build can never carry a token.
+    info:
+      path: Configs/Info.plist
+      properties:
+        CFBundleDisplayName: MangaBaka
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Standard HTTPS only, which is exempt. Without this, App Store Connect
+        # asks an encryption question on EVERY build and stalls an unattended
+        # TestFlight pipeline until a human answers it.
+        ITSAppUsesNonExemptEncryption: false
+        MB_PAT: $(MB_PAT)
+        MB_API_BASE_URL: $(MB_API_BASE_URL)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka
         PRODUCT_NAME: MangaBaka
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        INFOPLIST_FILE: ""
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-        INFOPLIST_KEY_CFBundleDisplayName: MangaBaka
+        GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Declares that the app uses only standard HTTPS, which is exempt from
-        # export compliance. Without this, App Store Connect asks an encryption
-        # question on EVERY build, which would block an unattended TestFlight
-        # pipeline until someone answered it by hand.
-        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         CODE_SIGN_STYLE: Automatic
         # Team "Abdirahman Mohamed". Set here so Xcode and Xcode Cloud resolve
         # signing without anyone picking it from a dropdown by hand.

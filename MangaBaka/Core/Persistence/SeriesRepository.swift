@@ -18,11 +18,22 @@ protocol SeriesRepositoryProtocol: Sendable {
 enum FeedKind: Sendable, Hashable {
     case rising
     case hiddenGems
+    case trending
+    /// Series similar to another, used on the detail screen.
+    case similar(seriesId: Int)
+    /// "Readers also like", also on the detail screen.
+    case readersAlsoLike(seriesId: Int)
+    /// The stack's queue, blended from seed series.
+    case mix(seeds: [Int])
 
     var cacheKey: String {
         switch self {
         case .rising: "discover/rising"
         case .hiddenGems: "discover/hidden-gems"
+        case .trending: "discover/trending"
+        case let .similar(id): "series/\(id)/similar"
+        case let .readersAlsoLike(id): "series/\(id)/readers-also-like"
+        case let .mix(seeds): "series/mix/" + seeds.sorted().map(String.init).joined(separator: "-")
         }
     }
 
@@ -30,12 +41,35 @@ enum FeedKind: Sendable, Hashable {
         switch self {
         case .rising: "/v2/series/discover/rising"
         case .hiddenGems: "/v2/series/discover/hidden-gems"
+        case .trending: "/v2/series/search"
+        case let .similar(id): "/v2/series/\(id)/similar"
+        case let .readersAlsoLike(id): "/v2/series/\(id)/readers-also-like"
+        case .mix: "/v1/series/mix"
         }
     }
 
-    /// The endpoint caps `limit` at 20 and MangaBaka's CDN holds the response
-    /// for a day, so requesting fewer wastes budget for no benefit.
-    var limit: Int { 20 }
+    /// Extra query beyond `limit`.
+    var extraQuery: [String: String] {
+        switch self {
+        case .trending:
+            ["sort_by": "trending_7d"]
+        case let .mix(seeds) where !seeds.isEmpty:
+            ["series": seeds.map(String.init).joined(separator: ","), "strict": "false"]
+        default:
+            [:]
+        }
+    }
+
+    /// Each endpoint's own maximum, taken from the spec. Requesting fewer than
+    /// the maximum wastes budget, because the response is CDN-cached either way.
+    var limit: Int {
+        switch self {
+        case .rising, .hiddenGems: 20
+        case .similar, .readersAlsoLike: 24
+        case .mix: 50
+        case .trending: 20
+        }
+    }
 
     /// How long a locally cached copy is considered fresh.
     ///
@@ -45,7 +79,11 @@ enum FeedKind: Sendable, Hashable {
     /// spends requests on a response the CDN would have served identically.
     var freshness: TimeInterval {
         switch self {
-        case .rising, .hiddenGems: 86_400
+        // Matches the endpoints' own x-cache-ttl-cdn-seconds of 86400.
+        case .rising, .hiddenGems, .similar, .readersAlsoLike: 86_400
+        // Search-backed and blended results are not CDN-pinned to a day; an
+        // hour keeps them lively without spending requests on every visit.
+        case .trending, .mix: 3_600
         }
     }
 }
@@ -97,7 +135,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         do {
             let series: [Series] = try await client.get(
                 feed.path,
-                query: ["limit": String(feed.limit)]
+                query: ["limit": String(feed.limit)].merging(feed.extraQuery) { _, new in new }
             )
             let discoverable = series.filter(\.isDiscoverable)
             try? write(discoverable, for: feed)

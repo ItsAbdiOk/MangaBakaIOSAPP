@@ -22,6 +22,12 @@ fi
 if git grep -nE '"mb-[A-Za-z0-9]{16,}"' -- 'MangaBaka/*.swift' >/dev/null 2>&1; then
     fail "A token-shaped literal is present in shipping code."
 fi
+# Any tracked file, not just Swift. A real token was once pasted into
+# Configs/Secrets.example.xcconfig, which IS tracked — the Swift-only check
+# above would not have caught it.
+if git grep -nE 'mb-[A-Za-z0-9]{16,}' -- . ':(exclude)*Tests*' >/dev/null 2>&1; then
+    fail "A token-shaped string is present in a tracked file. Move it to Configs/Secrets.xcconfig."
+fi
 ok "no credentials staged"
 
 # 2. Lint. Error-severity rules cover force unwraps, print(), catch-alls.

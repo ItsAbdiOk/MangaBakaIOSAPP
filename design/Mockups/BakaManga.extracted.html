@@ -1,0 +1,765 @@
+DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script src="51884ee9-e5a6-4655-a46f-eef9fdda1506"></script>
+</head>
+<body>
+
+<x-dc>
+<helmet data-dc-atomics=""><style>
+html,body{margin:0;padding:0;background:#050507}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+.hs::-webkit-scrollbar{display:none}
+.hs{scrollbar-width:none}
+.sv::-webkit-scrollbar{display:none}
+.sv{scrollbar-width:none}
+a{color:oklch(0.72 0.16 30);text-decoration:none}
+a:hover{color:oklch(0.80 0.13 30)}
+@keyframes bmfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style></helmet>
+<div style="--ac:{{ accent }};--gb:{{ glassBlur }};--cw:{{ coverW }};min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 16px;background:radial-gradient(120% 90% at 50% 0%, #16161d 0%, #050507 62%);font-family:-apple-system,'SF Pro Display','SF Pro Text',system-ui,'Helvetica Neue',Helvetica,sans-serif">
+<div style="position:relative;width:393px;height:852px;border-radius:46px;overflow:hidden;background:#08080b;box-shadow:0 40px 90px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07)">
+
+<div class="sv" style="position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="padding:106px 0 150px;animation:bmfade .3s ease both">
+  <div style="padding:0 18px 2px">
+    <h1 style="margin:0;font-size:36px;line-height:1.05;letter-spacing:-1.2px;font-weight:700;color:rgba(255,255,255,0.97)">Discover</h1>
+    <p style="margin:8px 0 0;font-size:13px;line-height:1.4;color:rgba(235,235,245,0.5)">{{ todayLine }}</p>
+  </div>
+
+  <div style="display:flex;gap:8px;padding:16px 18px 2px;flex-wrap:wrap">
+    <button sc-camel-on-click="{{ goStack }}" style="flex:1 1 auto;display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:16px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(30,30,36,0.6);backdrop-filter:blur(var(--gb,26px)) saturate(180%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(180%);cursor:pointer;text-align:left">
+      <span style="width:26px;height:26px;border-radius:9px;background:var(--ac,oklch(0.72 0.16 30));display:flex;align-items:center;justify-content:center;flex:none">
+        <svg width="15" height="15" sc-camel-view-box="0 0 22 22" fill="none"><rect x="4" y="3" width="14" height="4" rx="2" fill="#1a0d08"></rect><rect x="2.5" y="9" width="17" height="4" rx="2" fill="#1a0d08"></rect><rect x="4" y="15" width="14" height="4" rx="2" fill="#1a0d08"></rect></svg>
+      </span>
+      <span style="display:block;min-width:0">
+        <span style="display:block;font-size:13.5px;font-weight:600;color:rgba(255,255,255,0.95)">Open the stack</span>
+        <span style="display:block;font-size:11.5px;color:rgba(235,235,245,0.5);margin-top:1px">{{ stackLeftLine }}</span>
+      </span>
+    </button>
+  </div>
+
+  <sc-for list="{{ rows }}" as="row" hint-placeholder-count="3">
+    <div style="margin-top:26px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 18px 11px">
+        <h2 style="margin:0;font-size:20px;letter-spacing:-0.5px;font-weight:700;color:rgba(255,255,255,0.95)">{{ row.title }}</h2>
+        <button sc-camel-on-click="{{ row.onMore }}" style="flex:none;background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">{{ row.more }}</button>
+      </div>
+      <div class="hs" style="display:flex;gap:12px;overflow-x:auto;padding:2px 18px 4px;scroll-snap-type:x proximity">
+        <sc-for list="{{ row.items }}" as="s" hint-placeholder-count="4">
+          <button sc-camel-on-click="{{ s.onOpen }}" style="flex:none;width:var(--cw,118px);background:none;border:0;padding:0;cursor:pointer;text-align:left;scroll-snap-align:start">
+            <div style="aspect-ratio:2/3;border-radius:13px;overflow:hidden;background:#131318;box-shadow:0 8px 20px rgba(0,0,0,0.5)"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+            <div style="margin-top:8px;font-size:12.5px;line-height:1.25;font-weight:600;color:rgba(255,255,255,0.9);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ s.title }}</div>
+            <div style="margin-top:3px;font-size:11px;color:rgba(235,235,245,0.42)">{{ s.meta }}</div>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-for>
+
+  <div style="margin-top:30px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 18px 11px">
+      <h2 style="margin:0;font-size:20px;letter-spacing:-0.5px;font-weight:700;color:rgba(255,255,255,0.95)">Upcoming</h2>
+      <button sc-camel-on-click="{{ notYet }}" style="flex:none;background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">Next 30 days</button>
+    </div>
+    <div class="hs" style="display:flex;gap:12px;overflow-x:auto;padding:2px 18px 4px">
+      <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
+        <button sc-camel-on-click="{{ u.onOpen }}" style="flex:none;width:250px;display:flex;gap:12px;padding:10px;border-radius:16px;border:0.5px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.045);cursor:pointer;text-align:left">
+          <div style="width:52px;flex:none;aspect-ratio:2/3;border-radius:8px;overflow:hidden;background:#131318"><img src="{{ u.cover }}" alt="{{ u.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+          <div style="min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px">
+            <div style="font-size:11px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;color:var(--ac,oklch(0.72 0.16 30))">{{ u.date }}</div>
+            <div style="font-size:13px;font-weight:600;line-height:1.25;color:rgba(255,255,255,0.92);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ u.title }}</div>
+            <div style="font-size:11.5px;color:rgba(235,235,245,0.45)">{{ u.edition }}</div>
+          </div>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="margin-top:30px;padding:0 18px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 0 11px">
+      <h2 style="margin:0;font-size:20px;letter-spacing:-0.5px;font-weight:700;color:rgba(255,255,255,0.95)">News</h2>
+      <button sc-camel-on-click="{{ notYet }}" style="flex:none;background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">All types</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1px;border-radius:16px;overflow:hidden;background:rgba(255,255,255,0.07)">
+      <sc-for list="{{ news }}" as="n" hint-placeholder-count="3">
+        <button sc-camel-on-click="{{ notYet }}" style="display:flex;align-items:flex-start;gap:12px;padding:14px 15px;border:0;background:#0f0f14;cursor:pointer;text-align:left">
+          <span style="flex:none;margin-top:2px;font-size:9.5px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;padding:4px 7px;border-radius:6px;background:rgba(255,255,255,0.08);color:rgba(235,235,245,0.62)">{{ n.kind }}</span>
+          <span style="min-width:0;display:block">
+            <span style="display:block;font-size:13.5px;line-height:1.35;font-weight:500;color:rgba(255,255,255,0.9)">{{ n.title }}</span>
+            <span style="display:block;margin-top:3px;font-size:11px;color:rgba(235,235,245,0.4)">{{ n.meta }}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="margin-top:26px;padding:0 18px">
+    <div style="display:flex;gap:10px;padding:15px;border-radius:18px;border:0.5px solid rgba(255,255,255,0.09);background:linear-gradient(140deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025))">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.45)">Community pulse</div>
+        <div style="margin-top:8px;display:flex;gap:18px">
+          <div><div style="font-size:22px;font-weight:700;letter-spacing:-0.5px;color:rgba(255,255,255,0.95)">1,284</div><div style="font-size:11px;color:rgba(235,235,245,0.45)">edits this week</div></div>
+          <div><div style="font-size:22px;font-weight:700;letter-spacing:-0.5px;color:rgba(255,255,255,0.95)">42</div><div style="font-size:11px;color:rgba(235,235,245,0.45)">contributors</div></div>
+        </div>
+      </div>
+    </div>
+    <p style="margin:18px 2px 0;font-size:11px;line-height:1.55;color:rgba(235,235,245,0.32)">Series data from MangaBaka, which aggregates AniList, Kitsu, MangaUpdates, MyAnimeList and Anime-Planet. Each series screen credits its own sources.</p>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isStack }}">
+<div style="padding:100px 0 150px;animation:bmfade .3s ease both">
+  <div style="padding:0 22px 14px;display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+    <div>
+      <h1 style="margin:0;font-size:28px;letter-spacing:-0.9px;font-weight:700;color:rgba(255,255,255,0.97)">The stack</h1>
+      <p style="margin:6px 0 0;font-size:12.5px;color:rgba(235,235,245,0.45)">Drag the cover aside · tap it to open</p>
+    </div>
+    <div style="flex:none;text-align:right">
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.5px;color:var(--ac,oklch(0.72 0.16 30))">{{ savedCount }}</div>
+      <div style="font-size:10.5px;color:rgba(235,235,245,0.4)">saved</div>
+    </div>
+  </div>
+
+  <div style="position:relative;height:452px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+    <div style="position:absolute;left:-56px;width:132px;aspect-ratio:2/3;border-radius:14px;overflow:hidden;opacity:0.3;filter:blur(1px)"><img src="{{ prevCover }}" alt="Previous in the stack" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+    <div style="position:absolute;right:-56px;width:132px;aspect-ratio:2/3;border-radius:14px;overflow:hidden;opacity:0.3;filter:blur(1px)"><img src="{{ nextCover }}" alt="Next in the stack" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+    <button sc-camel-on-pointer-down="{{ onDown }}" sc-camel-on-pointer-move="{{ onMove }}" sc-camel-on-pointer-up="{{ onUp }}" sc-camel-on-pointer-cancel="{{ onUp }}" sc-camel-on-click="{{ openCurrent }}" style="position:relative;width:268px;padding:0;border:0;background:none;cursor:grab;touch-action:pan-y;transform:{{ dragTf }};transition:{{ dragTr }}">
+      <div style="aspect-ratio:2/3;border-radius:20px;overflow:hidden;background:#131318;box-shadow:0 30px 60px rgba(0,0,0,0.65), 0 0 0 0.5px rgba(255,255,255,0.1)"><img src="{{ curCover }}" alt="{{ curTitle }}" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none"></div>
+      <span style="position:absolute;top:16px;left:16px;padding:7px 12px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:1px;background:rgba(10,10,12,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:rgba(255,255,255,0.75);border:0.5px solid rgba(255,255,255,0.18);opacity:{{ skipOp }}">SKIP</span>
+      <span style="position:absolute;top:16px;right:16px;padding:7px 12px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:1px;background:var(--ac,oklch(0.72 0.16 30));color:#180b06;opacity:{{ saveOp }}">SAVE</span>
+    </button>
+  </div>
+
+  <div style="padding:6px 26px 0;text-align:center">
+    <div style="font-size:19px;font-weight:700;letter-spacing:-0.4px;color:rgba(255,255,255,0.96);line-height:1.25">{{ curTitle }}</div>
+    <div style="margin-top:6px;font-size:12.5px;color:rgba(235,235,245,0.5)">{{ curMeta }}</div>
+    <div style="margin-top:12px;display:flex;gap:7px;justify-content:center;flex-wrap:wrap">
+      <sc-for list="{{ curTags }}" as="t" hint-placeholder-count="3">
+        <span style="padding:5px 10px;border-radius:999px;font-size:11.5px;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.08);color:rgba(235,235,245,0.66)">{{ t }}</span>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;display:flex;gap:16px;justify-content:center;align-items:center">
+    <button sc-camel-on-click="{{ doSkip }}" style="width:56px;height:56px;border-radius:999px;border:0.5px solid rgba(255,255,255,0.14);background:rgba(30,30,36,0.62);backdrop-filter:blur(var(--gb,26px)) saturate(180%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(180%);cursor:pointer;color:rgba(255,255,255,0.6);font-size:22px;line-height:1;font-family:inherit">✕</button>
+    <button sc-camel-on-click="{{ openCurrent }}" style="height:48px;padding:0 20px;border-radius:999px;border:0.5px solid rgba(255,255,255,0.14);background:rgba(30,30,36,0.62);backdrop-filter:blur(var(--gb,26px)) saturate(180%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(180%);cursor:pointer;color:rgba(255,255,255,0.82);font-size:13.5px;font-weight:600;font-family:inherit">Details</button>
+    <button sc-camel-on-click="{{ doSave }}" style="width:64px;height:64px;border-radius:999px;border:0;background:var(--ac,oklch(0.72 0.16 30));cursor:pointer;color:#180b06;font-size:24px;line-height:1;font-family:inherit;box-shadow:0 10px 26px rgba(0,0,0,0.5)">＋</button>
+  </div>
+
+  <div style="margin-top:26px;padding:0 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px 10px">
+      <h2 style="margin:0;font-size:15px;font-weight:600;color:rgba(255,255,255,0.88)">Saved from the stack</h2>
+      <button sc-camel-on-click="{{ notYet }}" style="background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">Shelf ›</button>
+    </div>
+    <sc-if value="{{ hasSaved }}">
+      <div class="hs" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">
+        <sc-for list="{{ savedCards }}" as="s" hint-placeholder-count="2">
+          <button sc-camel-on-click="{{ s.onOpen }}" style="flex:none;width:74px;padding:0;border:0;background:none;cursor:pointer"><div style="aspect-ratio:2/3;border-radius:9px;overflow:hidden;background:#131318"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div></button>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ noSaved }}">
+      <p style="margin:0;padding:16px;border-radius:14px;border:0.5px dashed rgba(255,255,255,0.13);font-size:12.5px;line-height:1.5;color:rgba(235,235,245,0.42)">Nothing saved yet. Skips are remembered too, and stay recoverable in the shelf.</p>
+    </sc-if>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSearch }}">
+<div style="padding:154px 18px 150px;animation:bmfade .3s ease both">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 2px 12px">
+    <h2 style="margin:0;font-size:15px;font-weight:600;color:rgba(255,255,255,0.88)">{{ searchHeading }}</h2>
+    <button sc-camel-on-click="{{ surprise }}" style="background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;font-weight:500;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">Surprise me</button>
+  </div>
+
+  <sc-if value="{{ showLenses }}">
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:22px">
+      <sc-for list="{{ lenses }}" as="l" hint-placeholder-count="3">
+        <button sc-camel-on-click="{{ l.onRun }}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-radius:14px;border:0.5px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.05);cursor:pointer;text-align:left">
+          <span style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:600;color:rgba(255,255,255,0.92)">{{ l.name }}</span><span style="display:block;margin-top:2px;font-size:11.5px;color:rgba(235,235,245,0.45)">{{ l.rule }}</span></span>
+          <span style="flex:none;color:rgba(235,235,245,0.35);font-size:18px">›</span>
+        </button>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <sc-for list="{{ results }}" as="s" hint-placeholder-count="6">
+      <button sc-camel-on-click="{{ s.onOpen }}" style="padding:0;border:0;background:none;cursor:pointer;text-align:left">
+        <div style="aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:#131318;box-shadow:0 6px 16px rgba(0,0,0,0.45)"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+        <div style="margin-top:7px;font-size:12px;line-height:1.25;font-weight:600;color:rgba(255,255,255,0.9);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ s.title }}</div>
+        <div style="margin-top:2px;font-size:10.5px;color:rgba(235,235,245,0.4)">{{ s.meta }}</div>
+      </button>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ noResults }}">
+    <div style="padding:34px 8px;text-align:center">
+      <p style="margin:0;font-size:14px;font-weight:600;color:rgba(255,255,255,0.8)">Nothing matched “{{ q }}”</p>
+      <p style="margin:8px 0 16px;font-size:12.5px;line-height:1.5;color:rgba(235,235,245,0.45)">Try a looser filter, or let the API pick.</p>
+      <button sc-camel-on-click="{{ surprise }}" style="padding:11px 18px;border-radius:999px;border:0;background:var(--ac,oklch(0.72 0.16 30));color:#180b06;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Random with these filters</button>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isMix }}">
+<div style="padding:106px 18px 150px;animation:bmfade .3s ease both">
+  <h1 style="margin:0;font-size:36px;line-height:1.05;letter-spacing:-1.2px;font-weight:700;color:rgba(255,255,255,0.97)">Mix</h1>
+  <p style="margin:8px 2px 0;font-size:13px;line-height:1.45;color:rgba(235,235,245,0.5)">Pick series you love. The mix is blended from them — no account needed.</p>
+
+  <div style="margin-top:22px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 2px 11px">
+      <h2 style="margin:0;font-size:15px;font-weight:600;color:rgba(255,255,255,0.88)">Seeds</h2>
+      <span style="font-size:11.5px;color:rgba(235,235,245,0.4)">{{ seedLine }}</span>
+    </div>
+    <div class="hs" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">
+      <sc-for list="{{ seedCards }}" as="s" hint-placeholder-count="2">
+        <button sc-camel-on-click="{{ s.onRemove }}" style="flex:none;width:82px;padding:0;border:0;background:none;cursor:pointer;text-align:left;position:relative">
+          <div style="aspect-ratio:2/3;border-radius:11px;overflow:hidden;background:#131318;outline:2px solid var(--ac,oklch(0.72 0.16 30));outline-offset:1px"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+          <span style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:999px;background:#0d0d11;border:0.5px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);font-size:13px;line-height:20px;text-align:center">✕</span>
+        </button>
+      </sc-for>
+      <button sc-camel-on-click="{{ openSeedPicker }}" style="flex:none;width:82px;aspect-ratio:2/3;border-radius:11px;border:0.5px dashed rgba(255,255,255,0.2);background:rgba(255,255,255,0.03);cursor:pointer;color:rgba(235,235,245,0.5);font-size:11.5px;font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px"><span style="font-size:20px">＋</span>Add seed</button>
+    </div>
+  </div>
+
+  <div style="margin-top:24px;border-radius:18px;border:0.5px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.04);overflow:hidden">
+    <div style="padding:14px 15px;border-bottom:0.5px solid rgba(255,255,255,0.07)">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Type</div>
+      <div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap">
+        <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="4">
+          <button sc-camel-on-click="{{ c.onPick }}" style="padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:500;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:14px 15px;border-bottom:0.5px solid rgba(255,255,255,0.07)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Minimum rating</div>
+        <div style="font-size:13px;font-weight:600;color:var(--ac,oklch(0.72 0.16 30))">{{ minRatingLabel }}</div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:6px">
+        <sc-for list="{{ ratingSteps }}" as="r" hint-placeholder-count="5">
+          <button sc-camel-on-click="{{ r.onPick }}" style="flex:1;height:34px;border-radius:9px;border:0;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:14px 15px;border-bottom:0.5px solid rgba(255,255,255,0.07)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Tags</div>
+        <button sc-camel-on-click="{{ toggleTagMode }}" style="padding:4px 9px;border-radius:7px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:700;letter-spacing:0.6px;color:rgba(235,235,245,0.7)">{{ tagMode }}</button>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap">
+        <sc-for list="{{ tagChips }}" as="c" hint-placeholder-count="6">
+          <button sc-camel-on-click="{{ c.onPick }}" style="padding:7px 12px;border-radius:999px;font-size:12.5px;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <button sc-camel-on-click="{{ toggleBlocked }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border:0;background:none;cursor:pointer;text-align:left;font-family:inherit">
+      <span style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:500;color:rgba(255,255,255,0.9)">Blocked tags</span><span style="display:block;margin-top:2px;font-size:11.5px;color:rgba(235,235,245,0.44)">{{ blockedLine }}</span></span>
+      <span style="flex:none;width:46px;height:28px;border-radius:999px;padding:2px;background:{{ blockedTrack }};transition:background .2s ease"><span style="display:block;width:24px;height:24px;border-radius:999px;background:#fff;transform:{{ blockedKnob }};transition:transform .2s cubic-bezier(.3,.9,.3,1)"></span></span>
+    </button>
+  </div>
+
+  <button sc-camel-on-click="{{ runMix }}" style="margin-top:18px;width:100%;height:52px;border-radius:16px;border:0;background:var(--ac,oklch(0.72 0.16 30));color:#180b06;font-size:15px;font-weight:700;letter-spacing:-0.2px;cursor:pointer;font-family:inherit;box-shadow:0 14px 30px rgba(0,0,0,0.45)">{{ runLabel }}</button>
+  <button sc-camel-on-click="{{ saveLens }}" style="margin-top:10px;width:100%;height:46px;border-radius:14px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.82);font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">Save as a lens</button>
+
+  <sc-if value="{{ mixRun }}">
+    <div style="margin-top:30px;animation:bmfade .35s ease both">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 2px 12px">
+        <h2 style="margin:0;font-size:20px;letter-spacing:-0.5px;font-weight:700;color:rgba(255,255,255,0.95)">{{ mixCountLine }}</h2>
+        <button sc-camel-on-click="{{ runMix }}" style="background:none;border:0;padding:0;cursor:pointer;font-size:12.5px;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">Reshuffle</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <sc-for list="{{ mixResults }}" as="s" hint-placeholder-count="6">
+          <button sc-camel-on-click="{{ s.onOpen }}" style="padding:0;border:0;background:none;cursor:pointer;text-align:left">
+            <div style="aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:#131318"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+            <div style="margin-top:7px;font-size:12px;line-height:1.25;font-weight:600;color:rgba(255,255,255,0.9);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ s.title }}</div>
+            <div style="margin-top:2px;font-size:10.5px;color:var(--ac,oklch(0.72 0.16 30))">{{ s.why }}</div>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</sc-if>
+</div>
+
+<div style="position:absolute;left:0;right:0;top:0;z-index:30;pointer-events:none">
+  <div style="background:rgba(12,12,16,0.55);backdrop-filter:blur(var(--gb,26px)) saturate(180%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(180%);border-bottom:0.5px solid rgba(255,255,255,0.08);pointer-events:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 26px 4px">
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.2px;color:#fff">9:41</span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <svg width="18" height="12" sc-camel-view-box="0 0 18 12" fill="#fff"><rect x="0" y="7.5" width="3" height="4.5" rx="1"></rect><rect x="5" y="5" width="3" height="7" rx="1"></rect><rect x="10" y="2.5" width="3" height="9.5" rx="1"></rect><rect x="15" y="0" width="3" height="12" rx="1" opacity="0.4"></rect></svg>
+        <svg width="26" height="13" sc-camel-view-box="0 0 26 13" fill="none"><rect x="0.5" y="0.5" width="22" height="12" rx="3.5" stroke="#fff" opacity="0.45"></rect><rect x="2" y="2" width="15" height="9" rx="2" fill="#fff"></rect><rect x="24" y="4.5" width="2" height="4" rx="1" fill="#fff" opacity="0.45"></rect></svg>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 18px 12px">
+      <span style="font-size:12px;font-weight:700;letter-spacing:2.2px;color:rgba(255,255,255,0.55)">BAKAMANGA</span>
+      <span style="display:flex;gap:8px">
+        <button sc-camel-on-click="{{ cachedNote }}" style="display:flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.07);cursor:pointer;font-family:inherit;font-size:11px;font-weight:500;color:rgba(235,235,245,0.62)"><span style="width:6px;height:6px;border-radius:999px;background:oklch(0.72 0.16 145)"></span>Cached 2m</button>
+        <button sc-camel-on-click="{{ notYet }}" style="width:30px;height:30px;border-radius:999px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.07);cursor:pointer;color:rgba(235,235,245,0.7);font-size:13px;font-family:inherit">⋯</button>
+      </span>
+    </div>
+    <sc-if value="{{ isSearch }}">
+      <div style="padding:0 18px 12px;display:flex;gap:10px;align-items:center">
+        <span style="flex:1;display:flex;align-items:center;gap:9px;height:40px;padding:0 13px;border-radius:13px;background:rgba(255,255,255,0.09);border:0.5px solid rgba(255,255,255,0.08)">
+          <svg width="15" height="15" sc-camel-view-box="0 0 22 22" fill="none" stroke="rgba(235,235,245,0.5)" stroke-width="2"><circle cx="9.6" cy="9.6" r="6.4"></circle><line x1="14.6" y1="14.6" x2="19" y2="19" stroke-linecap="round"></line></svg>
+          <input value="{{ q }}" sc-camel-on-change="{{ onQuery }}" placeholder="Title, tag, publisher, staff" style="flex:1;min-width:0;border:0;background:none;outline:none;font-family:inherit;font-size:15px;color:#fff">
+        </span>
+        <button sc-camel-on-click="{{ openSheet }}" style="flex:none;width:40px;height:40px;border-radius:13px;border:0;background:{{ filterBg }};cursor:pointer;color:{{ filterFg }};font-family:inherit;display:flex;align-items:center;justify-content:center">
+          <svg width="17" height="17" sc-camel-view-box="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="2" y1="6" x2="18" y2="6"></line><line x1="2" y1="14" x2="18" y2="14"></line><circle cx="13" cy="6" r="2.6" fill="#0d0d11"></circle><circle cx="7" cy="14" r="2.6" fill="#0d0d11"></circle></svg>
+        </button>
+      </div>
+      <div class="hs" style="display:flex;gap:7px;overflow-x:auto;padding:0 18px 12px">
+        <sc-for list="{{ sortChips }}" as="c" hint-placeholder-count="4">
+          <button sc-camel-on-click="{{ c.onPick }}" style="flex:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+</div>
+
+<div class="sv" style="position:absolute;inset:0;z-index:40;overflow-y:auto;overflow-x:hidden;background:#08080b;transform:{{ detailTf }};transition:transform .38s cubic-bezier(.25,.9,.3,1);box-shadow:-20px 0 60px rgba(0,0,0,0.6)">
+  <div style="position:relative;height:396px">
+    <img src="{{ d_cover }}" alt="" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(38px) saturate(150%);opacity:0.5;transform:scale(1.25)">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(8,8,11,0.35) 0%, rgba(8,8,11,0.1) 30%, rgba(8,8,11,0.85) 78%, #08080b 100%)"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:16px;align-items:flex-end;padding:0 18px 18px">
+      <div style="width:126px;flex:none;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:#131318;box-shadow:0 18px 40px rgba(0,0,0,0.65), 0 0 0 0.5px rgba(255,255,255,0.12)"><img src="{{ d_cover }}" alt="{{ d_title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+      <div style="min-width:0;padding-bottom:4px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--ac,oklch(0.72 0.16 30))">{{ d_kicker }}</div>
+        <h1 style="margin:6px 0 0;font-size:24px;line-height:1.15;letter-spacing:-0.7px;font-weight:700;color:rgba(255,255,255,0.98);text-wrap:pretty">{{ d_title }}</h1>
+        <div style="margin-top:7px;font-size:12.5px;color:rgba(235,235,245,0.6)">{{ d_native }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:0 18px 150px">
+    <div style="display:flex;gap:10px;margin-top:2px">
+      <button sc-camel-on-click="{{ d_save }}" style="flex:1;height:48px;border-radius:15px;border:0;background:var(--ac,oklch(0.72 0.16 30));color:#180b06;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit">{{ d_saveLabel }}</button>
+      <button sc-camel-on-click="{{ d_seed }}" style="flex:none;height:48px;padding:0 16px;border-radius:15px;border:0.5px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit">Use as seed</button>
+    </div>
+
+    <div style="display:flex;margin-top:18px;border-radius:16px;border:0.5px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);overflow:hidden">
+      <sc-for list="{{ d_stats }}" as="st" hint-placeholder-count="4">
+        <div style="flex:1;padding:12px 6px;text-align:center;border-right:0.5px solid rgba(255,255,255,0.07)">
+          <div style="font-size:15px;font-weight:700;letter-spacing:-0.3px;color:rgba(255,255,255,0.95)">{{ st.v }}</div>
+          <div style="margin-top:3px;font-size:10px;letter-spacing:0.4px;text-transform:uppercase;color:rgba(235,235,245,0.4)">{{ st.k }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <p style="margin:18px 2px 0;font-size:14px;line-height:1.55;color:rgba(235,235,245,0.75);text-wrap:pretty">{{ d_desc }}</p>
+
+    <div style="margin-top:16px;display:flex;gap:7px;flex-wrap:wrap">
+      <sc-for list="{{ d_tags }}" as="t" hint-placeholder-count="3">
+        <button sc-camel-on-click="{{ t.onOpen }}" style="padding:7px 12px;border-radius:999px;font-size:12.5px;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:rgba(235,235,245,0.72)">{{ t.label }}</button>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:20px;border-radius:16px;border:0.5px solid rgba(255,255,255,0.08);overflow:hidden">
+      <sc-for list="{{ d_credits }}" as="c" hint-placeholder-count="3">
+        <div style="display:flex;justify-content:space-between;gap:14px;padding:12px 14px;background:rgba(255,255,255,0.035);border-bottom:0.5px solid rgba(255,255,255,0.06)">
+          <span style="font-size:12.5px;color:rgba(235,235,245,0.45)">{{ c.k }}</span>
+          <span style="font-size:12.5px;font-weight:500;color:rgba(255,255,255,0.88);text-align:right">{{ c.v }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <sc-for list="{{ d_rows }}" as="row" hint-placeholder-count="3">
+      <div style="margin-top:28px;margin-left:-18px;margin-right:-18px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 18px 11px">
+          <h2 style="margin:0;font-size:18px;letter-spacing:-0.4px;font-weight:700;color:rgba(255,255,255,0.94)">{{ row.title }}</h2>
+          <span style="flex:none;font-size:11.5px;color:rgba(235,235,245,0.35)">{{ row.src }}</span>
+        </div>
+        <div class="hs" style="display:flex;gap:12px;overflow-x:auto;padding:2px 18px 4px">
+          <sc-for list="{{ row.items }}" as="s" hint-placeholder-count="4">
+            <button sc-camel-on-click="{{ s.onOpen }}" style="flex:none;width:106px;padding:0;border:0;background:none;cursor:pointer;text-align:left">
+              <div style="aspect-ratio:2/3;border-radius:12px;overflow:hidden;background:#131318"><img src="{{ s.cover }}" alt="{{ s.title }}" style="width:100%;height:100%;object-fit:cover;display:block"></div>
+              <div style="margin-top:7px;font-size:11.5px;line-height:1.25;font-weight:600;color:rgba(255,255,255,0.88);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ s.title }}</div>
+              <div style="margin-top:2px;font-size:10.5px;color:rgba(235,235,245,0.4)">{{ s.meta }}</div>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+
+    <div style="margin-top:28px">
+      <h2 style="margin:0 0 11px;font-size:18px;letter-spacing:-0.4px;font-weight:700;color:rgba(255,255,255,0.94)">On other trackers</h2>
+      <div class="hs" style="display:flex;gap:9px;overflow-x:auto;padding-bottom:4px">
+        <sc-for list="{{ d_trackers }}" as="t" hint-placeholder-count="4">
+          <div style="flex:none;padding:11px 14px;border-radius:13px;border:0.5px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.045)">
+            <div style="font-size:11px;color:rgba(235,235,245,0.45)">{{ t.k }}</div>
+            <div style="margin-top:4px;font-size:15px;font-weight:700;letter-spacing:-0.3px;color:rgba(255,255,255,0.92)">{{ t.v }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top:24px">
+      <h2 style="margin:0 0 11px;font-size:18px;letter-spacing:-0.4px;font-weight:700;color:rgba(255,255,255,0.94)">Read it elsewhere</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <sc-for list="{{ d_links }}" as="l" hint-placeholder-count="3">
+          <button sc-camel-on-click="{{ notYet }}" style="padding:10px 14px;border-radius:12px;border:0.5px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:rgba(255,255,255,0.85)">{{ l }} ↗</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <p style="margin:26px 2px 0;font-size:11px;line-height:1.55;color:rgba(235,235,245,0.32)">{{ d_provenance }}</p>
+  </div>
+
+  <button sc-camel-on-click="{{ closeDetail }}" style="position:fixed;left:16px;top:58px;width:38px;height:38px;border-radius:999px;border:0.5px solid rgba(255,255,255,0.16);background:rgba(20,20,26,0.5);backdrop-filter:blur(var(--gb,26px)) saturate(180%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(180%);cursor:pointer;color:rgba(255,255,255,0.9);font-size:22px;line-height:1;padding-bottom:3px;font-family:inherit;z-index:5">‹</button>
+</div>
+
+<div sc-camel-on-click="{{ closeSheet }}" style="position:absolute;inset:0;z-index:50;background:rgba(0,0,0,0.5);opacity:{{ sheetBackdropOp }};pointer-events:{{ sheetPe }};transition:opacity .3s ease"></div>
+<div class="sv" style="position:absolute;left:0;right:0;bottom:0;z-index:51;max-height:76%;overflow-y:auto;border-radius:26px 26px 0 0;background:rgba(22,22,28,0.82);backdrop-filter:blur(34px) saturate(180%);-webkit-backdrop-filter:blur(34px) saturate(180%);border-top:0.5px solid rgba(255,255,255,0.14);transform:{{ sheetTf }};transition:transform .4s cubic-bezier(.25,.9,.3,1)">
+  <div style="position:sticky;top:0;padding:10px 0 4px;text-align:center"><span style="display:inline-block;width:38px;height:5px;border-radius:999px;background:rgba(255,255,255,0.25)"></span></div>
+  <div style="padding:6px 18px 26px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <h2 style="margin:0;font-size:22px;letter-spacing:-0.6px;font-weight:700;color:rgba(255,255,255,0.97)">Filters</h2>
+      <button sc-camel-on-click="{{ resetFilters }}" style="background:none;border:0;padding:0;cursor:pointer;font-size:13px;color:var(--ac,oklch(0.72 0.16 30));font-family:inherit">Reset</button>
+    </div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Type</div>
+      <div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap">
+        <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="4">
+          <button sc-camel-on-click="{{ c.onPick }}" style="padding:8px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Status</div>
+      <div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap">
+        <sc-for list="{{ statusChips }}" as="c" hint-placeholder-count="3">
+          <button sc-camel-on-click="{{ c.onPick }}" style="padding:8px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.7px;text-transform:uppercase;color:rgba(235,235,245,0.42)">Sort by</div>
+      <div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap">
+        <sc-for list="{{ sortChips }}" as="c" hint-placeholder-count="6">
+          <button sc-camel-on-click="{{ c.onPick }}" style="padding:8px 14px;border-radius:999px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;border:0.5px solid rgba(255,255,255,0.1);background:{{ c.bg }};color:{{ c.fg }}">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top:22px;padding:14px;border-radius:15px;border:0.5px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.045)">
+      <div style="font-size:13.5px;font-weight:600;color:rgba(255,255,255,0.9)">Content rating</div>
+      <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:rgba(235,235,245,0.5)">Safe and suggestive only. Filtering happens server-side, so nothing else is fetched or cached. Change it in Settings.</p>
+    </div>
+
+    <button sc-camel-on-click="{{ applyFilters }}" style="margin-top:18px;width:100%;height:52px;border-radius:16px;border:0;background:var(--ac,oklch(0.72 0.16 30));color:#180b06;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">{{ applyLabel }}</button>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;z-index:60;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 0 30px;pointer-events:none">
+  <div style="display:flex;gap:2px;padding:6px;border-radius:999px;background:rgba(26,26,32,0.6);backdrop-filter:blur(var(--gb,26px)) saturate(190%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(190%);border:0.5px solid rgba(255,255,255,0.13);box-shadow:0 14px 34px rgba(0,0,0,0.5);pointer-events:auto">
+    <button sc-camel-on-click="{{ goHome }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:74px;padding:7px 0 6px;border:0;border-radius:999px;cursor:pointer;font-family:inherit;background:{{ tabHomeBg }};color:{{ tabHomeFg }}">
+      <svg width="21" height="21" sc-camel-view-box="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="8.2"></circle><circle cx="11" cy="11" r="2.4" fill="currentColor" stroke="none"></circle></svg>
+      <span style="font-size:9.5px;font-weight:600;letter-spacing:0.1px">Discover</span>
+    </button>
+    <button sc-camel-on-click="{{ goStack }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:74px;padding:7px 0 6px;border:0;border-radius:999px;cursor:pointer;font-family:inherit;background:{{ tabStackBg }};color:{{ tabStackFg }}">
+      <svg width="21" height="21" sc-camel-view-box="0 0 22 22" fill="currentColor"><rect x="4" y="3" width="14" height="3.6" rx="1.8"></rect><rect x="2.4" y="9.2" width="17.2" height="3.6" rx="1.8"></rect><rect x="4" y="15.4" width="14" height="3.6" rx="1.8"></rect></svg>
+      <span style="font-size:9.5px;font-weight:600;letter-spacing:0.1px">Stack</span>
+    </button>
+    <button sc-camel-on-click="{{ goMix }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:74px;padding:7px 0 6px;border:0;border-radius:999px;cursor:pointer;font-family:inherit;background:{{ tabMixBg }};color:{{ tabMixFg }}">
+      <svg width="21" height="21" sc-camel-view-box="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8.2" cy="11" r="5.6"></circle><circle cx="13.8" cy="11" r="5.6"></circle></svg>
+      <span style="font-size:9.5px;font-weight:600;letter-spacing:0.1px">Mix</span>
+    </button>
+  </div>
+  <button sc-camel-on-click="{{ goSearch }}" style="width:58px;height:58px;border-radius:999px;background:{{ searchBtnBg }};backdrop-filter:blur(var(--gb,26px)) saturate(190%);-webkit-backdrop-filter:blur(var(--gb,26px)) saturate(190%);border:0.5px solid rgba(255,255,255,0.13);box-shadow:0 14px 34px rgba(0,0,0,0.5);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center;color:{{ searchBtnFg }}">
+    <svg width="22" height="22" sc-camel-view-box="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="9.6" cy="9.6" r="6.4"></circle><line x1="14.6" y1="14.6" x2="19.2" y2="19.2" stroke-linecap="round"></line></svg>
+  </button>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:9px;z-index:70;display:flex;justify-content:center;pointer-events:none"><span style="width:140px;height:5px;border-radius:999px;background:rgba(255,255,255,0.4)"></span></div>
+
+<div style="position:absolute;left:0;right:0;bottom:104px;z-index:80;display:flex;justify-content:center;pointer-events:none;opacity:{{ toastOp }};transform:{{ toastTf }};transition:opacity .25s ease, transform .25s ease">
+  <span style="max-width:300px;padding:11px 18px;border-radius:999px;background:rgba(30,30,36,0.78);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:0.5px solid rgba(255,255,255,0.14);font-size:13px;font-weight:500;color:rgba(255,255,255,0.92);text-align:center">{{ toast }}</span>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:460,&quot;height&quot;:910},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;oklch(0.72 0.16 30)&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;oklch(0.72 0.16 30)&quot;,&quot;oklch(0.72 0.16 265)&quot;,&quot;oklch(0.72 0.16 145)&quot;,&quot;oklch(0.78 0.15 85)&quot;],&quot;section&quot;:&quot;Theme&quot;},&quot;glassBlur&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:26,&quot;min&quot;:0,&quot;max&quot;:48,&quot;step&quot;:2,&quot;unit&quot;:&quot;px&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Comfortable&quot;,&quot;options&quot;:[&quot;Comfortable&quot;,&quot;Compact&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+function RES(p){var r=(typeof window!=='undefined'&&window.__resources)||{};return r[p]||r['./'+p]||p;}
+const SERIES = [
+  {id:'one-piece',cover:'covers/one-piece.jpg',title:'ONE PIECE',native:'ワンピース',type:'Manga',year:1997,rating:8.7,ratings:'41.2k',ch:1140,vol:110,status:'Releasing',tags:['Adventure','Pirates','Shounen','Ensemble cast'],author:'Eiichiro Oda',publisher:'Shueisha',desc:'Monkey D. Luffy sails the Grand Line with a crew of misfits, chasing the treasure that would make him King of the Pirates.'},
+  {id:'one-punch-man',cover:'covers/one-punch-man.jpg',title:'ONE-PUNCH MAN',native:'ワンパンマン',type:'Manga',year:2012,rating:8.5,ratings:'28.9k',ch:203,vol:30,status:'Releasing',tags:['Action','Comedy','Superhero','Parody'],author:'ONE',publisher:'Shueisha',desc:'Saitama can end any fight with a single punch, which has left him profoundly bored. He keeps showing up anyway.'},
+  {id:'solo-leveling',cover:'covers/solo-leveling.jpg',title:'Solo Leveling',native:'나 혼자만 레벨업',type:'Manhwa',year:2018,rating:8.6,ratings:'33.4k',ch:179,vol:14,status:'Completed',tags:['Action','Dungeon','System','Levelling'],author:'Chugong',publisher:'D&C Media',desc:'The world\’s weakest hunter is granted a system that lets him level without limit, while the gates keep opening.'},
+  {id:'omniscient-reader',cover:'covers/omniscient-reader.jpg',title:'Omniscient Reader',native:'전지적 독자 시점',type:'Manhwa',year:2020,rating:8.8,ratings:'21.7k',ch:230,vol:12,status:'Releasing',tags:['Apocalypse','Meta','Action','Ensemble cast'],author:'Sing-Shong',publisher:'Naver',desc:'The only reader of a long web novel watches it become reality, armed with the one advantage nobody else has: he knows how it ends.'},
+  {id:'nano-machine',cover:'covers/nano-machine.jpg',title:'Nano Machine',native:'나노마신',type:'Manhwa',year:2020,rating:8.1,ratings:'14.3k',ch:250,vol:11,status:'Releasing',tags:['Murim','Sci-fi','Action','Regression'],author:'Hanjung Wolya',publisher:'Redice Studio',desc:'An outcast prince of the Demonic Cult receives a nanomachine from a descendant in the far future, and takes it back into the sect.'},
+  {id:'kaiji',cover:'covers/kaiji.jpg',title:'Gambling Apocalypse: Kaiji',native:'賭博黙示録カイジ',type:'Manga',year:1996,rating:8.4,ratings:'9.8k',ch:130,vol:13,status:'Completed',tags:['Psychological','Gambling','Seinen','Survival'],author:'Nobuyuki Fukumoto',publisher:'Kodansha',desc:'A drifting young man co-signs the wrong loan and ends up on a ship where debts are settled by gambling.'},
+  {id:'pick-me-up',cover:'covers/pick-me-up.jpg',title:'Pick Me Up',native:'픽 미 업',type:'Manhwa',year:2022,rating:7.9,ratings:'8.1k',ch:120,vol:6,status:'Releasing',tags:['Gacha','Isekai','Action','Dark fantasy'],author:'Nokdu',publisher:'Kakao',desc:'A gacha player wakes up inside the game as the worst unit he ever pulled, bound to a party that dies on cue.'},
+  {id:'baskerville',cover:'covers/baskerville.jpg',title:'Revenge of the Baskerville Bloodhound',native:'바스커빌의 사냥개',type:'Manhwa',year:2022,rating:7.8,ratings:'6.4k',ch:98,vol:5,status:'Releasing',tags:['Revenge','Historical','Regression','Knights'],author:'Baek Chan',publisher:'Kakao',desc:'A hound of a knight, betrayed and executed, returns to the house that used him with the patience of someone who has already died once.'},
+  {id:'extras-academy',cover:'covers/extras-academy.jpg',title:'The Extra\’s Academy Survival Guide',native:'엑스트라의 아카데미 생존법',type:'Manhwa',year:2022,rating:7.7,ratings:'7.2k',ch:104,vol:5,status:'Releasing',tags:['Academy','Regression','Fantasy','Comedy'],author:'Kwak Jeong',publisher:'Naver',desc:'Dropped into a novel as a background student, he has exactly one plan: graduate alive and unremarkable.'},
+  {id:'estate-developer',cover:'covers/estate-developer.jpg',title:'The Greatest Estate Developer',native:'대영주의 개발기',type:'Manhwa',year:2021,rating:8.0,ratings:'11.6k',ch:180,vol:9,status:'Releasing',tags:['Comedy','Isekai','Kingdom building','Fantasy'],author:'Lee Hyeon-min',publisher:'Kakao',desc:'A civil engineering student wakes up as a fantasy novel\’s most hated noble, carrying nothing but modern construction knowledge.'},
+  {id:'regressed-mercenary',cover:'covers/regressed-mercenary.jpg',title:'The Regressed Mercenary Has a Plan',native:'회귀한 용병의 계획',type:'Manhwa',year:2023,rating:7.6,ratings:'4.9k',ch:76,vol:4,status:'Releasing',tags:['Regression','Fantasy','War','Action'],author:'Kim Do-yeon',publisher:'Kakao',desc:'A mercenary who died at the end of the war wakes at its beginning, intending to sell his sword to the right side this time.'},
+  {id:'stellar-swordmaster',cover:'covers/stellar-swordmaster.jpg',title:'The Stellar Swordmaster',native:'천상검신',type:'Manhwa',year:2023,rating:7.5,ratings:'3.8k',ch:64,vol:3,status:'Releasing',tags:['Murim','Fantasy','Swordsman','Training'],author:'Jang Woo-jin',publisher:'Redice Studio',desc:'A swordsman who reads the movement of stars trains toward the peak of a martial world that has forgotten how.'},
+  {id:'with-the-light',cover:'covers/with-the-light.jpg',title:'With the Light: Raising an Autistic Child',native:'光とともに',type:'Manga',year:2000,rating:8.2,ratings:'2.1k',ch:60,vol:15,status:'Completed',tags:['Josei','Slice of life','Drama','Family'],author:'Keiko Tobe',publisher:'Akita Shoten',desc:'Sachiko raises her son Hikaru, who is autistic, across school years, neighbours and a country slow to make room for him.'}
+];
+const BY = {};
+SERIES.forEach(s => { BY[s.id] = s; });
+
+const ROWDEFS = [
+  {key:'rising', title:'Rising this week', more:'7 days', ids:['stellar-swordmaster','regressed-mercenary','extras-academy','pick-me-up','baskerville','nano-machine']},
+  {key:'gems', title:'Hidden gems', more:'See all', ids:['with-the-light','kaiji','estate-developer','baskerville','extras-academy']},
+  {key:'trend', title:'Trending', more:'7d · 30d', ids:['solo-leveling','omniscient-reader','one-piece','one-punch-man','nano-machine','pick-me-up']}
+];
+
+const RELATED = {
+  'similar': ['nano-machine','pick-me-up','stellar-swordmaster','regressed-mercenary','baskerville'],
+  'also': ['omniscient-reader','estate-developer','extras-academy','one-punch-man','kaiji'],
+  'coll': ['one-piece','with-the-light','kaiji','solo-leveling']
+};
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home', detailId: 'solo-leveling', detailOpen: false, sheet: false,
+    stackIdx: 0, dragX: 0, dragging: false, saved: [], skipped: [],
+    toast: null, q: '', sort: 'Trending · 7d', type: 'Any', status: 'Any',
+    seeds: ['solo-leveling','omniscient-reader'], minRating: 7, tagMode: 'AND',
+    mixTags: ['Regression'], blocked: true, mixRun: false, mixNonce: 0
+  };
+
+  say(msg) {
+    clearTimeout(this._t);
+    this.setState({ toast: msg });
+    this._t = setTimeout(() => this.setState({ toast: null }), 1900);
+  }
+  go(screen) { this.setState({ screen, detailOpen: false, sheet: false }); this.scrollTop(); }
+  scrollTop() {
+    setTimeout(() => {
+      const el = this._root && this._root.querySelector('.sv');
+      if (el) el.scrollTop = 0;
+    }, 0);
+  }
+  componentDidMount() { this._root = document.body; }
+
+  open(id) {
+    this.setState({ detailId: id, detailOpen: true, sheet: false });
+    setTimeout(() => {
+      const els = document.querySelectorAll('.sv');
+      if (els[1]) els[1].scrollTop = 0;
+    }, 0);
+  }
+  card(id) {
+    const s = BY[id];
+    return { id, cover: RES(s.cover), title: s.title, meta: s.type + ' · ' + s.rating, onOpen: () => this.open(id) };
+  }
+  toggleSaved(id) {
+    const has = this.state.saved.indexOf(id) >= 0;
+    this.setState({ saved: has ? this.state.saved.filter(x => x !== id) : this.state.saved.concat([id]) });
+    this.say(has ? 'Removed from shelf' : 'Saved to shelf');
+  }
+
+  stackOrder() { return ['baskerville','with-the-light','pick-me-up','estate-developer','kaiji','stellar-swordmaster','extras-academy','nano-machine']; }
+  stackAt(o) {
+    const ord = this.stackOrder();
+    return BY[ord[((this.state.stackIdx + o) % ord.length + ord.length) % ord.length]];
+  }
+  commit(kind) {
+    const cur = this.stackAt(0);
+    const next = { stackIdx: this.state.stackIdx + 1, dragX: 0, dragging: false };
+    if (kind === 'save') next.saved = this.state.saved.concat([cur.id]);
+    else next.skipped = this.state.skipped.concat([cur.id]);
+    this.setState(next);
+    this.say(kind === 'save' ? 'Saved · ' + cur.title : 'Skipped · recoverable in the shelf');
+  }
+
+  chips(list, active, onPick) {
+    return list.map(label => ({
+      label,
+      bg: (Array.isArray(active) ? active.indexOf(label) >= 0 : active === label) ? 'var(--ac, oklch(0.72 0.16 30))' : 'rgba(255,255,255,0.06)',
+      fg: (Array.isArray(active) ? active.indexOf(label) >= 0 : active === label) ? '#180b06' : 'rgba(235,235,245,0.72)',
+      onPick: () => onPick(label)
+    }));
+  }
+
+  renderVals() {
+    const st = this.state;
+    const ac = 'var(--ac, oklch(0.72 0.16 30))';
+    const d = BY[st.detailId];
+    const savedSet = st.saved;
+
+    const q = st.q.trim().toLowerCase();
+    let results = SERIES.filter(s =>
+      (!q || s.title.toLowerCase().indexOf(q) >= 0 || s.tags.join(' ').toLowerCase().indexOf(q) >= 0 || s.author.toLowerCase().indexOf(q) >= 0) &&
+      (st.type === 'Any' || s.type === st.type) &&
+      (st.status === 'Any' || s.status === st.status)
+    );
+    if (st.sort === 'Highest rated') results = results.slice().sort((a, b) => b.rating - a.rating);
+    if (st.sort === 'Newest') results = results.slice().sort((a, b) => b.year - a.year);
+    if (st.sort === 'Random') results = results.slice().sort(() => Math.random() - 0.5);
+
+    const pool = SERIES.filter(s => s.rating >= st.minRating && st.seeds.indexOf(s.id) < 0 && (st.type === 'Any' || s.type === st.type));
+    const mixOut = pool.slice().sort((a, b) => ((a.id.length * 7 + st.mixNonce * 13) % 11) - ((b.id.length * 7 + st.mixNonce * 13) % 11)).slice(0, 6);
+
+    return {
+      accent: this.props.accent || 'oklch(0.72 0.16 30)',
+      glassBlur: (this.props.glassBlur || 26) + 'px',
+      coverW: (this.props.density === 'Compact' ? 100 : 118) + 'px',
+
+      isHome: st.screen === 'home', isStack: st.screen === 'stack', isSearch: st.screen === 'search', isMix: st.screen === 'mix',
+      goHome: () => this.go('home'), goStack: () => this.go('stack'), goMix: () => this.go('mix'), goSearch: () => this.go('search'),
+      tabHomeBg: st.screen === 'home' ? 'rgba(255,255,255,0.13)' : 'transparent',
+      tabHomeFg: st.screen === 'home' ? '#fff' : 'rgba(235,235,245,0.5)',
+      tabStackBg: st.screen === 'stack' ? 'rgba(255,255,255,0.13)' : 'transparent',
+      tabStackFg: st.screen === 'stack' ? '#fff' : 'rgba(235,235,245,0.5)',
+      tabMixBg: st.screen === 'mix' ? 'rgba(255,255,255,0.13)' : 'transparent',
+      tabMixFg: st.screen === 'mix' ? '#fff' : 'rgba(235,235,245,0.5)',
+      searchBtnBg: st.screen === 'search' ? ac : 'rgba(26,26,32,0.6)',
+      searchBtnFg: st.screen === 'search' ? '#180b06' : 'rgba(235,235,245,0.62)',
+
+      todayLine: 'Tuesday · ' + SERIES.length + ' series cached · nothing waiting on a spinner',
+      stackLeftLine: this.stackOrder().length - (st.saved.length + st.skipped.length) + ' left in today\’s stack',
+      notYet: () => this.say('Not in this prototype yet'),
+      cachedNote: () => this.say('Offline-first: last refreshed 2 minutes ago'),
+      toast: st.toast || '', toastOp: st.toast ? 1 : 0, toastTf: st.toast ? 'translateY(0)' : 'translateY(10px)',
+
+      rows: ROWDEFS.map(r => ({
+        title: r.title, more: r.more, onMore: () => this.say(r.title + ' → full grid'),
+        items: r.ids.map(id => this.card(id))
+      })),
+      upcoming: [
+        { ...this.card('one-piece'), date: 'Sep 12', edition: 'Volume 110 · Viz Media' },
+        { ...this.card('solo-leveling'), date: 'Sep 19', edition: 'Volume 14 · Yen Press' },
+        { ...this.card('with-the-light'), date: 'Oct 03', edition: 'Omnibus · Akita Shoten' }
+      ],
+      news: [
+        { kind: 'Announce', title: 'Omniscient Reader part 3 dated for the winter season', meta: 'via MangaBaka News · 2h' },
+        { kind: 'Release', title: 'ONE-PUNCH MAN chapter 204 lands next Thursday', meta: 'via MangaBaka News · 5h' },
+        { kind: 'Licence', title: 'Kaiji omnibus picked up for an English print run', meta: 'via MangaBaka News · 1d' }
+      ],
+
+      savedCount: st.saved.length, hasSaved: st.saved.length > 0, noSaved: st.saved.length === 0,
+      savedCards: st.saved.map(id => this.card(id)),
+      curCover: RES(this.stackAt(0).cover), curTitle: this.stackAt(0).title,
+      curMeta: this.stackAt(0).type + ' · ' + this.stackAt(0).year + ' · ' + this.stackAt(0).rating + ' from ' + this.stackAt(0).ratings,
+      curTags: this.stackAt(0).tags.slice(0, 3),
+      prevCover: RES(this.stackAt(-1).cover), nextCover: RES(this.stackAt(1).cover),
+      dragTf: 'translateX(' + st.dragX + 'px) rotate(' + (st.dragX * 0.012) + 'deg)',
+      dragTr: st.dragging ? 'none' : 'transform .36s cubic-bezier(.22,.9,.3,1)',
+      saveOp: Math.max(0, Math.min(1, st.dragX / 80)), skipOp: Math.max(0, Math.min(1, -st.dragX / 80)),
+      onDown: e => { this._x0 = e.clientX; this._moved = false; e.currentTarget.setPointerCapture(e.pointerId); this.setState({ dragging: true }); },
+      onMove: e => { if (!st.dragging) return; const dx = e.clientX - this._x0; if (Math.abs(dx) > 4) this._moved = true; this.setState({ dragX: dx }); },
+      onUp: () => {
+        if (st.dragX > 92) this.commit('save');
+        else if (st.dragX < -92) this.commit('skip');
+        else this.setState({ dragX: 0, dragging: false });
+      },
+      openCurrent: () => { if (!this._moved) this.open(this.stackAt(0).id); },
+      doSave: () => this.commit('save'), doSkip: () => this.commit('skip'),
+
+      q: st.q, onQuery: e => this.setState({ q: e.target.value }),
+      searchHeading: q || st.type !== 'Any' || st.status !== 'Any' ? results.length + ' results · ' + st.sort : 'Saved lenses',
+      showLenses: !q && st.type === 'Any' && st.status === 'Any',
+      lenses: [
+        { name: 'Cosy fantasy, completed, 4+', rule: 'type: manhwa · status: completed · rating ≥ 8', onRun: () => { this.setState({ q: '', type: 'Manhwa', status: 'Completed' }); this.say('Lens applied'); } },
+        { name: 'Seinen I never finished', rule: 'tag: seinen · sort: popularity', onRun: () => { this.setState({ q: 'seinen', type: 'Any', status: 'Any' }); } },
+        { name: 'Regression, but funny', rule: 'tags: regression AND comedy', onRun: () => { this.setState({ q: 'regression', type: 'Any', status: 'Any' }); } }
+      ],
+      results: results.map(s => this.card(s.id)),
+      noResults: results.length === 0,
+      surprise: () => { this.setState({ sort: 'Random', q: '' }); this.say('sort_by=random with your filters'); },
+      sortChips: this.chips(['Trending · 7d', 'Trending · 30d', 'Highest rated', 'Newest', 'Popularity', 'Random'], st.sort, v => this.setState({ sort: v })),
+      typeChips: this.chips(['Any', 'Manga', 'Manhwa', 'Manhua'], st.type, v => this.setState({ type: v })),
+      statusChips: this.chips(['Any', 'Releasing', 'Completed', 'Hiatus'], st.status, v => this.setState({ status: v })),
+      openSheet: () => this.setState({ sheet: true }), closeSheet: () => this.setState({ sheet: false }),
+      sheetTf: st.sheet ? 'translateY(0)' : 'translateY(102%)',
+      sheetBackdropOp: st.sheet ? 1 : 0, sheetPe: st.sheet ? 'auto' : 'none',
+      filterBg: st.sheet ? ac : 'rgba(255,255,255,0.09)',
+      filterFg: st.sheet ? '#180b06' : 'rgba(235,235,245,0.62)',
+      applyLabel: 'Show ' + results.length + ' results',
+      applyFilters: () => { this.setState({ sheet: false }); this.say('Filters applied server-side'); },
+      resetFilters: () => this.setState({ type: 'Any', status: 'Any', sort: 'Trending · 7d' }),
+
+      seedCards: st.seeds.map(id => ({ ...this.card(id), onRemove: () => this.setState({ seeds: st.seeds.filter(x => x !== id) }) })),
+      seedLine: st.seeds.length + ' of 5',
+      openSeedPicker: () => {
+        const cand = SERIES.map(s => s.id).filter(id => st.seeds.indexOf(id) < 0)[0];
+        if (st.seeds.length >= 5) return this.say('Five seeds is the limit');
+        this.setState({ seeds: st.seeds.concat([cand]) });
+        this.say('Seed added · /v1/series/mix/seeds suggests more');
+      },
+      minRatingLabel: st.minRating === 0 ? 'Any' : st.minRating + '.0+',
+      ratingSteps: [0, 6, 7, 8, 9].map(n => ({
+        label: n === 0 ? 'Any' : n + '+',
+        bg: st.minRating === n ? ac : 'rgba(255,255,255,0.06)',
+        fg: st.minRating === n ? '#180b06' : 'rgba(235,235,245,0.7)',
+        onPick: () => this.setState({ minRating: n })
+      })),
+      tagMode: st.tagMode,
+      toggleTagMode: () => this.setState({ tagMode: st.tagMode === 'AND' ? 'OR' : 'AND' }),
+      tagChips: this.chips(['Regression', 'Murim', 'Academy', 'Revenge', 'Slice of life', 'Survival'], st.mixTags, v => this.setState({ mixTags: st.mixTags.indexOf(v) >= 0 ? st.mixTags.filter(x => x !== v) : st.mixTags.concat([v]) })),
+      blocked: st.blocked,
+      blockedLine: st.blocked ? 'Excluding 3 tags you never want to see' : 'Nothing excluded',
+      blockedTrack: st.blocked ? ac : 'rgba(255,255,255,0.14)',
+      blockedKnob: st.blocked ? 'translateX(18px)' : 'translateX(0)',
+      toggleBlocked: () => this.setState({ blocked: !st.blocked }),
+      runLabel: st.mixRun ? 'Run mix again' : 'Run the mix',
+      runMix: () => { this.setState({ mixRun: true, mixNonce: st.mixNonce + 1 }); this.say('Blended from ' + st.seeds.length + ' seeds'); },
+      saveLens: () => this.say('Saved as a lens · re-runnable from Search'),
+      mixRun: st.mixRun,
+      mixCountLine: mixOut.length + ' from your seeds',
+      mixResults: mixOut.map(s => ({ ...this.card(s.id), why: 'shares ' + (s.tags[0] || '').toLowerCase() })),
+
+      detailTf: st.detailOpen ? 'translateX(0)' : 'translateX(100%)',
+      closeDetail: () => this.setState({ detailOpen: false }),
+      d_cover: RES(d.cover), d_title: d.title, d_native: d.native + ' · ' + d.author,
+      d_kicker: d.type + ' · ' + d.status,
+      d_desc: d.desc,
+      d_stats: [
+        { k: 'Rating', v: d.rating }, { k: 'Ratings', v: d.ratings },
+        { k: 'Chapters', v: d.ch }, { k: 'Volumes', v: d.vol }, { k: 'Started', v: d.year }
+      ],
+      d_saveLabel: savedSet.indexOf(d.id) >= 0 ? 'On your shelf ✓' : 'Save to shelf',
+      d_save: () => this.toggleSaved(d.id),
+      d_seed: () => { if (st.seeds.indexOf(d.id) < 0) this.setState({ seeds: st.seeds.concat([d.id]).slice(0, 5) }); this.go('mix'); },
+      d_tags: d.tags.map(t => ({ label: t, onOpen: () => { this.setState({ q: t.toLowerCase(), detailOpen: false, screen: 'search' }); } })),
+      d_credits: [
+        { k: 'Story & art', v: d.author }, { k: 'Publisher', v: d.publisher },
+        { k: 'Content rating', v: 'Safe' }, { k: 'Anime adaptation', v: d.rating > 8.4 ? 'Yes' : 'None listed' }
+      ],
+      d_rows: [
+        { title: 'Similar', src: '/similar', items: RELATED.similar.filter(x => x !== d.id).map(id => this.card(id)) },
+        { title: 'Readers also like', src: '/readers-also-like', items: RELATED.also.filter(x => x !== d.id).map(id => this.card(id)) },
+        { title: 'In collections', src: '/collections', items: RELATED.coll.filter(x => x !== d.id).map(id => this.card(id)) }
+      ],
+      d_trackers: [
+        { k: 'AniList', v: d.rating }, { k: 'MyAnimeList', v: (d.rating + 0.1).toFixed(1) },
+        { k: 'Kitsu', v: (d.rating - 0.2).toFixed(1) }, { k: 'MangaUpdates', v: (d.rating - 0.4).toFixed(1) }, { k: 'Anime-Planet', v: (d.rating + 0.2).toFixed(1) }
+      ],
+      d_links: ['Official reader', 'Publisher', 'Print edition'],
+      d_provenance: 'Aggregated by MangaBaka from AniList, Kitsu, MangaUpdates, MyAnimeList and Anime-Planet. Cover art © ' + d.publisher + '.'
+    };
+  }
+}
+</script>
+
+
+</body></html>"
+  </script>
+</body>
+</html>

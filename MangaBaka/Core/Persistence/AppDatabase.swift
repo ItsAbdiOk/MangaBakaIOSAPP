@@ -79,6 +79,25 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v2_shelf") { db in
+            // The reader's own reactions, local until sign-in exists. Kept in
+            // its own table rather than as a column on `series` because a
+            // cached series is disposable and a save is not: clearing the cache
+            // must never lose what someone chose to keep.
+            try db.create(table: "shelfEntry") { table in
+                table.primaryKey("seriesId", .integer)
+                // "saved" or "skipped". A skip is recorded, not discarded, so
+                // the same series stops reappearing in the stack and can still
+                // be recovered.
+                table.column("kind", .text).notNull()
+                table.column("addedAt", .datetime).notNull()
+                // The series as it was when saved, so the shelf still renders
+                // when the cache has been cleared or the reader is offline.
+                table.column("payload", .blob).notNull()
+            }
+            try db.create(index: "shelfEntry_on_kind", on: "shelfEntry", columns: ["kind", "addedAt"])
+        }
+
         return migrator
     }
 }
