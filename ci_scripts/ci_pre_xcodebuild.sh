@@ -23,4 +23,19 @@ echo "Linting..."
 brew install swiftlint
 swiftlint lint --strict
 
+# App Store Connect rejects a build whose number it has already seen, so every
+# archive needs a unique one. Xcode Cloud supplies a monotonically increasing
+# CI_BUILD_NUMBER; without wiring it in, every build would upload as "1" and the
+# second one would be refused.
+if [ -n "${CI_BUILD_NUMBER:-}" ]; then
+    echo "Setting build number to $CI_BUILD_NUMBER..."
+    # project.yml is the source of truth and ci_post_clone regenerates the
+    # project from it, so patch the yml rather than the generated pbxproj.
+    sed -i "" "s/CURRENT_PROJECT_VERSION: \".*\"/CURRENT_PROJECT_VERSION: \"$CI_BUILD_NUMBER\"/" project.yml
+    xcodegen generate
+    grep CURRENT_PROJECT_VERSION project.yml
+else
+    echo "No CI_BUILD_NUMBER (not an Xcode Cloud run); leaving the build number alone."
+fi
+
 echo "Pre-build checks passed."
