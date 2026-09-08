@@ -18,7 +18,11 @@ xcuserdata/
 .build/
 .swiftpm/
 Packages/
-Package.resolved
+# Package.resolved is deliberately NOT ignored. Ignoring it is the convention
+# for libraries, where the consumer picks versions. This is an app: the file
+# pins the exact dependency versions, CI requires it (Xcode Cloud disables
+# automatic resolution and fails without it), and without it a cloud build
+# could silently resolve a different version than a local one.
 
 # CocoaPods / Carthage
 Pods/
