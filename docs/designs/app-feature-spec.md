@@ -40,13 +40,18 @@ Three coherent options:
 | **B. Safe by default, opt-in** | Defaults to `safe` + `suggestive`; a Settings toggle unlocks more | Higher age rating (17+); needs a deliberate, non-trivial opt-in |
 | **C. Unfiltered** | Everything, no filtering | 17+ minimum; explicit covers on the home feed by default |
 
-**Recommendation: B.** It matches what the website offers without making the
-default experience explicit, and the filter is a query parameter rather than
-client-side work, so it costs almost nothing to implement. C is not viable —
-an unfiltered cover grid as the launch screen is both a review risk and a bad
-first impression.
+**DECIDED: B.** Default is `safe` + `suggestive`. `erotica` and `pornographic`
+are excluded unless the reader turns them on in Settings.
 
-Unresolved until the user decides.
+Consequences to design and build for:
+- The app is rated 17+ regardless, because the content is reachable.
+- The opt-in must be deliberate: a Settings toggle with plain language about
+  what changes, not a switch buried in a list.
+- Filtering happens server-side via `content_rating` / `not_content_rating` on
+  every discovery and search request, so unwanted covers are never downloaded,
+  never cached, and never briefly visible while a client-side filter catches up.
+- The setting must apply to the cache too: changing it invalidates cached feeds,
+  since a cached feed was fetched under the previous filter.
 
 ---
 
@@ -209,7 +214,7 @@ limit is per IP and shared with everyone on the same network.
 
 ## Open questions
 
-1. **Content rating default** — needs a decision. Recommendation above.
+1. ~~Content rating default~~ — decided: safe + suggestive, opt-in for more.
 2. **v1 vs v2** where both exist. Carried over from the architecture doc.
 3. **Does the stack need auth to be good?** `mix` is public, so probably not — worth measuring rather than assuming.
 4. **Naming**: the app is BakaManga; MangaBaka is the data source. Keeping those distinct in the UI matters for the trademark position.
