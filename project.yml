@@ -3,7 +3,7 @@
 # Xcode Cloud and contributors without XcodeGen can build without extra setup.
 name: MangaBaka
 options:
-  bundleIdPrefix: org.mangabaka
+  bundleIdPrefix: dev.abdirahmanmohamed
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -33,7 +33,7 @@ targets:
       Release: Configs/Base.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.mangabaka.client
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka
         PRODUCT_NAME: MangaBaka
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
@@ -56,7 +56,7 @@ targets:
       - target: MangaBaka
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.mangabaka.client.tests
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.tests
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:

@@ -350,7 +350,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MangaBaka.app/MangaBaka";
@@ -376,7 +376,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka;
 				PRODUCT_NAME = MangaBaka;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -469,7 +469,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka;
 				PRODUCT_NAME = MangaBaka;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -486,7 +486,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.mangabaka.client.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MangaBaka.app/MangaBaka";
