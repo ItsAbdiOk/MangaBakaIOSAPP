@@ -1,7 +1,7 @@
 import Foundation
 
 /// One title for a series, in one language.
-struct SeriesTitle: Decodable, Equatable, Sendable, Hashable {
+struct SeriesTitle: Codable, Equatable, Sendable, Hashable {
     /// BCP-47-ish tag as the API returns it: "en", "ko", "pt-br", "ko-Latn".
     let language: String
     /// Zero or more of "official", "native", "alternative".

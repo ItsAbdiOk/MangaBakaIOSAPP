@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct MangaBakaApp: App {
-    private let client: APIClient
+    private let repository: SeriesRepository
 
     init() {
         let info = Bundle.main.infoDictionary
@@ -18,12 +18,26 @@ struct MangaBakaApp: App {
         let provider: TokenProvider = PATTokenProvider(infoDictionary: info)
             ?? UnauthenticatedTokenProvider()
 
-        client = APIClient(baseURL: base, tokenProvider: provider)
+        let client = APIClient(baseURL: base, tokenProvider: provider)
+
+        // A cache that cannot be opened is not worth crashing over: fall back
+        // to an in-memory one so the app still works, just without offline
+        // support until the next launch.
+        let database: AppDatabase
+        do {
+            database = try AppDatabase.onDisk()
+        } catch {
+            database = (try? AppDatabase.inMemory()) ?? {
+                preconditionFailure("An in-memory SQLite database could not be opened.")
+            }()
+        }
+
+        repository = SeriesRepository(client: client, database: database)
     }
 
     var body: some Scene {
         WindowGroup {
-            DiscoveryView(model: DiscoveryModel(client: client))
+            DiscoveryView(model: DiscoveryModel(repository: repository))
         }
     }
 }

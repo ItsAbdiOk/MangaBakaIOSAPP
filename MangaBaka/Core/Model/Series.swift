@@ -7,7 +7,7 @@ import Foundation
 /// `canonical_url`, which the published OpenAPI spec does not document
 /// (verified 2026-09-08). The spec lags the API, so this type must never
 /// assume the spec is exhaustive.
-struct Series: Decodable, Identifiable, Equatable, Sendable, Hashable {
+struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     let id: Int
     /// "active", "merged" or "deleted".
     let state: String

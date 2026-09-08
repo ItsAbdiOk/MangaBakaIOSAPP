@@ -26,37 +26,35 @@ struct DiscoveryView: View {
         case .idle, .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        case let .loaded(series):
+        case let .loaded(series, staleReason):
             if series.isEmpty {
                 ContentUnavailableView(
                     "Nothing rising right now",
                     systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Check back a little later.")
                 )
-            } else {
-                grid(series)
-            }
-
-        case let .failed(message, stale):
-            if stale.isEmpty {
-                ContentUnavailableView {
-                    Label("Can't load right now", systemImage: "wifi.exclamationmark")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Try again") { Task { await model.load() } }
-                }
-            } else {
-                // A failure with cached content shows the content, not an error
-                // page. The banner explains why it may be out of date.
+            } else if let staleReason {
+                // Cached content is shown rather than an error page; the banner
+                // explains why it may be out of date.
                 VStack(spacing: 0) {
-                    Text(message)
+                    Text(staleReason)
                         .font(.footnote)
                         .frame(maxWidth: .infinity)
                         .padding(8)
                         .background(.quaternary)
-                    grid(stale)
+                    grid(series)
                 }
+            } else {
+                grid(series)
+            }
+
+        case let .failed(message):
+            ContentUnavailableView {
+                Label("Can't load right now", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Try again") { Task { await model.load(forceRefresh: true) } }
             }
         }
     }
@@ -73,7 +71,7 @@ struct DiscoveryView: View {
             }
             .padding(16)
         }
-        .refreshable { await model.load() }
+        .refreshable { await model.load(forceRefresh: true) }
     }
 }
 

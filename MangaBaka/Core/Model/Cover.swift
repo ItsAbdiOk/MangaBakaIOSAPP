@@ -5,7 +5,7 @@ import Foundation
 /// The API supplies a BlurHash placeholder and the intrinsic pixel dimensions
 /// specifically so a client can reserve the correct aspect ratio before the
 /// image arrives. Using them is what keeps a scrolling feed from jumping.
-struct Cover: Decodable, Equatable, Sendable, Hashable {
+struct Cover: Codable, Equatable, Sendable, Hashable {
     /// Original, unscaled image.
     let raw: URL?
     /// Pre-scaled variants at 1x device pixel ratio, by height in points.

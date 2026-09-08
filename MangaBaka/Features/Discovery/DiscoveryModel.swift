@@ -2,46 +2,44 @@ import Foundation
 
 /// Backing state for the discovery surface.
 ///
-/// Loads from the network directly for now. The on-device cache described in
-/// the design doc slots in behind this without changing the view: the model
-/// will ask a repository instead of the client, and the repository decides
-/// whether to hit the network.
+/// Reads through `SeriesRepository`, which decides for itself whether to serve
+/// cache or hit the network. This type deliberately knows nothing about that
+/// decision — it only cares whether it has content to show.
 @MainActor
 @Observable
 final class DiscoveryModel {
     enum State: Equatable {
         case idle
         case loading
-        case loaded([Series])
-        /// Carries a user-safe message plus whatever could still be shown.
-        case failed(message: String, stale: [Series])
+        /// Content to show. `staleReason` is non-nil when the network failed
+        /// and this came from cache, so the UI can say why it may be dated.
+        case loaded([Series], staleReason: String?)
+        /// Nothing to show at all, and here is why.
+        case failed(message: String)
     }
 
     private(set) var state: State = .idle
-    private let client: APIClient
+    private let repository: any SeriesRepositoryProtocol
 
-    init(client: APIClient) {
-        self.client = client
+    init(repository: any SeriesRepositoryProtocol) {
+        self.repository = repository
     }
 
-    func load() async {
+    func load(forceRefresh: Bool = false) async {
         if case .loading = state { return }
-
-        // Keep whatever is on screen so a failure degrades to stale content
-        // rather than a blank page.
-        let existing: [Series] = if case let .loaded(series) = state { series } else { [] }
         state = .loading
 
-        do {
-            // `limit` maxes at 20 on this endpoint, and the response is CDN
-            // cached for a day, so asking for the maximum costs nothing extra.
-            let series: [Series] = try await client.get(
-                "/v2/series/discover/rising",
-                query: ["limit": "20"]
-            )
-            state = .loaded(series.filter(\.isDiscoverable))
-        } catch {
-            state = .failed(message: error.userFacingMessage, stale: existing)
+        let result = await repository.feed(.rising, forceRefresh: forceRefresh)
+
+        if let blocking = result.blockingError {
+            state = .failed(message: blocking.userFacingMessage)
+            return
         }
+        let staleReason: String? = if case let .staleAfter(error) = result.origin {
+            error.userFacingMessage
+        } else {
+            nil
+        }
+        state = .loaded(result.series, staleReason: staleReason)
     }
 }
