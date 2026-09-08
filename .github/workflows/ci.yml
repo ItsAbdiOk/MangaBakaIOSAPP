@@ -17,17 +17,24 @@ concurrency:
 jobs:
   verify:
     name: Lint, build and test
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_26.app
+      - name: Select the newest installed Xcode
+        # Discovered rather than hard-coded: pinning a path breaks silently
+        # whenever GitHub updates the runner image.
+        run: |
+          set -euo pipefail
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using $newest"
+          sudo xcode-select -switch "$newest"
+          xcodebuild -version
 
       - name: Install tools
-        run: brew install xcodegen swiftlint
+        run: brew install xcodegen swiftlint xcbeautify
 
       - name: Lint
         # Fails on any error-severity rule: force unwraps, hard-coded tokens,
@@ -60,15 +67,29 @@ jobs:
             exit 1
           fi
 
+      - name: Pick an available iPhone simulator
+        id: sim
+        # Also discovered rather than hard-coded, for the same reason.
+        run: |
+          set -euo pipefail
+          name=$(xcrun simctl list devices available \
+            | grep -oE 'iPhone [0-9]+ Pro' | sort -V | tail -1)
+          if [ -z "$name" ]; then
+            name=$(xcrun simctl list devices available | grep -oE 'iPhone [^(]*' \
+              | head -1 | sed 's/[[:space:]]*$//')
+          fi
+          echo "Using simulator: $name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
       - name: Build and test
         run: |
           set -o pipefail
           xcodebuild test \
             -project MangaBaka.xcodeproj \
             -scheme MangaBaka \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
             -resultBundlePath TestResults.xcresult \
-            | xcpretty && exit ${PIPESTATUS[0]}
+            | xcbeautify || exit ${PIPESTATUS[0]}
 
       - name: Upload test results on failure
         if: failure()
