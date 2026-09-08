@@ -211,11 +211,19 @@ embedded token and act as that account.
 
 - **UI: SwiftUI.** No reason to reach for UIKit here; the screens are lists,
   grids, a card stack and a detail view.
-- **Deployment target: iOS 17+** — a guess, not a derived constraint. It buys
-  `Observable` and SwiftData. Worth revisiting against how old a phone the
-  target reader actually carries.
-- **Persistence: undecided, see Open Questions.** This is a day-one blocker for
-  the repository layer and needs a call before step 3 of Next Steps.
+- **Deployment target: iOS 26+.** Decided, not a guess. The app commits fully
+  to Liquid Glass, so there are no fallback visual paths and no second design
+  language to maintain. This deliberately trades reach for the look; the look
+  is the point.
+- **Persistence: GRDB (SQLite).** Chosen over SwiftData because Liquid Glass
+  spends the GPU budget on live refraction and blur during scroll, which leaves
+  the data layer needing to be predictable rather than convenient. GRDB fetches
+  exactly what is asked for, keeps memory flat, makes TTL columns and indexes
+  explicit, and unit-tests without standing up a container. SwiftData's faulting
+  and change-tracking do work that cannot be inspected when a scroll stutters.
+  The cost is more code, which is acceptable here.
+  **Unmeasured:** this is architectural reasoning, not a benchmark. If a scroll
+  ever stutters, measure before re-litigating.
 - **Networking: `URLSession` plus `Codable`, no third-party HTTP client.** The
   response envelope is uniform enough (`status` / `message` / `pagination` /
   `data`) to wrap in one generic decoder.
@@ -282,16 +290,10 @@ Aligned to the standards in CLAUDE.md.
    MangaBaka defines the term, not this document.
 4. **Will MangaBaka issue a `client_id` to a third-party client?** No published
    process. Unknown until asked.
-5. **Persistence technology.** GRDB (SQLite) or SwiftData? SwiftData is less
-   code and idiomatic with SwiftUI; GRDB gives explicit control over TTL
-   columns, indexes and migrations, which a cache-shaped schema wants, and is
-   easier to test. Leaning GRDB for those reasons, but this is a real
-   architecture decision and it should be made deliberately, not inherited from
-   this sentence. **Blocks Next Steps step 3.**
-6. **Cache freshness policy.** Which endpoints tolerate stale data and for how
+5. **Cache freshness policy.** Which endpoints tolerate stale data and for how
    long? The spec's per-endpoint `cache ttl` annotations are the input; they have
    not yet been extracted systematically.
-7. **Per-IP rate limiting under carrier NAT.** Two users on the same mobile
+6. **Per-IP rate limiting under carrier NAT.** Two users on the same mobile
    network share the 30/min search budget. Unclear how often this bites in
    practice; needs measurement, not speculation.
 
@@ -308,6 +310,11 @@ Aligned to the standards in CLAUDE.md.
   rotation, retry-on-401, Keychain) — that is expected, not a failure.
 - A simulated 100-card swipe session issues no more than 6 API requests.
 - No force-unwrap anywhere on the path from network response to view.
+- Scrolling holds 120fps on ProMotion hardware with Liquid Glass active.
+- Memory stays flat while scrolling an unbounded feed — the cache evicts, and
+  scrolling forever does not grow the heap without bound.
+- No measurable battery cost from background or idle work; the app does nothing
+  when not on screen.
 
 ## Distribution Plan
 
@@ -326,9 +333,9 @@ Aligned to the standards in CLAUDE.md.
 
 1. Decide v1 vs v2 for the overlapping endpoints (Open Question 1). Blocks the
    repository layer.
-2. Choose the persistence technology (Open Question 5), then extract the
+2. Extract the
    per-endpoint `x-cache-ttl` annotations from the spec into a freshness policy
-   table (Open Question 6). Verified with jq: all 77 operations carry
+   table (Open Question 5). Verified with jq: all 77 operations carry
    `x-cache-ttl`, and 73 of them also carry `x-cache-ttl-cdn-seconds` and
    `x-cache-ttl-browser-seconds`. So this is a scripted extraction, not a
    judgement call.
