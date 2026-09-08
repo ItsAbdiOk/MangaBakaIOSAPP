@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select the newest installed Xcode
         # Discovered rather than hard-coded: pinning a path breaks silently
