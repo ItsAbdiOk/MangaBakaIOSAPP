@@ -25,6 +25,10 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     let rating: Double?
     let type: String?
     let contentRating: String?
+    /// Chapters published so far, when known.
+    let totalChapters: Double?
+    /// The final volume number, when the series has ended.
+    let finalVolume: Double?
 
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.

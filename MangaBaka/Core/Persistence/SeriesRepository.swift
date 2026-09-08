@@ -25,6 +25,11 @@ enum FeedKind: Sendable, Hashable {
     case readersAlsoLike(seriesId: Int)
     /// The stack's queue, blended from seed series.
     case mix(seeds: [Int])
+    /// The stack with nothing saved yet. `mix` rejects a seedless request
+    /// ("At least one seed series or one include tag is required", HTTP 400,
+    /// verified 2026-09-08), so a first-run stack cannot use it. Random search
+    /// is a real recommendation surface rather than a placeholder.
+    case surprise
 
     var cacheKey: String {
         switch self {
@@ -34,6 +39,7 @@ enum FeedKind: Sendable, Hashable {
         case let .similar(id): "series/\(id)/similar"
         case let .readersAlsoLike(id): "series/\(id)/readers-also-like"
         case let .mix(seeds): "series/mix/" + seeds.sorted().map(String.init).joined(separator: "-")
+        case .surprise: "series/surprise"
         }
     }
 
@@ -45,18 +51,37 @@ enum FeedKind: Sendable, Hashable {
         case let .similar(id): "/v2/series/\(id)/similar"
         case let .readersAlsoLike(id): "/v2/series/\(id)/readers-also-like"
         case .mix: "/v1/series/mix"
+        case .surprise: "/v2/series/search"
+        }
+    }
+
+    /// Whether the endpoint nests each series inside a recommendation wrapper
+    /// rather than returning series directly. Verified per endpoint against the
+    /// live API; the spec does not make this obvious.
+    var isRecommendationShaped: Bool {
+        switch self {
+        case .similar, .readersAlsoLike, .mix: true
+        case .rising, .hiddenGems, .trending, .surprise: false
         }
     }
 
     /// Extra query beyond `limit`.
-    var extraQuery: [String: String] {
+    var extraQuery: [URLQueryItem] {
         switch self {
         case .trending:
-            ["sort_by": "trending_7d"]
+            [URLQueryItem(name: "sort_by", value: "trending_7d")]
         case let .mix(seeds) where !seeds.isEmpty:
-            ["series": seeds.map(String.init).joined(separator: ","), "strict": "false"]
+            [
+                // `series` genuinely is comma-separated; `content_rating` is
+                // not. The API is not consistent about this, so each parameter
+                // is encoded the way that parameter wants.
+                URLQueryItem(name: "series", value: seeds.map(String.init).joined(separator: ",")),
+                URLQueryItem(name: "strict", value: "false")
+            ]
+        case .surprise:
+            [URLQueryItem(name: "sort_by", value: "random")]
         default:
-            [:]
+            []
         }
     }
 
@@ -68,6 +93,7 @@ enum FeedKind: Sendable, Hashable {
         case .similar, .readersAlsoLike: 24
         case .mix: 50
         case .trending: 20
+        case .surprise: 50
         }
     }
 
@@ -84,6 +110,9 @@ enum FeedKind: Sendable, Hashable {
         // Search-backed and blended results are not CDN-pinned to a day; an
         // hour keeps them lively without spending requests on every visit.
         case .trending, .mix: 3_600
+        // A surprise queue that returned the same series on every visit would
+        // not be a surprise. Never served from cache.
+        case .surprise: 0
         }
     }
 }
@@ -116,11 +145,21 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     private let database: AppDatabase
     private let clock: any Clock
     private let decoder: JSONDecoder
+    /// Content ratings to request, or `nil` for no filter. Defaults to the
+    /// product decision: safe and suggestive, with anything stronger behind a
+    /// deliberate opt-in that does not exist yet.
+    private let contentRatings: [String]?
 
-    init(client: APIClient, database: AppDatabase, clock: any Clock = SystemClock()) {
+    init(
+        client: APIClient,
+        database: AppDatabase,
+        clock: any Clock = SystemClock(),
+        contentRatings: [String]? = ["safe", "suggestive"]
+    ) {
         self.client = client
         self.database = database
         self.clock = clock
+        self.contentRatings = contentRatings
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -133,10 +172,22 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
 
         do {
-            let series: [Series] = try await client.get(
-                feed.path,
-                query: ["limit": String(feed.limit)].merging(feed.extraQuery) { _, new in new }
-            )
+            var query = [URLQueryItem(name: "limit", value: String(feed.limit))]
+            query.append(contentsOf: feed.extraQuery)
+            // Filtering server-side means excluded covers are never downloaded,
+            // never cached, and never briefly visible while a client-side
+            // filter catches up. Repeated key, not comma-joined: the comma form
+            // is rejected with HTTP 400.
+            for rating in contentRatings ?? [] {
+                query.append(URLQueryItem(name: "content_rating", value: rating))
+            }
+            let series: [Series]
+            if feed.isRecommendationShaped {
+                let wrapped: [Recommendation] = try await client.get(feed.path, query: query)
+                series = wrapped.map(\.series)
+            } else {
+                series = try await client.get(feed.path, query: query)
+            }
             let discoverable = series.filter(\.isDiscoverable)
             try? write(discoverable, for: feed)
             return FeedResult(series: discoverable, origin: .network)

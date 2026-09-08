@@ -30,9 +30,13 @@ actor APIClient {
         self.decoder = decoder
     }
 
+    /// - Parameter query: query items, as a list rather than a dictionary
+    ///   because the API takes repeated keys — `content_rating` must be sent as
+    ///   `content_rating=safe&content_rating=suggestive`, and a comma-joined
+    ///   value is rejected with HTTP 400.
     func get<Payload: Decodable>(
         _ path: String,
-        query: [String: String] = [:],
+        query: [URLQueryItem] = [],
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
         let request = try makeRequest(path: path, query: query)
@@ -87,7 +91,7 @@ actor APIClient {
         return payload
     }
 
-    private func makeRequest(path: String, query: [String: String]) throws(APIError) -> URLRequest {
+    private func makeRequest(path: String, query: [URLQueryItem]) throws(APIError) -> URLRequest {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(path),
             resolvingAgainstBaseURL: false
@@ -96,8 +100,6 @@ actor APIClient {
         }
         if !query.isEmpty {
             components.queryItems = query
-                .sorted { $0.key < $1.key }
-                .map { URLQueryItem(name: $0.key, value: $0.value) }
         }
         guard let url = components.url else {
             throw APIError.transport(underlying: "Could not build a URL for \(path).")

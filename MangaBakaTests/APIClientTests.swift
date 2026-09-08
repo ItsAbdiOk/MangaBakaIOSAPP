@@ -267,7 +267,10 @@ struct APIClientRequestTests {
             session: URLProtocolStub.makeSession(),
             tokenProvider: UnauthenticatedTokenProvider()
         )
-        let _: [Int] = try await client.get("/things", query: ["limit": "20", "q": "solo leveling"])
+        let _: [Int] = try await client.get("/things", query: [
+                URLQueryItem(name: "limit", value: "20"),
+                URLQueryItem(name: "q", value: "solo leveling")
+        ])
 
         let url = try #require(URLProtocolStub.requests.first?.url?.absoluteString)
         #expect(url.contains("limit=20"))

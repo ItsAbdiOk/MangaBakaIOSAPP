@@ -177,6 +177,44 @@ struct SeriesRepositoryTests {
         #expect(cached.series.map(\.id) == [9], "Stale entries must not linger in the feed")
     }
 
+    /// Regression: content_rating was once sent comma-joined
+    /// (`content_rating=safe,suggestive`), which the API rejects with HTTP 400
+    /// and a validation error. Every feed broke, while lint and the rest of the
+    /// suite stayed green — nothing asserted the shape of the outgoing URL.
+    @Test("Content rating is sent as repeated keys, never comma-joined")
+    func contentRatingIsRepeated() async throws {
+        URLProtocolStub.setHandler { [data = payload(ids: [1])] _ in .respond(.init(body: data)) }
+        defer { URLProtocolStub.reset() }
+
+        _ = await try makeRepository(clock: TestClock()).feed(.rising, forceRefresh: true)
+
+        let url = try #require(URLProtocolStub.requests.first?.url)
+        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        let ratings = items.filter { $0.name == "content_rating" }
+
+        #expect(ratings.count == 2, "Each rating needs its own query item")
+        #expect(Set(ratings.compactMap(\.value)) == ["safe", "suggestive"])
+        #expect(
+            !ratings.contains { ($0.value ?? "").contains(",") },
+            "A comma-joined value is rejected by the API with HTTP 400"
+        )
+    }
+
+    /// Regression: the stack sent a seedless request to /v1/series/mix, which
+    /// the API rejects ("At least one seed series or one include tag is
+    /// required"). A first-run reader saw an error instead of a stack.
+    @Test("A seedless stack does not call the endpoint that requires seeds")
+    func seedlessStackAvoidsMix() async throws {
+        URLProtocolStub.setHandler { [data = payload(ids: [1])] _ in .respond(.init(body: data)) }
+        defer { URLProtocolStub.reset() }
+
+        _ = await try makeRepository(clock: TestClock()).feed(.surprise, forceRefresh: true)
+
+        let path = try #require(URLProtocolStub.requests.first?.url?.path)
+        #expect(!path.contains("/mix"), "mix rejects a request with no seeds")
+        #expect(path.contains("/search"))
+    }
+
     /// Every modelled field must survive the SQLite round trip. Cheap to get
     /// wrong silently: a dropped field shows up as a blank UI, not a crash.
     @Test("Modelled fields survive the cache round trip intact")

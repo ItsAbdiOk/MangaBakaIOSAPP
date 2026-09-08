@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct MangaBakaApp: App {
     private let repository: SeriesRepository
+    private let shelf: ShelfStore
 
     init() {
         let info = Bundle.main.infoDictionary
@@ -33,11 +34,12 @@ struct MangaBakaApp: App {
         }
 
         repository = SeriesRepository(client: client, database: database)
+        shelf = ShelfStore(database: database)
     }
 
     var body: some Scene {
         WindowGroup {
-            DiscoveryView(model: DiscoveryModel(repository: repository))
+            RootView(repository: repository, shelf: shelf)
         }
     }
 }
