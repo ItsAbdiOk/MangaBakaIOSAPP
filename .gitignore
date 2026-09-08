@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods / Carthage
+Pods/
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Secrets
+*.xcconfig.local
+.env
+.env.*
+
+# Local agent instructions
+CLAUDE.md
+.claude/
