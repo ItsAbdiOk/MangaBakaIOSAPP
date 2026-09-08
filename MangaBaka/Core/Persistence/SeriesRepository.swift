@@ -12,6 +12,51 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// - Parameter forceRefresh: bypass the freshness check (pull to refresh).
     /// - Returns: the series, and whether they came from the network or cache.
     func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult
+
+    /// Runs a search. Deliberately never cached: a query is typed once and the
+    /// answer is expected to be current, and caching every keystroke's result
+    /// would fill the database with rows nobody reads twice.
+    func search(_ query: SearchQuery) async -> FeedResult
+
+    /// Blends recommendations from seed series, with the reason each matched.
+    /// Requires at least one seed — the API rejects a seedless request.
+    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation]
+}
+
+/// A search or filter request. Only non-nil fields are sent, so an untouched
+/// filter never narrows the results by accident.
+struct SearchQuery: Sendable, Equatable {
+    var text: String?
+    /// manga, novel, manhwa, manhua, oel, other
+    var types: [String] = []
+    /// releasing, completed, hiatus, cancelled, upcoming, unknown
+    var statuses: [String] = []
+    /// One of the API's 20 sort orders.
+    var sort: String?
+    /// 0-100 as the API expresses it.
+    var minimumRating: Int?
+    var limit = 30
+
+    var isEmpty: Bool {
+        (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+            && types.isEmpty && statuses.isEmpty && minimumRating == nil
+    }
+
+    /// Repeated keys where the API wants them; a comma-joined list is rejected
+    /// with HTTP 400 for these parameters.
+    var queryItems: [URLQueryItem] {
+        var items = [URLQueryItem(name: "limit", value: String(limit))]
+        if let text, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            items.append(URLQueryItem(name: "q", value: text))
+        }
+        for type in types { items.append(URLQueryItem(name: "type", value: type)) }
+        for status in statuses { items.append(URLQueryItem(name: "status", value: status)) }
+        if let sort { items.append(URLQueryItem(name: "sort_by", value: sort)) }
+        if let minimumRating {
+            items.append(URLQueryItem(name: "rating_lower", value: String(minimumRating)))
+        }
+        return items
+    }
 }
 
 /// Which feed, and how long its cache stays fresh.
@@ -196,6 +241,35 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // train. An empty result here is handled by `blockingError`.
             let stale = (try? readCache(feed, requireFresh: false)) ?? []
             return FeedResult(series: stale, origin: .staleAfter(error))
+        }
+    }
+
+    func search(_ query: SearchQuery) async -> FeedResult {
+        var items = query.queryItems
+        for rating in contentRatings ?? [] {
+            items.append(URLQueryItem(name: "content_rating", value: rating))
+        }
+        do {
+            let series: [Series] = try await client.get("/v2/series/search", query: items)
+            return FeedResult(series: series.filter(\.isDiscoverable), origin: .network)
+        } catch {
+            return FeedResult(series: [], origin: .staleAfter(error))
+        }
+    }
+
+    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] {
+        guard !seeds.isEmpty else { return [] }
+        var items = filters.queryItems.filter { $0.name != "q" && $0.name != "sort_by" }
+        items.append(URLQueryItem(name: "series", value: seeds.map(String.init).joined(separator: ",")))
+        items.append(URLQueryItem(name: "strict", value: "false"))
+        for rating in contentRatings ?? [] {
+            items.append(URLQueryItem(name: "content_rating", value: rating))
+        }
+        do {
+            let results: [Recommendation] = try await client.get("/v1/series/mix", query: items)
+            return results.filter(\.series.isDiscoverable)
+        } catch {
+            return []
         }
     }
 

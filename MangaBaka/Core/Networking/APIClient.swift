@@ -91,6 +91,13 @@ actor APIClient {
         return payload
     }
 
+    /// Fetches the signed-in reader's profile, or `nil` when the credentials
+    /// are missing or rejected. Used to confirm a token works at the moment it
+    /// is entered, rather than letting it fail silently later.
+    func profile() async -> Profile? {
+        try? await get("/v1/my/profile", as: Profile.self)
+    }
+
     private func makeRequest(path: String, query: [URLQueryItem]) throws(APIError) -> URLRequest {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(path),

@@ -8,21 +8,28 @@ import SwiftUI
 struct RootView: View {
     let repository: SeriesRepository
     let shelf: ShelfStore
+    let client: APIClient
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
     @State private var stackPath: [Series] = []
     @State private var shelfPath: [Series] = []
+    @State private var searchPath: [Series] = []
+    @State private var mixPath: [Series] = []
+    @State private var searchModel: SearchModel?
+    @State private var mixModel: MixModel?
 
     /// Named AppTab, not Tab: SwiftUI's own Tab view is used below and the two
     /// names collide.
     enum AppTab: Hashable, CaseIterable {
-        case discover, stack, shelf
+        case discover, stack, search, mix, shelf
 
         var title: String {
             switch self {
             case .discover: "Discover"
             case .stack: "Stack"
+            case .search: "Search"
+            case .mix: "Mix"
             case .shelf: "Shelf"
             }
         }
@@ -31,6 +38,8 @@ struct RootView: View {
             switch self {
             case .discover: "square.grid.2x2"
             case .stack: "rectangle.portrait.on.rectangle.portrait"
+            case .search: "magnifyingglass"
+            case .mix: "wand.and.sparkles"
             case .shelf: "bookmark"
             }
         }
@@ -56,12 +65,49 @@ struct RootView: View {
                     .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
                 }
             }
+            Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) {
+                NavigationStack(path: $searchPath) {
+                    SearchView(
+                        model: searchModel ?? SearchModel(repository: repository),
+                        path: $searchPath
+                    )
+                    .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
+                }
+            }
+            Tab(AppTab.mix.title, systemImage: AppTab.mix.symbol, value: AppTab.mix) {
+                NavigationStack(path: $mixPath) {
+                    MixView(
+                        model: mixModel ?? MixModel(repository: repository, shelf: shelf),
+                        path: $mixPath,
+                        // Picking a seed is a search, so send the reader to the
+                        // screen that already does that well rather than
+                        // building a second, worse picker inside Mix.
+                        onPickSeed: { selection = .search }
+                    )
+                    .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
+                }
+            }
             Tab(AppTab.shelf.title, systemImage: AppTab.shelf.symbol, value: AppTab.shelf) {
                 NavigationStack(path: $shelfPath) {
                     ShelfView(shelf: shelf, path: $shelfPath)
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                NavigationLink {
+                                    SettingsView(validate: validateToken)
+                                } label: {
+                                    Image(systemName: "gearshape")
+                                }
+                            }
+                        }
                 }
             }
+        }
+        .task {
+            // Created once and kept: rebuilding them per tab switch would drop
+            // a half-typed query or an assembled set of mix seeds.
+            if searchModel == nil { searchModel = SearchModel(repository: repository) }
+            if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
         }
         .tint(Palette.accent)
         .preferredColorScheme(.dark)
@@ -73,5 +119,11 @@ struct RootView: View {
 
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
         SeriesDetailView(series: series, repository: repository, path: path)
+    }
+
+    /// Confirms a freshly entered token by asking who it belongs to. Returning
+    /// a name proves the token works; anything else means it does not.
+    private func validateToken(_ token: String) async -> String? {
+        await client.profile()?.displayName
     }
 }

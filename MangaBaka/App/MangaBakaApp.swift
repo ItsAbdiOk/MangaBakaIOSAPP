@@ -4,6 +4,7 @@ import SwiftUI
 struct MangaBakaApp: App {
     private let repository: SeriesRepository
     private let shelf: ShelfStore
+    private let client: APIClient
 
     init() {
         let info = Bundle.main.infoDictionary
@@ -14,12 +15,20 @@ struct MangaBakaApp: App {
             .flatMap(URL.init(string:))
             ?? URL(string: "https://api.mangabaka.org").unsafelyUnwrappedFallback
 
-        // Unauthenticated is a fully functional mode: every discovery endpoint
-        // is public. A PAT is picked up only if the developer supplied one.
-        let provider: TokenProvider = PATTokenProvider(infoDictionary: info)
-            ?? UnauthenticatedTokenProvider()
+        // Order matters: a token the reader entered on this device wins over
+        // one baked in at build time, and unauthenticated is a fully functional
+        // mode rather than a degraded one, because every discovery endpoint is
+        // public.
+        let provider: TokenProvider = if TokenStore().read() != nil {
+            KeychainTokenProvider()
+        } else if let build = PATTokenProvider(infoDictionary: info) {
+            build
+        } else {
+            UnauthenticatedTokenProvider()
+        }
 
-        let client = APIClient(baseURL: base, tokenProvider: provider)
+        let apiClient = APIClient(baseURL: base, tokenProvider: provider)
+        client = apiClient
 
         // A cache that cannot be opened is not worth crashing over: fall back
         // to an in-memory one so the app still works, just without offline
@@ -33,13 +42,13 @@ struct MangaBakaApp: App {
             }()
         }
 
-        repository = SeriesRepository(client: client, database: database)
+        repository = SeriesRepository(client: apiClient, database: database)
         shelf = ShelfStore(database: database)
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(repository: repository, shelf: shelf)
+            RootView(repository: repository, shelf: shelf, client: client)
         }
     }
 }

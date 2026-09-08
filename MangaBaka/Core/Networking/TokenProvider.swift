@@ -18,6 +18,26 @@ struct UnauthenticatedTokenProvider: TokenProvider {
     func authorizationHeader() async -> (field: String, value: String)? { nil }
 }
 
+/// Reads a personal access token from the Keychain, where the reader entered it
+/// on their own device.
+///
+/// Preferred over the build-time token: nothing is baked into the binary, the
+/// value never reaches the repository, and it can be removed from inside the
+/// app. Still a stopgap — a PAT never expires and is not scoped, which is
+/// exactly what OAuth fixes.
+struct KeychainTokenProvider: TokenProvider {
+    private let store: TokenStore
+
+    init(store: TokenStore = TokenStore()) {
+        self.store = store
+    }
+
+    func authorizationHeader() async -> (field: String, value: String)? {
+        guard let token = store.read() else { return nil }
+        return ("x-api-key", token)
+    }
+}
+
 /// Development-only. Reads a personal access token supplied at build time via
 /// the gitignored `Secrets.xcconfig`.
 ///
