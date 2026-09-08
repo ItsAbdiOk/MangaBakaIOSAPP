@@ -121,8 +121,11 @@ struct RootView: View {
         SeriesDetailView(series: series, repository: repository, path: path)
     }
 
-    /// Confirms a freshly entered token by asking who it belongs to. Returning
-    /// a name proves the token works; anything else means it does not.
+    /// Confirms a token by asking MangaBaka who it belongs to. A name coming
+    /// back proves the token works.
+    ///
+    /// The client resolves credentials per request, and Settings writes to the
+    /// Keychain before calling this, so the token under test is the one used.
     private func validateToken(_ token: String) async -> String? {
         await client.profile()?.displayName
     }

@@ -15,17 +15,9 @@ struct MangaBakaApp: App {
             .flatMap(URL.init(string:))
             ?? URL(string: "https://api.mangabaka.org").unsafelyUnwrappedFallback
 
-        // Order matters: a token the reader entered on this device wins over
-        // one baked in at build time, and unauthenticated is a fully functional
-        // mode rather than a degraded one, because every discovery endpoint is
-        // public.
-        let provider: TokenProvider = if TokenStore().read() != nil {
-            KeychainTokenProvider()
-        } else if let build = PATTokenProvider(infoDictionary: info) {
-            build
-        } else {
-            UnauthenticatedTokenProvider()
-        }
+        // Resolved per request rather than chosen once, so a token entered in
+        // Settings takes effect immediately instead of after a relaunch.
+        let provider = ResolvingTokenProvider(infoDictionary: info)
 
         let apiClient = APIClient(baseURL: base, tokenProvider: provider)
         client = apiClient

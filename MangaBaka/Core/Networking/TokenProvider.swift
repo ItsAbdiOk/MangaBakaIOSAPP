@@ -18,6 +18,30 @@ struct UnauthenticatedTokenProvider: TokenProvider {
     func authorizationHeader() async -> (field: String, value: String)? { nil }
 }
 
+/// Resolves credentials fresh on every request.
+///
+/// The app used to choose one provider at launch. If no token existed then, the
+/// client was pinned to unauthenticated for the whole session — so a token
+/// entered in Settings was written to the Keychain and then never read, and
+/// every attempt to validate it was rejected regardless of whether it was good.
+struct ResolvingTokenProvider: TokenProvider {
+    private let store: TokenStore
+    private let buildTimeToken: String?
+
+    init(store: TokenStore = TokenStore(), infoDictionary: [String: Any]?) {
+        self.store = store
+        self.buildTimeToken = PATTokenProvider(infoDictionary: infoDictionary)?.token
+    }
+
+    func authorizationHeader() async -> (field: String, value: String)? {
+        // A token the reader entered on this device wins over one baked in at
+        // build time; unauthenticated is a fully functional mode, not a
+        // degraded one, because every discovery endpoint is public.
+        guard let token = store.read() ?? buildTimeToken else { return nil }
+        return ("x-api-key", token)
+    }
+}
+
 /// Reads a personal access token from the Keychain, where the reader entered it
 /// on their own device.
 ///
