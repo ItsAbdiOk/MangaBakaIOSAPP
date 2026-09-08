@@ -1,0 +1,66 @@
+#!/bin/sh
+# Runs before every push. The point: broken code never leaves this machine, so
+# nothing broken can reach TestFlight.
+#
+# Enable with:  git config core.hooksPath .githooks
+# Bypass once:  git push --no-verify   (use sparingly, it defeats the purpose)
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); OFF=$(printf '\033[0m')
+fail() { printf "%spre-push: %s%s\n" "$RED" "$1" "$OFF" >&2; exit 1; }
+ok()   { printf "%s  ok%s  %s\n" "$GREEN" "$OFF" "$1"; }
+
+echo "pre-push checks..."
+
+# 1. A real token must never be committed or pushed.
+if git ls-files --error-unmatch Configs/Secrets.xcconfig >/dev/null 2>&1; then
+    fail "Configs/Secrets.xcconfig is tracked by git. It must stay local."
+fi
+if git grep -nE '"mb-[A-Za-z0-9]{16,}"' -- 'MangaBaka/*.swift' >/dev/null 2>&1; then
+    fail "A token-shaped literal is present in shipping code."
+fi
+ok "no credentials staged"
+
+# 2. Lint. Error-severity rules cover force unwraps, print(), catch-alls.
+if ! command -v swiftlint >/dev/null 2>&1; then
+    fail "swiftlint is not installed. Run: brew install swiftlint"
+fi
+swiftlint lint --strict --quiet || fail "lint failed"
+ok "lint clean"
+
+# 3. project.yml is the source of truth; the committed .xcodeproj must match.
+if ! command -v xcodegen >/dev/null 2>&1; then
+    fail "xcodegen is not installed. Run: brew install xcodegen"
+fi
+xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
+if ! git diff --quiet -- MangaBaka.xcodeproj; then
+    fail "MangaBaka.xcodeproj is out of sync with project.yml. Commit the regenerated project."
+fi
+ok "project in sync"
+
+# 4. Tests. The slow step, and the one that matters most.
+SIM=$(xcrun simctl list devices available \
+      | grep -oE 'iPhone [0-9]+ Pro' | sort -V | tail -1)
+[ -n "$SIM" ] || SIM=$(xcrun simctl list devices available \
+      | grep -oE 'iPhone [^(]*' | head -1 | sed 's/[[:space:]]*$//')
+[ -n "$SIM" ] || fail "no iPhone simulator available to test against"
+
+echo "  running tests on $SIM (this is the slow bit)..."
+# Not --quiet: quiet mode suppresses the per-test results, which are the whole
+# reason to read this log when something fails.
+if ! xcodebuild test \
+        -project MangaBaka.xcodeproj -scheme MangaBaka \
+        -destination "platform=iOS Simulator,name=$SIM" \
+        >/tmp/mb-prepush.log 2>&1; then
+    printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2
+    grep -E "✘|error:|Expectation failed|Test run with" /tmp/mb-prepush.log \
+        | sed 's/^/  /' | head -25 >&2
+    echo "  full log: /tmp/mb-prepush.log" >&2
+    exit 1
+fi
+ok "tests passed"
+
+echo "pre-push checks passed."

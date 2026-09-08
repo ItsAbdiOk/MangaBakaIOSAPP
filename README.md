@@ -49,9 +49,24 @@ xcodebuild test -project MangaBaka.xcodeproj -scheme MangaBaka \
 python3 Scripts/check-api-contract.py      # has MangaBaka's response shape drifted?
 ```
 
-CI runs the first two on every push. The contract check runs weekly, because
-the golden fixtures are frozen snapshots — without it, MangaBaka could change
-its response shape and every unit test would still pass while the app broke.
+A `pre-push` git hook runs the credential check, lint, the project-sync check
+and the full test suite before anything leaves your machine. Enable it once
+after cloning:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Xcode Cloud runs the same credential and lint checks again before building, via
+`ci_scripts/ci_pre_xcodebuild.sh`, so a push made with `--no-verify` still
+cannot reach TestFlight unchecked.
+
+Run the contract check by hand every so often. The golden fixtures are frozen
+snapshots: without it, MangaBaka could change their response shape and every
+unit test would still pass while the app broke.
+
+There is deliberately no GitHub Actions workflow — CI runs locally and in
+Xcode Cloud instead.
 
 ## Attribution
 
