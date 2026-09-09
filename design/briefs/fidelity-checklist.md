@@ -128,10 +128,28 @@ library, dropped, schedule, tags, plus the floating chrome.
 |---|---|
 | `Metrics.gutterStatus` | The mockup draws a fake iOS status bar. The real one is drawn by iOS. |
 | `Metrics.backButton` | The mockup has a custom 38pt circular back button. The system navigation bar's own control is used instead: it handles the edge-swipe gesture and VoiceOver for free, and the custom top bar now hides on pushed screens so it is visible. |
-| `Metrics.coverRowWidthCompact` | The mockup has a density setting (compact covers at 100pt). No setting exists yet. |
-| `Metrics.ratingSegment` | Mix's rating step control is not built to the mockup's segment shape yet. |
-| `Metrics.toggle` | Belongs to Mix's blocked-tags switch, which is not built. |
 | `Palette.rowOpaque` | No surface currently needs an opaque row. |
+
+### Ruled out, with the reason (2026-09-09)
+
+**The density setting is not a feature.** `coverRowWidthCompact` (100pt) sat on
+this list for weeks as an unbuilt setting. It is a prop in the mockup's own
+editor panel — `density: { editor: 'enum', options: ['Comfortable', 'Compact'] }`
+— sitting next to `accent` and `glassBlur`. Those are knobs for the designer to
+preview with, not controls the app was meant to ship. The token is deleted and
+`coverRowWidth` carries the reason, so it does not get re-proposed.
+
+The check that distinguishes the two: search the mockup for the token's name.
+A real feature appears in the rendered markup. A design knob appears only in
+`this.props`.
+
+**The filter sheet's "Blocked tags" switch is deliberately not built.** The
+mockup puts an on/off switch for the whole blocked-tag list inside the search
+filter sheet. The list itself lives in Settings and is global. Adding a second
+control for it would need a new "blocking is currently off" state that nothing
+else in the app has, and two places to change one thing is how they drift. If a
+design wants per-search blocking, that is a feature to spec, not a token to use
+up.
 
 ### Not built from the mockup
 
@@ -139,7 +157,6 @@ library, dropped, schedule, tags, plus the floating chrome.
   `SearchQuery` carries tags; only the UI is missing.
 - Mix's **"Save as a lens"** button. Lenses ship as presets; writing your own
   needs a design.
-- The **density** setting behind `coverRowWidthCompact`.
 - A **library search** field on the Library screen.
 
 ### Deviations added during the pass

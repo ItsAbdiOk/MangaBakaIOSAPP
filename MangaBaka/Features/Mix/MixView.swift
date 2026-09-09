@@ -12,13 +12,6 @@ struct MixView: View {
     @Binding private var path: [Series]
     private let onPickSeed: () -> Void
 
-    private static let ratingOptions: [(label: String, minimum: Int?)] = [
-        ("Any", nil),
-        ("7.0+", 70),
-        ("8.0+", 80),
-        ("9.0+", 90)
-    ]
-
     private static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
 
     init(model: MixModel, path: Binding<[Series]>, onPickSeed: @escaping () -> Void) {
@@ -146,12 +139,20 @@ struct MixView: View {
                         toggleType(type)
                     }
                 }
-                ForEach(Self.ratingOptions, id: \.label) { option in
-                    chip(option.label, isSelected: model.filters.minimumRating == option.minimum) {
-                        model.filters.minimumRating = option.minimum
-                    }
-                }
             }
+            // The same control the search filters use. Mix had its own row of
+            // capsules offering Any/7/8/9 — a different shape and a different
+            // set from the sheet, for the same parameter on the same API.
+            HStack(alignment: .firstTextBaseline) {
+                Eyebrow(text: "Minimum rating")
+                Spacer(minLength: 8)
+                Text(RatingSegments.label(for: model.filters.minimumRating))
+                    .typeChip()
+                    .foregroundStyle(Palette.accent)
+            }
+            .padding(.top, Metrics.gapCovers)
+            RatingSegments(minimum: $model.filters.minimumRating)
+                .padding(.top, 10)
             tagFilter
         }
         .padding(.horizontal, Metrics.gutter)

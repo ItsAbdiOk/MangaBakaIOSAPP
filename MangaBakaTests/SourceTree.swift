@@ -25,4 +25,17 @@ enum SourceTree {
     static func read(_ relativePath: String) throws -> String {
         try String(contentsOfFile: "\(root)/\(relativePath)", encoding: .utf8)
     }
+
+    /// Every Swift file under a directory, as repository-relative paths.
+    ///
+    /// For checks that have to look at the whole app rather than one file —
+    /// "is this token used anywhere at all" cannot be answered from one.
+    static func swiftFiles(under directory: String) throws -> [String] {
+        let base = "\(root)/\(directory)"
+        guard let walker = FileManager.default.enumerator(atPath: base) else { return [] }
+        return walker
+            .compactMap { $0 as? String }
+            .filter { $0.hasSuffix(".swift") }
+            .map { "\(directory)/\($0)" }
+    }
 }

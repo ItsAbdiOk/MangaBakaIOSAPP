@@ -22,12 +22,4 @@ enum Glass {
             .overlay(shape.strokeBorder(Palette.glassEdge, lineWidth: 0.5))
             .shadow(color: .black.opacity(0.50), radius: 17, y: 14)
     }
-
-    /// The top bar: thinner, so content reads through it.
-    /// CSS intent: rgba(12,12,16,0.55), blur 26px.
-    static func topBar<S: InsettableShape>(_ shape: S) -> some View {
-        Color.clear
-            .glassEffect(.regular, in: shape)
-            .overlay(shape.strokeBorder(Palette.glassEdge, lineWidth: 0.5))
-    }
 }

@@ -98,19 +98,26 @@ struct SwitchIndicator: View {
     let isOn: Bool
     let isLocked: Bool
 
+    /// The mockup's switch, not UIKit's: a 46x28 track with a 24pt knob and
+    /// 2pt of inset. It was drawn at UIKit's 51x31 with a 27pt knob, which is
+    /// the right size for a real `Toggle` and the wrong one here — noticeably
+    /// larger than every other control on the same screen.
+    private static let trackWidth: CGFloat = 46
+    private static let knob = Metrics.toggle - 4
+
     var body: some View {
         let track = isOn ? Palette.accent : Palette.surfaceChip
         return ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
                 .fill(track.opacity(isLocked ? 0.4 : 1))
-                .frame(width: 51, height: 31)
+                .frame(width: Self.trackWidth, height: Metrics.toggle)
             Circle()
                 .fill(.white.opacity(isLocked ? 0.6 : 1))
-                .frame(width: 27, height: 27)
+                .frame(width: Self.knob, height: Self.knob)
                 .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
                 .padding(.horizontal, 2)
         }
-        .frame(width: 51, height: 31)
+        .frame(width: Self.trackWidth, height: Metrics.toggle)
         .animation(.snappy(duration: 0.2), value: isOn)
         .accessibilityHidden(true)
     }

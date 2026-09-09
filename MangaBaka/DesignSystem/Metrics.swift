@@ -55,8 +55,14 @@ enum Metrics {
 
     // MARK: Covers
 
+    /// 118, and there is no compact alternative.
+    ///
+    /// The mockup carries a `density` prop with Comfortable (118) and Compact
+    /// (100) covers, and it was on the backlog as an unbuilt setting. It is
+    /// not a feature: `density` sits in the mockup's own editor panel next to
+    /// `accent` and `glassBlur` — knobs for the designer to preview with, not
+    /// controls the app was meant to ship.
     static let coverRowWidth: CGFloat = 118
-    static let coverRowWidthCompact: CGFloat = 100
     static let coverDetailRowWidth: CGFloat = 106
     static let coverDetailHeroWidth: CGFloat = 126
     static let coverSeedWidth: CGFloat = 82

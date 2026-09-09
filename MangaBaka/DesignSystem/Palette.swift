@@ -12,8 +12,6 @@ enum Palette {
     static let ground = Color(hex: 0x08080B)
     /// Cover and image placeholder, shown behind art while it loads.
     static let imagePlaceholder = Color(hex: 0x131318)
-    /// Opaque row fill, used where hairlines must stay crisp.
-    static let rowOpaque = Color(hex: 0x0F0F14)
 
     // MARK: Raised surfaces — white over the ground, never solid grey
 

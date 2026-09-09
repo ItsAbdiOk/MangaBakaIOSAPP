@@ -46,7 +46,7 @@ struct FilterSheet: View {
                     }
                 }
 
-                section("Minimum rating") { ratingStepper }
+                ratingSection
 
                 HStack(spacing: Metrics.gapChips) {
                     Button {
@@ -111,28 +111,21 @@ struct FilterSheet: View {
         }
     }
 
-    private var ratingStepper: some View {
-        // Steps of ten, matching how the API expresses rating (0-100), rather
-        // than a slider whose value would rarely land on a round number.
-        HStack {
-            Text(query.minimumRating.map { "\($0)+" } ?? "Any")
-                .typeBody()
-                .foregroundStyle(Palette.textPrimary)
-            Spacer()
-            Stepper(
-                "",
-                value: Binding(
-                    get: { query.minimumRating ?? 0 },
-                    set: { query.minimumRating = $0 == 0 ? nil : $0 }
-                ),
-                in: 0...100,
-                step: 10
-            )
-            .labelsHidden()
+    /// The mockup names the current value beside the heading in the accent,
+    /// so the control says what it is set to without the reader parsing five
+    /// segments to find the lit one.
+    private var ratingSection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Minimum rating")
+                    .typeSubsectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                Spacer(minLength: 8)
+                Text(RatingSegments.label(for: query.minimumRating))
+                    .typeChip()
+                    .foregroundStyle(Palette.accent)
+            }
+            RatingSegments(minimum: $query.minimumRating)
         }
-        .padding(.horizontal, 14)
-        .frame(height: Metrics.field)
-        .background(Palette.surfaceChip)
-        .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
     }
 }
