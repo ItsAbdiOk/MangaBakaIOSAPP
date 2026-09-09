@@ -19,6 +19,8 @@ actor APIClient {
     /// also means they can contact us rather than silently blocking us.
     static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
 
+    private let limiter = RateLimitGate()
+
     init(baseURL: URL, session: URLSession = .shared, tokenProvider: TokenProvider) {
         self.baseURL = baseURL
         self.session = session
@@ -54,6 +56,13 @@ actor APIClient {
         query: [URLQueryItem] = [],
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
+        // Refuse before spending a request we already know will be refused.
+        // The limit is per IP and shared with strangers on the same network, so
+        // hammering it during a backoff makes their searches fail too.
+        if let wait = await limiter.secondsUntilAllowed() {
+            throw APIError.rateLimited(retryAfter: wait)
+        }
+
         let request = try makeRequest(path: path, query: query)
         let header = await tokenProvider.authorizationHeader()
 
@@ -80,8 +89,10 @@ actor APIClient {
 
         if http.statusCode == 429 {
             let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
+            await limiter.recordRateLimit(retryAfter: retryAfter)
             throw APIError.rateLimited(retryAfter: retryAfter)
         }
+        await limiter.recordSuccess()
 
         guard (200...299).contains(http.statusCode) else {
             // Errors always carry `message`, and it is documented as safe to

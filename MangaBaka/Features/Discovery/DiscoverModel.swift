@@ -31,9 +31,10 @@ final class DiscoverModel {
         !rows.contains { !$0.series.isEmpty } && !rows.contains(where: \.isLoading)
     }
 
-    /// Why the screen is empty, in the API's own words where it gave any.
-    /// Never claims the reader is offline when the failure was something else.
-    private(set) var failureReason: String?
+    /// Why the screen is empty. Carried as the error itself rather than a
+    /// string, so the view can choose a symbol and phrasing that match the
+    /// actual cause instead of assuming everything is an outage.
+    private(set) var failure: APIError?
 
     private let repository: any SeriesRepositoryProtocol
 
@@ -48,18 +49,18 @@ final class DiscoverModel {
                     (index, await repository.feed(row.kind, forceRefresh: forceRefresh))
                 }
             }
-            var firstFailure: String?
+            var firstFailure: APIError?
             for await (index, result) in group {
                 rows[index].series = result.series
                 rows[index].isLoading = false
                 if case let .staleAfter(error) = result.origin {
                     rows[index].staleReason = result.series.isEmpty ? nil : error.userFacingMessage
-                    firstFailure = firstFailure ?? error.userFacingMessage
+                    firstFailure = firstFailure ?? error
                 } else {
                     rows[index].staleReason = nil
                 }
             }
-            failureReason = firstFailure
+            failure = firstFailure
         }
     }
 }

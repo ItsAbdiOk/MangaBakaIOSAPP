@@ -61,15 +61,7 @@ struct DiscoverView: View {
             SectionHeader(title: row.title)
 
             if let staleReason = row.staleReason {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Palette.positive)
-                        .frame(width: 6, height: 6)
-                    Text(staleReason)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
-                }
-                .padding(.horizontal, Metrics.gutter)
+                StaleBanner(message: staleReason)
             }
 
             if row.isLoading && row.series.isEmpty {
@@ -111,27 +103,8 @@ struct DiscoverView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 30))
-                .foregroundStyle(Palette.textTertiary)
-            Text("Nothing to show yet")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text(model.failureReason ?? "Nothing is saved on this device yet.")
-                .typeSubtitle()
-                .foregroundStyle(Palette.textSecondary)
-                .multilineTextAlignment(.center)
-            Button("Try again") { Task { await model.load(forceRefresh: true) } }
-                .typeCTA()
-                .foregroundStyle(Palette.onAccent)
-                .padding(.horizontal, 18)
-                .frame(height: Metrics.ctaSecondary)
-                .background(Palette.accent, in: Capsule())
-                .padding(.top, 6)
+        FailureState(error: model.failure ?? .offline) {
+            await model.load(forceRefresh: true)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 40)
-        .padding(.top, 60)
     }
 }
