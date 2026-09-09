@@ -37,7 +37,8 @@ struct MixView: View {
                 }
                 filterStrip
                 blendButton
-                resultsSection
+                dnaSection
+                MixResults(model: model, path: $path)
             }
             .padding(.top, Metrics.scrollTopInset)
             .padding(.bottom, Metrics.scrollBottomInset)
@@ -56,7 +57,7 @@ struct MixView: View {
             Text("Mix")
                 .typeScreenTitle()
                 .foregroundStyle(Palette.textPrimary)
-            Text("Blend a few series you love into new ones worth reading.")
+            Text("Pick series you love. The mix is blended from them — no account needed.")
                 .typeSubtitle()
                 .foregroundStyle(Palette.textSecondary)
         }
@@ -203,60 +204,23 @@ struct MixView: View {
         .padding(.horizontal, Metrics.gutter)
     }
 
-    // MARK: Results
+    // MARK: Blend DNA
 
+    /// What the blend is made of, and the only steering the API allows.
     @ViewBuilder
-    private var resultsSection: some View {
-        if model.isRunning {
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(Palette.textTertiary)
-                Spacer()
-            }
-            .padding(.top, Metrics.sectionGap)
-        } else if let message = model.message {
-            Text(message)
-                .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
-                .padding(.horizontal, Metrics.gutter)
-        } else if !model.results.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionHeader(title: "Blend")
-                ForEach(model.results) { recommendation in
-                    resultRow(recommendation)
-                }
-            }
+    private var dnaSection: some View {
+        if !model.dna.isEmpty {
+            BlendDNAView(
+                dna: model.dna,
+                excluded: model.excludedTags,
+                excludedStrands: model.excludedStrands,
+                moves: model.moves,
+                isEdited: model.isDNAEdited,
+                onToggle: { tagId in Task { await model.toggleStrand(tagId) } },
+                onReset: { Task { await model.resetDNA() } }
+            )
+            .padding(.horizontal, Metrics.gutter)
         }
     }
 
-    private func resultRow(_ recommendation: Recommendation) -> some View {
-        Button {
-            path.append(recommendation.series)
-        } label: {
-            HStack(spacing: Metrics.gapCovers) {
-                CoverImage(
-                    cover: recommendation.series.cover,
-                    width: Metrics.coverSavedStripWidth,
-                    radius: Metrics.radiusThumb
-                )
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(recommendation.series.displayTitle ?? "Untitled series")
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(2)
-                    if let reason = recommendation.reason {
-                        Text(reason)
-                            .typeSmallMeta()
-                            .foregroundStyle(Palette.textTertiary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Metrics.gutter)
-            .padding(.vertical, 10)
-        }
-        .buttonStyle(.plain)
-    }
 }

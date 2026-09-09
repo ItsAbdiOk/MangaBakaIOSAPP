@@ -26,9 +26,19 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// beginning of the row.
     func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult
 
-    /// Blends recommendations from seed series, with the reason each matched.
+    /// Blends recommendations from seed series, with the reason each matched
+    /// and the DNA the blend was derived from.
+    ///
     /// Requires at least one seed — the API rejects a seedless request.
-    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation]
+    ///
+    /// - Parameter excludedTags: tag ids to keep out, sent as `tag_not`. There
+    ///   is no weight parameter on this endpoint, so steering is include or
+    ///   exclude and nothing in between.
+    func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int]
+    ) async -> MixResult
 
     /// Everything the detail screen shows beyond the series itself. Fetched
     /// together so one slow endpoint does not stagger the screen into place.
@@ -382,8 +392,12 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
-    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] {
-        guard !seeds.isEmpty else { return [] }
+    func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int] = []
+    ) async -> MixResult {
+        guard !seeds.isEmpty else { return .empty }
         var items = filters.queryItems.filter { $0.name != "q" && $0.name != "sort_by" }
         // Repeated keys; the comma form is rejected with HTTP 400. See
         // FeedKind.extraQuery for the verification.
@@ -396,12 +410,36 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         if filters.types.isEmpty {
             items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
         }
+        // Excluded strands. Proven live: excluding the top tag drops it out of
+        // the DNA, promotes everything below it, and changes most of the
+        // results — so the DNA doubles as feedback for the edit just made.
+        items.append(contentsOf: excludedTags.map {
+            URLQueryItem(name: "tag_not", value: String($0))
+        })
+
         do {
-            let results: [Recommendation] = try await client.get("/v1/series/mix", query: items)
-            return results.filter(\.series.isDiscoverable)
+            let envelope: MixEnvelope = try await client.getRoot(
+                "/v1/series/mix",
+                query: items
+            )
+            return MixResult(
+                recommendations: (envelope.data ?? []).filter(\.series.isDiscoverable),
+                dna: BlendDNA(
+                    strands: envelope.dna ?? [],
+                    seedCount: envelope.seedCount ?? seeds.count
+                )
+            )
         } catch {
-            return []
+            return .empty
         }
+    }
+
+    /// `mix` answers with `data` alongside `dna` and `seed_count` at the top
+    /// level, so it needs its own envelope rather than the shared one.
+    private struct MixEnvelope: Decodable {
+        let data: [Recommendation]?
+        let dna: [BlendDNA.Strand]?
+        let seedCount: Int?
     }
 
     func updateContentRatings(_ ratings: [String]) async {

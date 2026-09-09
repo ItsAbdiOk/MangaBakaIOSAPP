@@ -6,11 +6,19 @@ private final class MixRepository: StubRepositoryBase, @unchecked Sendable {
     private(set) var mixCalls = 0
     private(set) var lastSeeds: [Int] = []
     var results: [Recommendation] = []
+    /// Handed back as the blend's DNA, so a test can drive the strand controls.
+    var dna: BlendDNA = .empty
+    private(set) var lastExcludedTags: [Int] = []
 
-    override func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] {
+    override func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int]
+    ) async -> MixResult {
         mixCalls += 1
         lastSeeds = seeds
-        return results
+        lastExcludedTags = excludedTags.sorted()
+        return MixResult(recommendations: results, dna: dna)
     }
 }
 
@@ -214,5 +222,215 @@ struct ShelfStoreTests {
         try await shelf.record(SeriesFactory.make(id: 2, title: "Second"), as: .saved)
 
         #expect(try await shelf.entries(.saved).map(\.id) == [2, 1])
+    }
+}
+
+/// The blend's DNA: ten weighted tags, and the only steering the API allows.
+@Suite("Blend DNA")
+@MainActor
+struct BlendDNATests {
+    private func makeShelf() throws -> ShelfStore {
+        ShelfStore(database: try AppDatabase.inMemory(), clock: TestClock())
+    }
+
+    private func strand(_ tagId: Int, _ name: String, _ weight: Double) -> BlendDNA.Strand {
+        BlendDNA.Strand(tagId: tagId, name: name, weight: weight)
+    }
+
+    private func dna(_ strands: [BlendDNA.Strand]) -> BlendDNA {
+        BlendDNA(strands: strands, seedCount: 1)
+    }
+
+    /// Verified live: excluding a strand drops it from the DNA and re-derives
+    /// the rest. The app has to send that exclusion or nothing happens.
+    @Test("Switching a strand off sends it as an exclusion and re-blends")
+    func excludingAStrandReblends() async throws {
+        let repository = MixRepository()
+        repository.dna = dna([strand(467, "Kuudere", 0.16), strand(827, "Twins", 0.11)])
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+
+        await model.run()
+        #expect(repository.lastExcludedTags.isEmpty)
+
+        await model.toggleStrand(467)
+        #expect(repository.lastExcludedTags == [467])
+        #expect(model.isDNAEdited)
+        #expect(repository.mixCalls == 2, "an edit has to re-blend, or nothing changes")
+    }
+
+    @Test("Switching it back on removes the exclusion")
+    func togglingBackOn() async throws {
+        let repository = MixRepository()
+        repository.dna = dna([strand(467, "Kuudere", 0.16)])
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+
+        await model.run()
+        await model.toggleStrand(467)
+        await model.toggleStrand(467)
+
+        #expect(repository.lastExcludedTags.isEmpty)
+        #expect(!model.isDNAEdited)
+    }
+
+    @Test("Starting over clears every exclusion")
+    func resetClearsExclusions() async throws {
+        let repository = MixRepository()
+        repository.dna = dna([strand(1, "A", 0.2), strand(2, "B", 0.1)])
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+
+        await model.run()
+        await model.toggleStrand(1)
+        await model.toggleStrand(2)
+        #expect(model.excludedTags.count == 2)
+
+        await model.resetDNA()
+        #expect(model.excludedTags.isEmpty)
+        #expect(repository.lastExcludedTags.isEmpty)
+    }
+
+    /// The weights re-derive server-side after every edit, so showing how they
+    /// moved is the feedback for the edit just made.
+    @Test("Movement is reported against the previous blend")
+    func reportsMovement() async throws {
+        let repository = MixRepository()
+        repository.dna = dna([strand(1, "A", 0.20), strand(2, "B", 0.10)])
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+
+        await model.run()
+        #expect(model.moves.isEmpty, "a first blend has nothing to compare against")
+
+        repository.dna = dna([strand(1, "A", 0.30), strand(2, "B", 0.10)])
+        await model.toggleStrand(9)
+
+        let move = try #require(model.moves.first)
+        #expect(move.name == "A")
+        #expect(move.from == 0.20)
+        #expect(move.to == 0.30)
+        #expect(move.rose)
+    }
+
+    /// A weight that barely twitched is noise, not a result.
+    @Test("Movement below half a percent is not reported")
+    func ignoresNoise() {
+        let before = dna([strand(1, "A", 0.200)])
+        let after = dna([strand(1, "A", 0.202)])
+        #expect(BlendDNA.moves(from: before, to: after).isEmpty)
+    }
+
+    /// Changing the seeds invalidates everything derived from them.
+    @Test("Editing the seeds discards the DNA and its exclusions")
+    func seedChangeClearsDNA() async throws {
+        let repository = MixRepository()
+        repository.dna = dna([strand(1, "A", 0.2)])
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+
+        await model.run()
+        await model.toggleStrand(1)
+        #expect(model.isDNAEdited)
+
+        model.addSeed(SeriesFactory.make(id: 2, title: "Another"))
+        #expect(model.dna.isEmpty)
+        #expect(model.excludedTags.isEmpty)
+    }
+}
+
+/// The DNA has to survive the wire, and the endpoint's envelope is its own
+/// shape: `data` alongside `dna` and `seed_count` at the top level.
+@Suite("Blend DNA decoding", .serialized)
+struct BlendDNADecodingTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    @Test("A real mix response yields both the results and the DNA")
+    func decodesDNA() async throws {
+        let body = Data("""
+        {"status":200,
+         "seed_count":1,
+         "dna":[{"tag_id":467,"name":"Kuudere","weight":0.1605},
+                {"tag_id":253,"name":"Twins","weight":0.1122}],
+         "data":[{"score":0.9,"matched_related":true,
+                  "series":{"id":7,"state":"active","cover":{},
+                            "titles":[{"language":"en","traits":["official"],
+                                       "title":"Blend","is_primary":true}]}}]}
+        """.utf8)
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
+        defer { URLProtocolStub.reset() }
+
+        let repository = SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: try AppDatabase.inMemory(),
+            clock: TestClock()
+        )
+        let blend = await repository.mix(seeds: [1], filters: SearchQuery(), excludedTags: [])
+
+        #expect(blend.recommendations.count == 1)
+        #expect(blend.dna.strands.count == 2)
+        #expect(blend.dna.strands.first?.name == "Kuudere")
+        #expect(blend.dna.seedCount == 1)
+    }
+
+    /// Sent as repeated keys, like every other list parameter on this API.
+    @Test("Excluded strands are sent as repeated tag_not keys")
+    func sendsExclusions() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: try AppDatabase.inMemory(),
+            clock: TestClock()
+        )
+        _ = await repository.mix(seeds: [1], filters: SearchQuery(), excludedTags: [467, 253])
+
+        let url = try #require(URLProtocolStub.requests.first?.url)
+        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(items.filter { $0.name == "tag_not" }.compactMap(\.value) == ["467", "253"])
+    }
+}
+
+/// Excluding a strand removes it from what the API returns, so the chip
+/// vanished and the only way back was "Start over" — a one-way control.
+@Suite("Excluded strands stay reachable")
+@MainActor
+struct ExcludedStrandTests {
+    private func makeShelf() throws -> ShelfStore {
+        ShelfStore(database: try AppDatabase.inMemory(), clock: TestClock())
+    }
+
+    @Test("An excluded strand is remembered so it can be switched back on")
+    func excludedStrandIsRemembered() async throws {
+        let repository = MixRepository()
+        repository.dna = BlendDNA(
+            strands: [BlendDNA.Strand(tagId: 467, name: "Kuudere", weight: 0.16)],
+            seedCount: 1
+        )
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+        await model.run()
+
+        // The API drops an excluded tag from the DNA it returns.
+        repository.dna = BlendDNA(strands: [], seedCount: 1)
+        await model.toggleStrand(467)
+
+        #expect(model.dna.strands.isEmpty, "the API no longer returns it")
+        #expect(model.excludedStrands.map(\.name) == ["Kuudere"], "but it is still shown")
+
+        await model.toggleStrand(467)
+        #expect(model.excludedStrands.isEmpty)
+        #expect(model.excludedTags.isEmpty)
     }
 }

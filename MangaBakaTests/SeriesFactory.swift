@@ -79,7 +79,11 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
         FeedResult(series: [], origin: .network)
     }
 
-    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] { [] }
+    func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int]
+    ) async -> MixResult { .empty }
 
     func extras(for seriesId: Int) async -> SeriesExtras { SeriesExtras() }
 

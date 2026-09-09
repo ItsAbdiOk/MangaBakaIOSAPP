@@ -98,7 +98,7 @@ struct SearchAndMixTests {
         defer { URLProtocolStub.reset() }
 
         let repository = try makeRepository()
-        _ = await repository.mix(seeds: [11, 22], filters: SearchQuery())
+        _ = await repository.mix(seeds: [11, 22], filters: SearchQuery(), excludedTags: [])
 
         let seeds = try items(from: URLProtocolStub.requests.first)
             .filter { $0.name == "series" }
@@ -112,9 +112,11 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
         defer { URLProtocolStub.reset() }
 
-        let results = try await makeRepository().mix(seeds: [], filters: SearchQuery())
+        let blend = try await makeRepository().mix(
+            seeds: [], filters: SearchQuery(), excludedTags: []
+        )
 
-        #expect(results.isEmpty)
+        #expect(blend.recommendations.isEmpty)
         #expect(URLProtocolStub.requests.isEmpty, "No seeds means no request at all")
     }
 
@@ -127,7 +129,7 @@ struct SearchAndMixTests {
         defer { URLProtocolStub.reset() }
 
         let repository = try makeRepository()
-        _ = await repository.mix(seeds: [1, 2, 3], filters: SearchQuery())
+        _ = await repository.mix(seeds: [1, 2, 3], filters: SearchQuery(), excludedTags: [])
 
         let sent = try items(from: URLProtocolStub.requests.first)
         #expect(sent.contains { $0.name == "content_rating" }, "Filtering still applies to mix")
@@ -144,7 +146,7 @@ struct SearchAndMixTests {
         filters.text = "ignored"
         filters.sort = "random"
         filters.types = ["manga"]
-        _ = try await makeRepository().mix(seeds: [7], filters: filters)
+        _ = try await makeRepository().mix(seeds: [7], filters: filters, excludedTags: [])
 
         let names = Set(try items(from: URLProtocolStub.requests.first).map(\.name))
         #expect(!names.contains("q"))
@@ -170,11 +172,13 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
 
-        let results = try await makeRepository().mix(seeds: [3397], filters: SearchQuery())
+        let blend = try await makeRepository().mix(
+            seeds: [3397], filters: SearchQuery(), excludedTags: []
+        )
 
-        #expect(results.count == 1)
-        #expect(results.first?.series.displayTitle == "Blend")
-        #expect(results.first?.reason == "Directly related")
+        #expect(blend.recommendations.count == 1)
+        #expect(blend.recommendations.first?.series.displayTitle == "Blend")
+        #expect(blend.recommendations.first?.reason == "Directly related")
     }
 
     /// A reason is shown only when the API gave a basis for one.
