@@ -33,7 +33,7 @@ struct SeriesDetailView: View {
                 provenance
             }
             .padding(.top, 12)
-            .padding(.bottom, Metrics.tabBarClearance)
+            .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)

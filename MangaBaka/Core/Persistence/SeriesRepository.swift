@@ -49,6 +49,10 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// track. Nil clears it.
     func updateLibraryExclusion(userID: String?) async
 
+    /// How many distinct series are held on device. The mockup's Discover
+    /// subtitle counts them, so it has to be a real number.
+    func cachedSeriesCount() async -> Int
+
     /// When the freshest cached feed was written, or nil if nothing is cached.
     /// Drives the top bar's "Cached 2m" so it reports a real timestamp rather
     /// than a decorative one.
@@ -401,6 +405,16 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         guard formats != self.formats else { return }
         self.formats = formats
         try? discardCachedFeeds()
+    }
+
+    func cachedSeriesCount() async -> Int {
+        cachedSeriesCountSync()
+    }
+
+    private func cachedSeriesCountSync() -> Int {
+        (try? database.writer.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM series") ?? 0
+        }) ?? 0
     }
 
     func newestCacheDate() async -> Date? {

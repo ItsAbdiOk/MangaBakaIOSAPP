@@ -4,16 +4,19 @@ import SwiftUI
 struct DiscoverView: View {
     @State private var model: DiscoverModel
     @Binding private var path: [Series]
+    private let onOpenStack: () -> Void
 
-    init(model: DiscoverModel, path: Binding<[Series]>) {
+    init(model: DiscoverModel, path: Binding<[Series]>, onOpenStack: @escaping () -> Void) {
         _model = State(initialValue: model)
         _path = path
+        self.onOpenStack = onOpenStack
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
                 header
+                openTheStack
 
                 if model.isCompletelyEmpty {
                     emptyState
@@ -23,8 +26,8 @@ struct DiscoverView: View {
                     }
                 }
             }
-            .padding(.top, 62)
-            .padding(.bottom, Metrics.tabBarClearance)
+            .padding(.top, Metrics.scrollTopInset)
+            .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
@@ -44,21 +47,65 @@ struct DiscoverView: View {
         .padding(.horizontal, Metrics.gutter)
     }
 
-    /// Grounded in the actual time of day rather than invented copy.
+    /// "Tuesday · 1,284 series cached". Both halves are real: the weekday from
+    /// the clock, the count from the database. The mockup's third clause
+    /// ("nothing waiting on a spinner") is dropped — it is a claim about
+    /// performance that the app cannot verify at render time.
     private var todayLine: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        return switch hour {
-        case 5..<12: "Something to start the day"
-        case 12..<18: "Worth an afternoon"
-        case 18..<23: "Find something worth the night"
-        default: "Still awake? So is the shelf"
+        let weekday = Date().formatted(.dateTime.weekday(.wide))
+        guard model.cachedCount > 0 else { return weekday }
+        return "\(weekday) · \(model.cachedCount.formatted()) series cached"
+    }
+
+    /// The mockup opens Discover with a shortcut into the stack.
+    ///
+    /// DEVIATION: its subtitle reads "N left in today's stack". Discover cannot
+    /// know that without duplicating the stack's queue and reaction logic, and
+    /// a wrong number is worse than a plain one, so this says what the control
+    /// does instead.
+    private var openTheStack: some View {
+        Button { onOpenStack() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Palette.onAccent)
+                    .frame(width: 26, height: 26)
+                    .background(Palette.accent, in: RoundedRectangle(
+                        cornerRadius: 9, style: .continuous
+                    ))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Open the stack")
+                        .typeRowTitle()
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("Swipe covers to find something new")
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .background { Glass.floating(RoundedRectangle(
+                cornerRadius: Metrics.radiusCard, style: .continuous
+            )) }
+            .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Metrics.gutter)
+        .padding(.top, 16)
     }
 
     @ViewBuilder
     private func rowView(_ row: DiscoverModel.Row) -> some View {
         VStack(alignment: .leading, spacing: 11) {
-            SectionHeader(title: row.title)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                SectionHeader(title: row.title)
+                Spacer(minLength: 0)
+                Text(row.more)
+                    .typeInstruction()
+                    .foregroundStyle(Palette.accent)
+                    .padding(.trailing, Metrics.gutter)
+            }
 
             if let staleReason = row.staleReason {
                 StaleBanner(message: staleReason)
@@ -76,7 +123,7 @@ struct DiscoverView: View {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(row.series) { series in
                             Button { path.append(series) } label: {
-                                CoverCard(series: series)
+                                CoverCard(series: series, meta: Self.meta(for: series))
                             }
                             .buttonStyle(.plain)
                             // Fetch when the reader reaches the run-up to the
@@ -103,6 +150,14 @@ struct DiscoverView: View {
                 .scrollIndicators(.hidden)
             }
         }
+    }
+
+    /// "Manhwa · 8.6". Each half only when the API supplied it.
+    static func meta(for series: Series) -> String? {
+        var parts: [String] = []
+        if let type = series.type, !type.isEmpty { parts.append(type.capitalized) }
+        if let rating = series.rating { parts.append(String(format: "%.1f", rating / 10)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// How far from the end of a row to start fetching the next page.

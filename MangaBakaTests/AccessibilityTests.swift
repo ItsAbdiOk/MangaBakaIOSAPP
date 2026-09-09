@@ -175,10 +175,13 @@ struct TabBarClearanceTests {
         "MangaBaka/Features/Settings/SettingsView.swift"
     ]
 
-    @Test("The clearance exceeds the tab bar's height plus its inset")
+    /// The floating capsule is roughly 61pt tall and sits `tabBarBottomInset`
+    /// off the bottom edge. Whichever token a screen reserves has to clear that.
+    @Test("Both clearance tokens exceed the tab bar's height plus its inset")
     func clearanceIsEnough() {
-        // The capsule is 62pt and sits 22pt from the bottom edge.
-        #expect(Metrics.tabBarClearance >= 62 + 22)
+        let needed = 61 + Metrics.tabBarBottomInset
+        #expect(Metrics.tabBarClearance >= needed)
+        #expect(Metrics.scrollBottomInset >= needed)
     }
 
     @Test(
@@ -187,8 +190,12 @@ struct TabBarClearanceTests {
     )
     func everyScreenReservesIt(path: String) throws {
         let text = try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
+        // Either token clears the bar — `clearanceIsEnough` asserts that of
+        // both. The screens now use the mockup's own 150pt bottom padding, so
+        // naming only the old token would fail a screen that reserves MORE.
         #expect(
-            text.contains("Metrics.tabBarClearance"),
+            text.contains("Metrics.scrollBottomInset")
+                || text.contains("Metrics.tabBarClearance"),
             "\(path) can leave its last row stranded behind the tab bar"
         )
     }

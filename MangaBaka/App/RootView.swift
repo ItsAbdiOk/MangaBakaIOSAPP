@@ -62,7 +62,8 @@ struct RootView: View {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
                         model: DiscoverModel(repository: repository),
-                        path: $discoverPath
+                        path: $discoverPath,
+                        onOpenStack: { selection = .stack }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
                 }

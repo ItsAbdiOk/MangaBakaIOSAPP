@@ -12,6 +12,9 @@ final class DiscoverModel {
     struct Row: Identifiable, Equatable {
         let kind: FeedKind
         let title: String
+        /// The link at the right of the row header. The mockup gives each row
+        /// its own label rather than one shared "See all".
+        let more: String
         var series: [Series] = []
         var staleReason: String?
         var isLoading = true
@@ -31,10 +34,13 @@ final class DiscoverModel {
     }
 
     private(set) var rows: [Row] = [
-        Row(kind: .rising, title: "Rising this week"),
-        Row(kind: .hiddenGems, title: "Hidden gems"),
-        Row(kind: .trending, title: "Trending")
+        Row(kind: .rising, title: "Rising this week", more: "7 days"),
+        Row(kind: .hiddenGems, title: "Hidden gems", more: "See all"),
+        Row(kind: .trending, title: "Trending", more: "7d · 30d")
     ]
+
+    /// How many series are cached, for the subtitle. Zero until it is read.
+    private(set) var cachedCount = 0
 
     /// True only when every row failed with nothing cached — the one case that
     /// deserves a whole-screen error.
@@ -54,6 +60,7 @@ final class DiscoverModel {
     }
 
     func load(forceRefresh: Bool = false) async {
+        defer { Task { await refreshCachedCount() } }
         await withTaskGroup(of: (Int, FeedResult).self) { group in
             for (index, row) in rows.enumerated() {
                 group.addTask { [repository] in
@@ -78,6 +85,10 @@ final class DiscoverModel {
             }
             failure = firstFailure
         }
+    }
+
+    private func refreshCachedCount() async {
+        cachedCount = await repository.cachedSeriesCount()
     }
 
     /// Fetches the next page of one row and appends it.

@@ -25,8 +25,8 @@ struct SearchView: View {
 
                 content
             }
-            .padding(.top, 62)
-            .padding(.bottom, Metrics.tabBarClearance)
+            .padding(.top, Metrics.scrollTopInset)
+            .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
