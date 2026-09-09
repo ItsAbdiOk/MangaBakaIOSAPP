@@ -150,3 +150,25 @@ struct BlockedTagsRequestTests {
         #expect(URLProtocolStub.requests.count == before + 1)
     }
 }
+
+/// A blocked list the reader cannot find is indistinguishable from a broken
+/// app: things are missing and there is no way to learn why.
+@Suite("Blocked tags are findable", .enabled(if: SourceTree.isAvailable))
+struct BlockedTagsDiscoverabilityTests {
+    @Test("Settings lists what has been blocked, and can unblock it")
+    func settingsListsThem() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Settings/SettingsView.swift")
+        #expect(source.contains("Blocked tags"))
+        #expect(source.contains("blockedTags.toggle"))
+        #expect(source.contains("Unblock"))
+    }
+
+    /// Blocking happens where the tags are; the list lives where a reader looks
+    /// for what they have hidden. Both routes have to exist.
+    @Test("Blocking is offered from the tag list itself")
+    func browseOffersBlocking() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Browse/BrowseView.swift")
+        #expect(source.contains("blockLabel"))
+        #expect(source.contains("blocked.toggle"))
+    }
+}

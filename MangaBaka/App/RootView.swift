@@ -126,7 +126,8 @@ struct RootView: View {
                             SettingsView(
                                 validate: validateToken,
                                 content: content,
-                                formats: formats
+                                formats: formats,
+                                blockedTags: blockedTags
                             )
                         }
                         .toolbar {

@@ -9,6 +9,7 @@ struct SettingsView: View {
     let validate: (String) async -> String?
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
+    let blockedTags: BlockedTagsStore
 
     @State private var entry = ""
     @State private var status: Status = .idle
@@ -32,6 +33,7 @@ struct SettingsView: View {
                 accountSection
                 FormatSection(formats: formats)
                 contentSection
+                blockedSection
                 attributionSection
             }
             .padding(.horizontal, Metrics.gutter)
@@ -214,6 +216,49 @@ struct SettingsView: View {
         .accessibilityLabel("\(rating.title) content")
         .accessibilityValue(isOn ? "On" : "Off")
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// What the reader has hidden by theme rather than by rating.
+    ///
+    /// Blocking happens in Browse, where the tags are. This is where someone
+    /// looks when they want to know what they have hidden from themselves — a
+    /// list they cannot find is indistinguishable from a broken app.
+    @ViewBuilder
+    private var blockedSection: some View {
+        if !blockedTags.blocked.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Eyebrow(text: "Blocked tags")
+                Text("""
+                Hidden everywhere, whatever a series is rated. Unblock from the \
+                tag list in Browse.
+                """)
+                .typeSubtitle()
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                FlowLayout(spacing: 7) {
+                    ForEach(blockedTags.blocked.tags) { tag in
+                        Button {
+                            Task { await blockedTags.toggle(id: tag.id, name: tag.name) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(tag.name).typeChip()
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(Palette.textSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Palette.surfaceChip, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Unblock \(tag.name)")
+                    }
+                }
+            }
+        }
     }
 
     /// Required by the data licence, not decoration.
