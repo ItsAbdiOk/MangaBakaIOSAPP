@@ -56,6 +56,22 @@ actor APIClient {
         query: [URLQueryItem] = [],
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
+        let data = try await rawData(path: path, query: query)
+        let envelope: APIEnvelope<Payload>
+        do {
+            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+        guard let payload = envelope.data else {
+            throw APIError.decoding(underlying: "Successful response carried no `data`.")
+        }
+        return payload
+    }
+
+    /// Performs the request and returns the raw body, having already turned
+    /// every transport and status failure into a named `APIError`.
+    private func rawData(path: String, query: [URLQueryItem]) async throws(APIError) -> Data {
         // Refuse before spending a request we already know will be refused.
         // The limit is per IP and shared with strangers on the same network, so
         // hammering it during a backoff makes their searches fail too.
@@ -92,8 +108,6 @@ actor APIClient {
             await limiter.recordRateLimit(retryAfter: retryAfter)
             throw APIError.rateLimited(retryAfter: retryAfter)
         }
-        await limiter.recordSuccess()
-
         guard (200...299).contains(http.statusCode) else {
             // Errors always carry `message`, and it is documented as safe to
             // show users. Fall back only if the body is unreadable.
@@ -104,17 +118,34 @@ actor APIClient {
             )
         }
 
-        let envelope: APIEnvelope<Payload>
+        // Only a success clears the backoff. A 500 says the server is unwell,
+        // not that the rate-limit window has reopened, and treating it as
+        // permission to resume would put us straight back into the limit.
+        await limiter.recordSuccess()
+        return data
+    }
+
+    /// Fetches from an endpoint that answers with `results` rather than `data`.
+    ///
+    /// Two shapes exist in this API and neither decodes as the other, so the
+    /// distinction is explicit at the call site rather than guessed at.
+    func getResults<Payload: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        as _: Payload.Type = Payload.self
+    ) async throws(APIError) -> Payload {
+        let data = try await rawData(path: path, query: query)
         do {
-            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
+            let envelope = try decoder.decode(ResultsEnvelope<Payload>.self, from: data)
+            guard let results = envelope.results else {
+                throw APIError.decoding(underlying: "Response carried no `results`.")
+            }
+            return results
+        } catch let error as APIError {
+            throw error
         } catch {
             throw APIError.decoding(underlying: String(describing: error))
         }
-
-        guard let payload = envelope.data else {
-            throw APIError.decoding(underlying: "Successful response carried no `data`.")
-        }
-        return payload
     }
 
     /// Fetches the signed-in reader's profile, or `nil` when the credentials

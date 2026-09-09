@@ -142,3 +142,66 @@ struct RateLimitClientTests {
         #expect(URLProtocolStub.requests.count == 2)
     }
 }
+
+/// A tiny thread-safe queue, because the stub's handler is `@Sendable` and
+/// cannot capture a mutable local.
+private final class ResponseQueue: @unchecked Sendable {
+    private let lock = NSLock()
+    private var responses: [URLProtocolStub.Response]
+
+    init(_ responses: [URLProtocolStub.Response]) {
+        self.responses = responses
+    }
+
+    func next() -> URLProtocolStub.Response {
+        lock.lock(); defer { lock.unlock() }
+        guard !responses.isEmpty else {
+            return .init(body: Data(#"{"status":200,"data":[]}"#.utf8))
+        }
+        return responses.removeFirst()
+    }
+}
+
+@Suite("Rate limit is not cleared by other failures", .serialized)
+struct RateLimitClearingTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeClient() -> APIClient {
+        APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
+    }
+
+    /// A 500 says the server is unwell, not that the rate-limit window has
+    /// reopened. Treating it as permission to resume puts the app straight back
+    /// into the limit it was told to back off from.
+    @Test("A server error does not clear an active rate-limit backoff")
+    func serverErrorDoesNotClearBackoff() async {
+        // A queue the handler can drain from across concurrency domains.
+        let queue = ResponseQueue([
+            .init(statusCode: 429, body: Data(#"{"status":429}"#.utf8),
+                  headers: ["Retry-After": "60"]),
+            .init(statusCode: 500, body: Data(#"{"status":500}"#.utf8))
+        ])
+        URLProtocolStub.setHandler { _ in .respond(queue.next()) }
+        defer { URLProtocolStub.reset() }
+
+        let client = makeClient()
+        // First call earns the backoff.
+        await #expect(throws: APIError.self) {
+            let _: [Int] = try await client.get("/a")
+        }
+        let afterRateLimit = URLProtocolStub.requests.count
+
+        // The gate should refuse locally, so the queued 500 is never reached.
+        await #expect(throws: APIError.self) {
+            let _: [Int] = try await client.get("/b")
+        }
+        #expect(
+            URLProtocolStub.requests.count == afterRateLimit,
+            "The backoff must still hold"
+        )
+    }
+}
