@@ -48,6 +48,11 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// The reader's own user id, so a blend can exclude what they already
     /// track. Nil clears it.
     func updateLibraryExclusion(userID: String?) async
+
+    /// When the freshest cached feed was written, or nil if nothing is cached.
+    /// Drives the top bar's "Cached 2m" so it reports a real timestamp rather
+    /// than a decorative one.
+    func newestCacheDate() async -> Date?
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -396,6 +401,19 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         guard formats != self.formats else { return }
         self.formats = formats
         try? discardCachedFeeds()
+    }
+
+    func newestCacheDate() async -> Date? {
+        // GRDB offers a sync and an async `read`; in an async context `try?`
+        // picks the async one, which does not type-check here. Same reason
+        // `discardCachedFeeds` is split out.
+        newestCacheDateSync()
+    }
+
+    private func newestCacheDateSync() -> Date? {
+        try? database.writer.read { db in
+            try Date.fetchOne(db, sql: "SELECT MAX(cachedAt) FROM feedMetadata")
+        }
     }
 
     func updateLibraryExclusion(userID: String?) async {

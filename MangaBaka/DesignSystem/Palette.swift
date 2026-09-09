@@ -52,7 +52,8 @@ enum Palette {
     /// Text and icons on an accent fill. Never white: white on this fails contrast.
     static let onAccent = Color(hex: 0x180B06)
     /// oklch(0.72 0.16 145). Used only for the cached indicator dot.
-    static let positive = Color(hex: 0x4FC98A)
+    /// The mockup's oklch(0.72 0.16 145), converted. Used for the cached dot.
+    static let positive = Color(hex: 0x5BBE62)
 
     // MARK: Borders — always 0.5pt
 
@@ -67,6 +68,13 @@ enum Palette {
     static let surfaceControl = Color(hex: 0x1E1E24).opacity(0.62)
     /// The dark badge sitting on a cover. rgba(10,10,12,0.6).
     static let surfaceBadge = Color(hex: 0x0A0A0C).opacity(0.60)
+    /// The tab capsule and the floating search button. rgba(26,26,32,0.6).
+    static let surfaceFloating = Color(hex: 0x1A1A20).opacity(0.60)
+    /// The top bar, thinner so content reads through it. rgba(12,12,16,0.55).
+    static let surfaceTopBar = Color(hex: 0x0C0C10).opacity(0.55)
+    /// A small pill in the top bar. rgba(255,255,255,0.07).
+    static let surfacePill = Color.white.opacity(0.07)
+    static let borderPill = Color.white.opacity(0.12)
     /// A floating control's edge. Brighter than `border`, which is for cards.
     static let borderControl = Color.white.opacity(0.14)
 

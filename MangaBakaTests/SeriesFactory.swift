@@ -88,4 +88,6 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
     func updateFormats(_ formats: [String]) async {}
 
     func updateLibraryExclusion(userID: String?) async {}
+
+    func newestCacheDate() async -> Date? { nil }
 }

@@ -77,6 +77,19 @@ enum Metrics {
     static let actionDetails: CGFloat = 48
     static let actionSave: CGFloat = 64
     static let actionGap: CGFloat = 16
+
+    // MARK: The floating chrome
+
+    /// One tab inside the capsule.
+    static let tabWidth: CGFloat = 62
+    static let tabIcon: CGFloat = 21
+    /// The capsule's own padding around its tabs.
+    static let tabCapsulePadding: CGFloat = 6
+    /// Between the capsule and the search button beside it.
+    static let tabCapsuleGap: CGFloat = 10
+    /// How far the whole assembly sits off the bottom.
+    static let tabBarBottomInset: CGFloat = 30
+    static let searchButton: CGFloat = 58
     static let coverUpcomingThumb: CGFloat = 52
 
     /// Every cover in the app is 2:3.
