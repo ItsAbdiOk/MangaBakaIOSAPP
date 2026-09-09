@@ -4,6 +4,7 @@ import SwiftUI
 struct SeriesDetailView: View {
     let series: Series
     let repository: any SeriesRepositoryProtocol
+    let library: any LibraryProviding
     @Binding var path: [Series]
 
     @State private var similar: [Series] = []
@@ -17,6 +18,7 @@ struct SeriesDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
                 hero
+                LibraryControl(series: series, library: library)
                 if let description = series.description, !description.isEmpty {
                     Text(description)
                         .typeBody()

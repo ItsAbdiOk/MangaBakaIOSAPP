@@ -216,7 +216,7 @@ struct RootView: View {
     }
 
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
-        SeriesDetailView(series: series, repository: repository, path: path)
+        SeriesDetailView(series: series, repository: repository, library: library, path: path)
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

@@ -71,3 +71,26 @@ struct APIErrorPresentationTests {
         #expect(Set(symbols).count == symbols.count, "A shared symbol tells the reader nothing")
     }
 }
+
+/// "Unauthenticated." names a state the reader cannot act on. Signing in is a
+/// fix they can carry out, and the app has a screen for it — so the message
+/// says where to go. Every other status keeps the API's own wording, which the
+/// API documents as safe to show verbatim.
+@Suite("An auth failure says what to do about it")
+struct AuthErrorPresentationTests {
+    @Test("401 and 403 point at Settings", arguments: [401, 403])
+    func authErrorsAreActionable(_ status: Int) {
+        let error = APIError.server(status: status, message: "Unauthenticated.")
+        #expect(error.needsAccount)
+        #expect(error.userFacingMessage.contains("Settings"))
+        #expect(!error.userFacingMessage.contains("Unauthenticated"))
+        #expect(error.symbolName == "person.crop.circle.badge.plus")
+    }
+
+    @Test("Other statuses keep the API's own words", arguments: [400, 404, 422, 500])
+    func otherStatusesAreVerbatim(_ status: Int) {
+        let error = APIError.server(status: status, message: "That series does not exist.")
+        #expect(!error.needsAccount)
+        #expect(error.userFacingMessage == "That series does not exist.")
+    }
+}

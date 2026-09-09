@@ -23,7 +23,11 @@ enum AppTab: Hashable, CaseIterable {
         switch self {
         case .discover: "circle.circle"
         case .stack: "line.3.horizontal"
-        case .mix: "circle.on.circle"
+        // Overlapping circles: the blend the screen actually does. The
+        // previous name, "circle.on.circle", is not an SF Symbol at all — it
+        // renders as nothing, silently, which is how the Mix tab shipped with
+        // a label and no glyph. AppTabSymbolTests now checks every name.
+        case .mix: "camera.filters"
         case .library: "chart.bar.fill"
         case .search: "magnifyingglass"
         }

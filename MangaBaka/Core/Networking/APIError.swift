@@ -48,12 +48,18 @@ enum APIError: Error, Equatable {
         }
     }
 
+    /// Whether the reader can fix this by connecting an account.
+    var needsAccount: Bool {
+        if case let .server(status, _) = self { return status == 401 || status == 403 }
+        return false
+    }
+
     /// A symbol suited to the cause, so the screen reads at a glance.
     var symbolName: String {
         switch self {
         case .offline: "wifi.slash"
         case .rateLimited: "hourglass"
-        case .server: "exclamationmark.triangle"
+        case .server: needsAccount ? "person.crop.circle.badge.plus" : "exclamationmark.triangle"
         case .decoding, .transport: "questionmark.circle"
         }
     }
@@ -73,8 +79,16 @@ enum APIError: Error, Equatable {
             } else {
                 "MangaBaka is busy right now."
             }
-        case let .server(_, message):
-            message
+        // 401 and 403 have a fix the reader can actually carry out, and the
+        // API's own message for them ("Unauthenticated.") names a state, not
+        // an action. Every other status keeps the server's wording, which the
+        // API documents as safe to show verbatim.
+        case let .server(status, message):
+            if status == 401 || status == 403 {
+                "Connect your MangaBaka account in Settings to use your library."
+            } else {
+                message
+            }
         case .decoding, .transport:
             "Something went wrong talking to MangaBaka."
         }

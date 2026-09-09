@@ -65,9 +65,7 @@ enum Palette {
 
     /// The dark badge sitting on a cover. rgba(10,10,12,0.6).
     static let surfaceBadge = Color(hex: 0x0A0A0C).opacity(0.60)
-    /// The top bar, thinner so content reads through it. rgba(12,12,16,0.55).
-    static let surfaceTopBar = Color(hex: 0x0C0C10).opacity(0.55)
-    /// A small pill in the top bar. rgba(255,255,255,0.07).
+    /// A small pill. rgba(255,255,255,0.07).
     static let surfacePill = Color.white.opacity(0.07)
     static let borderPill = Color.white.opacity(0.12)
 
