@@ -49,8 +49,8 @@ targets:
       - package: GRDB
         product: GRDB
     configFiles:
-      Debug: Configs/Base.xcconfig
-      Release: Configs/Base.xcconfig
+      Debug: Configs/Debug.xcconfig
+      Release: Configs/Release.xcconfig
     # A real Info.plist rather than a generated one, because the app reads two
     # build settings at runtime and INFOPLIST_KEY_* only supports Apple's own
     # known keys — custom names are silently dropped, which is why MB_PAT never

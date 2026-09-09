@@ -1,0 +1,8 @@
+// Debug-only settings.
+//
+// The personal access token is included HERE and never in Release, so a local
+// archive cannot carry it even by accident. Xcode Cloud has no Secrets.xcconfig
+// at all, but relying on that alone meant a hand-made local archive would have
+// shipped a real credential.
+#include "Base.xcconfig"
+#include? "Secrets.xcconfig"

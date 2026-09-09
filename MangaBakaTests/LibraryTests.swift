@@ -201,3 +201,58 @@ struct LibraryTests {
         #expect(await makeService().topGenres().isEmpty)
     }
 }
+
+/// A personal access token never expires and grants full account access, so a
+/// Release build must not be able to carry one — anyone with the .ipa could
+/// extract it and act as its owner.
+@Suite("Release builds cannot carry a token")
+struct ReleaseTokenTests {
+    private var root: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .path
+    }
+
+    private func config(_ name: String) throws -> String {
+        try String(contentsOfFile: "\(root)/Configs/\(name)", encoding: .utf8)
+    }
+
+    /// Relying on Xcode Cloud simply not having the secrets file was not
+    /// enough: a local archive uploaded by hand would have shipped a real
+    /// credential. Release now excludes it structurally.
+    /// Checks for an actual include directive rather than the word appearing
+    /// anywhere: the file explains in prose why it excludes the secrets, and a
+    /// naive substring match would fail on its own comment.
+    private func includesSecrets(_ text: String) -> Bool {
+        text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .contains { $0.hasPrefix("#include") && $0.contains("Secrets.xcconfig") }
+    }
+
+    @Test("Release config does not include the secrets file")
+    func releaseExcludesSecrets() throws {
+        let release = try config("Release.xcconfig")
+        #expect(!includesSecrets(release))
+        #expect(release.contains("MB_PAT ="), "Release forces the value empty")
+    }
+
+    @Test("Debug config still picks the token up for local development")
+    func debugIncludesSecrets() throws {
+        #expect(includesSecrets(try config("Debug.xcconfig")))
+    }
+
+    /// The shared base must stay free of it, or both configurations inherit it.
+    @Test("The shared base config carries no token")
+    func baseIsClean() throws {
+        #expect(!includesSecrets(try config("Base.xcconfig")))
+    }
+
+    @Test("The example file holds a placeholder, never a real token")
+    func exampleIsPlaceholder() throws {
+        let example = try config("Secrets.example.xcconfig")
+        #expect(example.contains("mb-your-personal-access-token-here"))
+        // A real token is 60+ characters; the placeholder must not look like one.
+        #expect(!example.contains("mb-") || example.contains("your-personal"))
+    }
+}

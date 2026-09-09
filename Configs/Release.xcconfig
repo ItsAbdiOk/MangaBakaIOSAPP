@@ -1,0 +1,9 @@
+// Release-only settings.
+//
+// Deliberately does NOT include Secrets.xcconfig. A Release build must never
+// carry a personal access token: a token never expires and grants full account
+// access, so anyone with the .ipa could extract it and act as its owner.
+#include "Base.xcconfig"
+
+// Force it empty even if something else tries to define it.
+MB_PAT =
