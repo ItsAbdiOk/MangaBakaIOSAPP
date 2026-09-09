@@ -98,6 +98,28 @@ struct AppDatabase: Sendable {
             try db.create(index: "shelfEntry_on_kind", on: "shelfEntry", columns: ["kind", "addedAt"])
         }
 
+        migrator.registerMigration("v3_cadence") { db in
+            // One row per series we have asked MangaUpdates about.
+            //
+            // A row exists as soon as the question has been ASKED, whether or
+            // not it produced an answer. That distinction is the whole point:
+            // a null cadence with a timestamp is a settled result ("too few
+            // dated releases to estimate from"), not a gap waiting to be
+            // filled. Keying "have we looked at this?" off the cadence instead
+            // of the timestamp made the reference implementation re-fetch the
+            // same works on every build and report "8 still to do" forever.
+            try db.create(table: "cadenceEntry") { table in
+                table.primaryKey("seriesId", .integer)
+                // The estimate, JSON-encoded. Null when the series has too
+                // little release history to estimate from.
+                table.column("payload", .blob)
+                table.column("fetchedAt", .datetime).notNull()
+                // Set when the fetch itself failed, so the next build retries
+                // it rather than treating the silence as an answer.
+                table.column("failure", .text)
+            }
+        }
+
         return migrator
     }
 }

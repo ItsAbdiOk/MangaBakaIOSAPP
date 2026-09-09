@@ -55,9 +55,14 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     }
 
     struct TrackerEntry: Codable, Equatable, Sendable, Hashable {
-        /// The id is a string on some trackers and a number on others, so it
-        /// is not modelled — nothing here needs it, and decoding it would fail
-        /// on whichever shape was not anticipated.
+        /// The tracker's own id, kept as a string.
+        ///
+        /// It arrives as a string on some trackers and a number on others
+        /// (`anime_planet` sends "tsukihime", `anilist` sends 30705), so it is
+        /// decoded leniently and normalised to a string. Modelling it as either
+        /// concrete type fails on whichever shape was not anticipated — the
+        /// same v1/v2 trap that has cost this app three silent decode failures.
+        let id: String?
         let rating: Double?
         /// Every tracker uses a different scale; this one is 0-100 throughout,
         /// which is the only way to compare them honestly.
@@ -128,6 +133,12 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         DisplayTitle.choose(from: titles)
     }
 
+    /// MangaUpdates' id for this series, if it has one. Base-36, and it must be
+    /// decoded before use — see `MangaUpdatesID`.
+    var mangaUpdatesID: String? {
+        source?["manga_updates"]?.id
+    }
+
     /// A series whose `state` is "merged" or "deleted" should not be shown in
     /// discovery surfaces; it exists only so stored references can be updated.
     var isDiscoverable: Bool {
@@ -144,5 +155,24 @@ private extension KeyedDecodingContainer {
         if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
         guard let text = try? decodeIfPresent(String.self, forKey: key) else { return nil }
         return Double(text)
+    }
+}
+
+extension Series.TrackerEntry {
+    private enum CodingKeys: String, CodingKey { case id, rating, ratingNormalized }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // String on some trackers, number on others. Normalised rather than
+        // insisted upon.
+        if let text = try? container.decodeIfPresent(String.self, forKey: .id) {
+            id = text
+        } else if let number = try? container.decodeIfPresent(Int.self, forKey: .id) {
+            id = String(number)
+        } else {
+            id = nil
+        }
+        rating = try container.decodeIfPresent(Double.self, forKey: .rating)
+        ratingNormalized = try container.decodeIfPresent(Double.self, forKey: .ratingNormalized)
     }
 }
