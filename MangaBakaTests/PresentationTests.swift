@@ -176,7 +176,10 @@ struct SortOrderTests {
 
     /// The filter sheet used to carry its own copy of this list, which is how
     /// two places drift apart.
-    @Test("The sort list is defined once")
+    /// Reads the source, so it can only run where the checkout is reachable.
+    /// Tests run inside the simulator; on a build machine the files are not
+    /// there.
+    @Test("The sort list is defined once", .enabled(if: SourceTree.isAvailable))
     func definedOnce() throws {
         // The filter sheet is the only place that renders the list; the search
         // heading uses SortOrder.label. Neither may hold its own copy.

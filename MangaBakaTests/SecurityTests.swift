@@ -82,7 +82,8 @@ struct SecurityTests {
     /// The rule is what the request CARRIES, not where it is going.
     /// `/v1/series/mix` is public by path, but once it carries the reader's
     /// account id the URL is a cache key containing that id.
-    @Test("Identity-bearing parameters are named and never cached")
+    @Test("Identity-bearing parameters are named and never cached",
+          .enabled(if: SourceTree.isAvailable))
     func identityIsNeverCached() throws {
         let source = try SourceTree.read("MangaBaka/Core/Networking/APIClient.swift")
         for parameter in ["exclude_user_library", "blend_user_id"] {

@@ -20,6 +20,7 @@
 		14C86245A2FFF1449145B702 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EDE9358BE6F5C26EE4A290 /* AppDatabase.swift */; };
 		1621038E6C35ED1642B2F900 /* LinksSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8655E5F70D5BC83C78BFB1B6 /* LinksSection.swift */; };
 		17423DB0B7630B34E45FF791 /* DisplayTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */; };
+		180493DBB033BAD16DD1E432 /* SourceTestGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */; };
 		1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC80B7959AD108FCFD7FFF /* StackModel.swift */; };
 		1FAF9328BFF73ADDFA7163DA /* FormatPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF595AE01077A9CDAA601BB7 /* FormatPreferencesTests.swift */; };
 		21FEA6C477FD95D25064A8CB /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E794403919014DB2D01E20 /* FlowLayout.swift */; };
@@ -232,6 +233,7 @@
 		A41B78E9BC45F46C39BABCE7 /* FormatPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormatPreferences.swift; sourceTree = "<group>"; };
 		AE4CAD5968791AD6892AD695 /* RateLimitGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitGate.swift; sourceTree = "<group>"; };
 		AF1D9EA1F3939E7C7446C07E /* APIErrorPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIErrorPresentationTests.swift; sourceTree = "<group>"; };
+		B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceTestGuardTests.swift; sourceTree = "<group>"; };
 		B9F587D9C9F9514C82ACD4B9 /* SearchLensList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchLensList.swift; sourceTree = "<group>"; };
 		BB59EF6E9F6BAFBB79F5BC68 /* ResultsEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsEnvelope.swift; sourceTree = "<group>"; };
 		BD80FA82C8DB0C1F8B36440D /* BlendDNA.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendDNA.swift; sourceTree = "<group>"; };
@@ -532,6 +534,7 @@
 				D9A8619A97BD3D79D30DB90B /* SeriesExtrasTests.swift */,
 				64EED0A0A3A05647D2445F70 /* SeriesFactory.swift */,
 				ECDC6890749C1997497BEE11 /* SeriesRepositoryTests.swift */,
+				B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */,
 				45FF467BEFD81175BFF95FDB /* SourceTree.swift */,
 				3A6C7BDE02EF1D5618DBBF97 /* StackSaveTests.swift */,
 				7DE5A9E7DDC428AB083B28B0 /* SurpriseAndStackTests.swift */,
@@ -901,6 +904,7 @@
 				7E6F50ABE110986FD1E83529 /* SeriesExtrasTests.swift in Sources */,
 				D84B75E1AA8C7B233A63FF52 /* SeriesFactory.swift in Sources */,
 				B91A25F847578C571F45BE74 /* SeriesRepositoryTests.swift in Sources */,
+				180493DBB033BAD16DD1E432 /* SourceTestGuardTests.swift in Sources */,
 				E660C1970FF471564D6F9700 /* SourceTree.swift in Sources */,
 				D82EE639AF5818E765A8482A /* StackSaveTests.swift in Sources */,
 				E30F00A5B893F7CD6D2189F3 /* SurpriseAndStackTests.swift in Sources */,
