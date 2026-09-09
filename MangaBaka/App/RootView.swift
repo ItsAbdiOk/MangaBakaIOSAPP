@@ -22,6 +22,8 @@ struct RootView: View {
     @State private var stackPath: [Series] = []
     @State private var shelfPath: [Series] = []
     @State private var showsSchedule = false
+    @State private var libraryModel: LibraryModel?
+    @State private var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
     @State private var searchModel: SearchModel?
@@ -97,8 +99,19 @@ struct RootView: View {
             }
             Tab(AppTab.library.title, systemImage: AppTab.library.symbol, value: AppTab.library) {
                 NavigationStack(path: $shelfPath) {
-                    ShelfView(shelf: shelf, path: $shelfPath)
+                    LibraryView(
+                        model: libraryModel ?? LibraryModel(library: library),
+                        path: $shelfPath,
+                        scheduleSummary: nil,
+                        onOpenSchedule: { showsSchedule = true },
+                        onOpenShelf: { state in
+                            openShelf = libraryModel?.shelves.first { $0.state == state }
+                        }
+                    )
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
+                        .navigationDestination(item: $openShelf) { shelf in
+                            ShelfDetailView(shelf: shelf, path: $shelfPath)
+                        }
                         .navigationDestination(isPresented: $showsSchedule) {
                             ScheduleView(
                                 model: ScheduleModel(service: schedule),
@@ -163,6 +176,7 @@ struct RootView: View {
             // a half-typed query or an assembled set of mix seeds.
             if searchModel == nil { searchModel = SearchModel(repository: repository) }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
+            if libraryModel == nil { libraryModel = LibraryModel(library: library) }
         }
         .task {
             // Nothing is cached when the app opens — the first feed has not
@@ -187,7 +201,11 @@ struct RootView: View {
         case .discover: discoverPath.isEmpty
         case .stack: stackPath.isEmpty
         case .mix: mixPath.isEmpty
-        case .library: shelfPath.isEmpty
+        // The shelf and schedule screens are pushed by their own bindings
+        // rather than onto shelfPath, so checking the path alone reported
+        // "at root" while a screen was open — and the top bar covered its
+        // back button.
+        case .library: shelfPath.isEmpty && openShelf == nil && !showsSchedule
         case .search: searchPath.isEmpty
         }
     }
@@ -198,7 +216,10 @@ struct RootView: View {
         case .discover: discoverPath.removeAll()
         case .stack: stackPath.removeAll()
         case .mix: mixPath.removeAll()
-        case .library: shelfPath.removeAll()
+        case .library:
+            shelfPath.removeAll()
+            openShelf = nil
+            showsSchedule = false
         case .search: searchPath.removeAll()
         }
     }
