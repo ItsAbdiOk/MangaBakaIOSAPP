@@ -25,8 +25,8 @@ struct DetailBackdrop: View {
             // 2:3 and adds a shadow, both wrong for a full-bleed wash, and its
             // placeholder would paint a grey rectangle behind the hero on a
             // slow connection rather than nothing.
-            AsyncImage(url: cover.url(forHeight: proxy.size.height, scale: displayScale)) {
-                image in
+            let url = cover.url(forHeight: proxy.size.height, scale: displayScale)
+            AsyncImage(url: url) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Color.clear

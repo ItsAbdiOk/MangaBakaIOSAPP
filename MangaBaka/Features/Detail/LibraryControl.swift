@@ -19,7 +19,7 @@ final class LibraryControlModel {
     private(set) var failure: String?
 
     var isKnown: Bool { entry != nil }
-    var current: LibraryEntry? { entry ?? nil }
+    var current: LibraryEntry? { entry.flatMap { $0 } }
 
     init(library: any LibraryProviding, seriesId: Int) {
         self.library = library

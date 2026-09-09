@@ -54,19 +54,30 @@ struct LibraryControlTests {
             entries.removeAll { $0.seriesId == seriesId }
         }
 
+        /// Built directly rather than decoded. These are test doubles standing
+        /// in for what the server holds, and going through JSON would only be
+        /// testing the decoder, which has its own suite.
         static func entry(
             seriesId: Int,
             state: LibraryEntry.State,
             chapter: Double? = nil
         ) -> LibraryEntry {
-            let json = """
-            {"id":\(seriesId),"series_id":\(seriesId),"state":"\(state.rawValue)",
-             "progress_chapter":\(chapter.map { String($0) } ?? "null")}
-            """
-            // Force-decoding a literal this file wrote is not a reachable
-            // force-unwrap: there is no input here that a user or the network
-            // can influence.
-            return try! Fixture.decoder().decode(LibraryEntry.self, from: Data(json.utf8))
+            LibraryEntry(
+                id: seriesId,
+                seriesId: seriesId,
+                state: state,
+                progressChapter: chapter,
+                progressVolume: nil,
+                rating: nil,
+                note: nil,
+                startDate: nil,
+                finishDate: nil,
+                numberOfRereads: nil,
+                priority: nil,
+                isPrivate: nil,
+                readLink: nil,
+                series: nil
+            )
         }
     }
 
