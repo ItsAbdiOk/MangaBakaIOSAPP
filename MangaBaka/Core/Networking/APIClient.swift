@@ -27,6 +27,21 @@ actor APIClient {
         let decoder = JSONDecoder()
         // The API uses snake_case throughout (`is_licensed`, `total_chapters`).
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        // Timestamps are ISO-8601, sometimes with fractional seconds and
+        // sometimes without, so both are accepted rather than failing the whole
+        // response over a missing ".000".
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            let withFraction = ISO8601DateFormatter()
+            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = withFraction.date(from: text) { return date }
+            let plain = ISO8601DateFormatter()
+            if let date = plain.date(from: text) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: try decoder.singleValueContainer(),
+                debugDescription: "Unrecognised date: \(text)"
+            )
+        }
         self.decoder = decoder
     }
 

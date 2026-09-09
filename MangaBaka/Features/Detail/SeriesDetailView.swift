@@ -8,7 +8,9 @@ struct SeriesDetailView: View {
 
     @State private var similar: [Series] = []
     @State private var alsoLike: [Series] = []
+    @State private var extras = SeriesExtras()
     @State private var isLoading = true
+    @Environment(\.openURL) private var openURL
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -21,8 +23,13 @@ struct SeriesDetailView: View {
                         .foregroundStyle(Palette.textBody)
                         .padding(.horizontal, Metrics.gutter)
                 }
+                trackerScores
+                relatedRow
                 onwardRow("Similar", similar)
                 onwardRow("Readers also like", alsoLike)
+                publishersSection
+                readElsewhere
+                newsSection
                 provenance
             }
             .padding(.top, 12)
@@ -127,12 +134,129 @@ struct SeriesDetailView: View {
             .padding(.horizontal, Metrics.gutter)
     }
 
+    // MARK: - Sections
+
+    /// The same series scored by other trackers. Real data from the API's
+    /// `source` field, normalised to 0-100 so the numbers are comparable —
+    /// AniList's 100-point scale and Anime-Planet's 5-star scale otherwise
+    /// sit side by side meaning different things.
+    @ViewBuilder
+    private var trackerScores: some View {
+        let entries = (series.source ?? [:])
+            .compactMap { name, entry -> (String, Double)? in
+                guard let score = entry.ratingNormalized else { return nil }
+                return (name, score)
+            }
+            .sorted { $0.0 < $1.0 }
+
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Scores elsewhere")
+                    .typeDetailSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, Metrics.gutter)
+
+                ScrollView(.horizontal) {
+                    HStack(spacing: Metrics.gapStrip) {
+                        ForEach(entries, id: \.0) { name, score in
+                            VStack(spacing: 3) {
+                                Text(String(format: "%.1f", score / 10))
+                                    .scaledFont(size: 22, weight: .bold, relativeTo: .title2)
+                                    .foregroundStyle(Palette.textPrimary)
+                                Text(trackerName(name))
+                                    .typeGridMeta()
+                                    .foregroundStyle(Palette.textTertiary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Palette.surface, in: RoundedRectangle(
+                                cornerRadius: Metrics.radiusThumb, style: .continuous
+                            ))
+                        }
+                    }
+                    .padding(.horizontal, Metrics.gutter)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    private func trackerName(_ key: String) -> String {
+        switch key {
+        case "anilist": "AniList"
+        case "my_anime_list": "MyAnimeList"
+        case "anime_planet": "Anime-Planet"
+        case "manga_updates": "MangaUpdates"
+        case "anime_news_network": "ANN"
+        case "kitsu": "Kitsu"
+        default: key.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    /// Sequels, prequels, spin-offs and source novels. The strongest onward
+    /// path there is, because it is an explicit link rather than a guess.
+    @ViewBuilder
+    private var relatedRow: some View {
+        if !extras.relationships.isEmpty {
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Related")
+                    .typeDetailSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, Metrics.gutter)
+
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                        ForEach(extras.relationships) { relation in
+                            Button { path.append(relation.series) } label: {
+                                CoverCard(
+                                    series: relation.series,
+                                    width: Metrics.coverDetailRowWidth,
+                                    meta: relation.label
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, Metrics.gutter)
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var publishersSection: some View {
+        if let publishers = series.publishers, !publishers.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Published by")
+                    .typeDetailSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                FlowChips(items: publishers.map { publisher in
+                    if let type = publisher.type { "\(publisher.name) · \(type)" } else { publisher.name }
+                })
+            }
+            .padding(.horizontal, Metrics.gutter)
+        }
+    }
+
+    @ViewBuilder
+    private var readElsewhere: some View {
+        LinksSection(links: extras.links)
+    }
+
+    @ViewBuilder
+    private var newsSection: some View {
+        NewsSection(items: extras.news)
+    }
+
     private func load() async {
         isLoading = true
         async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
+        async let extrasResult = repository.extras(for: series.id)
         similar = await similarResult.series
         alsoLike = await alsoResult.series
+        extras = await extrasResult
         isLoading = false
     }
 }

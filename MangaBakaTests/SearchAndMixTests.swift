@@ -148,14 +148,7 @@ struct SearchAndMixTests {
     /// A reason is shown only when the API gave a basis for one.
     @Test("No match data means no invented reason")
     func noReasonWhenNoBasis() {
-        let cover = Cover(raw: nil, x150: nil, x250: nil, x350: nil,
-                          blurhash: nil, width: nil, height: nil)
-        let series = Series(
-            id: 1, state: "active", mergedWith: nil, titles: nil, cover: cover,
-            description: nil, authors: nil, artists: nil, status: nil,
-            rating: nil, type: nil, contentRating: nil,
-            totalChapters: nil, finalVolume: nil
-        )
+        let series = SeriesFactory.make()
         let bare = Recommendation(
             series: series, score: nil, sharedTags: nil, sharedTagsTotal: nil,
             matchedAuthor: false, matchedRelated: false

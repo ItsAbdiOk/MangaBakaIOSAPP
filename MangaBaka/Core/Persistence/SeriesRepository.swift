@@ -21,6 +21,19 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// Blends recommendations from seed series, with the reason each matched.
     /// Requires at least one seed — the API rejects a seedless request.
     func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation]
+
+    /// Everything the detail screen shows beyond the series itself. Fetched
+    /// together so one slow endpoint does not stagger the screen into place.
+    func extras(for seriesId: Int) async -> SeriesExtras
+}
+
+/// The onward paths from a series. Every field is independently optional: a
+/// series with no news is ordinary, and one failing endpoint must not empty
+/// the rest of the screen.
+struct SeriesExtras: Sendable, Equatable {
+    var links: [SeriesLink] = []
+    var news: [NewsItem] = []
+    var relationships: [SeriesRelationship] = []
 }
 
 /// A search or filter request. Only non-nil fields are sent, so an untouched
@@ -271,6 +284,25 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         } catch {
             return []
         }
+    }
+
+    func extras(for seriesId: Int) async -> SeriesExtras {
+        // Concurrent rather than sequential: three independent reads, and the
+        // detail screen should not wait for them in series.
+        async let links: [SeriesLink]? = try? client.get("/v1/series/\(seriesId)/links")
+        async let news: [NewsItem]? = try? client.get(
+            "/v1/series/\(seriesId)/news",
+            query: [URLQueryItem(name: "limit", value: "6")]
+        )
+        async let related: [SeriesRelationship]? = try? client.get(
+            "/v1/series/\(seriesId)/relationships"
+        )
+
+        return await SeriesExtras(
+            links: links ?? [],
+            news: news ?? [],
+            relationships: (related ?? []).filter(\.series.isDiscoverable)
+        )
     }
 
     // MARK: - Cache

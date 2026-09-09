@@ -4,37 +4,23 @@ import Testing
 
 /// A stub that records what it was asked and can be made slow, so debounce
 /// behaviour is testable without real time or a real network.
-private final class RecordingRepository: SeriesRepositoryProtocol, @unchecked Sendable {
+private final class RecordingRepository: StubRepositoryBase, @unchecked Sendable {
     private(set) var searchCount = 0
     private(set) var lastQuery: SearchQuery?
     var result = FeedResult(series: [], origin: .network)
 
-    func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
-        FeedResult(series: [], origin: .network)
-    }
-
-    func search(_ query: SearchQuery) async -> FeedResult {
+    override func search(_ query: SearchQuery) async -> FeedResult {
         searchCount += 1
         lastQuery = query
         return result
     }
-
-    func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] { [] }
 }
 
 @Suite("Search model")
 @MainActor
 struct SearchModelTests {
     private func series(_ id: Int) -> Series {
-        Series(
-            id: id, state: "active", mergedWith: nil,
-            titles: [SeriesTitle(language: "en", traits: ["official"], title: "S\(id)", isPrimary: true)],
-            cover: Cover(raw: nil, x150: nil, x250: nil, x350: nil,
-                         blurhash: nil, width: 200, height: 300),
-            description: nil, authors: nil, artists: nil, status: nil,
-            rating: nil, type: nil, contentRating: nil,
-            totalChapters: nil, finalVolume: nil
-        )
+        SeriesFactory.make(id: id, title: "S\(id)", cover: .sized)
     }
 
     /// Regression: `search()` used to cancel the debounce task it was running

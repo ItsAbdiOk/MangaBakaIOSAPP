@@ -29,6 +29,40 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     let totalChapters: Double?
     /// The final volume number, when the series has ended.
     let finalVolume: Double?
+    /// Who publishes it, and where. Objects rather than names: each carries a
+    /// type ("Original", "English") and sometimes a note about volume counts.
+    let publishers: [Publisher]?
+    /// Whether an anime adaptation exists, and which chapters it covers.
+    /// The mockup derived this from the rating; it is a real field.
+    let anime: AnimeAdaptation?
+    /// The same series on other trackers, with their ratings. Also real —
+    /// the mockup faked these as arithmetic offsets from the base rating.
+    let source: [String: TrackerEntry]?
+
+    struct Publisher: Codable, Equatable, Sendable, Hashable {
+        let name: String
+        /// "Original", "English", and similar.
+        let type: String?
+        /// Free text, often a volume count or completion note.
+        let note: String?
+    }
+
+    struct AnimeAdaptation: Codable, Equatable, Sendable, Hashable {
+        let exists: Bool?
+        /// Where the adaptation starts in the manga, as free text.
+        let start: String?
+        let end: String?
+    }
+
+    struct TrackerEntry: Codable, Equatable, Sendable, Hashable {
+        /// The id is a string on some trackers and a number on others, so it
+        /// is not modelled — nothing here needs it, and decoding it would fail
+        /// on whichever shape was not anticipated.
+        let rating: Double?
+        /// Every tracker uses a different scale; this one is 0-100 throughout,
+        /// which is the only way to compare them honestly.
+        let ratingNormalized: Double?
+    }
 
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.
