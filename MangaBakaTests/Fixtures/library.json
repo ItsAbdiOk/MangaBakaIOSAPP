@@ -1,0 +1,394 @@
+{
+ "status": 200,
+ "data": [
+  {
+   "note": null,
+   "read_link": null,
+   "rating": null,
+   "state": "reading",
+   "priority": 20,
+   "is_private": false,
+   "number_of_rereads": 0,
+   "progress_chapter": 17,
+   "progress_volume": null,
+   "start_date": "2026-08-27T00:00:00.000Z",
+   "finish_date": null,
+   "id": 1881237,
+   "series_id": 1000,
+   "user_id": "REDACTED",
+   "Entries": [],
+   "Series": {
+    "id": 1000,
+    "state": "active",
+    "merged_with": null,
+    "canonical_url": "https://mangabaka.org/manga/1000/Placeholder",
+    "title": "Placeholder Series 1",
+    "native_title": "Placeholder Series 1",
+    "romanized_title": "Placeholder Series 1",
+    "secondary_titles": {},
+    "cover": {
+     "raw": {
+      "url": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx156020-BRvhS7cSQjiu.png",
+      "size": 437733,
+      "height": 690,
+      "width": 460,
+      "blurhash": "|TO.gzNc0KE2MxNdsmxaofnN-:oh%MsAs:W;RjayRixuS#ahn%M{tlW;V@kpRPay%Mx]oft7R*axxuNGf8$%s:%Moft7jEIoayt7ofRPi_t7xatRIVWBM_oeozn*ogf8s:RkWCWBoetRjFRQbbWVRkWBoLkVeokCaeo0og",
+      "thumbhash": "61gKDQIGVMe4aHiHhmlnWHGfLv5z",
+      "format": "png"
+     },
+     "x150": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x150@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x150@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x150@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n"
+     },
+     "x250": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x250@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x250@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x250@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n"
+     },
+     "x350": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x350@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x350@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDE1NjAyMC1CUnZoUzdjU1FqaXUucG5n"
+     }
+    },
+    "authors": [
+     "A. Author"
+    ],
+    "artists": [
+     "B. Artist"
+    ],
+    "description": "Placeholder description.",
+    "year": 2022,
+    "published": {
+     "start_date": "2022-09-29",
+     "end_date": "2024-12-04",
+     "start_date_is_estimated": false,
+     "end_date_is_estimated": false
+    },
+    "status": "completed",
+    "is_licensed": true,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manhwa",
+    "rating": 70.4666666666667,
+    "popularity": {
+     "global": {
+      "current": 4475,
+      "history": {
+       "1d": 4495,
+       "1w": 4484,
+       "1mo": 4519,
+       "3mo": 5646,
+       "6mo": 6530,
+       "1y": 11190
+      }
+     },
+     "type": {
+      "current": 1244,
+      "history": {
+       "1d": 1247,
+       "1w": 1235,
+       "1mo": 1208,
+       "3mo": 1165,
+       "6mo": 1311,
+       "1y": 1539
+      }
+     }
+    },
+    "final_volume": null,
+    "total_chapters": "87",
+    "links": [],
+    "links_v2": [],
+    "publishers": [
+     {
+      "name": "Day Comics",
+      "type": "English",
+      "note": null
+     },
+     {
+      "name": "Toptoon",
+      "type": "Original",
+      "note": null
+     },
+     {
+      "name": "Toptoon Plus",
+      "type": "English",
+      "note": null
+     }
+    ],
+    "titles": [
+     {
+      "language": "en",
+      "traits": [
+       "official"
+      ],
+      "title": "Placeholder Series 1",
+      "is_primary": true
+     }
+    ],
+    "genres_v2": null,
+    "genres": [],
+    "tags_v2": [],
+    "tags": [],
+    "last_updated_at": "2026-09-08T10:57:28.958Z",
+    "relationships": null,
+    "relationships_v2": [],
+    "source": {
+     "anilist": {
+      "id": 156020,
+      "rating": 6.9,
+      "rating_normalized": 69
+     },
+     "anime_planet": {
+      "id": "breaking-a-romantic-fantasy-villain",
+      "rating": 3.7,
+      "rating_normalized": 74
+     },
+     "anime_news_network": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "kitsu": {
+      "id": 68423,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "manga_updates": {
+      "id": "uepbu5m",
+      "rating": 6.84,
+      "rating_normalized": 68
+     },
+     "my_anime_list": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "shikimori": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     }
+    }
+   }
+  },
+  {
+   "note": null,
+   "read_link": null,
+   "rating": null,
+   "state": "reading",
+   "priority": 20,
+   "is_private": false,
+   "number_of_rereads": 0,
+   "progress_chapter": 89,
+   "progress_volume": null,
+   "start_date": "2026-08-21T00:00:00.000Z",
+   "finish_date": null,
+   "id": 1892422,
+   "series_id": 1001,
+   "user_id": "REDACTED",
+   "Entries": [],
+   "Series": {
+    "id": 1001,
+    "state": "active",
+    "merged_with": null,
+    "canonical_url": "https://mangabaka.org/manga/1001/Placeholder",
+    "title": "Placeholder Series 2",
+    "native_title": "Placeholder Series 2",
+    "romanized_title": "Placeholder Series 2",
+    "secondary_titles": {},
+    "cover": {
+     "raw": {
+      "url": "https://images.mangabaka.dev/8/7/8/3/3/6/f/0/de4f/446e/bf08/e54716dda9f5",
+      "size": 126200,
+      "height": 1280,
+      "width": 903,
+      "blurhash": "|EE2,{noK,-pIvIpskt8S5IgIc-;NLR.%1odV@s;,]RkIVkCM|WBkDRjR*OYNFIU%JozNHkBt7oL0OxT-nE2x]%LRjbIjZ?axtM}xWn%NHV]s.j[0Mt2r=Wo%Le-WEWAogxb%Kt6MxRjWAR-bbWrTebwRlt2n#M|oeofn~",
+      "thumbhash": "FxgGFQTYeml9p0aJRoLaCQkxp6Co",
+      "format": "jpeg"
+     },
+     "x150": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x150@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x150@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x150@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1"
+     },
+     "x250": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x250@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x250@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x250@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1"
+     },
+     "x350": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x350@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x350@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi84LzcvOC8zLzMvNi9mLzAvZGU0Zi80NDZlL2JmMDgvZTU0NzE2ZGRhOWY1"
+     }
+    },
+    "authors": [
+     "A. Author"
+    ],
+    "artists": [
+     "B. Artist"
+    ],
+    "description": "Placeholder description.",
+    "year": 1999,
+    "published": {
+     "start_date": "1999-09-27",
+     "end_date": "2006-04-24",
+     "start_date_is_estimated": false,
+     "end_date_is_estimated": false
+    },
+    "status": "completed",
+    "is_licensed": true,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manga",
+    "rating": 87.8272857142857,
+    "popularity": {
+     "global": {
+      "current": 36,
+      "history": {
+       "1d": 36,
+       "1w": 36,
+       "1mo": 35,
+       "3mo": 43,
+       "6mo": 38,
+       "1y": 44
+      }
+     },
+     "type": {
+      "current": 31,
+      "history": {
+       "1d": 31,
+       "1w": 31,
+       "1mo": 31,
+       "3mo": 39,
+       "6mo": 34,
+       "1y": 41
+      }
+     }
+    },
+    "final_volume": "22",
+    "total_chapters": "249",
+    "links": [],
+    "links_v2": [],
+    "publishers": [
+     {
+      "name": "Shogakukan",
+      "type": "Original",
+      "note": ""
+     },
+     {
+      "name": "VIZ Media",
+      "type": "English",
+      "note": "22 Vols - Complete; print | 11 Perfect Eds - Completed; print"
+     },
+     {
+      "name": "Planeta C\u00f3mic",
+      "type": "Other",
+      "note": ""
+     },
+     {
+      "name": "Panini Manga M\u00e9xico",
+      "type": "Other",
+      "note": ""
+     }
+    ],
+    "titles": [
+     {
+      "language": "en",
+      "traits": [
+       "official"
+      ],
+      "title": "Placeholder Series 2",
+      "is_primary": true
+     }
+    ],
+    "genres_v2": null,
+    "genres": [],
+    "tags_v2": [],
+    "tags": [],
+    "last_updated_at": "2026-09-09T03:16:51.438Z",
+    "relationships": {
+     "sequel": [
+      11136
+     ],
+     "spin_off": [
+      25397
+     ],
+     "other": [
+      49198
+     ]
+    },
+    "relationships_v2": [
+     {
+      "id": "019e41ed-22c1-79f5-931d-0f439a550037",
+      "to_series_id": 49198,
+      "relation_type": "other",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-2282-72cd-89a9-65c9748b296d",
+      "to_series_id": 11136,
+      "relation_type": "sequel",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-22c4-7a37-a11f-e637ab5cbc7f",
+      "to_series_id": 25397,
+      "relation_type": "spin_off",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     }
+    ],
+    "source": {
+     "anilist": {
+      "id": 30003,
+      "rating": 8.8,
+      "rating_normalized": 88
+     },
+     "anime_planet": {
+      "id": "20th-century-boys",
+      "rating": 4.4,
+      "rating_normalized": 88
+     },
+     "anime_news_network": {
+      "id": 3424,
+      "rating": 8.9871,
+      "rating_normalized": 90
+     },
+     "kitsu": {
+      "id": 12,
+      "rating": 8.272,
+      "rating_normalized": 83
+     },
+     "manga_updates": {
+      "id": "ktr1ti2",
+      "rating": 8.76,
+      "rating_normalized": 88
+     },
+     "my_anime_list": {
+      "id": 3,
+      "rating": 8.93,
+      "rating_normalized": 89
+     },
+     "shikimori": {
+      "id": 3,
+      "rating": 8.93,
+      "rating_normalized": 89
+     }
+    }
+   }
+  }
+ ]
+}

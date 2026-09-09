@@ -64,6 +64,64 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         let ratingNormalized: Double?
     }
 
+    /// Decoded by hand for one reason: three numeric fields come back as
+    /// strings on the v1 endpoints and as numbers on v2.
+    ///
+    /// `/v1/my/library` sends `"total_chapters": "87"`; `/v2/series/{id}` sends
+    /// `"total_chapters": 87`. Verified against both on 2026-09-09. The
+    /// synthesised decoder throws on whichever shape it was not written for,
+    /// and because the library call swallows errors with `try?`, the whole
+    /// response silently became an empty list.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        state = try container.decode(String.self, forKey: .state)
+        mergedWith = try container.decodeIfPresent(Int.self, forKey: .mergedWith)
+        titles = try container.decodeIfPresent([SeriesTitle].self, forKey: .titles)
+        cover = try container.decode(Cover.self, forKey: .cover)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        authors = try container.decodeIfPresent([String].self, forKey: .authors)
+        artists = try container.decodeIfPresent([String].self, forKey: .artists)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+        contentRating = try container.decodeIfPresent(String.self, forKey: .contentRating)
+        publishers = try container.decodeIfPresent([Publisher].self, forKey: .publishers)
+        anime = try container.decodeIfPresent(AnimeAdaptation.self, forKey: .anime)
+        source = try container.decodeIfPresent([String: TrackerEntry].self, forKey: .source)
+
+        rating = container.lenientDouble(forKey: .rating)
+        totalChapters = container.lenientDouble(forKey: .totalChapters)
+        finalVolume = container.lenientDouble(forKey: .finalVolume)
+    }
+
+    /// Memberwise, because the custom `init(from:)` replaces the synthesised
+    /// one and the test factory builds series directly.
+    init(
+        id: Int, state: String, mergedWith: Int?, titles: [SeriesTitle]?, cover: Cover,
+        description: String?, authors: [String]?, artists: [String]?, status: String?,
+        rating: Double?, type: String?, contentRating: String?, totalChapters: Double?,
+        finalVolume: Double?, publishers: [Publisher]?, anime: AnimeAdaptation?,
+        source: [String: TrackerEntry]?
+    ) {
+        self.id = id
+        self.state = state
+        self.mergedWith = mergedWith
+        self.titles = titles
+        self.cover = cover
+        self.description = description
+        self.authors = authors
+        self.artists = artists
+        self.status = status
+        self.rating = rating
+        self.type = type
+        self.contentRating = contentRating
+        self.totalChapters = totalChapters
+        self.finalVolume = finalVolume
+        self.publishers = publishers
+        self.anime = anime
+        self.source = source
+    }
+
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.
     var displayTitle: String? {
@@ -74,5 +132,17 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// discovery surfaces; it exists only so stored references can be updated.
     var isDiscoverable: Bool {
         state == "active"
+    }
+}
+
+private extension KeyedDecodingContainer {
+    /// A number the API sends as a number on one endpoint and as a string on
+    /// another. Returns nil rather than throwing: an unparsable value means the
+    /// field is unknown, which the model already allows for, and throwing here
+    /// would discard the entire series over one optional field.
+    func lenientDouble(forKey key: Key) -> Double? {
+        if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
+        guard let text = try? decodeIfPresent(String.self, forKey: key) else { return nil }
+        return Double(text)
     }
 }

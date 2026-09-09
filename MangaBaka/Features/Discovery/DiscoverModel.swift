@@ -15,6 +15,17 @@ final class DiscoverModel {
         var series: [Series] = []
         var staleReason: String?
         var isLoading = true
+        /// The last page fetched. 1 until the row is scrolled to its end.
+        var page = 1
+        var isLoadingMore = false
+        /// Set when a page comes back short or empty, or when the endpoint has
+        /// no paging at all. `rising` and `hidden-gems` are capped at 20 by the
+        /// API with no page parameter, so those rows genuinely end.
+        var hasReachedEnd = false
+
+        var canLoadMore: Bool {
+            kind.supportsPaging && !hasReachedEnd && !isLoading && !isLoadingMore
+        }
 
         var id: String { kind.cacheKey }
     }
@@ -53,6 +64,11 @@ final class DiscoverModel {
             for await (index, result) in group {
                 rows[index].series = result.series
                 rows[index].isLoading = false
+                // A reload replaces the row, so paging starts over with it.
+                // Leaving these would make the next scroll to the bottom fetch
+                // page 5 of a row that currently holds page 1.
+                rows[index].page = 1
+                rows[index].hasReachedEnd = false
                 if case let .staleAfter(error) = result.origin {
                     rows[index].staleReason = result.series.isEmpty ? nil : error.userFacingMessage
                     firstFailure = firstFailure ?? error
@@ -62,5 +78,39 @@ final class DiscoverModel {
             }
             failure = firstFailure
         }
+    }
+
+    /// Fetches the next page of one row and appends it.
+    ///
+    /// Called when the reader nears the end of a row rather than from a button:
+    /// a row that stops dead with no way forward reads as the end of the
+    /// catalogue, which it is not.
+    func loadMore(_ rowID: Row.ID) async {
+        guard let index = rows.firstIndex(where: { $0.id == rowID }),
+              rows[index].canLoadMore
+        else { return }
+
+        rows[index].isLoadingMore = true
+        defer { rows[index].isLoadingMore = false }
+
+        let nextPage = rows[index].page + 1
+        let result = await repository.feedPage(rows[index].kind, page: nextPage)
+
+        // Deduplicate against what is already on screen. The API can and does
+        // repeat a series across pages when the underlying ordering shifts
+        // between requests, and SwiftUI's ForEach traps on duplicate IDs.
+        let known = Set(rows[index].series.map(\.id))
+        let additions = result.series.filter { !known.contains($0.id) }
+
+        guard !additions.isEmpty else {
+            // Nothing new: either the end, or a failure. Either way, stop
+            // asking — repeatedly requesting the same page against a shared
+            // per-IP rate limit costs everyone on the network, not just us.
+            rows[index].hasReachedEnd = true
+            return
+        }
+
+        rows[index].series.append(contentsOf: additions)
+        rows[index].page = nextPage
     }
 }

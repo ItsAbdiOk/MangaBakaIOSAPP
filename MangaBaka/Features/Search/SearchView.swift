@@ -93,15 +93,43 @@ struct SearchView: View {
     }
 
     private var grid: some View {
+        VStack(spacing: 0) {
+            resultsGrid
+            if model.isLoadingMore {
+                ProgressView()
+                    .tint(Palette.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            }
+        }
+    }
+
+    private var resultsGrid: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(model.results) { series in
                 Button { path.append(series) } label: {
                     CoverCard(series: series, width: 111, radius: Metrics.radiusCoverGrid)
                 }
                 .buttonStyle(.plain)
+                // Two rows from the bottom, so the next page is usually there
+                // before the reader arrives rather than after.
+                .onAppear {
+                    guard shouldPrefetch(series) else { return }
+                    Task { await model.loadMore() }
+                }
             }
         }
         .padding(.horizontal, Metrics.gutter)
+    }
+
+    /// Six results is two rows of the three-column grid.
+    private static let prefetchDistance = 6
+
+    private func shouldPrefetch(_ series: Series) -> Bool {
+        guard model.hasMore, !model.isLoadingMore,
+              let index = model.results.firstIndex(where: { $0.id == series.id })
+        else { return false }
+        return index >= model.results.count - Self.prefetchDistance
     }
 
     private var idleState: some View {
@@ -153,14 +181,30 @@ struct SearchView: View {
             model.query.sort = "random"
             Task { model.cancelPendingDebounce(); await model.search() }
         } label: {
-            Text("Surprise me")
-                .typeCTA()
-                .foregroundStyle(Palette.onAccent)
-                .padding(.horizontal, 20)
-                .frame(height: Metrics.ctaSecondary)
-                .background(Palette.accent)
-                .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+            // The label swaps for a spinner in place rather than the button
+            // sitting inert. A random search is a live request against a shared
+            // rate limit and can take a second or two; with no feedback the
+            // only reasonable conclusion is that the button is broken. (From
+            // the idle screen the whole section is replaced by the screen's own
+            // spinner; this covers the "nothing matched" screen, where the
+            // button stays put.)
+            ZStack {
+                Text("Surprise me")
+                    .typeCTA()
+                    .opacity(model.isSearching ? 0 : 1)
+                if model.isSearching {
+                    ProgressView()
+                        .tint(Palette.onAccent)
+                }
+            }
+            .foregroundStyle(Palette.onAccent)
+            .padding(.horizontal, 20)
+            .frame(height: Metrics.ctaSecondary)
+            .background(Palette.accent)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
+        .disabled(model.isSearching)
+        .accessibilityLabel(model.isSearching ? "Finding something" : "Surprise me")
     }
 
     private var displayedQuery: String {

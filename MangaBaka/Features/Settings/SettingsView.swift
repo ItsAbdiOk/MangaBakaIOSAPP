@@ -8,6 +8,7 @@ import SwiftUI
 struct SettingsView: View {
     let validate: (String) async -> String?
     let content: ContentPreferencesStore
+    let formats: FormatPreferencesStore
 
     @State private var entry = ""
     @State private var status: Status = .idle
@@ -29,6 +30,7 @@ struct SettingsView: View {
                     .foregroundStyle(Palette.textPrimary)
 
                 accountSection
+                FormatSection(formats: formats)
                 contentSection
                 attributionSection
             }
@@ -197,7 +199,7 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                switchIndicator(isOn: isOn, isLocked: isLocked)
+                SwitchIndicator(isOn: isOn, isLocked: isLocked)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -212,25 +214,6 @@ struct SettingsView: View {
         .accessibilityLabel("\(rating.title) content")
         .accessibilityValue(isOn ? "On" : "Off")
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// Drawn rather than a real switch, because this row's tap target is the
-    /// whole row and a live control inside it would compete for the gesture.
-    private func switchIndicator(isOn: Bool, isLocked: Bool) -> some View {
-        let track = isOn ? Palette.accent : Palette.surfaceChip
-        return ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule()
-                .fill(track.opacity(isLocked ? 0.4 : 1))
-                .frame(width: 51, height: 31)
-            Circle()
-                .fill(.white.opacity(isLocked ? 0.6 : 1))
-                .frame(width: 27, height: 27)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-                .padding(.horizontal, 2)
-        }
-        .frame(width: 51, height: 31)
-        .animation(.snappy(duration: 0.2), value: isOn)
-        .accessibilityHidden(true)
     }
 
     /// Required by the data licence, not decoration.

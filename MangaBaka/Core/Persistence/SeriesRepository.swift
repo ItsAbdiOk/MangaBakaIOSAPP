@@ -18,6 +18,14 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// would fill the database with rows nobody reads twice.
     func search(_ query: SearchQuery) async -> FeedResult
 
+    /// A later page of a feed. Only feeds whose endpoint takes `page` can
+    /// answer this; the rest return empty, which callers read as "no more".
+    ///
+    /// Never cached. A cache is keyed by feed, and page 2 of a feed is not the
+    /// feed — writing it would replace page 1 in the cache and lose the
+    /// beginning of the row.
+    func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult
+
     /// Blends recommendations from seed series, with the reason each matched.
     /// Requires at least one seed — the API rejects a seedless request.
     func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation]
@@ -32,6 +40,10 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// filter, so keeping it would keep showing content the reader has just
     /// excluded — or hide content they have just allowed.
     func updateContentRatings(_ ratings: [String]) async
+
+    /// Replaces the format filter and discards every cached feed, for the same
+    /// reason `updateContentRatings` does.
+    func updateFormats(_ formats: [String]) async
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -56,16 +68,27 @@ struct SearchQuery: Sendable, Equatable {
     /// 0-100 as the API expresses it.
     var minimumRating: Int?
     var limit = 30
+    /// 1-based, as the API counts. `/v2/series/search` accepts up to page 100.
+    var page = 1
 
+    /// Whether this query would narrow anything at all.
+    ///
+    /// `sort` counts. It used to be excluded, which is what made "Surprise me"
+    /// do nothing: it sets `sort = "random"` and nothing else, so the query
+    /// still read as empty, `search()` returned before making a request, and
+    /// the view kept rendering its idle state. A sort-only query is a real
+    /// query — random and trending are both browsing, not filtering.
     var isEmpty: Bool {
         (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
+            && sort == nil
     }
 
     /// Repeated keys where the API wants them; a comma-joined list is rejected
     /// with HTTP 400 for these parameters.
     var queryItems: [URLQueryItem] {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
+        if page > 1 { items.append(URLQueryItem(name: "page", value: String(page))) }
         if let text, !text.trimmingCharacters(in: .whitespaces).isEmpty {
             items.append(URLQueryItem(name: "q", value: text))
         }
@@ -130,19 +153,35 @@ enum FeedKind: Sendable, Hashable {
         }
     }
 
+    /// Whether the endpoint accepts a `page` parameter.
+    ///
+    /// Checked against the published spec, not assumed: `rising` and
+    /// `hidden-gems` take only `limit` (max 20) and have no paging at all, so
+    /// those two rows are 20 series and that is the whole of what exists. The
+    /// search-backed rows page to 100.
+    var supportsPaging: Bool {
+        switch self {
+        case .trending, .surprise: true
+        case .rising, .hiddenGems, .similar, .readersAlsoLike, .mix: false
+        }
+    }
+
     /// Extra query beyond `limit`.
     var extraQuery: [URLQueryItem] {
         switch self {
         case .trending:
             [URLQueryItem(name: "sort_by", value: "trending_7d")]
         case let .mix(seeds) where !seeds.isEmpty:
-            [
-                // `series` genuinely is comma-separated; `content_rating` is
-                // not. The API is not consistent about this, so each parameter
-                // is encoded the way that parameter wants.
-                URLQueryItem(name: "series", value: seeds.map(String.init).joined(separator: ",")),
-                URLQueryItem(name: "strict", value: "false")
-            ]
+            // Repeated keys, not comma-joined. A comma-joined list is rejected:
+            // "Invalid input: expected number, received NaN at series[0]",
+            // HTTP 400, verified against the live endpoint on 2026-09-09.
+            //
+            // The comment that used to sit here asserted the opposite, and it
+            // held up for months because a single seed has no comma in it. The
+            // stack only broke once a reader had two things to blend from,
+            // which is exactly when it starts being worth using.
+            seeds.map { URLQueryItem(name: "series", value: String($0)) }
+                + [URLQueryItem(name: "strict", value: "false")]
         case .surprise:
             [URLQueryItem(name: "sort_by", value: "random")]
         default:
@@ -214,17 +253,22 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// product decision: safe and suggestive, with anything stronger behind a
     /// deliberate opt-in that does not exist yet.
     private var contentRatings: [String]?
+    /// Formats to request, or empty for no filter. Empty is the default: the
+    /// catalogue as it is, until the reader narrows it.
+    private var formats: [String] = []
 
     init(
         client: APIClient,
         database: AppDatabase,
         clock: any Clock = SystemClock(),
-        contentRatings: [String]? = ["safe", "suggestive"]
+        contentRatings: [String]? = ["safe", "suggestive"],
+        formats: [String] = []
     ) {
         self.client = client
         self.database = database
         self.clock = clock
         self.contentRatings = contentRatings
+        self.formats = formats
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -241,11 +285,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             query.append(contentsOf: feed.extraQuery)
             // Filtering server-side means excluded covers are never downloaded,
             // never cached, and never briefly visible while a client-side
-            // filter catches up. Repeated key, not comma-joined: the comma form
-            // is rejected with HTTP 400.
-            for rating in contentRatings ?? [] {
-                query.append(URLQueryItem(name: "content_rating", value: rating))
-            }
+            // filter catches up.
+            query.append(contentsOf: filterQuery)
             let series: [Series]
             if feed.isRecommendationShaped {
                 let wrapped: [Recommendation] = try await client.get(feed.path, query: query)
@@ -264,10 +305,35 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
+    func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
+        guard feed.supportsPaging, page > 1 else {
+            return FeedResult(series: [], origin: .network)
+        }
+        var query = [
+            URLQueryItem(name: "limit", value: String(feed.limit)),
+            URLQueryItem(name: "page", value: String(page))
+        ]
+        query.append(contentsOf: feed.extraQuery)
+        query.append(contentsOf: filterQuery)
+        do {
+            let series: [Series] = try await client.get(feed.path, query: query)
+            return FeedResult(series: series.filter(\.isDiscoverable), origin: .network)
+        } catch {
+            return FeedResult(series: [], origin: .staleAfter(error))
+        }
+    }
+
     func search(_ query: SearchQuery) async -> FeedResult {
         var items = query.queryItems
-        for rating in contentRatings ?? [] {
-            items.append(URLQueryItem(name: "content_rating", value: rating))
+        items.append(contentsOf: (contentRatings ?? []).map {
+            URLQueryItem(name: "content_rating", value: $0)
+        })
+        // An explicit choice in the filter sheet wins over the standing
+        // preference. Sending both would intersect them, so picking "novel" in
+        // the sheet while novels are switched off in Settings would silently
+        // return nothing at all rather than what was asked for.
+        if query.types.isEmpty {
+            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
         }
         do {
             let series: [Series] = try await client.get("/v2/series/search", query: items)
@@ -280,10 +346,15 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] {
         guard !seeds.isEmpty else { return [] }
         var items = filters.queryItems.filter { $0.name != "q" && $0.name != "sort_by" }
-        items.append(URLQueryItem(name: "series", value: seeds.map(String.init).joined(separator: ",")))
+        // Repeated keys; the comma form is rejected with HTTP 400. See
+        // FeedKind.extraQuery for the verification.
+        items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })
         items.append(URLQueryItem(name: "strict", value: "false"))
-        for rating in contentRatings ?? [] {
-            items.append(URLQueryItem(name: "content_rating", value: rating))
+        items.append(contentsOf: (contentRatings ?? []).map {
+            URLQueryItem(name: "content_rating", value: $0)
+        })
+        if filters.types.isEmpty {
+            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
         }
         do {
             let results: [Recommendation] = try await client.get("/v1/series/mix", query: items)
@@ -297,6 +368,21 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         guard ratings != contentRatings else { return }
         contentRatings = ratings
         try? discardCachedFeeds()
+    }
+
+    func updateFormats(_ formats: [String]) async {
+        guard formats != self.formats else { return }
+        self.formats = formats
+        try? discardCachedFeeds()
+    }
+
+    /// The filters that apply to every request, as repeated query keys.
+    ///
+    /// Both parameters reject a comma-joined value with HTTP 400 — a mistake
+    /// that once broke every feed in the app while the tests stayed green.
+    private var filterQuery: [URLQueryItem] {
+        (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
+            + formats.map { URLQueryItem(name: "type", value: $0) }
     }
 
     /// Split out because GRDB offers both a sync and an async `write`, and in

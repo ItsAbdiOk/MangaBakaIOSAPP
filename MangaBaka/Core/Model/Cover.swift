@@ -17,6 +17,85 @@ struct Cover: Codable, Equatable, Sendable, Hashable {
     let width: Double?
     let height: Double?
 
+    // MARK: - Decoding two different shapes
+
+    /// The same cover comes back two different ways depending on the endpoint,
+    /// and the published spec describes only one of them.
+    ///
+    /// `/v2/series/*` returns each variant as a plain URL string. `/v1/my/*`
+    /// returns each as an object — `raw` carrying `{url, width, height,
+    /// blurhash, ...}` and each scaled variant carrying `{x1, x2, x3}`. Verified
+    /// against both live endpoints on 2026-09-09.
+    ///
+    /// This was not a cosmetic difference. `Cover` only understood the v2
+    /// shape, so every `/v1/my/library` response failed to decode, `library()`
+    /// swallowed the error through a `try?` and returned nothing, and the swipe
+    /// stack quietly fell back to a random queue for a reader with 937 series
+    /// on the site. Nothing looked broken; the app had simply stopped using
+    /// their taste.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Depth is not part of the shape: a variant is either a string or an
+        // object, and both forms appear for the same field.
+        func variant(_ key: CodingKeys) throws -> (url: URL?, detail: RawDetail?) {
+            if let string = try? container.decodeIfPresent(URL.self, forKey: key) {
+                return (string, nil)
+            }
+            if let detail = try? container.decodeIfPresent(RawDetail.self, forKey: key) {
+                return (detail.resolvedURL, detail)
+            }
+            return (nil, nil)
+        }
+
+        let rawVariant = try variant(.raw)
+        raw = rawVariant.url
+        x150 = try variant(.x150).url
+        x250 = try variant(.x250).url
+        x350 = try variant(.x350).url
+
+        // The v2 shape carries these beside the variants; the v1 shape nests
+        // them inside `raw`. Prefer whichever is actually present.
+        blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
+            ?? rawVariant.detail?.blurhash
+        width = try container.decodeIfPresent(Double.self, forKey: .width)
+            ?? rawVariant.detail?.width
+        height = try container.decodeIfPresent(Double.self, forKey: .height)
+            ?? rawVariant.detail?.height
+    }
+
+    /// The object form of a variant. `url` is how `raw` spells it; `x1`/`x2`
+    /// are how a scaled variant spells its device-pixel-ratio renderings.
+    private struct RawDetail: Decodable {
+        let url: URL?
+        let x1: URL?
+        let x2: URL?
+        let x3: URL?
+        let blurhash: String?
+        let width: Double?
+        let height: Double?
+
+        /// Always the 1x rendering, so `url(forHeight:scale:)` can keep doing
+        /// the @1 -> @2 substitution it does for the v2 shape. Picking x2 here
+        /// would silently double every image request on a 3x screen.
+        var resolvedURL: URL? { url ?? x1 }
+    }
+
+    /// Memberwise, because the custom `init(from:)` replaces the synthesised
+    /// one and every test fixture builds a cover directly.
+    init(
+        raw: URL?, x150: URL?, x250: URL?, x350: URL?,
+        blurhash: String?, width: Double?, height: Double?
+    ) {
+        self.raw = raw
+        self.x150 = x150
+        self.x250 = x250
+        self.x350 = x350
+        self.blurhash = blurhash
+        self.width = width
+        self.height = height
+    }
+
     /// Intrinsic aspect ratio, for reserving space before the image loads.
     /// `nil` when the API did not supply usable dimensions.
     var aspectRatio: Double? {

@@ -10,6 +10,8 @@ struct RootView: View {
     let shelf: ShelfStore
     let client: APIClient
     let content: ContentPreferencesStore
+    let formats: FormatPreferencesStore
+    let library: LibraryService
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
@@ -60,7 +62,11 @@ struct RootView: View {
             Tab(AppTab.stack.title, systemImage: AppTab.stack.symbol, value: AppTab.stack) {
                 NavigationStack(path: $stackPath) {
                     StackView(
-                        model: StackModel(repository: repository, shelf: shelf),
+                        model: StackModel(
+                            repository: repository,
+                            shelf: shelf,
+                            library: library
+                        ),
                         path: $stackPath
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
@@ -95,7 +101,11 @@ struct RootView: View {
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
                                 NavigationLink {
-                                    SettingsView(validate: validateToken, content: content)
+                                    SettingsView(
+                                        validate: validateToken,
+                                        content: content,
+                                        formats: formats
+                                    )
                                 } label: {
                                     Image(systemName: "gearshape")
                                 }

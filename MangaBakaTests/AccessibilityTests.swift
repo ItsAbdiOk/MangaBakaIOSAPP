@@ -196,6 +196,15 @@ struct InteractiveControlTests {
         )
         #expect(source.contains("allowsHitTesting(false)"))
     }
+
+    /// The card behind showed its own title at half opacity directly beneath
+    /// the front card's, which reads as a ghosted duplicate of the wrong series
+    /// rather than as depth. Only the cover should peek.
+    @Test("The peeking card shows no text")
+    func peekingCardHidesText() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
+        #expect(source.contains("card(next, showsText: false)"))
+    }
 }
 
 /// The content rows are a Button wrapping a drawn indicator rather than a live
@@ -204,13 +213,18 @@ struct InteractiveControlTests {
 /// the exact coordinate a tap failed at.
 @Suite("Content rows are tappable", .enabled(if: SourceTree.isAvailable))
 struct ContentRowTests {
-    @Test("The whole row is the control, not a nested Toggle")
-    func rowIsTheControl() throws {
-        let source = try String(
-            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
-            encoding: .utf8
-        )
-        #expect(source.contains("switchIndicator"), "The switch is drawn, not a live control")
+    /// Both settings sections, not just the first one written. The format
+    /// rows were added in a second file and would otherwise have been free to
+    /// repeat the bug this suite exists to prevent.
+    private static let rowFiles = [
+        "MangaBaka/Features/Settings/SettingsView.swift",
+        "MangaBaka/Features/Settings/FormatSection.swift"
+    ]
+
+    @Test("The whole row is the control, not a nested Toggle", arguments: rowFiles)
+    func rowIsTheControl(_ path: String) throws {
+        let source = try SourceTree.read(path)
+        #expect(source.contains("SwitchIndicator"), "The switch is drawn, not a live control")
         #expect(source.contains("contentShape(Rectangle())"), "The whole row must be the target")
         #expect(
             !source.contains("Toggle(isOn:"),
@@ -219,13 +233,13 @@ struct ContentRowTests {
     }
 
     /// The indicator is decoration; the Button carries the state for VoiceOver.
-    @Test("State is announced on the row, not on the decoration")
-    func stateIsOnTheRow() throws {
-        let source = try String(
-            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
-            encoding: .utf8
-        )
+    @Test("State is announced on the row, not on the decoration", arguments: rowFiles)
+    func stateIsOnTheRow(_ path: String) throws {
+        let source = try SourceTree.read(path)
         #expect(source.contains("accessibilityValue(isOn ? \"On\" : \"Off\")"))
-        #expect(source.contains("accessibilityHidden(true)"), "The drawn switch is not announced")
+        // The indicator itself lives in FormatSection.swift alongside the
+        // format rows; wherever it is, it must not be announced.
+        let indicator = try SourceTree.read("MangaBaka/Features/Settings/FormatSection.swift")
+        #expect(indicator.contains("accessibilityHidden(true)"))
     }
 }

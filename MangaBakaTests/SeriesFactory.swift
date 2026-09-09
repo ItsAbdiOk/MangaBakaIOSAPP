@@ -52,6 +52,16 @@ extension Cover {
         raw: nil, x150: nil, x250: nil, x350: nil,
         blurhash: nil, width: 200, height: 300
     )
+
+    /// A real cover, not a tidy one: series 1291's artwork as the live API
+    /// reports it (fetched from /v2/series/discover/rising, 2026-09-09). One
+    /// twenty-item row came back with fourteen distinct ratios spanning 0.63
+    /// to 0.88, which is what made a row of covers visibly ragged when each
+    /// was framed at its own.
+    static let realWide = Cover(
+        raw: nil, x150: nil, x250: nil, x350: nil,
+        blurhash: nil, width: 4800, height: 5450
+    )
 }
 
 /// A repository stub that satisfies the whole protocol, so a new protocol
@@ -65,9 +75,15 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
         FeedResult(series: [], origin: .network)
     }
 
+    func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
+        FeedResult(series: [], origin: .network)
+    }
+
     func mix(seeds: [Int], filters: SearchQuery) async -> [Recommendation] { [] }
 
     func extras(for seriesId: Int) async -> SeriesExtras { SeriesExtras() }
 
     func updateContentRatings(_ ratings: [String]) async {}
+
+    func updateFormats(_ formats: [String]) async {}
 }

@@ -14,6 +14,10 @@ final class SearchModel {
     private(set) var results: [Series] = []
     private(set) var isSearching = false
     private(set) var message: String?
+    private(set) var isLoadingMore = false
+    /// False once a page comes back short or empty. Starts false so the first
+    /// page has to actually arrive before the view offers to fetch a second.
+    private(set) var hasMore = false
 
     private let repository: any SeriesRepositoryProtocol
     private var debounceTask: Task<Void, Never>?
@@ -31,6 +35,7 @@ final class SearchModel {
             results = []
             message = nil
             isSearching = false
+            hasMore = false
             return
         }
         debounceTask = Task { [weak self] in
@@ -54,16 +59,50 @@ final class SearchModel {
             results = []
             message = nil
             isSearching = false
+            hasMore = false
             return
         }
         isSearching = true
         // A deferred reset, so no early return can strand the spinner again.
         defer { isSearching = false }
 
+        // A new search is page one by definition. Without this a reader who
+        // paged to 4 and then typed a new query would get page 4 of it.
+        query.page = 1
         let result = await repository.search(query)
         guard !Task.isCancelled else { return }
         results = result.series
+        hasMore = result.series.count >= query.limit
         message = result.series.isEmpty ? result.blockingError?.userFacingMessage : nil
+    }
+
+    /// Appends the next page. Driven by scroll position, not a button.
+    func loadMore() async {
+        guard hasMore, !isSearching, !isLoadingMore, !query.isEmpty else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        var next = query
+        next.page += 1
+        let result = await repository.search(next)
+        guard !Task.isCancelled else { return }
+
+        // Deduplicate: the API repeats series across pages when the underlying
+        // ordering shifts between requests, and a duplicate id traps ForEach.
+        // Under sort_by=random it is not an edge case but the normal outcome.
+        let known = Set(results.map(\.id))
+        let additions = result.series.filter { !known.contains($0.id) }
+
+        guard !additions.isEmpty else {
+            // Either the end or a failure. Stop asking either way, rather than
+            // re-requesting into a rate limit shared with everyone on this IP.
+            hasMore = false
+            return
+        }
+
+        results.append(contentsOf: additions)
+        query.page = next.page
+        hasMore = result.series.count >= query.limit
     }
 
     /// Drops a pending debounce without touching an in-flight search. Call this

@@ -73,6 +73,38 @@ struct SearchAndMixTests {
         #expect(Set(ratings.compactMap(\.value)) == ["safe", "suggestive"])
     }
 
+    /// Comma-joining the seeds is rejected outright: "Invalid input: expected
+    /// number, received NaN at series[0]", HTTP 400, verified against the live
+    /// endpoint on 2026-09-09. The bug survived because a single seed contains
+    /// no comma — the stack only broke once there were two things to blend.
+    @Test("Mix seeds are sent as repeated keys, never comma-joined")
+    func mixSeedsAreRepeated() async throws {
+        URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try makeRepository()
+        _ = await repository.feed(.mix(seeds: [11, 22, 33]), forceRefresh: true)
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        let seeds = sent.filter { $0.name == "series" }
+        #expect(seeds.count == 3)
+        #expect(seeds.compactMap(\.value) == ["11", "22", "33"])
+        #expect(!seeds.contains { ($0.value ?? "").contains(",") })
+    }
+
+    @Test("The mix endpoint used directly sends repeated seeds too")
+    func directMixSeedsAreRepeated() async throws {
+        URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try makeRepository()
+        _ = await repository.mix(seeds: [11, 22], filters: SearchQuery())
+
+        let seeds = try items(from: URLProtocolStub.requests.first)
+            .filter { $0.name == "series" }
+        #expect(seeds.compactMap(\.value) == ["11", "22"])
+    }
+
     /// The API rejects a seedless mix with HTTP 400. Spending a request to be
     /// told that is pure waste against a shared per-IP budget.
     @Test("A seedless mix never reaches the network")
@@ -86,18 +118,18 @@ struct SearchAndMixTests {
         #expect(URLProtocolStub.requests.isEmpty, "No seeds means no request at all")
     }
 
-    /// `series` genuinely is comma-separated, unlike content_rating. The API is
-    /// inconsistent, so each parameter is encoded the way that parameter wants.
-    @Test("Mix seeds are comma-joined into a single series parameter")
-    func mixSeedsAreCommaJoined() async throws {
+    /// This test used to assert the opposite, on the strength of a comment
+    /// rather than a request. Both were wrong, and the wrong test is why the
+    /// bug survived: it locked in the encoding that the API rejects.
+    @Test("A blend still carries the content filter")
+    func mixKeepsContentFilter() async throws {
         URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
         defer { URLProtocolStub.reset() }
 
-        _ = try await makeRepository().mix(seeds: [1, 2, 3], filters: SearchQuery())
+        let repository = try makeRepository()
+        _ = await repository.mix(seeds: [1, 2, 3], filters: SearchQuery())
 
         let sent = try items(from: URLProtocolStub.requests.first)
-        let seeds = try #require(sent.first { $0.name == "series" }?.value)
-        #expect(seeds == "1,2,3")
         #expect(sent.contains { $0.name == "content_rating" }, "Filtering still applies to mix")
     }
 

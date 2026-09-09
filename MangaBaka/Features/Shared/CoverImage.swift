@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// A series cover, sized and loaded the way the API intends.
+/// A series cover, at one fixed size.
 ///
-/// The API supplies pre-scaled variants and the cover's intrinsic dimensions
-/// specifically so a client can reserve the right aspect ratio before the
-/// image arrives. Using them is what stops a scrolling feed jumping.
+/// The frame is always 2:3 so a row or grid of covers is uniform. The API's
+/// pre-scaled variants are still used to pick the right download for that
+/// size, and the reported intrinsic ratio still decides how artwork that is
+/// not 2:3 gets cropped into it.
 struct CoverImage: View {
     let cover: Cover
     let width: CGFloat
@@ -25,9 +26,6 @@ struct CoverImage: View {
     }
 
     var body: some View {
-        // The API's own ratio when it gave one, else 2:3, which every cover is.
-        let ratio = cover.aspectRatio ?? Metrics.coverAspect
-
         AsyncImage(url: cover.url(forHeight: height, scale: displayScale)) { phase in
             switch phase {
             case let .success(image):
@@ -51,7 +49,16 @@ struct CoverImage: View {
                 }
             }
         }
-        .frame(width: width, height: width / ratio)
+        // Every cover in a row is the same size, always.
+        //
+        // This used to frame each cover at the API's own reported ratio
+        // (`cover.aspectRatio`), which is right for a single image and wrong
+        // for a grid: MangaBaka's dimensions are per-scan, so a row of covers
+        // came out visibly ragged — different heights, titles on different
+        // baselines. The intrinsic ratio still decides how the artwork is
+        // cropped (scaledToFill, below), it just no longer decides the frame.
+        .frame(width: width, height: height)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
         .accessibilityLabel(accessibilityText)

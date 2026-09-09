@@ -73,12 +73,29 @@ struct DiscoverView: View {
                     .padding(.horizontal, Metrics.gutter)
             } else {
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                    LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(row.series) { series in
                             Button { path.append(series) } label: {
                                 CoverCard(series: series)
                             }
                             .buttonStyle(.plain)
+                            // Fetch when the reader reaches the run-up to the
+                            // end, not the end itself: by the time the last
+                            // card is visible it is already too late to load
+                            // without a visible stall.
+                            .onAppear {
+                                guard shouldPrefetch(series, in: row) else { return }
+                                Task { await model.loadMore(row.id) }
+                            }
+                        }
+
+                        if row.isLoadingMore {
+                            ProgressView()
+                                .tint(Palette.textTertiary)
+                                .frame(
+                                    width: Metrics.coverRowWidth,
+                                    height: Metrics.coverRowWidth / Metrics.coverAspect
+                                )
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -86,6 +103,17 @@ struct DiscoverView: View {
                 .scrollIndicators(.hidden)
             }
         }
+    }
+
+    /// How far from the end of a row to start fetching the next page.
+    /// Four cards is roughly one screen width at the row's cover size.
+    private static let prefetchDistance = 4
+
+    private func shouldPrefetch(_ series: Series, in row: DiscoverModel.Row) -> Bool {
+        guard row.canLoadMore,
+              let index = row.series.firstIndex(where: { $0.id == series.id })
+        else { return false }
+        return index >= row.series.count - Self.prefetchDistance
     }
 
     private var skeletonRow: some View {

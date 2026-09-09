@@ -6,6 +6,8 @@ struct MangaBakaApp: App {
     private let shelf: ShelfStore
     private let client: APIClient
     private let content: ContentPreferencesStore
+    private let formats: FormatPreferencesStore
+    private let library: LibraryService
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -52,18 +54,50 @@ struct MangaBakaApp: App {
         // keeps the store from knowing anything about caches.
         let built = repository
         let store = ContentPreferencesStore()
-        store.onChange = { ratings in await built.updateContentRatings(ratings) }
         content = store
 
-        // Apply the stored choice before the first request goes out, or the
-        // opening feed would be fetched under the default filter.
-        let initial = store.preferences.queryValues
-        Task { await built.updateContentRatings(initial) }
+        let formatStore = FormatPreferencesStore()
+        formatStore.onChange = { types in await built.updateFormats(types) }
+        formats = formatStore
+
+        // Reads the reader's own library and personalised data. Every call it
+        // makes needs a token; without one they return nothing and the app
+        // falls back to its unauthenticated behaviour.
+        let libraryService = LibraryService(
+            client: apiClient,
+            contentRatings: store.preferences.queryValues
+        )
+        library = libraryService
+
+        // Recommendations are built from the reader's own library and are not
+        // content filtered by default, so the same choice has to reach both.
+        // Filtering feeds but not recommendations is the setting failing
+        // silently exactly where it matters most.
+        store.onChange = { ratings in
+            await built.updateContentRatings(ratings)
+            await libraryService.updateContentRatings(ratings)
+        }
+
+        // Apply the stored choices before the first request goes out, or the
+        // opening feed would be fetched under the default filters.
+        let initialRatings = store.preferences.queryValues
+        let initialFormats = formatStore.preferences.queryValues
+        Task {
+            await built.updateContentRatings(initialRatings)
+            await built.updateFormats(initialFormats)
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(repository: repository, shelf: shelf, client: client, content: content)
+            RootView(
+                repository: repository,
+                shelf: shelf,
+                client: client,
+                content: content,
+                formats: formats,
+                library: library
+            )
         }
     }
 }

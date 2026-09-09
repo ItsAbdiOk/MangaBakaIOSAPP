@@ -29,7 +29,7 @@ struct StackView: View {
             if let current = model.current {
                 // The next card, peeking behind, so the stack reads as a stack.
                 if let next = model.next {
-                    card(next)
+                    card(next, showsText: false)
                         .scaleEffect(0.94)
                         .offset(y: 14)
                         .opacity(0.5)
@@ -59,6 +59,20 @@ struct StackView: View {
                 ProgressView().tint(Palette.textTertiary)
             } else {
                 emptyState
+            }
+        }
+        // Says what the queue is built from, because "are these actually based
+        // on my taste?" is otherwise unanswerable from the screen. A random
+        // queue says so rather than passing itself off as personalised.
+        .overlay(alignment: .bottom) {
+            if model.current != nil {
+                Text(model.source.caption)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.gutter)
+                    .padding(.bottom, Metrics.tabBarClearance)
             }
         }
         .task { await model.loadIfNeeded() }
@@ -99,7 +113,11 @@ struct StackView: View {
             }
     }
 
-    private func card(_ series: Series) -> some View {
+    /// - Parameter showsText: false for the card peeking behind. Its title used
+    ///   to render at half opacity directly under the front card's title, which
+    ///   read as a ghosted duplicate of the wrong series rather than as depth.
+    ///   Only the cover should peek.
+    private func card(_ series: Series, showsText: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             CoverImage(cover: series.cover, width: 268, radius: Metrics.radiusStackCard)
                 .shadow(color: .black.opacity(0.65), radius: 30, y: 24)
@@ -119,6 +137,9 @@ struct StackView: View {
                 }
             }
             .frame(width: 268, alignment: .leading)
+            // Hidden rather than removed, so both cards keep the same height
+            // and the one behind stays exactly the intended amount lower.
+            .opacity(showsText ? 1 : 0)
         }
         .padding(.horizontal, Metrics.gutterStack)
     }
