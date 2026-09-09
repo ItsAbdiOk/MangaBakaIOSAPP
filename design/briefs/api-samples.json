@@ -1,0 +1,197 @@
+{
+ "library": {
+  "total": 937,
+  "states_seen": [
+   "reading"
+  ],
+  "entry_fields": [
+   "Entries",
+   "Series",
+   "finish_date",
+   "id",
+   "is_private",
+   "note",
+   "number_of_rereads",
+   "priority",
+   "progress_chapter",
+   "progress_volume",
+   "rating",
+   "read_link",
+   "series_id",
+   "start_date",
+   "state",
+   "user_id"
+  ]
+ },
+ "top_genres": {
+  "envelope": [
+   "status",
+   "results"
+  ],
+  "count": 3,
+  "fields": [
+   "affinity_score",
+   "tag_id",
+   "tag_name"
+  ],
+  "sample": [
+   {
+    "tag_id": 4050,
+    "tag_name": "Transmigrated into a Game",
+    "affinity_score": 51.99882751663695
+   },
+   {
+    "tag_id": 249,
+    "tag_name": "Time Travel",
+    "affinity_score": 83.7280755002112
+   },
+   {
+    "tag_id": 748,
+    "tag_name": "Age Regression",
+    "affinity_score": 37.514518167182146
+   }
+  ]
+ },
+ "mix_dna": {
+  "top_keys": [
+   "status",
+   "data",
+   "dna",
+   "seed_count"
+  ],
+  "seed_count": 1,
+  "dna_sample": [
+   {
+    "tag_id": 467,
+    "name": "Kuudere",
+    "weight": 0.16050603615244108
+   },
+   {
+    "tag_id": 827,
+    "name": "Kuudere Characters",
+    "weight": 0.13794683072026873
+   },
+   {
+    "tag_id": 2206,
+    "name": "Unaging Female Lead",
+    "weight": 0.11760550240967071
+   },
+   {
+    "tag_id": 253,
+    "name": "Twins",
+    "weight": 0.11229522383333997
+   },
+   {
+    "tag_id": 1528,
+    "name": "Eye Powers",
+    "weight": 0.10890726616572666
+   },
+   {
+    "tag_id": 759,
+    "name": "Split Personality",
+    "weight": 0.08201156167549743
+   },
+   {
+    "tag_id": 236,
+    "name": "Super Powers",
+    "weight": 0.08051790794168252
+   },
+   {
+    "tag_id": 252,
+    "name": "Vampires",
+    "weight": 0.0677146584404493
+   },
+   {
+    "tag_id": 883,
+    "name": "Special Ability",
+    "weight": 0.06740436699463885
+   },
+   {
+    "tag_id": 261,
+    "name": "Urban Fantasy",
+    "weight": 0.06509064566628478
+   }
+  ],
+  "item_fields": [
+   "cosine",
+   "matched_author",
+   "matched_related",
+   "matched_seed_ids",
+   "score",
+   "series",
+   "shared_tags",
+   "shared_tags_total"
+  ]
+ },
+ "tags": {
+  "total": 7105,
+  "fields": [
+   "content_rating",
+   "description",
+   "id",
+   "is_genre",
+   "is_spoiler",
+   "level",
+   "merged_with",
+   "name",
+   "name_path",
+   "parent_id",
+   "series_count"
+  ],
+  "sample": [
+   {
+    "id": 537,
+    "name": "Activities",
+    "name_path": "Activities",
+    "level": 1,
+    "series_count": 0,
+    "is_genre": false
+   },
+   {
+    "id": 5487,
+    "name": "Acrobatics",
+    "name_path": "Activities > Acrobatics",
+    "level": 2,
+    "series_count": 19,
+    "is_genre": false
+   },
+   {
+    "id": 5612,
+    "name": "Airsoft",
+    "name_path": "Activities > Airsoft",
+    "level": 2,
+    "series_count": 14,
+    "is_genre": false
+   },
+   {
+    "id": 3663,
+    "name": "Apprenticeship",
+    "name_path": "Activities > Apprenticeship",
+    "level": 2,
+    "series_count": 96,
+    "is_genre": false
+   },
+   {
+    "id": 3711,
+    "name": "Art Club",
+    "name_path": "Activities > Art Club",
+    "level": 2,
+    "series_count": 89,
+    "is_genre": false
+   },
+   {
+    "id": 1142,
+    "name": "Art Forms",
+    "name_path": "Activities > Art Forms",
+    "level": 2,
+    "series_count": 453,
+    "is_genre": false
+   }
+  ]
+ },
+ "publishers": {
+  "total": 500,
+  "fields": [],
+  "sample": []
+ }
+}
