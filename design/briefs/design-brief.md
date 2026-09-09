@@ -134,6 +134,22 @@ type, total_chapters).
 Progress is directly expressible: `progress_chapter` against
 `Series.total_chapters` gives a real completion figure for 75% of the library.
 
+**He rates on a 5-point scale, and mostly rates things down.** `rating` is a
+0-100 field, but his 425 ratings land almost entirely on 20/40/60/80/100 — a
+five-star scale in disguise. Render it as five steps, not as a number out of a
+hundred. The distribution:
+
+| Rating | 20 | 40 | 50 | 60 | 80 | 100 |
+|---|---:|---:|---:|---:|---:|---:|
+| Count | **134** | 118 | 2 | 67 | 55 | 49 |
+
+The most common rating he gives is the lowest one. Combined with 46% dropped,
+this library is as much a record of what he rejected as of what he loved, and a
+design that assumes a library is a trophy cabinet will feel wrong on his data.
+
+(His profile reports `rating_steps: 25`, which does not match the 20s his data
+actually uses. Unexplained; do not design against the 25.)
+
 **What to design**
 - The default view. Which state leads, and how the other six are reached.
 - A library row or cell: cover, title, progress, his rating, state.
@@ -169,9 +185,21 @@ relies on dramatic differences in magnitude will look flat on real data.
 **Per-result data:** `score`, `cosine`, `shared_tags`, `shared_tags_total`,
 `matched_author` (bool), `matched_related` (bool), `matched_seed_ids`.
 
+**Steering is binary, not weighted.** Verified against the live endpoint on
+2026-09-09: `/v1/series/mix` has **no weight or boost parameter**. What exists is
+`tag` (include), `tag_not` (exclude) and `blocked_tag`. So a reader can add a tag
+or remove one, but cannot turn one down by degree. Do not design a slider.
+
+Both directions are proven to work and to visibly re-shape the blend. Excluding
+the top tag (`tag_not=467`, Kuudere) dropped it out of the DNA entirely, promoted
+the rest, and changed three of the five results. Adding a tag changed four of
+five. The DNA re-derives after every change, so it doubles as the feedback for
+the edit the reader just made.
+
 **What to design**
 - How the DNA of a blend is shown. It is the identity of the mix, not a footnote.
-- Ideally: whether a reader can *push* it — damp a tag, boost another.
+- Add and remove tags. Binary, per the constraint above — no partial weighting.
+- How the DNA visibly re-derives after an edit, since that is the reward.
 - How an individual result says why it matched (shared tags, same author).
 
 **Existing screen:** `05-mix.png`. Today Mix is three empty seed slots and a
