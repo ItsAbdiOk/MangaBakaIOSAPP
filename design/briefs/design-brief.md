@@ -323,3 +323,168 @@ and specify it rather than assuming one exists.
 The two worth your best effort are **Library** and **Mix DNA**. Library because
 937 series are invisible today; Mix DNA because it is the only thing here that
 would make the recommendations arguable rather than magic.
+
+---
+
+# Part 6 — The screens the first brief missed
+
+Audited 2026-09-09 against a shipping checklist. These are the surfaces where
+building would otherwise stop and wait for design.
+
+---
+
+### 7. First run — what a new user sees
+
+**The fact that shapes this.** Every discovery endpoint returns 200 with **no
+token at all** — rising, search, series detail, mix, tags, genres, all verified.
+So an anonymous user gets a fully working discovery app. Only Library,
+recommendations and profile need an account.
+
+That makes onboarding a *choice*, not a gate. Nothing should stand between
+opening the app and seeing covers. But right now there is also nothing that
+explains what the app is, or that an account makes the Stack personal.
+
+What a new user has today: Discover works, Stack shows a random queue and says
+so, Shelf is empty, Library would be blank, Settings offers a raw token field.
+
+**What to design**
+- The first frame. Straight into Discover, or a brief welcome?
+- How the value of connecting an account is offered without blocking anyone —
+  the honest pitch is "the Stack stops being random".
+- The first-run content choice, if any. Default is safe + suggestive; stronger
+  content is a deliberate opt-in that currently lives only in Settings.
+- What the Stack and Library say when there is no account, without nagging.
+
+**States:** anonymous / signed in, and the transition between them.
+
+---
+
+### 8. Library entry editing, and adding to a library
+
+**This is what turns Library from a viewer into the app.** The API supports it
+fully: `POST`, `PUT`, `PATCH` and `DELETE` on `/v1/my/library/{series_id}`, plus
+a batch endpoint. The writable fields are exactly what an edit sheet needs:
+
+`state` · `progress_chapter` · `progress_volume` · `rating` · `note` ·
+`priority` · `is_private` · `number_of_rereads` · `start_date` · `finish_date` ·
+`read_link`
+
+Note **`is_private`** — entries can be private, and one of his real entries is.
+Whatever the design does with that, it must not leak a private entry into a
+shared or public-feeling surface.
+
+Deliberately unverified: I have not run a write. Testing one means mutating his
+real 937-series library, so the field list is from the spec, and the spec has
+been wrong about response shapes three times this week. Design it; I will
+confirm the request shape before wiring it.
+
+**What to design**
+- The edit sheet: seven states, chapter progress, a rating, a note.
+- **Add to library** from the Series detail screen and from the Stack. Today a
+  swipe saves only to a local shelf that MangaBaka never sees.
+- A badge showing a series is already tracked, and in which state — needed on
+  every cover surface, not just Library.
+- Delete, with whatever confirmation an irreversible action deserves.
+- The relationship between the local Shelf and the real Library. Two lists of
+  saved things is confusing; this design should resolve it.
+
+**States:** saving, saved, failed-and-retryable, offline-and-queued.
+
+---
+
+### 9. App icon — an App Store blocker
+
+The current icon is a placeholder and will not ship. It is a stack of blank
+cards on a **purple** gradient: no coral, no near-black, nothing to do with
+manga, and at 60×60 it collapses into a whitish blob. It reads as a flashcard
+app.
+
+**What to design**
+- A mark built from the real palette: coral `#FF7F63` on near-black `#08080B`.
+- Legible at 60×60 and 40×40. Test at those sizes before finalising.
+- Something that says manga or discovery at a glance and is distinguishable in
+  App Store search results.
+
+Deliverable: 1024×1024, plus a check of how it reads small.
+
+---
+
+### 10. Failure, empty and offline — one designed family
+
+These appear on every screen and are currently engineering, not design. The app
+models five distinct causes, and they were separated deliberately: an earlier
+version told readers to check their wifi over an HTTP 400.
+
+| Case | Cause | Note |
+|---|---|---|
+| `offline` | No connection | The only one that is the reader's network |
+| `rateLimited` | 429, carries `retryAfter` | Shared per IP — can be caused entirely by a stranger on the same network, and the copy must never blame the reader |
+| `server` | 5xx, carries a message | Not the reader's fault, may pass |
+| `decoding` | Response shape changed | Cached content is dropped here, because the shape changing means old data may mislead |
+| `transport` | Everything else | |
+
+Stale content is kept for the three that say nothing about accuracy, and dropped
+for `decoding`. So the design needs a **stale banner** as well as full-screen
+failure states.
+
+**What to design**
+- The full-screen failure state: symbol, headline, body, retry.
+- The inline stale banner, for when there is content to show but it is old.
+- Empty states, which are a different thing from failures and must not look
+  like errors.
+
+---
+
+### 11. Sign-in
+
+Today: a raw personal access token pasted into Settings. That was always a
+stopgap — a token never expires and is not scoped, which is exactly what OAuth
+fixes.
+
+**Blocked, honestly:** proper OAuth needs a `client_id` MangaBaka has not issued
+us. Design the shape; specifics may shift.
+
+**What to design**
+- Signed-out, signing-in, signed-in, and sign-out.
+- The auth sheet handoff.
+- Failure: rejected credential, cancelled, network.
+- The token path as it exists now, since it is what ships until OAuth arrives —
+  including saying plainly that a token is like a password.
+
+---
+
+### 12. Two components everything else needs
+
+Design these once; they appear in Library, editing and detail.
+
+**Rating control — five steps, not a hundred.** `rating` is a 0-100 field, but
+real ratings land on 20/40/60/80/100. Needs a clear "not rated" state: 55% of
+his library is unrated.
+
+**Progress control.** `progress_chapter` against `Series.total_chapters`. 75% of
+entries have progress. Needs a fast "+1 chapter" as well as setting a number,
+and must handle `total_chapters` being unknown — an ongoing series has no
+denominator, so "17" has to render as well as "17 / 311".
+
+---
+
+### 13. Launch screen
+
+Currently `UILaunchScreen: {}` — the blank system default. It is the first frame
+of the app on every cold start.
+
+---
+
+### 14. Search filter sheet — a pass, not a redesign
+
+It exists and works, but I assembled it from the mockup's chip vocabulary rather
+than from a design, and it has since grown. It carries type, status, sort (7
+orders) and a minimum rating stepper, and it now needs to coexist with the
+standing Formats preference in Settings — an explicit choice here overrides the
+standing one rather than intersecting with it, which the UI should make obvious.
+
+### 15. Settings — a pass, not a redesign
+
+Same situation. Account, Formats (6 toggles), Content (4 ratings, "safe" locked
+on), and required attribution. Assembled, not designed, and now three sections
+deep with sign-in and possibly notifications still to come.
