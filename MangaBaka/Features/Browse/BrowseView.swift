@@ -5,13 +5,16 @@ struct BrowseView: View {
     @State private var model: BrowseModel
     private let onPickGenre: (Genre) -> Void
     private let onPickTag: (Tag) -> Void
+    private let blocked: BlockedTagsStore
 
     init(
         model: BrowseModel,
+        blocked: BlockedTagsStore,
         onPickGenre: @escaping (Genre) -> Void,
         onPickTag: @escaping (Tag) -> Void
     ) {
         _model = State(initialValue: model)
+        self.blocked = blocked
         self.onPickGenre = onPickGenre
         self.onPickTag = onPickTag
     }
@@ -22,6 +25,7 @@ struct BrowseView: View {
                 header
                 genreChips
                 tagHeader
+                blockedSummary
                 ForEach(model.sections, id: \.name) { section in
                     sectionView(section.name, tags: section.tags)
                 }
@@ -101,6 +105,10 @@ struct BrowseView: View {
         .padding(.top, Metrics.sectionGap)
     }
 
+    private func blockLabel(_ tag: Tag) -> String {
+        blocked.blocked.contains(tag.id) ? "Unblock \(tag.name)" : "Block \(tag.name)"
+    }
+
     /// "Boxing, 19 series" — and it says when a tag is a spoiler, since that is
     /// the reason a reader might not want to hear it.
     static func label(for tag: Tag) -> String {
@@ -110,6 +118,29 @@ struct BrowseView: View {
         }
         if tag.isSpoiler == true { parts.append("spoiler tag") }
         return parts.joined(separator: ", ")
+    }
+
+    /// What the reader has hidden from themselves, by name. A count alone
+    /// would leave them unable to work out why something is missing.
+    @ViewBuilder
+    private var blockedSummary: some View {
+        if !blocked.blocked.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow(text: "Blocked")
+                Text(blocked.blocked.summary)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Hidden everywhere. Press and hold a tag to unblock it.")
+                    .typeFootnote()
+                    .foregroundStyle(Palette.textQuaternary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .hairlineBorder(Palette.border, radius: 15)
+            .padding(.top, 14)
+        }
     }
 
     private func sectionView(_ name: String, tags: [Tag]) -> some View {
@@ -162,6 +193,20 @@ struct BrowseView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Self.label(for: tag))
                 .accessibilityAddTraits(.isButton)
+                // Blocking is the other thing a reader wants from a tag list,
+                // and it is the only control that works at theme level rather
+                // than by content rating.
+                .accessibilityAction(named: blockLabel(tag)) {
+                    Task { await blocked.toggle(id: tag.id, name: tag.name) }
+                }
+                .contextMenu {
+                    Button(
+                        blockLabel(tag),
+                        systemImage: blocked.blocked.contains(tag.id) ? "eye" : "eye.slash"
+                    ) {
+                        Task { await blocked.toggle(id: tag.id, name: tag.name) }
+                    }
+                }
             }
         }
     }

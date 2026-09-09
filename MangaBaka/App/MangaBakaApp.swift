@@ -10,6 +10,7 @@ struct MangaBakaApp: App {
     private let library: LibraryService
     private let schedule: ReleaseScheduleService
     private let catalogue: CatalogueService
+    private let blockedTags: BlockedTagsStore
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -73,6 +74,10 @@ struct MangaBakaApp: App {
         schedule = ReleaseScheduleService(library: libraryService, database: database)
         catalogue = CatalogueService(client: apiClient)
 
+        let blocked = BlockedTagsStore()
+        blocked.onChange = { ids in await built.updateBlockedTags(ids) }
+        blockedTags = blocked
+
         // Recommendations are built from the reader's own library and are not
         // content filtered by default, so the same choice has to reach both.
         // Filtering feeds but not recommendations is the setting failing
@@ -99,6 +104,7 @@ struct MangaBakaApp: App {
 
             // Lets a blend exclude what the reader already tracks. Nil when
             // unauthenticated, which is the ordinary case and not a failure.
+            await built.updateBlockedTags(blocked.blocked.ids)
             await built.updateLibraryExclusion(userID: libraryService.profileID())
         }
     }
@@ -113,7 +119,8 @@ struct MangaBakaApp: App {
                 formats: formats,
                 library: library,
                 schedule: schedule,
-                catalogue: catalogue
+                catalogue: catalogue,
+                blockedTags: blockedTags
             )
         }
     }

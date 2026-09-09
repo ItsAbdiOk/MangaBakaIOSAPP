@@ -17,6 +17,7 @@ struct RootView: View {
     let library: LibraryService
     let schedule: ReleaseScheduleService
     let catalogue: CatalogueService
+    let blockedTags: BlockedTagsStore
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
@@ -167,6 +168,7 @@ struct RootView: View {
                     .navigationDestination(isPresented: $showsBrowse) {
                         BrowseView(
                             model: browseModel ?? BrowseModel(catalogue: catalogue),
+                            blocked: blockedTags,
                             onPickGenre: { genre in
                                 searchModel?.applyBrowse(genre: genre.value)
                                 showsBrowse = false

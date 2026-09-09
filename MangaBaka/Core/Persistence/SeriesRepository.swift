@@ -59,6 +59,10 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// track. Nil clears it.
     func updateLibraryExclusion(userID: String?) async
 
+    /// Replaces the blocked-tag list and discards every cached feed, for the
+    /// same reason the other filters do.
+    func updateBlockedTags(_ ids: [Int]) async
+
     /// How many distinct series are held on device. The mockup's Discover
     /// subtitle counts them, so it has to be a real number.
     func cachedSeriesCount() async -> Int
@@ -325,6 +329,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// "expected string, received boolean" and requires at least 32 characters
     /// (HTTP 400, verified 2026-09-09). Only ever the reader's own id.
     private var libraryExclusionUserID: String?
+    /// Tags the reader never wants to see, sent as `blocked_tag`.
+    private var blockedTags: [Int] = []
 
     init(
         client: APIClient,
@@ -405,6 +411,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         if query.types.isEmpty {
             items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
         }
+        items.append(contentsOf: blockedTags.map {
+            URLQueryItem(name: "tag_not", value: String($0))
+        })
         do {
             let series: [Series] = try await client.get("/v2/series/search", query: items)
             return FeedResult(series: series.filter(\.isDiscoverable), origin: .network)
@@ -425,6 +434,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })
         items.append(URLQueryItem(name: "strict", value: "false"))
         items.append(contentsOf: blendExclusionQuery)
+        items.append(contentsOf: blockedTags.map {
+            URLQueryItem(name: "blocked_tag", value: String($0))
+        })
         items.append(contentsOf: (contentRatings ?? []).map {
             URLQueryItem(name: "content_rating", value: $0)
         })
@@ -498,6 +510,14 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
+    func updateBlockedTags(_ ids: [Int]) async {
+        guard ids != blockedTags else { return }
+        blockedTags = ids
+        // Cached feeds were fetched without the block and still hold what the
+        // reader has just chosen not to see.
+        try? discardCachedFeeds()
+    }
+
     func updateLibraryExclusion(userID: String?) async {
         guard userID != libraryExclusionUserID else { return }
         libraryExclusionUserID = userID
@@ -520,6 +540,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     private var filterQuery: [URLQueryItem] {
         (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
             + formats.map { URLQueryItem(name: "type", value: $0) }
+            + blockedTags.map { URLQueryItem(name: "tag_not", value: String($0)) }
     }
 
     /// Split out because GRDB offers both a sync and an async `write`, and in
