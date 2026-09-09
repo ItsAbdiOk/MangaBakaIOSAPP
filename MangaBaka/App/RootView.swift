@@ -216,7 +216,26 @@ struct RootView: View {
     }
 
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
-        SeriesDetailView(series: series, repository: repository, library: library, path: path)
+        SeriesDetailView(
+            series: series,
+            repository: repository,
+            library: library,
+            schedule: schedule,
+            path: path,
+            onUseAsSeed: { series in
+                mixModel?.addSeed(series)
+                selection = .mix
+            },
+            onOpenTag: { tag in
+                searchModel?.query = SearchQuery(tags: [tag])
+                Task { await searchModel?.search() }
+                selection = .search
+            },
+            onOpenSchedule: {
+                selection = .library
+                showsSchedule = true
+            }
+        )
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

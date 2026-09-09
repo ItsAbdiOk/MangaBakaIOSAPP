@@ -254,6 +254,18 @@ actor ReleaseScheduleService {
         }
     }
 
+    /// The cadence already measured for one series, or nil if none has been.
+    ///
+    /// Reads the cache only. Measuring a series costs a MangaUpdates request,
+    /// and that API is spaced at one request every three seconds — so opening a
+    /// series page must never trigger one. The detail screen shows an estimate
+    /// when the schedule has already built one and stays silent otherwise,
+    /// which is the honest answer either way.
+    func cachedCadence(forSeriesId id: Int) -> Cadence? {
+        guard let row = (try? readCache())?[id] else { return nil }
+        return row.cadence
+    }
+
     // MARK: - Cache
 
     private struct CacheRow {

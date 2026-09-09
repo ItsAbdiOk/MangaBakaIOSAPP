@@ -162,6 +162,23 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         source?["manga_updates"]?.id
     }
 
+    /// Whether this series answers to a name the reader typed.
+    ///
+    /// Every title the series carries, not just the displayed one. A library
+    /// search that only matched `displayTitle` could not find a series by the
+    /// name the reader actually knows it by — the Korean title, the official
+    /// English one, an alternative romanisation — which on a 937-entry library
+    /// is the difference between a search and a guess. Authors count too: "show
+    /// me everything by this artist" is a real question about your own shelf.
+    func matches(_ needle: String) -> Bool {
+        let trimmed = needle.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        if titles?.contains(where: { $0.title.localizedCaseInsensitiveContains(trimmed) }) == true {
+            return true
+        }
+        return authors?.contains { $0.localizedCaseInsensitiveContains(trimmed) } == true
+    }
+
     /// A series whose `state` is "merged" or "deleted" should not be shown in
     /// discovery surfaces; it exists only so stored references can be updated.
     var isDiscoverable: Bool {

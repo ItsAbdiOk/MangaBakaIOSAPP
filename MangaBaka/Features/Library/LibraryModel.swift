@@ -102,7 +102,7 @@ final class LibraryModel {
         guard !needle.isEmpty else { return shelves }
         return shelves.compactMap { shelf in
             let matches = shelf.entries.filter { entry in
-                entry.series?.displayTitle?.localizedCaseInsensitiveContains(needle) == true
+                entry.series?.matches(needle) == true
             }
             guard !matches.isEmpty else { return nil }
             return Shelf(state: shelf.state, entries: matches, note: shelf.note)

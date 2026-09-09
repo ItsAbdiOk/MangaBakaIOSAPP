@@ -14,6 +14,7 @@ struct ShelfDetailView: View {
 
     @State private var filter: Filter = .all
     @State private var editing: LibraryEntry?
+    @State private var searchText = ""
 
     enum Filter: String, CaseIterable, Identifiable {
         case all
@@ -45,15 +46,37 @@ struct ShelfDetailView: View {
     /// Only dropped carries the filters; on the others they would all read "all".
     private var showsFilters: Bool { shelf.state == .dropped }
 
+    /// A shelf worth searching. Below this a reader can see the whole thing by
+    /// scrolling, and a field that filters six rows is furniture.
+    private var showsSearch: Bool { shelf.entries.count >= 12 }
+
     private var visible: [LibraryEntry] {
-        showsFilters ? shelf.entries.filter(filter.matches) : shelf.entries
+        let filtered = showsFilters ? shelf.entries.filter(filter.matches) : shelf.entries
+        let needle = searchText.trimmingCharacters(in: .whitespaces)
+        guard !needle.isEmpty else { return filtered }
+        return filtered.filter { entry in
+            entry.series?.matches(needle) ?? false
+        }
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header
+                if showsSearch {
+                    InlineSearchField(
+                        prompt: "Search \(shelf.entries.count.formatted()) here",
+                        text: $searchText
+                    )
+                    .padding(.bottom, 14)
+                }
                 if showsFilters { filterChips }
+                if visible.isEmpty && !searchText.isEmpty {
+                    Text("Nothing on this shelf matches")
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textTertiary)
+                        .padding(.vertical, 20)
+                }
                 ForEach(visible) { entry in
                     if let series = entry.series {
                         LibraryRow(

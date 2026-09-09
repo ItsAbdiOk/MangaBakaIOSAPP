@@ -95,30 +95,10 @@ struct LibraryView: View {
     /// Searching your own library, which at 937 entries is the difference
     /// between a list and an archive.
     private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Palette.textMuted)
-            TextField("Search \(model.total.formatted()) series", text: $model.searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .typeBody()
-                .foregroundStyle(Palette.textPrimary)
-            if model.isSearching {
-                Button { model.searchText = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Palette.textQuaternary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 13)
-        .frame(height: Metrics.field)
-        .background(Palette.surfaceField, in: RoundedRectangle(
-            cornerRadius: 13, style: .continuous
-        ))
-        .hairlineBorder(Palette.hairline, radius: 13)
+        InlineSearchField(
+            prompt: "Search \(model.total.formatted()) series",
+            text: $model.searchText
+        )
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 16)
     }

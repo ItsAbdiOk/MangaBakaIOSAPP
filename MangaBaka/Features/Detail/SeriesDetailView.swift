@@ -5,84 +5,99 @@ struct SeriesDetailView: View {
     let series: Series
     let repository: any SeriesRepositoryProtocol
     let library: any LibraryProviding
+    /// The release schedule, read from its cache only — see `cachedCadence`.
+    let schedule: ReleaseScheduleService?
     @Binding var path: [Series]
+    /// Sends this series to Mix as a seed and switches to that tab.
+    var onUseAsSeed: ((Series) -> Void)?
+    /// Opens a search for one of the series' tags.
+    var onOpenTag: ((String) -> Void)?
+    var onOpenSchedule: (() -> Void)?
 
     @State private var similar: [Series] = []
     @State private var alsoLike: [Series] = []
     @State private var extras = SeriesExtras()
+    @State private var cadence: Cadence?
     @State private var isLoading = true
     @Environment(\.openURL) private var openURL
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ScrollView {
+            // The mockup's order, which is an argument about what a reader
+            // wants: what it is, then what to do about it, then the numbers,
+            // then the words, then everywhere else to go.
             VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
-                hero
-                LibraryControl(series: series, library: library)
+                DetailHero(
+                    series: series,
+                    schedule: cadence,
+                    onOpenSchedule: onOpenSchedule
+                )
+                .padding(.top, 4)
+                actions
+                DetailStatsStrip(series: series)
                 if let description = series.description, !description.isEmpty {
-                    Text(description)
+                    Text(Self.prose(from: description))
                         .typeBody()
                         .foregroundStyle(Palette.textBody)
                         .padding(.horizontal, Metrics.gutter)
                 }
-                trackerScores
+                DetailTags(tags: series.tags ?? []) { tag in
+                    onOpenTag?(tag)
+                }
+                DetailCredits(series: series)
                 relatedRow
                 onwardRow("Similar", similar)
                 onwardRow("Readers also like", alsoLike)
-                publishersSection
+                trackerScores
                 readElsewhere
                 newsSection
                 provenance
             }
-            .padding(.top, 12)
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
-        .background(Palette.ground)
+        .background(alignment: .top) {
+            DetailBackdrop(cover: series.cover)
+                .background(Palette.ground)
+                .ignoresSafeArea()
+        }
         .navigationTitle(series.displayTitle ?? "Series")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: series.id) { await load() }
     }
 
-    private var hero: some View {
-        HStack(alignment: .top, spacing: Metrics.gapHero) {
-            CoverImage(
-                cover: series.cover,
-                width: Metrics.coverDetailHeroWidth,
-                radius: Metrics.radiusCoverRow
-            )
-            VStack(alignment: .leading, spacing: 8) {
-                Text(series.displayTitle ?? "Untitled series")
-                    .typeDetailHeroTitle()
-                    .foregroundStyle(Palette.textEmphasis)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let authors = series.authors, !authors.isEmpty {
-                    Text(authors.joined(separator: ", "))
-                        .typeSubtitle()
-                        .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(2)
+    /// The mockup pairs the primary action with "Use as seed", which is the
+    /// only place in the app that sends a specific series into a blend from the
+    /// screen where you decided you liked it.
+    private var actions: some View {
+        HStack(spacing: Metrics.gapStrip) {
+            LibraryControl(series: series, library: library)
+                .padding(.leading, Metrics.gutter)
+            if onUseAsSeed != nil {
+                Button { onUseAsSeed?(series) } label: {
+                    Text("Use as seed")
+                        .typeChip()
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .frame(height: Metrics.ctaPrimary)
+                        .foregroundStyle(Palette.textPrimary)
+                        .background(
+                            Palette.surfaceChip,
+                            in: RoundedRectangle(
+                                cornerRadius: Metrics.radiusCard, style: .continuous
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                                .strokeBorder(Palette.border, lineWidth: 0.5)
+                        )
                 }
-
-                // Only chips the API actually gave us. A missing field shows
-                // nothing rather than a guess.
-                FlowChips(items: chips)
+                .buttonStyle(.plain)
+                .accessibilityHint("Adds this series to the Mix and opens it")
             }
         }
-        .padding(.horizontal, Metrics.gutter)
-    }
-
-    private var chips: [String] {
-        var out: [String] = []
-        if let type = series.type { out.append(type.capitalized) }
-        if let status = series.status { out.append(status.capitalized) }
-        if let rating = series.rating {
-            out.append(String(format: "%.1f", rating / 10))
-        }
-        if let chapters = series.totalChapters, chapters > 0 {
-            out.append("\(Int(chapters)) ch")
-        }
-        return out
+        .padding(.trailing, Metrics.gutter)
     }
 
     @ViewBuilder
@@ -227,21 +242,6 @@ struct SeriesDetailView: View {
     }
 
     @ViewBuilder
-    private var publishersSection: some View {
-        if let publishers = series.publishers, !publishers.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Published by")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                FlowChips(items: publishers.map { publisher in
-                    if let type = publisher.type { "\(publisher.name) · \(type)" } else { publisher.name }
-                })
-            }
-            .padding(.horizontal, Metrics.gutter)
-        }
-    }
-
-    @ViewBuilder
     private var readElsewhere: some View {
         LinksSection(links: extras.links)
     }
@@ -249,6 +249,28 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private var newsSection: some View {
         NewsSection(items: extras.news)
+    }
+
+    /// Descriptions arrive as Markdown and were being printed raw, so a real
+    /// series page ended with a literal "*Source: Tappytoon*" and a line of
+    /// three hyphens. Parsing it renders the emphasis and drops the rules.
+    ///
+    /// `.inlineOnlyPreservingWhitespace`, not `.full`. Full parsing produces
+    /// block elements that `Text` renders end to end with no separator, which
+    /// turned a real description into "...extent of his powers. Source:
+    /// TappytoonKnown as the weakest hunter..." — two paragraphs and a caption
+    /// welded into one sentence.
+    static func prose(from markdown: String) -> AttributedString {
+        let cleaned = markdown
+            .replacingOccurrences(of: "\n---\n", with: "\n\n")
+            .replacingOccurrences(of: "\n\n\n", with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+        return (try? AttributedString(markdown: cleaned, options: options))
+            ?? AttributedString(cleaned)
     }
 
     private func load() async {
@@ -259,6 +281,7 @@ struct SeriesDetailView: View {
         similar = await similarResult.series
         alsoLike = await alsoResult.series
         extras = await extrasResult
+        cadence = await schedule?.cachedCadence(forSeriesId: series.id)
         isLoading = false
     }
 }

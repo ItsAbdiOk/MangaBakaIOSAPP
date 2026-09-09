@@ -116,7 +116,6 @@ struct LibraryControl: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, Metrics.gutter)
         .task { await model.load() }
         .sheet(isPresented: $isEditing) {
             if let entry = model.current {
