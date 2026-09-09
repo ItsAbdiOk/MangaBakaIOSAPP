@@ -11,7 +11,7 @@ struct LinksSection: View {
     @Environment(\.openURL) private var openURL
 
     private var readable: [SeriesLink] {
-        Array(links.filter { $0.url != nil }.prefix(6))
+        Array(links.filter { $0.safeURL != nil }.prefix(6))
     }
 
     var body: some View {
@@ -43,7 +43,7 @@ struct LinksSection: View {
 
     private func row(_ link: SeriesLink) -> some View {
         Button {
-            if let url = link.url { openURL(url) }
+            if let url = link.safeURL { openURL(url) }
         } label: {
             HStack {
                 Text(link.title)
@@ -82,7 +82,7 @@ struct NewsSection: View {
 
                 ForEach(items.prefix(4)) { item in
                     Button {
-                        if let url = item.url { openURL(url) }
+                        if let url = item.safeURL { openURL(url) }
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.title)

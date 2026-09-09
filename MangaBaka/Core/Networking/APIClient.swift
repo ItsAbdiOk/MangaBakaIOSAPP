@@ -171,6 +171,13 @@ actor APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        // Never let a response carrying the reader's own data sit in the shared
+        // URLCache on disk. MangaBaka does send "private, no-store" on those
+        // endpoints today (verified 2026-09-09), but that is their guarantee to
+        // change, not ours to depend on.
+        if path.hasPrefix("/v1/my") || path.hasPrefix("/v0/my") {
+            request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         return request
