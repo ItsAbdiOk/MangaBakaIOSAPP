@@ -43,7 +43,7 @@ struct SeriesRepositoryTests {
         URLProtocolStub.setHandler { [data = payload(ids: [1, 2, 3])] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        let result = await try makeRepository(clock: TestClock()).feed(.rising, forceRefresh: false)
+        let result = try await makeRepository(clock: TestClock()).feed(.rising, forceRefresh: false)
 
         #expect(result.origin == .network)
         #expect(result.series.map(\.id) == [1, 2, 3])
@@ -138,7 +138,7 @@ struct SeriesRepositoryTests {
         URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
         defer { URLProtocolStub.reset() }
 
-        let result = await try makeRepository(clock: TestClock()).feed(.rising, forceRefresh: false)
+        let result = try await makeRepository(clock: TestClock()).feed(.rising, forceRefresh: false)
 
         #expect(result.series.isEmpty)
         #expect(result.blockingError == .offline)
@@ -186,7 +186,7 @@ struct SeriesRepositoryTests {
         URLProtocolStub.setHandler { [data = payload(ids: [1])] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository(clock: TestClock()).feed(.rising, forceRefresh: true)
+        _ = try await makeRepository(clock: TestClock()).feed(.rising, forceRefresh: true)
 
         let url = try #require(URLProtocolStub.requests.first?.url)
         let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
@@ -208,7 +208,7 @@ struct SeriesRepositoryTests {
         URLProtocolStub.setHandler { [data = payload(ids: [1])] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository(clock: TestClock()).feed(.surprise, forceRefresh: true)
+        _ = try await makeRepository(clock: TestClock()).feed(.surprise, forceRefresh: true)
 
         let path = try #require(URLProtocolStub.requests.first?.url?.path)
         #expect(!path.contains("/mix"), "mix rejects a request with no seeds")

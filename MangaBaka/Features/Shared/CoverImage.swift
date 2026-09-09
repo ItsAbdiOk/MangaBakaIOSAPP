@@ -9,10 +9,20 @@ struct CoverImage: View {
     let cover: Cover
     let width: CGFloat
     var radius: CGFloat = Metrics.radiusCoverRow
+    /// What VoiceOver reads. Cover art carries the title visually, so without
+    /// this a reader using VoiceOver hears nothing at all.
+    var accessibilityText: String = "Cover art"
 
     @Environment(\.displayScale) private var displayScale
 
     private var height: CGFloat { width / Metrics.coverAspect }
+
+    /// Decoded once per cover. Cheap (a 32x32 image) but not free, so it is not
+    /// recomputed on every layout pass.
+    private var blurPlaceholder: UIImage? {
+        guard let hash = cover.blurhash else { return nil }
+        return BlurHashCache.shared.image(for: hash)
+    }
 
     var body: some View {
         // The API's own ratio when it gave one, else 2:3, which every cover is.
@@ -30,15 +40,21 @@ struct CoverImage: View {
                             .foregroundStyle(Palette.textQuaternary)
                     )
             default:
-                // BlurHash is available on every cover and would be a better
-                // placeholder than a flat fill. Not decoded yet — noted rather
-                // than faked, since a flat fill is honest and a wrong blur is not.
-                Palette.imagePlaceholder
+                // The API ships a BlurHash with every cover, so the placeholder
+                // can carry the artwork's real colours. A loading grid then
+                // looks like the grid it is about to become, rather than a wall
+                // of grey.
+                if let blur = blurPlaceholder {
+                    Image(uiImage: blur).resizable()
+                } else {
+                    Palette.imagePlaceholder
+                }
             }
         }
         .frame(width: width, height: width / ratio)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
+        .accessibilityLabel(accessibilityText)
     }
 }
 
@@ -51,7 +67,12 @@ struct CoverCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CoverImage(cover: series.cover, width: width, radius: radius)
+            CoverImage(
+                cover: series.cover,
+                width: width,
+                radius: radius,
+                accessibilityText: series.displayTitle ?? "Untitled series"
+            )
 
             // A series can legitimately have no titles at all.
             Text(series.displayTitle ?? "Untitled series")

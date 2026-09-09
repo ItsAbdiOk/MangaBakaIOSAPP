@@ -31,9 +31,13 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # Treat warnings seriously; this project has no legacy code to grandfather.
-    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
-    GCC_TREAT_WARNINGS_AS_ERRORS: NO
+    # Warnings are errors. A Swift warning caught a real crash here — an
+    # infinitely recursive subscript that killed the test process with a stack
+    # overflow — and it went unnoticed for hours because the build output was
+    # only ever grepped for "error:". There is no legacy code to grandfather,
+    # so the cheapest fix is to stop allowing warnings at all.
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
 
 targets:
   MangaBaka:

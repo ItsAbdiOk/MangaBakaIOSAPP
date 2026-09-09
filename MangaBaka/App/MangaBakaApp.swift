@@ -7,6 +7,15 @@ struct MangaBakaApp: App {
     private let client: APIClient
 
     init() {
+        // Cover art dominates this app's network use and is highly re-requested
+        // — the same covers appear across rows, search results and detail
+        // screens. URLSession's default disk cache is far too small for that,
+        // so scrolling back up re-downloads artwork the device already had.
+        URLCache.shared = URLCache(
+            memoryCapacity: 32 * 1024 * 1024,
+            diskCapacity: 256 * 1024 * 1024
+        )
+
         let info = Bundle.main.infoDictionary
 
         // Falls back to the documented production host if the build setting is

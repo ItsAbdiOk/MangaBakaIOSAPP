@@ -36,7 +36,7 @@ struct SearchAndMixTests {
 
         var query = SearchQuery()
         query.text = "solo"
-        _ = await try makeRepository().search(query)
+        _ = try await makeRepository().search(query)
 
         let names = Set(try items(from: URLProtocolStub.requests.first).map(\.name))
         #expect(names.contains("q"))
@@ -53,7 +53,7 @@ struct SearchAndMixTests {
         var query = SearchQuery()
         query.types = ["manga", "manhwa"]
         query.statuses = ["releasing"]
-        _ = await try makeRepository().search(query)
+        _ = try await makeRepository().search(query)
 
         let sent = try items(from: URLProtocolStub.requests.first)
         #expect(sent.filter { $0.name == "type" }.count == 2)
@@ -66,7 +66,7 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository().search(SearchQuery(text: "x"))
+        _ = try await makeRepository().search(SearchQuery(text: "x"))
 
         let ratings = try items(from: URLProtocolStub.requests.first)
             .filter { $0.name == "content_rating" }
@@ -80,7 +80,7 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
         defer { URLProtocolStub.reset() }
 
-        let results = await try makeRepository().mix(seeds: [], filters: SearchQuery())
+        let results = try await makeRepository().mix(seeds: [], filters: SearchQuery())
 
         #expect(results.isEmpty)
         #expect(URLProtocolStub.requests.isEmpty, "No seeds means no request at all")
@@ -93,7 +93,7 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { [payload = emptyPayload] _ in .respond(.init(body: payload)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository().mix(seeds: [1, 2, 3], filters: SearchQuery())
+        _ = try await makeRepository().mix(seeds: [1, 2, 3], filters: SearchQuery())
 
         let sent = try items(from: URLProtocolStub.requests.first)
         let seeds = try #require(sent.first { $0.name == "series" }?.value)
@@ -112,7 +112,7 @@ struct SearchAndMixTests {
         filters.text = "ignored"
         filters.sort = "random"
         filters.types = ["manga"]
-        _ = await try makeRepository().mix(seeds: [7], filters: filters)
+        _ = try await makeRepository().mix(seeds: [7], filters: filters)
 
         let names = Set(try items(from: URLProtocolStub.requests.first).map(\.name))
         #expect(!names.contains("q"))
@@ -138,7 +138,7 @@ struct SearchAndMixTests {
         URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
 
-        let results = await try makeRepository().mix(seeds: [3397], filters: SearchQuery())
+        let results = try await makeRepository().mix(seeds: [3397], filters: SearchQuery())
 
         #expect(results.count == 1)
         #expect(results.first?.series.displayTitle == "Blend")

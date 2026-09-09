@@ -55,6 +55,8 @@ SIM=$(xcrun simctl list devices available \
 [ -n "$SIM" ] || fail "no iPhone simulator available to test against"
 
 echo "  running tests on $SIM (this is the slow bit)..."
+# Warnings are build errors now, so a warning fails here rather than scrolling
+# past unnoticed the way an infinite-recursion warning once did.
 # Not --quiet: quiet mode suppresses the per-test results, which are the whole
 # reason to read this log when something fails.
 if ! xcodebuild test \

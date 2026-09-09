@@ -44,7 +44,7 @@ struct RequestBudgetTests {
         URLProtocolStub.setHandler { [data = payload(count: 20)] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository().feed(.rising, forceRefresh: false)
+        _ = try await makeRepository().feed(.rising, forceRefresh: false)
         #expect(URLProtocolStub.requests.count == 1)
     }
 
@@ -55,7 +55,7 @@ struct RequestBudgetTests {
         URLProtocolStub.setHandler { [data = payload(count: 20)] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        _ = await try makeRepository().feed(.rising, forceRefresh: false)
+        _ = try await makeRepository().feed(.rising, forceRefresh: false)
 
         let url = try #require(URLProtocolStub.requests.first?.url?.absoluteString)
         #expect(url.contains("limit=20"))
