@@ -255,3 +255,75 @@ struct StackCardDataTests {
         #expect(asStrings.ratingCount == 1128)
     }
 }
+
+/// Saved lenses filter by tag, which is a parameter the app had never sent.
+@Suite("Search lenses", .serialized)
+struct SearchLensTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeRepository() throws -> SeriesRepository {
+        SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: try AppDatabase.inMemory(),
+            clock: TestClock()
+        )
+    }
+
+    private func items(from request: URLRequest?) throws -> [URLQueryItem] {
+        let url = try #require(request?.url)
+        return try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+    }
+
+    /// Repeated keys, like every other list parameter on this API. The two that
+    /// were comma-joined on a guess both returned HTTP 400.
+    @Test("Tags are sent as repeated keys, with a mode only when combining")
+    func tagsAreRepeated() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try makeRepository()
+        var query = SearchQuery()
+        query.tags = ["Regression", "Comedy"]
+        query.tagMode = "and"
+        _ = await repository.search(query)
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression", "Comedy"])
+        #expect(sent.first { $0.name == "tag_mode" }?.value == "and")
+        #expect(!sent.contains { $0.name == "tag" && ($0.value ?? "").contains(",") })
+    }
+
+    /// One tag cannot be combined with anything, so a mode would be noise.
+    @Test("A single tag sends no mode")
+    func singleTagSendsNoMode() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try makeRepository()
+        var query = SearchQuery()
+        query.tags = ["Seinen"]
+        query.tagMode = "and"
+        _ = await repository.search(query)
+
+        let names = try items(from: URLProtocolStub.requests.first).map(\.name)
+        #expect(names.contains("tag"))
+        #expect(!names.contains("tag_mode"))
+    }
+
+    /// A lens is only useful if it actually narrows anything; an empty query
+    /// would return before reaching the network and the screen would sit on its
+    /// idle state looking broken — which is exactly how "Surprise me" failed.
+    @Test("Every preset lens is a real query", arguments: SearchLens.presets)
+    func presetsAreNotEmpty(_ lens: SearchLens) {
+        #expect(!lens.query.isEmpty, "\(lens.name) would never reach the network")
+        #expect(!lens.rule.isEmpty)
+    }
+}

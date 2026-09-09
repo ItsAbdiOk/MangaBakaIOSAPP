@@ -78,6 +78,11 @@ struct SearchQuery: Sendable, Equatable {
     var statuses: [String] = []
     /// One of the API's 20 sort orders.
     var sort: String?
+    /// Tag names to require. The API takes repeated `tag` keys plus a
+    /// `tag_mode` saying whether they are ANDed or ORed.
+    var tags: [String] = []
+    /// "and" or "or". Only sent when there is more than one tag to combine.
+    var tagMode: String?
     /// 0-100 as the API expresses it.
     var minimumRating: Int?
     var limit = 30
@@ -94,7 +99,7 @@ struct SearchQuery: Sendable, Equatable {
     var isEmpty: Bool {
         (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
-            && sort == nil
+            && sort == nil && tags.isEmpty
     }
 
     /// Repeated keys where the API wants them; a comma-joined list is rejected
@@ -107,6 +112,10 @@ struct SearchQuery: Sendable, Equatable {
         }
         for type in types { items.append(URLQueryItem(name: "type", value: type)) }
         for status in statuses { items.append(URLQueryItem(name: "status", value: status)) }
+        for tag in tags { items.append(URLQueryItem(name: "tag", value: tag)) }
+        if tags.count > 1, let tagMode {
+            items.append(URLQueryItem(name: "tag_mode", value: tagMode))
+        }
         if let sort { items.append(URLQueryItem(name: "sort_by", value: sort)) }
         if let minimumRating {
             items.append(URLQueryItem(name: "rating_lower", value: String(minimumRating)))

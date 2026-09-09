@@ -15,13 +15,26 @@ struct SearchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
-                Text("Search")
-                    .typeScreenTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-
                 searchBar
                     .padding(.horizontal, Metrics.gutter)
+
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(heading)
+                        .typeSubsectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                    Spacer(minLength: 0)
+                    Button {
+                        model.query.sort = "random"
+                        Task { model.cancelPendingDebounce(); await model.search() }
+                    } label: {
+                        Text("Surprise me")
+                            .typeInstruction()
+                            .foregroundStyle(Palette.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.isSearching)
+                }
+                .padding(.horizontal, Metrics.gutter + 2)
 
                 content
             }
@@ -74,6 +87,15 @@ struct SearchView: View {
         }
     }
 
+    /// "12 results · score_desc" once anything is asked for, "Saved lenses"
+    /// before that — the mockup's own wording.
+    private var heading: String {
+        guard !model.query.isEmpty else { return "Saved lenses" }
+        let count = "\(model.results.count) result\(model.results.count == 1 ? "" : "s")"
+        guard let sort = model.query.sort else { return count }
+        return "\(count) · \(sort)"
+    }
+
     @ViewBuilder
     private var content: some View {
         if model.query.isEmpty {
@@ -108,7 +130,12 @@ struct SearchView: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(model.results) { series in
                 Button { path.append(series) } label: {
-                    CoverCard(series: series, width: 111, radius: Metrics.radiusCoverGrid)
+                    CoverCard(
+                        series: series,
+                        width: 111,
+                        radius: Metrics.radiusCoverGrid,
+                        meta: DiscoverView.meta(for: series)
+                    )
                 }
                 .buttonStyle(.plain)
                 // Two rows from the bottom, so the next page is usually there
@@ -132,36 +159,70 @@ struct SearchView: View {
         return index >= model.results.count - Self.prefetchDistance
     }
 
+    /// Saved searches, shown before anything is typed. The mockup fills the
+    /// idle screen with these rather than with an invitation to type.
     private var idleState: some View {
-        VStack(spacing: 14) {
-            Text("Search MangaBaka")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text("Type a title, or let the shuffle pick something for you.")
-                .typeSubtitle()
-                .foregroundStyle(Palette.textSecondary)
-                .multilineTextAlignment(.center)
-            surpriseButton
+        VStack(spacing: 8) {
+            ForEach(SearchLens.presets) { lens in
+                Button {
+                    model.query = lens.query
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(lens.name)
+                                .typeRowTitle()
+                                .foregroundStyle(Palette.textPrimary)
+                            Text(lens.rule)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textTertiary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Palette.textQuaternary)
+                    }
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 13)
+                    .background(Palette.surface, in: RoundedRectangle(
+                        cornerRadius: 14, style: .continuous
+                    ))
+                    .hairlineBorder(Palette.hairline, radius: 14)
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 44)
-        .padding(.top, 70)
+        .padding(.horizontal, Metrics.gutter)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             Text("Nothing matched \(displayedQuery)")
-                .typeSubsectionHeader()
+                .typeBody()
                 .foregroundStyle(Palette.textPrimary)
-            Text("Try fewer filters, or a shorter title.")
-                .typeSubtitle()
-                .foregroundStyle(Palette.textSecondary)
+            Text("Try a looser filter, or let the API pick.")
+                .typeInstruction()
+                .foregroundStyle(Palette.textTertiary)
                 .multilineTextAlignment(.center)
-            surpriseButton
+                .padding(.top, 8)
+            Button {
+                model.query.sort = "random"
+                Task { model.cancelPendingDebounce(); await model.search() }
+            } label: {
+                Text("Random with these filters")
+                    .typeRowTitle()
+                    .foregroundStyle(Palette.onAccent)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 11)
+                    .background(Palette.accent, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 44)
-        .padding(.top, 70)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 34)
     }
 
     private func errorState(_ message: String) -> some View {
@@ -174,37 +235,6 @@ struct SearchView: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 44)
         .padding(.top, 70)
-    }
-
-    private var surpriseButton: some View {
-        Button {
-            model.query.sort = "random"
-            Task { model.cancelPendingDebounce(); await model.search() }
-        } label: {
-            // The label swaps for a spinner in place rather than the button
-            // sitting inert. A random search is a live request against a shared
-            // rate limit and can take a second or two; with no feedback the
-            // only reasonable conclusion is that the button is broken. (From
-            // the idle screen the whole section is replaced by the screen's own
-            // spinner; this covers the "nothing matched" screen, where the
-            // button stays put.)
-            ZStack {
-                Text("Surprise me")
-                    .typeCTA()
-                    .opacity(model.isSearching ? 0 : 1)
-                if model.isSearching {
-                    ProgressView()
-                        .tint(Palette.onAccent)
-                }
-            }
-            .foregroundStyle(Palette.onAccent)
-            .padding(.horizontal, 20)
-            .frame(height: Metrics.ctaSecondary)
-            .background(Palette.accent)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-        }
-        .disabled(model.isSearching)
-        .accessibilityLabel(model.isSearching ? "Finding something" : "Surprise me")
     }
 
     private var displayedQuery: String {

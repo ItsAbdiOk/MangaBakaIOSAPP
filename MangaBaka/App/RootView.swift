@@ -137,7 +137,12 @@ struct RootView: View {
             )
         }
         .overlay(alignment: .top) {
-            AppTopBar(cacheAge: cacheAge)
+            // Only at a tab's root. The bar is drawn over everything, so on a
+            // pushed screen it sat on top of the navigation bar and hid its
+            // back button — leaving an edge-swipe as the only way out.
+            if isAtRoot {
+                AppTopBar(cacheAge: cacheAge)
+            }
         }
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
@@ -160,6 +165,17 @@ struct RootView: View {
         }
         .tint(Palette.accent)
         .preferredColorScheme(.dark)
+    }
+
+    /// Whether the selected tab is showing its root screen.
+    private var isAtRoot: Bool {
+        switch selection {
+        case .discover: discoverPath.isEmpty
+        case .stack: stackPath.isEmpty
+        case .mix: mixPath.isEmpty
+        case .library: shelfPath.isEmpty
+        case .search: searchPath.isEmpty
+        }
     }
 
     /// Tapping the current tab returns to its root.
