@@ -18,7 +18,6 @@
 		137C347F5DC0E831E5D3F97D /* APIEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71C46FF149BB331347BEAA9 /* APIEnvelope.swift */; };
 		14C86245A2FFF1449145B702 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EDE9358BE6F5C26EE4A290 /* AppDatabase.swift */; };
 		1621038E6C35ED1642B2F900 /* LinksSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8655E5F70D5BC83C78BFB1B6 /* LinksSection.swift */; };
-		16237528BAEEF71764124AC3 /* ShelfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5594AC06AFE0BF5648F1E192 /* ShelfView.swift */; };
 		17423DB0B7630B34E45FF791 /* DisplayTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */; };
 		1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC80B7959AD108FCFD7FFF /* StackModel.swift */; };
 		1FAF9328BFF73ADDFA7163DA /* FormatPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF595AE01077A9CDAA601BB7 /* FormatPreferencesTests.swift */; };
@@ -164,7 +163,6 @@
 		52FCCDD33A78D94B0B5F003C /* MangaUpdatesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaUpdatesClient.swift; sourceTree = "<group>"; };
 		530B5C869E932A5DF2238597 /* CoverImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImage.swift; sourceTree = "<group>"; };
 		53AA072C03A0C7369887770B /* PaginationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaginationTests.swift; sourceTree = "<group>"; };
-		5594AC06AFE0BF5648F1E192 /* ShelfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfView.swift; sourceTree = "<group>"; };
 		5698F5863047F965EA299F22 /* RateLimitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitTests.swift; sourceTree = "<group>"; };
 		59A568F72990CB4BDB3E9056 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientTests.swift; sourceTree = "<group>"; };
 		5AA7827799CD364196381C9C /* APIShapeContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIShapeContractTests.swift; sourceTree = "<group>"; };
@@ -412,7 +410,6 @@
 			isa = PBXGroup;
 			children = (
 				8E9097F42ABA9FEE8097956C /* ShelfStore.swift */,
-				5594AC06AFE0BF5648F1E192 /* ShelfView.swift */,
 			);
 			path = Shelf;
 			sourceTree = "<group>";
@@ -779,7 +776,6 @@
 				D1182AEB5F0978D4B99E6FF2 /* SettingsView.swift in Sources */,
 				E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */,
 				2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */,
-				16237528BAEEF71764124AC3 /* ShelfView.swift in Sources */,
 				1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */,
 				E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */,
 				B72756445980F083663658AA /* StackView.swift in Sources */,

@@ -171,7 +171,10 @@ struct TabBarClearanceTests {
         "MangaBaka/Features/Detail/SeriesDetailView.swift",
         "MangaBaka/Features/Search/SearchView.swift",
         "MangaBaka/Features/Mix/MixView.swift",
-        "MangaBaka/Features/Shelf/ShelfView.swift",
+        "MangaBaka/Features/Library/LibraryView.swift",
+        "MangaBaka/Features/Library/ShelfDetailView.swift",
+        "MangaBaka/Features/Schedule/ScheduleView.swift",
+        "MangaBaka/Features/Browse/BrowseView.swift",
         "MangaBaka/Features/Settings/SettingsView.swift"
     ]
 
