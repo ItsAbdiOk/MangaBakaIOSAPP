@@ -92,11 +92,26 @@ actor ReleaseScheduleService {
 
     // MARK: - Scope
 
-    /// Reading or rereading, still publishing, and known to MangaUpdates.
+    /// Whether a series can have a next chapter at all.
+    ///
+    /// A completed or cancelled series will never release again, so an estimate
+    /// for one is not a weak answer — it is a wrong one. The detail page showed
+    /// "Completed · 3 years overdue" for Solo Leveling, which is what a median
+    /// gap says about a series that stopped, and it is nonsense.
+    static func canRelease(status: String?) -> Bool {
+        ["releasing", "hiatus", "on_hiatus"].contains(status ?? "")
+    }
+
+    /// Shelf states worth a release estimate: the ones the reader is partway
+    /// through. Completed and dropped are finished with, whatever the series is
+    /// still doing, and plan-to-read has not started.
+    static let statesWorthScheduling: Set<LibraryEntry.State> = [
+        .reading, .rereading, .paused
+    ]
+
+    /// Partway through, still publishing, and known to MangaUpdates.
     static func isInScope(state: LibraryEntry.State, status: String?) -> Bool {
-        let reading = state == .reading || state == .rereading
-        let publishing = ["releasing", "hiatus", "on_hiatus"].contains(status ?? "")
-        return reading && publishing
+        statesWorthScheduling.contains(state) && canRelease(status: status)
     }
 
     static func isPaused(status: String?) -> Bool {
@@ -254,16 +269,58 @@ actor ReleaseScheduleService {
         }
     }
 
+    /// What the schedule can say about one series.
+    ///
+    /// `measured` carries an estimate. `none` means MangaUpdates answered and
+    /// there was not enough history to infer a rhythm — a real answer, and
+    /// different from not having asked. `unavailable` means the series has no
+    /// MangaUpdates id at all, so no amount of asking would help.
+    enum SeriesCadence: Equatable, Sendable {
+        case measured(Cadence)
+        case none
+        case unavailable
+    }
+
     /// The cadence already measured for one series, or nil if none has been.
     ///
-    /// Reads the cache only. Measuring a series costs a MangaUpdates request,
-    /// and that API is spaced at one request every three seconds — so opening a
-    /// series page must never trigger one. The detail screen shows an estimate
-    /// when the schedule has already built one and stays silent otherwise,
-    /// which is the honest answer either way.
+    /// Cache only, and it never makes a request — the caller decides whether to
+    /// pay for one.
     func cachedCadence(forSeriesId id: Int) -> Cadence? {
         guard let row = (try? readCache())?[id] else { return nil }
         return row.cadence
+    }
+
+    /// The cadence for one series, measuring it if it has not been measured.
+    ///
+    /// One MangaUpdates request, not the ten pages a full build costs, and only
+    /// for the series actually on screen. The client spaces requests at one
+    /// every three seconds, so this can wait — which is why the screen shows a
+    /// spinner rather than nothing.
+    ///
+    /// A settled answer is never re-fetched, including a settled "not enough
+    /// history": that is a fact about the series, not a failure. A recorded
+    /// failure is retried, because it is a fact about the network.
+    func cadence(for series: Series) async -> SeriesCadence {
+        guard Self.canRelease(status: series.status) else { return .unavailable }
+        guard let raw = series.mangaUpdatesID,
+              let number = MangaUpdatesID.number(from: raw)
+        else { return .unavailable }
+
+        if let row = (try? readCache())?[series.id], row.failure == nil {
+            return row.cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
+        }
+
+        do {
+            let releases = try await mangaUpdates.releases(seriesNumber: number)
+            let cadence = Cadence.estimate(from: releases.compactMap(\.date))
+            try? write(seriesId: series.id, cadence: cadence, failure: nil)
+            return cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
+        } catch {
+            // Recorded as a failure rather than a null cadence, so the next
+            // open retries instead of treating an outage as an answer.
+            try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
+            return .none
+        }
     }
 
     // MARK: - Cache

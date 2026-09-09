@@ -8,18 +8,41 @@ import SwiftUI
 /// block can say. Collapsing them once produced "LIKELY — expected 6 days ago",
 /// a healthy pill on a late chapter.
 struct DetailScheduleBlock: View {
-    let estimate: Cadence
+    /// Nil while MangaUpdates is still being asked.
+    let estimate: Cadence?
+    /// Whether the ask is still in flight, as opposed to finished with nothing.
+    let isLoading: Bool
     let onOpen: (() -> Void)?
 
     var body: some View {
-        Button { onOpen?() } label: { content }
-            .buttonStyle(.plain)
-            .disabled(onOpen == nil)
-            .accessibilityElement(children: .combine)
-            .accessibilityHint(onOpen == nil ? "" : "Opens the release schedule")
+        if let estimate {
+            Button { onOpen?() } label: { content(estimate) }
+                .buttonStyle(.plain)
+                .disabled(onOpen == nil)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(onOpen == nil ? "" : "Opens the release schedule")
+        } else if isLoading {
+            waiting
+        }
     }
 
-    private var content: some View {
+    /// MangaUpdates is spaced at one request every three seconds, so this can
+    /// genuinely be waiting. An empty space would read as "this series has no
+    /// schedule", which is a different and possibly wrong answer.
+    private var waiting: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Estimated next")
+                .typeEyebrow()
+                .foregroundStyle(Palette.textMuted)
+            ProgressView()
+                .controlSize(.small)
+                .tint(Palette.textQuaternary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("Working out when the next chapter is due")
+    }
+
+    private func content(_ estimate: Cadence) -> some View {
         let now = Date()
         let isLate = estimate.state(asOf: now) == .late
 

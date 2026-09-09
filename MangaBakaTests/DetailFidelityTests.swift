@@ -124,7 +124,7 @@ struct DetailOrderTests {
             "DetailHero(",
             "actions",
             "DetailStatsStrip(",
-            "Self.prose(from: description)",
+            "DetailSynopsis(",
             "DetailTags(",
             "DetailCredits(",
             "relatedRow",

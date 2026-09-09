@@ -1,6 +1,6 @@
 # Privacy Policy — MangaBaka for iOS
 
-Last updated: 9 September 2026
+Last updated: 10 September 2026
 
 ## The short version
 
@@ -26,13 +26,16 @@ Deleting the app removes all of it.
 
 ## What leaves your device
 
-The app makes requests to two services, and only to fetch data:
+The app makes requests to three services, and only to fetch data:
 
 - **MangaBaka** (`api.mangabaka.org`) — series, covers, search, and, if you have
   entered a token, your own library and recommendations.
 - **MangaUpdates** (`api.mangaupdates.com`) — release history, used to estimate
   when the next chapter of a series you are reading is likely due. No account is
   used and nothing identifying you is sent.
+- **Shikimori** (`shikimori.one`) — the cast of a series, shown on its page. The
+  request is made only when you open a series that has one, names only that
+  series, and uses no account.
 
 As with any request over the internet, those services can see your IP address
 and the request you made. Their own privacy policies apply to what they do with
@@ -64,7 +67,8 @@ It is not directed at children.
 
 Series data comes from MangaBaka, and through it from AniList, Kitsu,
 MangaUpdates, MyAnimeList and Anime-Planet. It is licensed under
-CC BY-NC-SA 4.0. Release history comes from MangaUpdates.
+CC BY-NC-SA 4.0. Release history comes from MangaUpdates, and character
+information and portraits from Shikimori.
 
 ## Source
 

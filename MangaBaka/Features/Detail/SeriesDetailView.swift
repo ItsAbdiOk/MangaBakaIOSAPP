@@ -9,6 +9,7 @@ struct SeriesDetailView: View {
     let libraryStore: LibraryModel
     /// The release schedule, read from its cache only — see `cachedCadence`.
     let schedule: ReleaseScheduleService?
+    let characters: ShikimoriClient?
     @Binding var path: [Series]
     /// Sends this series to Mix as a seed and switches to that tab.
     var onUseAsSeed: ((Series) -> Void)?
@@ -19,7 +20,10 @@ struct SeriesDetailView: View {
     @State private var similar: [Series] = []
     @State private var alsoLike: [Series] = []
     @State private var extras = SeriesExtras()
+    @State private var cast: [SeriesCharacter] = []
+    @State private var isCastLoading = false
     @State private var cadence: Cadence?
+    @State private var isCadenceLoading = false
     @State private var isLoading = true
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -34,17 +38,16 @@ struct SeriesDetailView: View {
                 DetailHero(
                     series: series,
                     schedule: cadence,
+                    isScheduleLoading: isCadenceLoading,
                     onOpenSchedule: onOpenSchedule
                 )
                 .padding(.top, 4)
                 actions
                 DetailStatsStrip(series: series, year: extras.year)
                 if let description = series.description, !description.isEmpty {
-                    Text(Self.prose(from: description))
-                        .typeBody()
-                        .foregroundStyle(Palette.textBody)
-                        .padding(.horizontal, Metrics.gutter)
+                    DetailSynopsis(text: Self.prose(from: description))
                 }
+                CharacterRow(characters: cast, isLoading: isCastLoading)
                 DetailTags(tags: extras.tags) { tag in
                     onOpenTag?(tag)
                 }
@@ -252,8 +255,43 @@ struct SeriesDetailView: View {
         similar = await similarResult.series
         alsoLike = await alsoResult.series
         extras = await extrasResult
-        cadence = await schedule?.cachedCadence(forSeriesId: series.id)
         isLoading = false
+        async let cast: Void = loadCast()
+        async let cadence: Void = loadCadence()
+        _ = await (cast, cadence)
+    }
+
+    /// Shikimori's id comes from MangaBaka's own `source` block, so no lookup
+    /// is needed to find it — a series either carries one or has no cast to
+    /// show, and in the second case nothing is asked and no row appears.
+    private func loadCast() async {
+        guard let characters,
+              let raw = series.source?["shikimori"]?.id,
+              let id = Int(raw)
+        else { return }
+        isCastLoading = true
+        defer { isCastLoading = false }
+        cast = (try? await characters.characters(mangaId: id)) ?? []
+    }
+
+    /// Asked separately from everything else, and after it.
+    ///
+    /// MangaUpdates spaces requests at one every three seconds, so this can
+    /// take noticeably longer than the rest of the page. Awaiting it alongside
+    /// the others would hold the whole screen on the slowest thing on it; the
+    /// hero shows a spinner in its place instead.
+    private func loadCadence() async {
+        // Nothing is due for a series that has finished, so nothing is asked
+        // and no spinner is shown.
+        guard let schedule,
+              series.mangaUpdatesID != nil,
+              ReleaseScheduleService.canRelease(status: series.status)
+        else { return }
+        isCadenceLoading = true
+        defer { isCadenceLoading = false }
+        if case let .measured(estimate) = await schedule.cadence(for: series) {
+            cadence = estimate
+        }
     }
 }
 

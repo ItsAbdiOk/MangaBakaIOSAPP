@@ -10,6 +10,8 @@ struct DetailHero: View {
     let series: Series
     /// The release estimate, when the schedule knows one for this series.
     let schedule: Cadence?
+    /// Whether MangaUpdates is still being asked.
+    let isScheduleLoading: Bool
     let onOpenSchedule: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -56,9 +58,13 @@ struct DetailHero: View {
 
     private var text: some View {
         VStack(alignment: .leading, spacing: 0) {
-                if let schedule {
-                    DetailScheduleBlock(estimate: schedule, onOpen: onOpenSchedule)
-                        .padding(.bottom, 13)
+                if schedule != nil || isScheduleLoading {
+                    DetailScheduleBlock(
+                        estimate: schedule,
+                        isLoading: isScheduleLoading,
+                        onOpen: onOpenSchedule
+                    )
+                    .padding(.bottom, 13)
                 }
                 if let kicker {
                     Text(kicker)
