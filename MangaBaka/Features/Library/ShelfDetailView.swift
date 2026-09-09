@@ -130,6 +130,9 @@ struct LibraryRow: View {
                     radius: Metrics.radiusThumb,
                     accessibilityText: ""
                 )
+                // The row combines into one element carrying the title, so the
+                // cover would only add a focus stop that says nothing.
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(series.displayTitle ?? "Untitled series")
                         .typeRowTitle()

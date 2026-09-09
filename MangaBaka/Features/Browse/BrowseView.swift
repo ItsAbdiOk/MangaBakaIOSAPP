@@ -101,6 +101,17 @@ struct BrowseView: View {
         .padding(.top, Metrics.sectionGap)
     }
 
+    /// "Boxing, 19 series" — and it says when a tag is a spoiler, since that is
+    /// the reason a reader might not want to hear it.
+    static func label(for tag: Tag) -> String {
+        var parts = [tag.name]
+        if let count = tag.seriesCount {
+            parts.append("\(count) series")
+        }
+        if tag.isSpoiler == true { parts.append("spoiler tag") }
+        return parts.joined(separator: ", ")
+    }
+
     private func sectionView(_ name: String, tags: [Tag]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(name)
@@ -146,6 +157,11 @@ struct BrowseView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // One stop reading "Boxing, 19 series", not three reading
+                // "Boxing", "19" and an unlabelled chevron.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.label(for: tag))
+                .accessibilityAddTraits(.isButton)
             }
         }
     }

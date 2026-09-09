@@ -315,3 +315,40 @@ struct TabBarSizingTests {
         #expect(source.contains("accessibilityLabel(\"Search\")"))
     }
 }
+
+/// VoiceOver on the screens built during the fidelity pass.
+@Suite("New screens are usable with VoiceOver", .enabled(if: SourceTree.isAvailable))
+struct NewScreenAccessibilityTests {
+    /// A tag row is three views. Left alone it is three focus stops: the name,
+    /// a bare number, and an unlabelled chevron.
+    @Test("A tag row is one element that says what it is")
+    func tagRowIsOneElement() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Browse/BrowseView.swift")
+        #expect(source.contains("accessibilityElement(children: .ignore)"))
+        #expect(source.contains("accessibilityLabel(Self.label(for: tag))"))
+    }
+
+    /// A cover inside a row that already carries the title would only add a
+    /// focus stop that says nothing at all.
+    @Test("Covers with no label of their own are hidden, not silent")
+    func silentCoversAreHidden() throws {
+        for path in [
+            "MangaBaka/Features/Library/ShelfDetailView.swift",
+            "MangaBaka/Features/Library/LibraryView.swift"
+        ] {
+            let source = try SourceTree.read(path)
+            // Every empty-labelled cover is followed by a hide.
+            let empties = source.components(separatedBy: "accessibilityText: \"\"").count - 1
+            let hidden = source.components(separatedBy: "accessibilityHidden(true)").count - 1
+            #expect(hidden >= empties, "\(path) leaves a cover focusable with nothing to say")
+        }
+    }
+
+    /// It is drawn in the accent colour with a chevron. It has to do something.
+    @Test("The shelf link on the stack is a real control")
+    func shelfLinkIsAButton() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Stack/StackSections.swift")
+        #expect(source.contains("Button(action: onOpenShelf)"))
+        #expect(source.contains("accessibilityLabel(\"Open the shelf\")"))
+    }
+}

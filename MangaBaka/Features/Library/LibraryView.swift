@@ -290,6 +290,7 @@ struct ShelfCard: View {
                         radius: Metrics.radiusThumb,
                         accessibilityText: ""
                     )
+                    .accessibilityHidden(true)
                     .opacity(isDropped ? 0.78 : 1)
                     .frame(maxWidth: .infinity)
                 }

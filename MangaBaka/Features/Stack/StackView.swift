@@ -11,15 +11,21 @@ struct StackView: View {
     @Binding private var path: [Series]
 
     @State private var drag: CGSize = .zero
+    private let onOpenShelf: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let commitThreshold: CGFloat = 92
     private let rotationPerPoint: Double = 0.012
     private let badgeDivisor: CGFloat = 80
 
-    init(model: StackModel, path: Binding<[Series]>) {
+    init(
+        model: StackModel,
+        path: Binding<[Series]>,
+        onOpenShelf: @escaping () -> Void
+    ) {
         _model = State(initialValue: model)
         _path = path
+        self.onOpenShelf = onOpenShelf
     }
 
     var body: some View {
@@ -30,7 +36,7 @@ struct StackView: View {
                 if let current = model.current {
                     StackCaption(series: current, reason: model.currentReason)
                     actions
-                    StackSavedStrip(saved: model.saved, path: $path)
+                    StackSavedStrip(saved: model.saved, path: $path, onOpenShelf: onOpenShelf)
                 }
             }
             .padding(.top, 100)
@@ -160,12 +166,22 @@ struct StackView: View {
         )
         .shadow(color: .black.opacity(0.65), radius: 30, y: 24)
         .overlay(alignment: .topLeading) {
-            badge("SKIP", fill: Palette.surfaceBadge, text: Palette.textPrimary, bordered: true)
+            StackBadge(
+                text: "SKIP",
+                fill: Palette.surfaceBadge,
+                textColour: Palette.textPrimary,
+                bordered: true
+            )
                 .opacity(drag.width < 0 ? badgeStrength : 0)
                 .padding(16)
         }
         .overlay(alignment: .topTrailing) {
-            badge("SAVE", fill: Palette.accent, text: Palette.onAccent, bordered: false)
+            StackBadge(
+                text: "SAVE",
+                fill: Palette.accent,
+                textColour: Palette.onAccent,
+                bordered: false
+            )
                 .opacity(drag.width > 0 ? badgeStrength : 0)
                 .padding(16)
         }
@@ -173,21 +189,6 @@ struct StackView: View {
 
     private var badgeStrength: Double {
         Double(min(abs(drag.width) / badgeDivisor, 1))
-    }
-
-    private func badge(_ text: String, fill: Color, text color: Color, bordered: Bool) -> some View {
-        Text(text)
-            .typeBadge()
-            .foregroundStyle(color)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(fill, in: RoundedRectangle(cornerRadius: Metrics.radiusBadge, style: .continuous))
-            .overlay {
-                if bordered {
-                    RoundedRectangle(cornerRadius: Metrics.radiusBadge, style: .continuous)
-                        .strokeBorder(Palette.glassEdge, lineWidth: 0.5)
-                }
-            }
     }
 
     private var dragGesture: some Gesture {

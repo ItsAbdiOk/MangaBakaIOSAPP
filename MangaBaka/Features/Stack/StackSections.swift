@@ -1,5 +1,30 @@
 import SwiftUI
 
+/// SKIP and SAVE, shown on the card's corners as a drag commits.
+struct StackBadge: View {
+    let text: String
+    let fill: Color
+    let textColour: Color
+    let bordered: Bool
+
+    var body: some View {
+        Text(text)
+            .typeBadge()
+            .foregroundStyle(textColour)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(fill, in: RoundedRectangle(
+                cornerRadius: Metrics.radiusBadge, style: .continuous
+            ))
+            .overlay {
+                if bordered {
+                    RoundedRectangle(cornerRadius: Metrics.radiusBadge, style: .continuous)
+                        .strokeBorder(Palette.glassEdge, lineWidth: 0.5)
+                }
+            }
+    }
+}
+
 /// The block beneath the stack card: title, meta, tags, and the recommender's
 /// reason when it gave one.
 ///
@@ -88,6 +113,19 @@ struct StackCaption: View {
 struct StackSavedStrip: View {
     let saved: [Series]
     @Binding var path: [Series]
+    /// Opens the Library tab. "Shelf ›" was styled as a link — accent colour,
+    /// chevron and all — and did nothing when tapped.
+    let onOpenShelf: () -> Void
+
+    private var shelfLink: some View {
+        Button(action: onOpenShelf) {
+            Text("Shelf ›")
+                .typeInstruction()
+                .foregroundStyle(Palette.accent)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the shelf")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -100,18 +138,14 @@ struct StackSavedStrip: View {
                         .typeSubsectionHeader()
                         .foregroundStyle(Palette.textPrimary)
                     Spacer(minLength: 10)
-                    Text("Shelf ›")
-                        .typeInstruction()
-                        .foregroundStyle(Palette.accent)
+                    shelfLink
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Saved from the stack")
                         .typeSubsectionHeader()
                         .foregroundStyle(Palette.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Shelf ›")
-                        .typeInstruction()
-                        .foregroundStyle(Palette.accent)
+                    shelfLink
                 }
             }
             .padding(.horizontal, 2)

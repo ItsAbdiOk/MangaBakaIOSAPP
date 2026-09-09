@@ -80,7 +80,8 @@ struct RootView: View {
                 NavigationStack(path: $stackPath) {
                     StackView(
                         model: StackModel(repository: repository, shelf: shelf, library: library),
-                        path: $stackPath
+                        path: $stackPath,
+                        onOpenShelf: { selection = .library }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
                 }
