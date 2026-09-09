@@ -10,6 +10,10 @@ struct SearchView: View {
     /// app's custom top bar is drawn over the navigation bar on a root screen,
     /// so a toolbar button there was clipped to a sliver at the screen edge.
     let onBrowse: () -> Void
+    let lenses: SearchLensStore
+
+    @State private var isNamingLens = false
+    @State private var lensName = ""
 
     @State private var showFilters = false
 
@@ -41,12 +45,23 @@ struct SearchView: View {
                 .padding(.horizontal, Metrics.gutter + 2)
 
                 content
+                saveLens
             }
             .padding(.top, Metrics.scrollTopInset)
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .alert("Name this lens", isPresented: $isNamingLens) {
+            TextField("Cosy fantasy, completed", text: $lensName)
+            Button("Cancel", role: .cancel) { lensName = "" }
+            Button("Save") {
+                lenses.save(name: lensName, query: model.query)
+                lensName = ""
+            }
+        } message: {
+            Text(SearchLens.describe(model.query))
+        }
         .sheet(isPresented: $showFilters) {
             FilterSheet(query: $model.query) {
                 Task { model.cancelPendingDebounce(); await model.search() }
@@ -132,7 +147,10 @@ struct SearchView: View {
     @ViewBuilder
     private var content: some View {
         if model.query.isEmpty {
-            idleState
+            SearchLensList(lenses: lenses) { lens in
+                model.query = lens.query
+                Task { model.cancelPendingDebounce(); await model.search() }
+            }
         } else if model.isSearching {
             ProgressView()
                 .tint(Palette.accent)
@@ -192,41 +210,25 @@ struct SearchView: View {
         return index >= model.results.count - Self.prefetchDistance
     }
 
-    /// Saved searches, shown before anything is typed. The mockup fills the
-    /// idle screen with these rather than with an invitation to type.
-    private var idleState: some View {
-        VStack(spacing: 8) {
-            ForEach(SearchLens.presets) { lens in
-                Button {
-                    model.query = lens.query
-                    Task { model.cancelPendingDebounce(); await model.search() }
-                } label: {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(lens.name)
-                                .typeRowTitle()
-                                .foregroundStyle(Palette.textPrimary)
-                            Text(lens.rule)
-                                .typeSmallMeta()
-                                .foregroundStyle(Palette.textTertiary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Palette.textQuaternary)
-                    }
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 13)
+    /// Saves whatever filter is applied as a lens of the reader's own.
+    @ViewBuilder
+    private var saveLens: some View {
+        if !model.query.isEmpty {
+            Button { isNamingLens = true } label: {
+                Text("Save as a lens")
+                    .typeRowTitle()
+                    .foregroundStyle(Palette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Metrics.ctaSecondary)
                     .background(Palette.surface, in: RoundedRectangle(
                         cornerRadius: 14, style: .continuous
                     ))
-                    .hairlineBorder(Palette.hairline, radius: 14)
-                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
+                    .hairlineBorder(Palette.borderPill, radius: 14)
             }
+            .buttonStyle(.plain)
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.top, Metrics.gapCovers)
         }
-        .padding(.horizontal, Metrics.gutter)
     }
 
     private var emptyState: some View {
@@ -273,142 +275,5 @@ struct SearchView: View {
     private var displayedQuery: String {
         let text = (model.query.text ?? "").trimmingCharacters(in: .whitespaces)
         return text.isEmpty ? "these filters" : "\u{201C}\(text)\u{201D}"
-    }
-}
-
-/// Type, status, sort and minimum rating filters.
-private struct FilterSheet: View {
-    @Binding var query: SearchQuery
-    let onApply: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    private let types = ["manga", "novel", "manhwa", "manhua", "oel", "other"]
-    private let statuses = ["releasing", "completed", "hiatus", "cancelled", "upcoming"]
-    private let sorts = SortOrder.all
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Metrics.sectionGap) {
-                Text("Filters")
-                    .typeSheetTitle()
-                    .foregroundStyle(Palette.textPrimary)
-
-                section("Type") {
-                    FlowLayout {
-                        ForEach(types, id: \.self) { type in
-                            chip(type, isOn: query.types.contains(type)) { toggle(&query.types, type) }
-                        }
-                    }
-                }
-
-                section("Status") {
-                    FlowLayout {
-                        ForEach(statuses, id: \.self) { status in
-                            chip(status, isOn: query.statuses.contains(status)) {
-                                toggle(&query.statuses, status)
-                            }
-                        }
-                    }
-                }
-
-                section("Sort") {
-                    FlowLayout {
-                        ForEach(sorts, id: \.value) { sort in
-                            chip(sort.label, isOn: query.sort == sort.value) {
-                                query.sort = query.sort == sort.value ? nil : sort.value
-                            }
-                        }
-                    }
-                }
-
-                section("Minimum rating") { ratingStepper }
-
-                HStack(spacing: Metrics.gapChips) {
-                    Button {
-                        query = SearchQuery()
-                    } label: {
-                        Text("Clear all")
-                            .typeCTA()
-                            .foregroundStyle(Palette.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: Metrics.ctaSecondary)
-                            .background(Palette.surfaceChip)
-                            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-                    }
-
-                    Button {
-                        onApply()
-                        dismiss()
-                    } label: {
-                        Text("Show results")
-                            .typeCTA()
-                            .foregroundStyle(Palette.onAccent)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: Metrics.ctaSecondary)
-                            .background(Palette.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-                    }
-                }
-            }
-            .padding(Metrics.gutter)
-        }
-        .scrollIndicators(.hidden)
-        .background(Palette.ground)
-    }
-
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 11) {
-            Text(title)
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            content()
-        }
-    }
-
-    private func chip(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label.capitalized)
-                .typeChip()
-                .foregroundStyle(isOn ? Palette.onAccent : Palette.textSecondary)
-                .padding(.horizontal, 14)
-                .frame(height: Metrics.headerPill)
-                .background(isOn ? Palette.accent : Palette.surfaceChip)
-                .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func toggle(_ collection: inout [String], _ value: String) {
-        if let index = collection.firstIndex(of: value) {
-            collection.remove(at: index)
-        } else {
-            collection.append(value)
-        }
-    }
-
-    private var ratingStepper: some View {
-        // Steps of ten, matching how the API expresses rating (0-100), rather
-        // than a slider whose value would rarely land on a round number.
-        HStack {
-            Text(query.minimumRating.map { "\($0)+" } ?? "Any")
-                .typeBody()
-                .foregroundStyle(Palette.textPrimary)
-            Spacer()
-            Stepper(
-                "",
-                value: Binding(
-                    get: { query.minimumRating ?? 0 },
-                    set: { query.minimumRating = $0 == 0 ? nil : $0 }
-                ),
-                in: 0...100,
-                step: 10
-            )
-            .labelsHidden()
-        }
-        .padding(.horizontal, 14)
-        .frame(height: Metrics.field)
-        .background(Palette.surfaceChip)
-        .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
     }
 }

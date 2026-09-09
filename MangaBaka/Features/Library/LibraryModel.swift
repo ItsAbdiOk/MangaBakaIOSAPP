@@ -23,6 +23,10 @@ final class LibraryModel {
 
     private(set) var entries: [LibraryEntry] = []
     private(set) var shelves: [Shelf] = []
+    /// Filters every shelf. Local: the whole library is already in memory, and
+    /// a request per keystroke against a shared rate limit would be absurd for
+    /// something already on the device.
+    var searchText = ""
     private(set) var isLoading = false
     private(set) var hasAccount = true
 
@@ -90,6 +94,26 @@ final class LibraryModel {
         entries = all
         hasAccount = !all.isEmpty
         shelves = Self.shelves(from: all)
+    }
+
+    /// Shelves narrowed by the search box, empty ones dropped.
+    var visibleShelves: [Shelf] {
+        let needle = searchText.trimmingCharacters(in: .whitespaces)
+        guard !needle.isEmpty else { return shelves }
+        return shelves.compactMap { shelf in
+            let matches = shelf.entries.filter { entry in
+                entry.series?.displayTitle?.localizedCaseInsensitiveContains(needle) == true
+            }
+            guard !matches.isEmpty else { return nil }
+            return Shelf(state: shelf.state, entries: matches, note: shelf.note)
+        }
+    }
+
+    /// How many series the search matched, across every shelf.
+    var matchCount: Int { visibleShelves.reduce(0) { $0 + $1.count } }
+
+    var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     /// Grouped by state and sorted by size, largest first.

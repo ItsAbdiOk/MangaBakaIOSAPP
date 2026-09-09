@@ -11,6 +11,8 @@ struct MangaBakaApp: App {
     private let schedule: ReleaseScheduleService
     private let catalogue: CatalogueService
     private let blockedTags: BlockedTagsStore
+    private let lenses = SearchLensStore()
+    private let onboarding = OnboardingState()
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -120,7 +122,9 @@ struct MangaBakaApp: App {
                 library: library,
                 schedule: schedule,
                 catalogue: catalogue,
-                blockedTags: blockedTags
+                blockedTags: blockedTags,
+                lenses: lenses,
+                onboarding: onboarding
             )
         }
     }

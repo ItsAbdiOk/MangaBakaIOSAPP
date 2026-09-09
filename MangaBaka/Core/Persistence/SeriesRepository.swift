@@ -84,7 +84,7 @@ struct SeriesExtras: Sendable, Equatable {
 
 /// A search or filter request. Only non-nil fields are sent, so an untouched
 /// filter never narrows the results by accident.
-struct SearchQuery: Sendable, Equatable {
+struct SearchQuery: Sendable, Equatable, Codable {
     var text: String?
     /// manga, novel, manhwa, manhua, oel, other
     var types: [String] = []

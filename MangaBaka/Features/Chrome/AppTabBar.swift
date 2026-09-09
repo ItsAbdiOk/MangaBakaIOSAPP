@@ -9,17 +9,17 @@ import SwiftUI
 /// switching by hand would have thrown all of that away for a visual change.
 struct AppTabBar: View {
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Binding var selection: RootView.AppTab
+    @Binding var selection: AppTab
     /// Search is not in the capsule; it is the button beside it.
     let isSearching: Bool
     let onSearch: () -> Void
     /// Tapping the tab you are already on returns to its root, which is what
     /// every iOS tab bar does and what the system one did before this replaced
     /// it. Without it a pushed detail screen could only be left by swiping.
-    let onReselect: (RootView.AppTab) -> Void
+    let onReselect: (AppTab) -> Void
 
     /// The four in the capsule, in the mockup's order.
-    private static let tabs: [RootView.AppTab] = [.discover, .stack, .mix, .library]
+    private static let tabs: [AppTab] = [.discover, .stack, .mix, .library]
 
     var body: some View {
         HStack(spacing: Metrics.tabCapsuleGap) {
@@ -82,7 +82,7 @@ struct AppTabBar: View {
 
     /// Library stays lit while Dropped is open, since Dropped is reached from
     /// inside it rather than being a tab of its own.
-    private func isSelected(_ tab: RootView.AppTab) -> Bool {
+    private func isSelected(_ tab: AppTab) -> Bool {
         !isSearching && selection == tab
     }
 

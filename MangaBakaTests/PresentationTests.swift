@@ -178,8 +178,19 @@ struct SortOrderTests {
     /// two places drift apart.
     @Test("The sort list is defined once")
     func definedOnce() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Search/SearchView.swift")
-        #expect(source.contains("SortOrder.all"))
-        #expect(!source.contains("(\"relevance_desc\", \"Relevance\")"))
+        // The filter sheet is the only place that renders the list; the search
+        // heading uses SortOrder.label. Neither may hold its own copy.
+        for path in [
+            "MangaBaka/Features/Search/FilterSheet.swift",
+            "MangaBaka/Features/Search/SearchView.swift"
+        ] {
+            let source = try SourceTree.read(path)
+            #expect(
+                !source.contains("(\"relevance_desc\", \"Relevance\")"),
+                "\(path) carries its own copy of the sort list"
+            )
+        }
+        let sheet = try SourceTree.read("MangaBaka/Features/Search/FilterSheet.swift")
+        #expect(sheet.contains("SortOrder.all"))
     }
 }

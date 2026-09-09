@@ -18,6 +18,8 @@ struct RootView: View {
     let schedule: ReleaseScheduleService
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
+    let lenses: SearchLensStore
+    let onboarding: OnboardingState
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
@@ -25,6 +27,7 @@ struct RootView: View {
     @State private var shelfPath: [Series] = []
     @State private var showsSchedule = false
     @State private var showsTaste = false
+    @State private var showsSettings = false
     @State private var libraryModel: LibraryModel?
     @State private var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
@@ -35,37 +38,21 @@ struct RootView: View {
     @State private var mixModel: MixModel?
     @State private var cacheAge: TimeInterval?
 
-    /// Named AppTab, not Tab: SwiftUI's own Tab view is used below and the two
-    /// names collide.
-    enum AppTab: Hashable, CaseIterable {
-        case discover, stack, mix, library, search
-
-        var title: String {
-            switch self {
-            case .discover: "Discover"
-            case .stack: "Stack"
-            case .mix: "Mix"
-            // The mockup's fourth tab. It still shows the local shelf until the
-            // designed Library screen is built, so the label leads and the
-            // contents follow rather than the other way round.
-            case .library: "Library"
-            case .search: "Search"
+    var body: some View {
+        tabs
+            .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
+                OnboardingView(
+                    onFinish: { onboarding.complete() },
+                    onConnectAccount: {
+                        onboarding.complete()
+                        selection = .library
+                        showsSettings = true
+                    }
+                )
             }
-        }
-
-        /// Chosen to read like the mockup's line-art glyphs.
-        var symbol: String {
-            switch self {
-            case .discover: "circle.circle"
-            case .stack: "line.3.horizontal"
-            case .mix: "circle.on.circle"
-            case .library: "chart.bar.fill"
-            case .search: "magnifyingglass"
-            }
-        }
     }
 
-    var body: some View {
+    private var tabs: some View {
         TabView(selection: $selection) {
             Tab(AppTab.discover.title, systemImage: AppTab.discover.symbol, value: AppTab.discover) {
                 NavigationStack(path: $discoverPath) {
@@ -135,6 +122,13 @@ struct RootView: View {
                                 path: $shelfPath
                             )
                         }
+                        .navigationDestination(isPresented: $showsSettings) {
+                            SettingsView(
+                                validate: validateToken,
+                                content: content,
+                                formats: formats
+                            )
+                        }
                         .toolbar {
                             ToolbarItem(placement: .topBarLeading) {
                                 Button { showsSchedule = true } label: {
@@ -143,15 +137,10 @@ struct RootView: View {
                                 .accessibilityLabel("Next chapters")
                             }
                             ToolbarItem(placement: .topBarTrailing) {
-                                NavigationLink {
-                                    SettingsView(
-                                        validate: validateToken,
-                                        content: content,
-                                        formats: formats
-                                    )
-                                } label: {
+                                Button { showsSettings = true } label: {
                                     Image(systemName: "gearshape")
                                 }
+                                .accessibilityLabel("Settings")
                             }
                         }
                 }
@@ -162,7 +151,8 @@ struct RootView: View {
                     SearchView(
                         model: searchModel ?? SearchModel(repository: repository),
                         path: $searchPath,
-                        onBrowse: { showsBrowse = true }
+                        onBrowse: { showsBrowse = true },
+                        lenses: lenses
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
                     .navigationDestination(isPresented: $showsBrowse) {
@@ -239,7 +229,8 @@ struct RootView: View {
         // "at root" while a screen was open — and the top bar covered its
         // back button.
         case .library:
-            shelfPath.isEmpty && openShelf == nil && !showsSchedule && !showsTaste
+            shelfPath.isEmpty && openShelf == nil
+                && !showsSchedule && !showsTaste && !showsSettings
         case .search: searchPath.isEmpty && !showsBrowse
         }
     }
@@ -255,6 +246,7 @@ struct RootView: View {
             openShelf = nil
             showsSchedule = false
             showsTaste = false
+            showsSettings = false
         case .search:
             searchPath.removeAll()
             showsBrowse = false

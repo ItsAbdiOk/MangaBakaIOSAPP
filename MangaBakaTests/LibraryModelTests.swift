@@ -199,3 +199,83 @@ struct ShelfFilterAvailabilityTests {
         #expect(some.contains(where: ShelfDetailView.Filter.hasNote.matches))
     }
 }
+
+/// Searching your own library, which at 937 entries is the difference between
+/// a list and an archive.
+@Suite("Library search")
+@MainActor
+struct LibrarySearchTests {
+    private func entry(_ id: Int, _ title: String, _ state: LibraryEntry.State) throws -> LibraryEntry {
+        try Fixture.decoder().decode(LibraryEntry.self, from: Data("""
+        {"id":\(id),"series_id":\(id),"state":"\(state.rawValue)",
+         "Series":{"id":\(id),"state":"active","cover":{},
+                   "titles":[{"language":"en","traits":["official"],
+                              "title":"\(title)","is_primary":true}]}}
+        """.utf8))
+    }
+
+    private func model(_ entries: [LibraryEntry]) async -> LibraryModel {
+        let model = LibraryModel(library: Stub(entries: entries))
+        await model.load()
+        return model
+    }
+
+    private final class Stub: LibraryProviding, @unchecked Sendable {
+        let entries: [LibraryEntry]
+        init(entries: [LibraryEntry]) { self.entries = entries }
+        func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? entries : [] }
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func hiddenTagIDs() async -> Set<Int>? { [] }
+        func topGenres() async -> [TopGenre] { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+
+    @Test("An empty search shows every shelf unchanged")
+    func emptySearchShowsAll() async throws {
+        let subject = await model([
+            try entry(1, "Solo Leveling", .reading),
+            try entry(2, "Omniscient Reader", .dropped)
+        ])
+        #expect(!subject.isSearching)
+        #expect(subject.visibleShelves.count == 2)
+    }
+
+    /// Results stay grouped by shelf, so a hit keeps the context of where it
+    /// lives — which is most of what a library search is for.
+    @Test("A search narrows shelves and drops the empty ones")
+    func narrowsAndDrops() async throws {
+        let subject = await model([
+            try entry(1, "Solo Leveling", .reading),
+            try entry(2, "Omniscient Reader", .dropped),
+            try entry(3, "Solo Max-Level Newbie", .dropped)
+        ])
+        subject.searchText = "solo"
+
+        #expect(subject.isSearching)
+        #expect(subject.matchCount == 2)
+        // Reading has one match, dropped has one; the shelf with none is gone.
+        #expect(Set(subject.visibleShelves.map(\.state)) == [.reading, .dropped])
+        #expect(subject.visibleShelves.allSatisfy { !$0.entries.isEmpty })
+    }
+
+    @Test("Matching ignores case and whitespace around the query")
+    func matchingIsForgiving() async throws {
+        let subject = await model([try entry(1, "Solo Leveling", .reading)])
+        subject.searchText = "  LEVELING  "
+        #expect(subject.matchCount == 1)
+    }
+
+    /// A search matching nothing is a real answer, not an empty library.
+    @Test("No matches reports zero rather than falling back to everything")
+    func noMatches() async throws {
+        let subject = await model([try entry(1, "Solo Leveling", .reading)])
+        subject.searchText = "berserk"
+        #expect(subject.matchCount == 0)
+        #expect(subject.visibleShelves.isEmpty)
+    }
+}

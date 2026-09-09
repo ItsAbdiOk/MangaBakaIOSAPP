@@ -331,3 +331,102 @@ struct SearchLensTests {
         #expect(!lens.rule.isEmpty)
     }
 }
+
+/// A lens the reader writes themselves, which is what makes lenses theirs.
+@Suite("Saving a lens", .serialized)
+@MainActor
+struct SavedLensTests {
+    private func makeStore() throws -> SearchLensStore {
+        SearchLensStore(defaults: try #require(
+            UserDefaults(suiteName: "lens.tests.\(UUID().uuidString)")
+        ))
+    }
+
+    private var narrowed: SearchQuery {
+        var query = SearchQuery()
+        query.types = ["manhwa"]
+        query.minimumRating = 80
+        query.sort = "score_desc"
+        return query
+    }
+
+    @Test("A saved lens joins the presets and survives a relaunch")
+    func savesAndPersists() throws {
+        let defaults = try #require(UserDefaults(suiteName: "lens.persist.\(UUID().uuidString)"))
+        let store = SearchLensStore(defaults: defaults)
+        #expect(store.save(name: "Cosy manhwa", query: narrowed))
+        #expect(store.all.count == SearchLens.presets.count + 1)
+
+        let reloaded = SearchLensStore(defaults: defaults)
+        #expect(reloaded.own.map(\.name) == ["Cosy manhwa"])
+        #expect(reloaded.own.first?.isOwn == true)
+    }
+
+    /// A lens matching everything is a control that does nothing — and an empty
+    /// query returns before reaching the network, which is exactly how
+    /// "Surprise me" once silently failed.
+    @Test("An empty query cannot be saved as a lens")
+    func refusesEmptyQuery() throws {
+        let store = try makeStore()
+        #expect(!store.save(name: "Everything", query: SearchQuery()))
+        #expect(store.own.isEmpty)
+    }
+
+    @Test("A lens needs a name")
+    func refusesEmptyName() throws {
+        let store = try makeStore()
+        #expect(!store.save(name: "   ", query: narrowed))
+        #expect(store.own.isEmpty)
+    }
+
+    /// Saving twice under one name should replace, not accumulate duplicates
+    /// the reader then has to tell apart.
+    @Test("Saving the same name again replaces it")
+    func replacesByName() throws {
+        let store = try makeStore()
+        store.save(name: "Mine", query: narrowed)
+        var other = narrowed
+        other.types = ["manga"]
+        store.save(name: "mine", query: other)
+
+        #expect(store.own.count == 1)
+        #expect(store.own.first?.query.types == ["manga"])
+    }
+
+    /// A lens saved while scrolled to page four must not reopen at page four.
+    @Test("A saved lens starts at page one")
+    func resetsPage() throws {
+        let store = try makeStore()
+        var deep = narrowed
+        deep.page = 4
+        store.save(name: "Deep", query: deep)
+
+        #expect(store.own.first?.query.page == 1)
+    }
+
+    /// The rule line is generated so it cannot drift from the query it
+    /// describes.
+    @Test("The rule reads as words, built from the query itself")
+    func describesTheQuery() {
+        var query = SearchQuery()
+        query.types = ["manhwa"]
+        query.statuses = ["completed"]
+        query.minimumRating = 80
+        query.sort = "score_desc"
+
+        let rule = SearchLens.describe(query)
+        #expect(rule.contains("type: manhwa"))
+        #expect(rule.contains("status: completed"))
+        #expect(rule.contains("rating"))
+        #expect(rule.contains("score"), "the sort reads as a word, not a query key")
+        #expect(!rule.contains("score_desc"))
+    }
+
+    @Test("Presets cannot be deleted")
+    func presetsSurviveDeletion() throws {
+        let store = try makeStore()
+        let preset = try #require(SearchLens.presets.first)
+        store.delete(id: preset.id)
+        #expect(store.all.contains { $0.id == preset.id })
+    }
+}
