@@ -23,9 +23,23 @@ struct StackView: View {
     }
 
     var body: some View {
-        ZStack {
-            Palette.ground.ignoresSafeArea()
+        // A VStack, not a ZStack with the caption overlaid.
+        //
+        // Overlaid, the caption floated at the bottom of the same space the
+        // card occupies, so a title that wrapped to two lines rendered straight
+        // through the reason text underneath it (observed on device). Giving
+        // the caption its own row means the cards centre in what is left and
+        // the two can never meet.
+        VStack(spacing: 0) {
+            cardArea
+            caption
+        }
+        .background(Palette.ground.ignoresSafeArea())
+        .task { await model.loadIfNeeded() }
+    }
 
+    private var cardArea: some View {
+        ZStack {
             if let current = model.current {
                 // The next card, peeking behind, so the stack reads as a stack.
                 if let next = model.next {
@@ -61,21 +75,35 @@ struct StackView: View {
                 emptyState
             }
         }
-        // Says what the queue is built from, because "are these actually based
-        // on my taste?" is otherwise unanswerable from the screen. A random
-        // queue says so rather than passing itself off as personalised.
-        .overlay(alignment: .bottom) {
-            if model.current != nil {
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Says what the queue is built from, because "are these actually based on
+    /// my taste?" is otherwise unanswerable from the screen. A random queue
+    /// says so rather than passing itself off as personalised.
+    @ViewBuilder
+    private var caption: some View {
+        if model.current != nil {
+            VStack(spacing: 4) {
+                // The per-card reason when the recommender gave one, and the
+                // source underneath. Only the profile recommender explains
+                // itself; nothing is invented for the others, and an
+                // explanation that cannot be shown safely is simply absent.
+                if let reason = model.currentReason {
+                    Text(reason)
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textSecondary)
+                }
                 Text(model.source.caption)
-                    .typeSmallMeta()
+                    .typeFootnote()
                     .foregroundStyle(Palette.textTertiary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Metrics.gutter)
-                    .padding(.bottom, Metrics.tabBarClearance)
             }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.bottom, Metrics.tabBarClearance)
+            .accessibilityElement(children: .combine)
         }
-        .task { await model.loadIfNeeded() }
     }
 
     private var dragGesture: some Gesture {

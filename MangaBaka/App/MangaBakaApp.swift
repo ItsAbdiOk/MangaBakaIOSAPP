@@ -57,7 +57,6 @@ struct MangaBakaApp: App {
         content = store
 
         let formatStore = FormatPreferencesStore()
-        formatStore.onChange = { types in await built.updateFormats(types) }
         formats = formatStore
 
         // Reads the reader's own library and personalised data. Every call it
@@ -77,6 +76,12 @@ struct MangaBakaApp: App {
             await built.updateContentRatings(ratings)
             await libraryService.updateContentRatings(ratings)
         }
+        // The format choice has to reach the recommender too, or "no novels"
+        // would hold everywhere except the one screen built from taste.
+        formatStore.onChange = { types in
+            await built.updateFormats(types)
+            await libraryService.updateFormats(types)
+        }
 
         // Apply the stored choices before the first request goes out, or the
         // opening feed would be fetched under the default filters.
@@ -85,6 +90,11 @@ struct MangaBakaApp: App {
         Task {
             await built.updateContentRatings(initialRatings)
             await built.updateFormats(initialFormats)
+            await libraryService.updateFormats(initialFormats)
+
+            // Lets a blend exclude what the reader already tracks. Nil when
+            // unauthenticated, which is the ordinary case and not a failure.
+            await built.updateLibraryExclusion(userID: libraryService.profileID())
         }
     }
 

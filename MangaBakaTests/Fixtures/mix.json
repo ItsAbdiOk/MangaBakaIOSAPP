@@ -1,0 +1,581 @@
+{
+ "status": 200,
+ "data": [
+  {
+   "score": 0.8366701607646725,
+   "cosine": 0.5973774194717407,
+   "shared_tags": [],
+   "shared_tags_total": 45,
+   "matched_author": true,
+   "matched_related": true,
+   "matched_seed_ids": [
+    2000
+   ],
+   "series": {
+    "id": 2000,
+    "state": "active",
+    "merged_with": null,
+    "canonical_url": "https://mangabaka.org/manga/2000/Placeholder",
+    "title": "Placeholder Blend 1",
+    "native_title": "Placeholder Blend 1",
+    "romanized_title": "Placeholder Blend 1",
+    "secondary_titles": {},
+    "cover": {
+     "raw": {
+      "url": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx30707-oXVAloPUc3RC.jpg",
+      "size": 125434,
+      "height": 658,
+      "width": 460,
+      "blurhash": "|EEe=M~pX9V@NIR,S$t6fm~UEMxUt7bctRtQozoz_2M{RjM{t7tQIta#oz=?Rj-px^xt=|ofjFWB%KD*t8-:xaW;NLNHazoZD%D+xtn#nhxYS1RjoyRjV?xVIos:%1s.oLyDtlJpxsnNjFRkNHt6OZ%1ozS6M{xuxtRlWB",
+      "thumbhash": "1BcKFQJ/dl2H6GeWp1h5hF5/qpBU",
+      "format": "jpeg"
+     },
+     "x150": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x150@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x150@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x150@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc"
+     },
+     "x250": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x250@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x250@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x250@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc"
+     },
+     "x350": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x350@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x350@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDMwNzA3LW9YVkFsb1BVYzNSQy5qcGc"
+     }
+    },
+    "authors": [
+     "A. Author"
+    ],
+    "artists": [
+     "B. Artist"
+    ],
+    "description": "Placeholder description.",
+    "year": 2005,
+    "published": {
+     "start_date": "2005-06-01",
+     "end_date": "2011-08-01",
+     "start_date_is_estimated": false,
+     "end_date_is_estimated": false
+    },
+    "status": "completed",
+    "is_licensed": false,
+    "has_anime": true,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manga",
+    "rating": 74.1433333333333,
+    "popularity": {
+     "global": {
+      "current": 4218,
+      "history": {
+       "1d": 4216,
+       "1w": 4212,
+       "1mo": 4148,
+       "3mo": 3874,
+       "6mo": 3621,
+       "1y": 2982
+      }
+     },
+     "type": {
+      "current": 2823,
+      "history": {
+       "1d": 2823,
+       "1w": 2824,
+       "1mo": 2818,
+       "3mo": 2851,
+       "6mo": 2655,
+       "1y": 2365
+      }
+     }
+    },
+    "final_volume": "9",
+    "total_chapters": "55",
+    "links": [],
+    "links_v2": [],
+    "publishers": [
+     {
+      "name": "KADOKAWA",
+      "type": "Original",
+      "note": ""
+     }
+    ],
+    "titles": [
+     {
+      "language": "en",
+      "traits": [
+       "official"
+      ],
+      "title": "Placeholder Blend 1",
+      "is_primary": true
+     }
+    ],
+    "genres_v2": null,
+    "genres": [],
+    "tags_v2": [],
+    "tags": [],
+    "last_updated_at": "2026-09-09T02:05:17.113Z",
+    "relationships": {
+     "prequel": [
+      2
+     ],
+     "sequel": [
+      12467
+     ],
+     "spin_off": [
+      17115,
+      1700,
+      3651
+     ],
+     "alternative": [
+      6965
+     ],
+     "other": [
+      102039,
+      48058,
+      12794,
+      2618
+     ]
+    },
+    "relationships_v2": [
+     {
+      "id": "019e41ed-248e-7da3-93ee-ac2d63e7d68a",
+      "to_series_id": 2,
+      "relation_type": "main",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-2367-71a3-a3fc-259254b1263b",
+      "to_series_id": 6965,
+      "relation_type": "main",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-2242-7a6a-81d7-30a1515c5908",
+      "to_series_id": 12467,
+      "relation_type": "main",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c5d9-7176-a6da-fd3864b7e728",
+      "to_series_id": 98808,
+      "relation_type": "parent",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c591-7a86-818e-e16ba2b04030",
+      "to_series_id": 12600,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c6b0-70eb-88ce-fc95134f6bb9",
+      "to_series_id": 12776,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-22a7-7971-8993-c71b69c6db63",
+      "to_series_id": 48058,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c6a8-78ff-94de-66da38efe0a8",
+      "to_series_id": 72311,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c6c6-73ac-b7ca-5059cbb4351d",
+      "to_series_id": 77437,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c5f8-7a1d-a027-80f0d6ead80a",
+      "to_series_id": 234710,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c510-7682-8d37-517c64659d66",
+      "to_series_id": 236016,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ee-c52a-7036-a9b3-736690c6395c",
+      "to_series_id": 236907,
+      "relation_type": "parody",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-2274-7bde-964e-04d75689c752",
+      "to_series_id": 12794,
+      "relation_type": "series",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-221e-775e-99d1-95a3b12e3c55",
+      "to_series_id": 102039,
+      "relation_type": "series",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-2477-7704-bde4-a22680d1055c",
+      "to_series_id": 1700,
+      "relation_type": "side_story",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-23eb-7f29-99ec-74a05ef1ed89",
+      "to_series_id": 3651,
+      "relation_type": "side_story",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-22e7-72ea-ad6f-1b80c7dfd180",
+      "to_series_id": 17115,
+      "relation_type": "side_story",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     }
+    ],
+    "source": {
+     "anilist": {
+      "id": 30707,
+      "rating": 7.1,
+      "rating_normalized": 71
+     },
+     "anime_planet": {
+      "id": "melty-blood",
+      "rating": 3.8,
+      "rating_normalized": 76
+     },
+     "anime_news_network": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "kitsu": {
+      "id": 1578,
+      "rating": 7.276000000000001,
+      "rating_normalized": 73
+     },
+     "manga_updates": {
+      "id": "wsea940",
+      "rating": 7.73,
+      "rating_normalized": 77
+     },
+     "my_anime_list": {
+      "id": 707,
+      "rating": 7.44,
+      "rating_normalized": 74
+     },
+     "shikimori": {
+      "id": 707,
+      "rating": 7.34,
+      "rating_normalized": 73
+     }
+    }
+   }
+  },
+  {
+   "score": 0.5913254310012264,
+   "cosine": 0.3931298851966858,
+   "shared_tags": [],
+   "shared_tags_total": 30,
+   "matched_author": true,
+   "matched_related": true,
+   "matched_seed_ids": [
+    2000
+   ],
+   "series": {
+    "id": 2001,
+    "state": "active",
+    "merged_with": null,
+    "canonical_url": "https://mangabaka.org/manga/2001/Placeholder",
+    "title": "Placeholder Blend 2",
+    "native_title": "Placeholder Blend 2",
+    "romanized_title": "Placeholder Blend 2",
+    "secondary_titles": {},
+    "cover": {
+     "raw": {
+      "url": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/large/bx65911-867DmWu5D5ep.jpg",
+      "size": 124088,
+      "height": 676,
+      "width": 460,
+      "blurhash": "|WJZxj~VNGEK$+xuWCM{enz.#jR*j]e.nOa#t7ofMc$fkWS5M{V@S2W=n+?bxas:R*ozxbWUNGWBn7aKe.R+i{n%j?R+jGIARkj[bbaLWAs:ozoftR$kX8aeSes:X5ocWUs;Rke:WUj@kCofoebHM|RkV@oyofR*oLoeoe",
+      "thumbhash": "HEkOHQRvhXWHR4nHiHZIh2jfqvXP",
+      "format": "jpeg"
+     },
+     "x150": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x150@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x150@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x150@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc"
+     },
+     "x250": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x250@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x250@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x250@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc"
+     },
+     "x350": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x350@2/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x350@3/aHR0cHM6Ly9zNC5hbmlsaXN0LmNvL2ZpbGUvYW5pbGlzdGNkbi9tZWRpYS9tYW5nYS9jb3Zlci9sYXJnZS9ieDY1OTExLTg2N0RtV3U1RDVlcC5qcGc"
+     }
+    },
+    "authors": [
+     "A. Author"
+    ],
+    "artists": [
+     "B. Artist"
+    ],
+    "description": "Placeholder description.",
+    "year": 2005,
+    "published": {
+     "start_date": "2005-02-25",
+     "end_date": "2012-10-05",
+     "start_date_is_estimated": false,
+     "end_date_is_estimated": false
+    },
+    "status": "completed",
+    "is_licensed": false,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manga",
+    "rating": 63.15,
+    "popularity": {
+     "global": {
+      "current": 43442,
+      "history": {
+       "1d": 43438,
+       "1w": 43348,
+       "1mo": 42694,
+       "3mo": 51815,
+       "6mo": 50672,
+       "1y": 34224
+      }
+     },
+     "type": {
+      "current": 29757,
+      "history": {
+       "1d": 29753,
+       "1w": 29721,
+       "1mo": 29549,
+       "3mo": 38455,
+       "6mo": 37710,
+       "1y": 26791
+      }
+     }
+    },
+    "final_volume": "1",
+    "total_chapters": "11",
+    "links": [],
+    "links_v2": [],
+    "publishers": [
+     {
+      "name": "Ichijinsha",
+      "type": "Original",
+      "note": ""
+     }
+    ],
+    "titles": [
+     {
+      "language": "en",
+      "traits": [
+       "official"
+      ],
+      "title": "Placeholder Blend 2",
+      "is_primary": true
+     }
+    ],
+    "genres_v2": null,
+    "genres": [],
+    "tags_v2": [],
+    "tags": [],
+    "last_updated_at": "2026-09-09T01:36:58.610Z",
+    "relationships": {
+     "other": [
+      2,
+      11106,
+      11714
+     ]
+    },
+    "relationships_v2": [
+     {
+      "id": "019e41ed-2494-7360-9764-2009ce86c901",
+      "to_series_id": 2,
+      "relation_type": "series",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-236a-781c-b2ca-e8b512cafd3d",
+      "to_series_id": 11714,
+      "relation_type": "series",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     },
+     {
+      "id": "019e41ed-23f8-7dc1-af93-f2cf87495294",
+      "to_series_id": 11106,
+      "relation_type": "source",
+      "is_manual": false,
+      "note": null,
+      "chronology": "unknown",
+      "published_start_date": null
+     }
+    ],
+    "source": {
+     "anilist": {
+      "id": 65911,
+      "rating": 6.5,
+      "rating_normalized": 65
+     },
+     "anime_planet": {
+      "id": "dotsuki-manzai-type-moon-sakuhinshuu",
+      "rating": null,
+      "rating_normalized": null
+     },
+     "anime_news_network": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "kitsu": {
+      "id": 13765,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "manga_updates": {
+      "id": "of85qje",
+      "rating": 6.13,
+      "rating_normalized": 61
+     },
+     "my_anime_list": {
+      "id": 35911,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "shikimori": {
+      "id": 35911,
+      "rating": null,
+      "rating_normalized": null
+     }
+    }
+   }
+  }
+ ],
+ "dna": [
+  {
+   "tag_id": 467,
+   "name": "Kuudere",
+   "weight": 0.16050603615244108
+  },
+  {
+   "tag_id": 827,
+   "name": "Kuudere Characters",
+   "weight": 0.13794683072026873
+  },
+  {
+   "tag_id": 2206,
+   "name": "Unaging Female Lead",
+   "weight": 0.11760550240967071
+  },
+  {
+   "tag_id": 253,
+   "name": "Twins",
+   "weight": 0.11229522383333997
+  },
+  {
+   "tag_id": 1528,
+   "name": "Eye Powers",
+   "weight": 0.10890726616572666
+  },
+  {
+   "tag_id": 759,
+   "name": "Split Personality",
+   "weight": 0.08201156167549743
+  },
+  {
+   "tag_id": 236,
+   "name": "Super Powers",
+   "weight": 0.08051790794168252
+  },
+  {
+   "tag_id": 252,
+   "name": "Vampires",
+   "weight": 0.0677146584404493
+  },
+  {
+   "tag_id": 883,
+   "name": "Special Ability",
+   "weight": 0.06740436699463885
+  },
+  {
+   "tag_id": 261,
+   "name": "Urban Fantasy",
+   "weight": 0.06509064566628478
+  }
+ ],
+ "seed_count": 1
+}

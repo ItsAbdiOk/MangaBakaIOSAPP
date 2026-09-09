@@ -44,6 +44,10 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// Replaces the format filter and discards every cached feed, for the same
     /// reason `updateContentRatings` does.
     func updateFormats(_ formats: [String]) async
+
+    /// The reader's own user id, so a blend can exclude what they already
+    /// track. Nil clears it.
+    func updateLibraryExclusion(userID: String?) async
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -256,6 +260,15 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Formats to request, or empty for no filter. Empty is the default: the
     /// catalogue as it is, until the reader narrows it.
     private var formats: [String] = []
+    /// The reader's own 32-character user id. Sent as `exclude_user_library` on
+    /// a blend so it stops recommending series they are already reading — the
+    /// single largest source of "these recommendations are bad" for someone
+    /// with a large library.
+    ///
+    /// Not a boolean, despite the name: the API rejects `true` with
+    /// "expected string, received boolean" and requires at least 32 characters
+    /// (HTTP 400, verified 2026-09-09). Only ever the reader's own id.
+    private var libraryExclusionUserID: String?
 
     init(
         client: APIClient,
@@ -283,6 +296,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         do {
             var query = [URLQueryItem(name: "limit", value: String(feed.limit))]
             query.append(contentsOf: feed.extraQuery)
+            if case .mix = feed { query.append(contentsOf: blendExclusionQuery) }
             // Filtering server-side means excluded covers are never downloaded,
             // never cached, and never briefly visible while a client-side
             // filter catches up.
@@ -350,6 +364,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // FeedKind.extraQuery for the verification.
         items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })
         items.append(URLQueryItem(name: "strict", value: "false"))
+        items.append(contentsOf: blendExclusionQuery)
         items.append(contentsOf: (contentRatings ?? []).map {
             URLQueryItem(name: "content_rating", value: $0)
         })
@@ -374,6 +389,21 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         guard formats != self.formats else { return }
         self.formats = formats
         try? discardCachedFeeds()
+    }
+
+    func updateLibraryExclusion(userID: String?) async {
+        guard userID != libraryExclusionUserID else { return }
+        libraryExclusionUserID = userID
+        // Cached blends were built without the exclusion, so they still hold
+        // series the reader already tracks.
+        try? discardCachedFeeds()
+    }
+
+    /// Applies only to blends. Search and discovery are browsing surfaces where
+    /// finding something already on your shelf is useful, not noise.
+    private var blendExclusionQuery: [URLQueryItem] {
+        guard let libraryExclusionUserID else { return [] }
+        return [URLQueryItem(name: "exclude_user_library", value: libraryExclusionUserID)]
     }
 
     /// The filters that apply to every request, as repeated query keys.

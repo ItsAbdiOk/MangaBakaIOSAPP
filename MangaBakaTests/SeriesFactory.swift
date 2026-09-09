@@ -86,4 +86,6 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
     func updateContentRatings(_ ratings: [String]) async {}
 
     func updateFormats(_ formats: [String]) async {}
+
+    func updateLibraryExclusion(userID: String?) async {}
 }

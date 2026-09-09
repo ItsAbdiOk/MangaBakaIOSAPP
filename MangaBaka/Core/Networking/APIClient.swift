@@ -129,6 +129,32 @@ actor APIClient {
     ///
     /// Two shapes exist in this API and neither decodes as the other, so the
     /// distinction is explicit at the call site rather than guessed at.
+    /// Decodes a response that has no envelope at all.
+    ///
+    /// This API has three response shapes, not two. Most endpoints wrap the
+    /// payload in `data`, the personalised ones wrap it in `results`, and
+    /// `/v1/my/series/recommendations/status` wraps it in nothing — its fields
+    /// sit at the top level beside `status` (verified 2026-09-09).
+    ///
+    /// Decoding that one as a `results` envelope threw, the caller's `try?`
+    /// turned it into nil, and the swipe stack concluded the reader had no
+    /// profile to recommend from. Nothing surfaced; the stack just quietly used
+    /// a worse source.
+    func getRoot<Payload: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        as _: Payload.Type = Payload.self
+    ) async throws(APIError) -> Payload {
+        let data = try await rawData(path: path, query: query)
+        do {
+            return try decoder.decode(Payload.self, from: data)
+        } catch let error as APIError {
+            throw error
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+    }
+
     func getResults<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
@@ -155,6 +181,16 @@ actor APIClient {
         try? await get("/v1/my/profile", as: Profile.self)
     }
 
+    /// Query parameters that put the reader's identity into a URL.
+    ///
+    /// `blend_user_id` is listed although the app does not send it: if it is
+    /// ever added, it must not be the change that quietly starts caching an
+    /// account id to disk.
+    private static let identifyingParameters: Set<String> = [
+        "exclude_user_library",
+        "blend_user_id"
+    ]
+
     private func makeRequest(path: String, query: [URLQueryItem]) throws(APIError) -> URLRequest {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(path),
@@ -175,7 +211,16 @@ actor APIClient {
         // URLCache on disk. MangaBaka does send "private, no-store" on those
         // endpoints today (verified 2026-09-09), but that is their guarantee to
         // change, not ours to depend on.
-        if path.hasPrefix("/v1/my") || path.hasPrefix("/v0/my") {
+        //
+        // The path prefix is not sufficient on its own. `/v1/series/mix` is a
+        // public endpoint by path, but once it carries `exclude_user_library`
+        // the URL contains the reader's 32-character account id — and the URL
+        // is the cache key, so that id would be written to a cache file on
+        // disk, in a 256MB cache, for a response that gains nothing from being
+        // cached there (blends are already cached in the app's own database).
+        // So the test is what the request carries, not where it is going.
+        let carriesIdentity = query.contains { Self.identifyingParameters.contains($0.name) }
+        if path.hasPrefix("/v1/my") || path.hasPrefix("/v0/my") || carriesIdentity {
             request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")

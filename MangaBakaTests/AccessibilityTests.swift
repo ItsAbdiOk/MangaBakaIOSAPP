@@ -111,6 +111,29 @@ struct DynamicTypeLayoutTests {
         )
     }
 
+    /// The format rows arrived in a second file after this suite was written,
+    /// so they were outside every check it makes. Two lines of scaled text per
+    /// row, same trap.
+    @Test("Format rows size to their content")
+    func formatRowsAreFlexible() throws {
+        let text = try source("MangaBaka/Features/Settings/FormatSection.swift")
+        #expect(text.contains("frame(minHeight: Metrics.ctaSecondary)"))
+        #expect(
+            !text.contains("frame(height: Metrics.ctaSecondary)"),
+            "A fixed height clips scaled text"
+        )
+    }
+
+    /// The stack's caption is two stacked lines of scaled text over a card.
+    /// Without this it truncates to a single line at accessibility sizes and
+    /// the reason — the whole point of showing it — is the half that goes.
+    @Test("The stack's source caption is allowed to wrap")
+    func stackCaptionWraps() throws {
+        let text = try source("MangaBaka/Features/Stack/StackView.swift")
+        #expect(text.contains("fixedSize(horizontal: false, vertical: true)"))
+        #expect(text.contains("multilineTextAlignment(.center)"))
+    }
+
     /// A pill with a fixed height clips its own label once the label grows.
     @Test("Chips size to their content")
     func chipsAreFlexible() throws {
@@ -233,6 +256,14 @@ struct ContentRowTests {
     }
 
     /// The indicator is decoration; the Button carries the state for VoiceOver.
+    /// The caption is two Texts describing one thing. Read separately, VoiceOver
+    /// announces a reason with no subject and then a source with no reason.
+    @Test("The stack caption is announced as one thing")
+    func captionIsOneElement() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
+        #expect(source.contains("accessibilityElement(children: .combine)"))
+    }
+
     @Test("State is announced on the row, not on the decoration", arguments: rowFiles)
     func stateIsOnTheRow(_ path: String) throws {
         let source = try SourceTree.read(path)

@@ -11,6 +11,9 @@ final class StackModel {
     /// depends entirely on which of these it is — a random queue is not
     /// personalised at all, and the app should not imply otherwise.
     enum Source: Equatable {
+        /// MangaBaka's own profile-based recommendations, built from the
+        /// reader's whole library rather than from a handful of seeds.
+        case yourProfile
         /// Blended from series saved on this device.
         case yourSaves
         /// Blended from the reader's MangaBaka library.
@@ -20,8 +23,9 @@ final class StackModel {
 
         var caption: String {
             switch self {
+            case .yourProfile: "Picked from your whole MangaBaka library"
             case .yourSaves: "Based on what you've saved"
-            case .yourLibrary: "Based on your MangaBaka library"
+            case .yourLibrary: "Blended from your MangaBaka library"
             case .random: "A random sample — save a few to make this yours"
             }
         }
@@ -31,10 +35,19 @@ final class StackModel {
     private(set) var isLoading = false
     private(set) var message: String?
     private(set) var source: Source = .random
+    /// Why the current card was suggested, when the source can say. Only the
+    /// profile recommender explains itself; a blend does not, and inventing a
+    /// reason for it would be worse than showing none.
+    var currentReason: String? {
+        guard let id = current?.id else { return nil }
+        return reasons[id]
+    }
+
+    private var reasons: [Int: String] = [:]
 
     private let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
-    private let library: LibraryService?
+    private let library: (any LibraryProviding)?
     private var reacted: Set<Int> = []
 
     /// Every series that could seed a blend, and where we are in it.
@@ -47,10 +60,18 @@ final class StackModel {
     private var seedCursor = 0
     private static let seedsPerBlend = 3
 
+    /// Page of the profile recommender. It takes `page` and `exclude_ids`, so
+    /// unlike a blend it never repeats and never runs out.
+    private var recommendationPage = 0
+    /// Whether the profile recommender is usable for this reader. Nil until
+    /// asked; false when there is no token, or the library is too small to
+    /// build a profile from.
+    private var canUseProfile: Bool?
+
     init(
         repository: any SeriesRepositoryProtocol,
         shelf: ShelfStore,
-        library: LibraryService? = nil
+        library: (any LibraryProviding)? = nil
     ) {
         self.repository = repository
         self.shelf = shelf
@@ -70,6 +91,23 @@ final class StackModel {
         defer { isLoading = false }
 
         reacted = (try? await shelf.reactedIDs()) ?? []
+
+        // The profile recommender first, when the reader has one. It draws on
+        // their whole library rather than three seeds, it explains each pick,
+        // and it pages — so it is strictly better than a blend wherever it is
+        // available.
+        if await profileIsUsable() {
+            let fresh = await fetchProfilePage()
+            if !fresh.isEmpty {
+                append(fresh)
+                source = .yourProfile
+                message = nil
+                return
+            }
+            // Exhausted or failed: fall through to a blend rather than showing
+            // an empty stack to someone who plainly has taste on file.
+        }
+
         await buildSeedPoolIfNeeded()
 
         // Two attempts, not one. The first can come back entirely composed of
@@ -78,7 +116,7 @@ final class StackModel {
         for _ in 0..<2 {
             let fresh = await fetchBatch()
             if !fresh.isEmpty {
-                queue = fresh
+                append(fresh)
                 message = nil
                 return
             }
@@ -88,7 +126,16 @@ final class StackModel {
         // Nothing left to offer. `message` is whatever the last fetch set: an
         // error if one occurred, nil if the queue is genuinely exhausted. The
         // empty state reads those two cases differently.
-        queue = []
+    }
+
+    /// Adds to the queue rather than replacing it.
+    ///
+    /// A refill starts while two cards are still in hand, so replacing threw
+    /// away two series the reader had not seen yet — every time the stack
+    /// topped itself up, which is constantly.
+    private func append(_ series: [Series]) {
+        let known = Set(queue.map(\.id))
+        queue.append(contentsOf: series.filter { !known.contains($0.id) })
     }
 
     func react(_ kind: ShelfEntry.Kind) async {
@@ -103,6 +150,58 @@ final class StackModel {
 
         if queue.count <= 2 { await refill() }
     }
+
+    // MARK: - Profile recommendations
+
+    private func profileIsUsable() async -> Bool {
+        if let canUseProfile { return canUseProfile }
+        guard let library else {
+            canUseProfile = false
+            return false
+        }
+        // cold_start means the library is too small to build a profile from.
+        // Asking anyway would spend a request to be told nothing.
+        let usable = await library.recommendationStatus()?.canPersonalise ?? false
+        canUseProfile = usable
+        return usable
+    }
+
+    private func fetchProfilePage() async -> [Series] {
+        guard let library else { return [] }
+        recommendationPage += 1
+
+        // Everything already reacted to, sent as exclusions rather than
+        // filtered out afterwards. Filtering afterwards wastes the slots: a
+        // page of twenty that is half things you have already swiped is a page
+        // of ten. Capped because the exclusion list travels in the URL.
+        let excluded = Array(reacted.sorted().suffix(Self.maximumExclusions))
+
+        let recommendations = await library.recommendations(
+            limit: 20,
+            page: recommendationPage,
+            excluding: excluded
+        )
+        guard !recommendations.isEmpty else { return [] }
+
+        // Nil means the answer is not known, and an unverified tag name is the
+        // one outcome worth avoiding here — so an unknown answer hides every
+        // named tag rather than none.
+        let hidden = await library.hiddenTagIDs()
+        for recommendation in recommendations {
+            guard let hidden,
+                  let summary = recommendation.reason?.summary(hiding: hidden)
+            else { continue }
+            reasons[recommendation.id] = summary
+        }
+        // Still filtered locally: exclude_ids is capped, and a skip made on
+        // this device is not necessarily known to the server.
+        return recommendations.map(\.asSeries).filter { !reacted.contains($0.id) }
+    }
+
+    /// A URL has a practical length limit and each id costs about 18
+    /// characters. Sixty is well inside it and covers a long session; anything
+    /// older is still filtered locally.
+    private static let maximumExclusions = 60
 
     // MARK: - Seeds
 
@@ -127,7 +226,7 @@ final class StackModel {
         if let library {
             // Highest priority first, then the ones being read: a series
             // someone dropped says as much about what they don't want.
-            let entries = await library.library(limit: 50)
+            let entries = await library.library(page: 1, limit: 50)
             let ids = entries
                 .filter { $0.state != .dropped }
                 .sorted { ($0.priority ?? 0) > ($1.priority ?? 0) }

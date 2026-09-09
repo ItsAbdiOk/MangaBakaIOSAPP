@@ -91,7 +91,10 @@ struct LibraryTests {
             {"status":200,"cold_start":false,"profile_stale":false,"results":[
               {"id":1138,"titles":[{"language":"en","traits":["official"],
                                     "title":"The Regressed Doctor","is_primary":true}],
-               "cover_image":"https://cdn.example.invalid/a.jpg",
+               "cover_image":{"raw":{"url":"https://cdn.example.invalid/a.jpg",
+                                     "width":690,"height":1000,"blurhash":"|cFt4x"},
+                              "x150":{"x1":"https://cdn.example.invalid/x150@1/a",
+                                      "x2":"https://cdn.example.invalid/x150@2/a"}},
                "media_type":"manhwa","published_year":2021,
                "reason":{"reason_type":"similar_to",
                          "top_tags":[{"id":584,"name":"Time Rewind","weight":"core"},
@@ -106,10 +109,35 @@ struct LibraryTests {
 
         #expect(results.count == 1)
         #expect(results.first?.displayTitle == "The Regressed Doctor")
-        #expect(results.first?.coverURL != nil)
+        // The real shape, not an invented one. This payload used to spell
+        // cover_image as a plain URL string because that is what the field's
+        // name suggests; the live endpoint returns a full v1 cover object, and
+        // the invented fixture is why the endpoint never decoding went unnoticed.
+        #expect(results.first?.coverImage?.raw != nil)
+        #expect(results.first?.coverImage?.width == 690)
+        #expect(results.first?.coverImage?.blurhash == "|cFt4x")
+        #expect(results.first?.asSeries.cover.x150 != nil)
         #expect(results.first?.reason?.reasonType == "similar_to")
         #expect(results.first?.reason?.topTags?.first?.name == "Time Rewind")
         #expect(results.first?.reason?.summary == "Because you read Time Rewind and Time Travel")
+    }
+
+    /// Three envelope shapes, not two. This endpoint uses none: its fields sit
+    /// at the top level beside `status`. Decoding it as a `results` envelope
+    /// threw, the `try?` turned that into nil, and the stack concluded the
+    /// reader had no profile — silently choosing a worse source.
+    @Test("The status endpoint decodes from a bare response, not an envelope")
+    func statusHasNoEnvelope() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data("""
+            {"status":200,"cold_start":false,"profile_stale":false,"library_count":937}
+            """.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let status = await makeService().recommendationStatus()
+        #expect(status?.libraryCount == 937)
+        #expect(status?.canPersonalise == true)
     }
 
     /// A small library cannot be personalised from. The UI needs to say that

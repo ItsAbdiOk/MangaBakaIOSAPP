@@ -101,7 +101,15 @@ struct RecommendationStatus: Decodable, Sendable, Equatable {
 struct PersonalRecommendation: Decodable, Identifiable, Sendable, Equatable {
     let id: Int
     let titles: [SeriesTitle]?
-    let coverImage: String?
+    /// A full cover object in the v1 shape, not a URL string.
+    ///
+    /// It was modelled as `String?` on the strength of the field's name, and
+    /// the endpoint has therefore never decoded: the mismatch threw, the `try?`
+    /// in `LibraryService` swallowed it, and personalised recommendations came
+    /// back as an empty list every time. Verified against the live endpoint on
+    /// 2026-09-09 — the third instance of the same v1/v2 shape split this week,
+    /// which is why there is now a contract test per shape.
+    let coverImage: Cover?
     let mediaType: String?
     let publishedYear: Int?
     /// Why this was suggested. An object, not a string — it names the kind of
@@ -125,15 +133,62 @@ struct PersonalRecommendation: Decodable, Identifiable, Sendable, Equatable {
 
         /// A short phrase for the UI, built only from what the API gave.
         /// Returns nil rather than inventing a reason.
-        var summary: String? {
-            let names = (topTags ?? []).prefix(2).map(\.name)
+        var summary: String? { summary(hiding: []) }
+
+        /// The same phrase with named tags withheld.
+        ///
+        /// The tags come from the reader's own library, not from the
+        /// recommended series, so a series well inside the reader's content
+        /// setting can still be explained by a tag well outside it — an app
+        /// set to safe and suggestive was captioning cards "Because you read
+        /// BDSM and Cunnilingus" (observed on device, 2026-09-09). That is
+        /// someone's reading history printed on a phone screen in public.
+        ///
+        /// Withheld tags are dropped rather than replaced, and a reason left
+        /// with nothing to say returns nil. Half a reason is still a reason.
+        func summary(hiding hiddenTagIDs: Set<Int>) -> String? {
+            let names = (topTags ?? [])
+                .filter { !hiddenTagIDs.contains($0.id) }
+                .prefix(2)
+                .map(\.name)
             guard !names.isEmpty else { return nil }
             return "Because you read \(names.joined(separator: " and "))"
         }
     }
 
     var displayTitle: String? { DisplayTitle.choose(from: titles) }
-    var coverURL: URL? { coverImage.flatMap(URL.init(string:)) }
+
+    /// The recommendation as a `Series`, so it can go through the same card,
+    /// detail screen and shelf as everything else.
+    ///
+    /// The absent fields are absent from the endpoint, not dropped here: it
+    /// returns no description, authors, artists, status, rating, publishers or
+    /// tracker scores. `state` is "active" because the endpoint only recommends
+    /// series that can be read — an assumption, and the only one made here.
+    var asSeries: Series {
+        Series(
+            id: id,
+            state: "active",
+            mergedWith: nil,
+            titles: titles,
+            cover: coverImage ?? Cover(
+                raw: nil, x150: nil, x250: nil, x350: nil,
+                blurhash: nil, width: nil, height: nil
+            ),
+            description: nil,
+            authors: nil,
+            artists: nil,
+            status: nil,
+            rating: nil,
+            type: mediaType,
+            contentRating: nil,
+            totalChapters: nil,
+            finalVolume: nil,
+            publishers: nil,
+            anime: nil,
+            source: nil
+        )
+    }
 }
 
 /// A tag the reader gravitates towards, with how strongly.
