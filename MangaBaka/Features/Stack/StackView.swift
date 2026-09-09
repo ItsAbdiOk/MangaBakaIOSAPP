@@ -278,23 +278,13 @@ struct StackView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Text(model.message == nil ? "That's the stack for now" : "Can't load the stack")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text(model.message ?? "Save a few and the next batch will lean towards them.")
-                .typeSubtitle()
-                .foregroundStyle(Palette.textSecondary)
-                .multilineTextAlignment(.center)
-            Button("Load more") { Task { await model.refill() } }
-                .typeCTA()
-                .foregroundStyle(Palette.onAccent)
-                .padding(.horizontal, 18)
-                .frame(height: Metrics.ctaSecondary)
-                .background(Palette.accent, in: Capsule())
-                .padding(.top, 6)
-        }
-        .padding(.horizontal, 44)
-        .padding(.vertical, 60)
+        EmptyState(
+            symbol: model.message == nil ? "checkmark.circle" : "exclamationmark.triangle",
+            title: model.message == nil ? "That's the stack for now" : "Can't load the stack",
+            message: model.message
+                ?? "Save a few and the next batch will lean towards them.",
+            actionTitle: "Load more",
+            action: { Task { await model.refill() } }
+        )
     }
 }

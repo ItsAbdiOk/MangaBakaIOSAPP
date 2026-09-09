@@ -352,3 +352,35 @@ struct NewScreenAccessibilityTests {
         #expect(source.contains("accessibilityLabel(\"Open the shelf\")"))
     }
 }
+
+/// An empty shelf and a failed request look similar and mean opposite things:
+/// one is the app working and telling the truth, the other is something broken.
+@Suite("Empty and failed are different things", .enabled(if: SourceTree.isAvailable))
+struct EmptyStateTests {
+    private static let screensWithEmptyStates = [
+        "MangaBaka/Features/Stack/StackView.swift",
+        "MangaBaka/Features/Library/LibraryView.swift",
+        "MangaBaka/Features/Schedule/ScheduleView.swift"
+    ]
+
+    /// Six screens each built their own. One component means a designer settles
+    /// it once rather than six times, and they cannot drift apart again.
+    @Test("Screens use the shared empty state", arguments: screensWithEmptyStates)
+    func usesSharedComponent(path: String) throws {
+        let source = try SourceTree.read(path)
+        #expect(source.contains("EmptyState("), "\(path) still builds its own")
+    }
+
+    /// A reader must be able to tell "there is nothing here" from "this broke".
+    @Test("The two states are separate types")
+    func distinctFromFailure() throws {
+        let empty = try SourceTree.read("MangaBaka/Features/Shared/EmptyState.swift")
+        let failure = try SourceTree.read("MangaBaka/Features/Shared/FailureState.swift")
+
+        #expect(empty.contains("struct EmptyState"))
+        #expect(failure.contains("struct FailureState"))
+        // A failure names its cause; an empty state has no error to name.
+        #expect(failure.contains("APIError"))
+        #expect(!empty.contains("APIError"))
+    }
+}

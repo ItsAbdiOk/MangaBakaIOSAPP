@@ -138,23 +138,14 @@ struct LibraryView: View {
     }
 
     private var noAccount: some View {
-        VStack(spacing: 0) {
-            Text("No library yet")
-                .typeSectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text("""
+        EmptyState(
+            symbol: "person.crop.circle.badge.questionmark",
+            title: "No library yet",
+            message: """
             Add a MangaBaka token in Settings and everything you track there \
             appears here.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textMuted)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 10)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 34)
-        .padding(.top, 90)
+            """
+        )
     }
 
     /// The way into the schedule, carrying its own summary so the card says

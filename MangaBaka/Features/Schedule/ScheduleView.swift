@@ -180,22 +180,13 @@ struct ScheduleView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 0) {
-            Text("Nothing to estimate from")
-                .typeSectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text("""
+        EmptyState(
+            symbol: "calendar.badge.clock",
+            title: "Nothing to estimate from",
+            message: """
             Estimates are built from the series you are reading. Add a \
             MangaBaka account and the schedule fills itself in.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textMuted)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 10)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 10)
-        .padding(.top, 110)
+            """
+        )
     }
 }
