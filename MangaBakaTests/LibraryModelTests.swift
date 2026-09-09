@@ -117,6 +117,8 @@ struct LibraryModelTests {
             limit: Int, page: Int, excluding: [Int]
         ) async -> [PersonalRecommendation] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+
     }
 }
 

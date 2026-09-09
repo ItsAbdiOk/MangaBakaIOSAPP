@@ -8,8 +8,12 @@ import SwiftUI
 struct ShelfDetailView: View {
     let shelf: LibraryModel.Shelf
     @Binding var path: [Series]
+    /// Applies a change to the reader's real library. Returns a message on
+    /// failure, nil on success.
+    let onSave: (Int, LibraryChange) async -> String?
 
     @State private var filter: Filter = .all
+    @State private var editing: LibraryEntry?
 
     enum Filter: String, CaseIterable, Identifiable {
         case all
@@ -52,7 +56,12 @@ struct ShelfDetailView: View {
                 if showsFilters { filterChips }
                 ForEach(visible) { entry in
                     if let series = entry.series {
-                        LibraryRow(entry: entry, series: series) { path.append(series) }
+                        LibraryRow(
+                            entry: entry,
+                            series: series,
+                            onOpen: { path.append(series) },
+                            onEdit: { editing = entry }
+                        )
                     }
                 }
             }
@@ -64,6 +73,13 @@ struct ShelfDetailView: View {
         .background(Palette.ground)
         .navigationTitle(shelf.label)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $editing) { entry in
+            if let series = entry.series {
+                LibraryEditSheet(entry: entry, series: series) { change in
+                    await onSave(entry.seriesId, change)
+                }
+            }
+        }
     }
 
     private var header: some View {
@@ -120,6 +136,7 @@ struct LibraryRow: View {
     let entry: LibraryEntry
     let series: Series
     let onOpen: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
@@ -166,6 +183,12 @@ struct LibraryRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        // A row is a link to the series; editing is a separate, deliberate act
+        // rather than something a stray tap can do to real data.
+        .accessibilityAction(named: "Edit") { onEdit() }
+        .contextMenu {
+            Button("Edit", systemImage: "pencil", action: onEdit)
+        }
     }
 
     private var progressLine: String { Self.progressLine(entry, series: series) }

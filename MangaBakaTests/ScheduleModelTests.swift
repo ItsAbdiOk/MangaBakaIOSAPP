@@ -20,6 +20,8 @@ struct ScheduleGroupingTests {
         ) async -> [PersonalRecommendation] { [] }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+
     }
 
     private func cadence(dueIn days: Int, regular: Bool = true) -> Cadence {

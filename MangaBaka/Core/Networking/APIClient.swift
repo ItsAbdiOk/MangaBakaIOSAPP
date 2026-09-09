@@ -129,6 +129,59 @@ actor APIClient {
     ///
     /// Two shapes exist in this API and neither decodes as the other, so the
     /// distinction is explicit at the call site rather than guessed at.
+    /// Sends a change to the reader's own data.
+    ///
+    /// Separate from every `get` on purpose: this is the only method in the
+    /// client that alters something on the server, and it should be obvious at
+    /// a call site which one is being used.
+    ///
+    /// Returns nothing. A 2xx is the whole answer — the caller re-reads rather
+    /// than trusting a response body to describe what it now holds.
+    func patch(
+        _ path: String,
+        body: [String: any Sendable]
+    ) async throws(APIError) {
+        var request = try makeRequest(path: path, query: [])
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let encoded = try? JSONSerialization.data(withJSONObject: body) else {
+            throw APIError.transport(underlying: "Could not encode the change.")
+        }
+        request.httpBody = encoded
+
+        if let header = await tokenProvider.authorizationHeader() {
+            request.setValue(header.value, forHTTPHeaderField: header.field)
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError where error.code == .notConnectedToInternet {
+            throw APIError.offline
+        } catch {
+            throw APIError.transport(underlying: String(describing: error))
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(underlying: "Not an HTTP response.")
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            throw APIError.rateLimited(retryAfter: retryAfter)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            // 401 and 403 are worth separating from any other failure: they
+            // mean the token is wrong or lacks permission, so retrying will
+            // not help and the reader needs sending to Settings.
+            let message = http.statusCode == 401 || http.statusCode == 403
+                ? "MangaBaka would not accept that change. Check your token in Settings."
+                : "MangaBaka could not save that change."
+            throw APIError.server(status: http.statusCode, message: message)
+        }
+        _ = data
+    }
+
     /// Decodes a response that has no envelope at all.
     ///
     /// This API has three response shapes, not two. Most endpoints wrap the

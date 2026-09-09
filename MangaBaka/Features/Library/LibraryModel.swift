@@ -68,6 +68,13 @@ final class LibraryModel {
         """
     }
 
+    /// Re-reads after a write, so the screen reflects the server rather than
+    /// what was typed into a sheet.
+    func reload() async {
+        entries = []
+        await load()
+    }
+
     func load() async {
         guard entries.isEmpty else { return }
         isLoading = true

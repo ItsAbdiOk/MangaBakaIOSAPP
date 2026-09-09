@@ -114,7 +114,11 @@ struct RootView: View {
                     )
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                         .navigationDestination(item: $openShelf) { shelf in
-                            ShelfDetailView(shelf: shelf, path: $shelfPath)
+                            ShelfDetailView(
+                                shelf: shelf,
+                                path: $shelfPath,
+                                onSave: saveLibraryChange
+                            )
                         }
                         .navigationDestination(isPresented: $showsSchedule) {
                             ScheduleView(
@@ -243,6 +247,19 @@ struct RootView: View {
             searchPath.removeAll()
             showsBrowse = false
         }
+    }
+
+    /// Writes a change to the reader's real library, then re-reads so the
+    /// screen shows what the server now holds rather than what was typed.
+    private func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
+        do {
+            try await library.update(seriesId: seriesId, change: change)
+        } catch {
+            return error.userFacingMessage
+        }
+        await libraryModel?.reload()
+        openShelf = libraryModel?.shelves.first { $0.state == openShelf?.state }
+        return nil
     }
 
     private func refreshCacheAge() async {

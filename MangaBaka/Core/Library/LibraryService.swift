@@ -18,6 +18,50 @@ protocol LibraryProviding: Sendable {
     func library(page: Int, limit: Int) async -> [LibraryEntry]
     /// Tags the reader has not opted into seeing named. Nil when unknown.
     func hiddenTagIDs() async -> Set<Int>?
+
+    /// Applies a change to one entry in the reader's own library.
+    ///
+    /// Throws rather than returning a flag: this alters someone's real data and
+    /// a caller that ignores the result should have to do so deliberately.
+    func update(seriesId: Int, change: LibraryChange) async throws(APIError)
+}
+
+/// A change to one library entry.
+///
+/// Every field is optional and only the ones set are sent. `PATCH` merges, so
+/// sending a field the reader did not touch would overwrite it with whatever
+/// the UI happened to be holding.
+///
+/// The double-optional on `note` is deliberate: `nil` means "leave it alone"
+/// and `.some(nil)` means "clear it". Collapsing those two would make it
+/// impossible to erase a note.
+struct LibraryChange: Equatable, Sendable {
+    var state: LibraryEntry.State?
+    var progressChapter: Double??
+    var progressVolume: Double??
+    var rating: Double??
+    var note: String??
+    var isPrivate: Bool?
+
+    var isEmpty: Bool { body.isEmpty }
+
+    /// A set-but-nil field becomes an explicit JSON null, which is how the API
+    /// is told to clear it. Omitting the key would leave the old value in place.
+    private static func value(_ wrapped: (some Sendable)?) -> any Sendable {
+        wrapped ?? NSNull()
+    }
+
+    /// Only what was actually set.
+    var body: [String: any Sendable] {
+        var body: [String: any Sendable] = [:]
+        if let state { body["state"] = state.rawValue }
+        if let progressChapter { body["progress_chapter"] = Self.value(progressChapter) }
+        if let progressVolume { body["progress_volume"] = Self.value(progressVolume) }
+        if let rating { body["rating"] = Self.value(rating) }
+        if let note { body["note"] = Self.value(note) }
+        if let isPrivate { body["is_private"] = isPrivate }
+        return body
+    }
 }
 
 actor LibraryService: LibraryProviding {
@@ -170,6 +214,13 @@ actor LibraryService: LibraryProviding {
 
         cachedHiddenTags = (contentRatings, ids)
         return ids
+    }
+
+    func update(seriesId: Int, change: LibraryChange) async throws(APIError) {
+        // An empty change is a no-op, not a request. Sending one would spend a
+        // write against someone's library to say nothing.
+        guard !change.isEmpty else { return }
+        try await client.patch("/v1/my/library/\(seriesId)", body: change.body)
     }
 
     /// The reader's strongest tag affinities, highest first.
