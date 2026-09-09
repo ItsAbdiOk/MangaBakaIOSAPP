@@ -34,6 +34,8 @@ struct StackBadge: View {
 struct StackCaption: View {
     let series: Series
     let reason: String?
+    /// Shown when a save reached the local shelf but not the account.
+    let warning: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,6 +79,15 @@ struct StackCaption: View {
                     .typeFootnote()
                     .foregroundStyle(Palette.textTertiary)
                     .padding(.top, 10)
+            }
+
+            // A save that did not reach the account is worth saying once. The
+            // shelf still has it, so this is a note rather than an error.
+            if let warning {
+                Text(warning)
+                    .typeFootnote()
+                    .foregroundStyle(Palette.accent)
+                    .padding(.top, 8)
             }
         }
         .multilineTextAlignment(.center)

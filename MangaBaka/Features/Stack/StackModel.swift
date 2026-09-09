@@ -35,6 +35,12 @@ final class StackModel {
     private(set) var isLoading = false
     private(set) var message: String?
     private(set) var source: Source = .random
+    /// Set when a save reached the reader's MangaBaka library, so the screen
+    /// can say where it went rather than leaving them to guess.
+    private(set) var lastSaveWentToLibrary = false
+    /// Set when a save could not reach the library. The local shelf still has
+    /// it, so this is a note rather than a failure.
+    private(set) var saveWarning: String?
     /// Why the current card was suggested, when the source can say. Only the
     /// profile recommender explains itself; a blend does not, and inventing a
     /// reason for it would be worse than showing none.
@@ -159,13 +165,45 @@ final class StackModel {
         // The card just dealt with becomes the one peeking in from behind.
         previous = series
         try? await shelf.record(series, as: kind)
-        if kind == .saved { saved.insert(series, at: 0) }
+        if kind == .saved {
+            saved.insert(series, at: 0)
+            await pushSaveToLibrary(series)
+        }
 
         // A save changes what the next blend should be built from, so the pool
         // is rebuilt rather than left pointing at the shelf as it was on load.
         if kind == .saved { seedPool = [] }
 
         if queue.count <= 2 { await refill() }
+    }
+
+    /// A save on the stack also puts the series in the reader's real library.
+    ///
+    /// Without this the app kept two lists of saved things: a local shelf
+    /// MangaBaka never saw, and the account's own library. Two lists of saved
+    /// things is confusing, and the local one had no home once Library replaced
+    /// the Shelf tab.
+    ///
+    /// It goes in as "plan to read", which is what a save on a discovery
+    /// surface actually means — not that it is being read.
+    ///
+    /// A skip stays local. MangaBaka has no concept of "not for me", and
+    /// writing "dropped" to a library for something never opened would be a
+    /// lie about the reader's history.
+    private func pushSaveToLibrary(_ series: Series) async {
+        guard let library else { return }
+        do {
+            lastSaveWentToLibrary = try await library.add(
+                seriesId: series.id,
+                state: .planToRead
+            ) || true
+            saveWarning = nil
+        } catch {
+            // The shelf already has it, so this is worth mentioning rather than
+            // undoing. Losing the save would be worse than a stale library.
+            lastSaveWentToLibrary = false
+            saveWarning = "Saved here, but not to your MangaBaka library."
+        }
     }
 
     // MARK: - Profile recommendations

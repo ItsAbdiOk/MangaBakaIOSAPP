@@ -211,3 +211,83 @@ struct LibraryEditSheetTests {
         #expect(sheet(try entry(rating: 60)).changes.rating == nil)
     }
 }
+
+/// Adding to the library, which is a different call from editing one.
+///
+/// Verified against the live API 2026-09-09 on a throwaway series that was then
+/// deleted: POST creates and answers 201; POST on an existing entry answers 409
+/// rather than duplicating; PATCH answers 404 when the entry does not exist, so
+/// it cannot be used to add.
+@Suite("Adding to the library", .serialized)
+struct LibraryAddTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeService() -> LibraryService {
+        LibraryService(client: APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        ))
+    }
+
+    @Test("Adding posts to the entry's path with the chosen shelf")
+    func addsWithPost() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(statusCode: 201, body: Data(#"{"status":201}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let created = try await makeService().add(seriesId: 87_872, state: .planToRead)
+
+        #expect(created)
+        let request = try #require(URLProtocolStub.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/my/library/87872")
+    }
+
+    /// "Already in your library" is an ordinary answer to "add this", not a
+    /// failure to show the reader.
+    @Test("A series already tracked is moved to the chosen shelf, not an error")
+    func alreadyTrackedFallsBackToPatch() async throws {
+        nonisolated(unsafe) var calls: [String] = []
+        URLProtocolStub.setHandler { request in
+            calls.append(request.httpMethod ?? "")
+            return calls.count == 1
+                ? .respond(.init(statusCode: 409, body: Data(#"{"status":409}"#.utf8)))
+                : .respond(.init(statusCode: 200, body: Data("{}".utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let created = try await makeService().add(seriesId: 1, state: .reading)
+
+        #expect(!created, "it was already there")
+        #expect(calls == ["POST", "PATCH"], "a 409 should move the shelf, not give up")
+    }
+
+    /// A real failure still has to surface. Swallowing every non-201 would make
+    /// "add" silently do nothing.
+    @Test("A genuine failure to add is not treated as already-present")
+    func realFailureThrows() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(statusCode: 500, body: Data("{}".utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        await #expect(throws: APIError.self) {
+            _ = try await makeService().add(seriesId: 1, state: .reading)
+        }
+    }
+
+    @Test("Removing deletes the entry's own path")
+    func removes() async throws {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: Data("{}".utf8))) }
+        defer { URLProtocolStub.reset() }
+
+        try await makeService().remove(seriesId: 4792)
+
+        let request = try #require(URLProtocolStub.requests.first)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path == "/v1/my/library/4792")
+        #expect(request.httpBody == nil, "a delete carries no body")
+    }
+}

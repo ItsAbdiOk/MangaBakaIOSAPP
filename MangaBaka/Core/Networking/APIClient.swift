@@ -129,6 +129,33 @@ actor APIClient {
     ///
     /// Two shapes exist in this API and neither decodes as the other, so the
     /// distinction is explicit at the call site rather than guessed at.
+    /// Creates something in the reader's own data, or reports that it is
+    /// already there.
+    ///
+    /// Returns false when the server says the thing already exists (409) rather
+    /// than throwing, because "already in your library" is an ordinary answer
+    /// to "add this", not a failure.
+    @discardableResult
+    func post(
+        _ path: String,
+        body: [String: any Sendable]
+    ) async throws(APIError) -> Bool {
+        do {
+            try await send("POST", path: path, body: body)
+            return true
+        } catch {
+            // 409 means it is already there, which is an ordinary answer to
+            // "add this" rather than a failure.
+            if case let .server(status, _) = error, status == 409 { return false }
+            throw error
+        }
+    }
+
+    /// Removes something from the reader's own data.
+    func delete(_ path: String) async throws(APIError) {
+        try await send("DELETE", path: path, body: nil)
+    }
+
     /// Sends a change to the reader's own data.
     ///
     /// Separate from every `get` on purpose: this is the only method in the
@@ -141,13 +168,24 @@ actor APIClient {
         _ path: String,
         body: [String: any Sendable]
     ) async throws(APIError) {
+        try await send("PATCH", path: path, body: body)
+    }
+
+    /// The one place this client alters something on the server.
+    private func send(
+        _ method: String,
+        path: String,
+        body: [String: any Sendable]?
+    ) async throws(APIError) {
         var request = try makeRequest(path: path, query: [])
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        guard let encoded = try? JSONSerialization.data(withJSONObject: body) else {
-            throw APIError.transport(underlying: "Could not encode the change.")
+        request.httpMethod = method
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            guard let encoded = try? JSONSerialization.data(withJSONObject: body) else {
+                throw APIError.transport(underlying: "Could not encode the change.")
+            }
+            request.httpBody = encoded
         }
-        request.httpBody = encoded
 
         if let header = await tokenProvider.authorizationHeader() {
             request.setValue(header.value, forHTTPHeaderField: header.field)

@@ -19,6 +19,18 @@ protocol LibraryProviding: Sendable {
     /// Tags the reader has not opted into seeing named. Nil when unknown.
     func hiddenTagIDs() async -> Set<Int>?
 
+    /// Puts a series into the reader's library.
+    ///
+    /// Returns false when it was already there. Verified against the live API
+    /// on 2026-09-09: POST creates and answers 201, and answers 409 rather than
+    /// duplicating when the entry exists. PATCH does NOT create — it answers
+    /// 404 — so adding and editing are genuinely different calls.
+    @discardableResult
+    func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool
+
+    /// Removes a series from the reader's library entirely.
+    func remove(seriesId: Int) async throws(APIError)
+
     /// Applies a change to one entry in the reader's own library.
     ///
     /// Throws rather than returning a flag: this alters someone's real data and
@@ -214,6 +226,27 @@ actor LibraryService: LibraryProviding {
 
         cachedHiddenTags = (contentRatings, ids)
         return ids
+    }
+
+    @discardableResult
+    func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool {
+        let created = try await client.post(
+            "/v1/my/library/\(seriesId)",
+            body: ["state": state.rawValue]
+        )
+        if !created {
+            // Already tracked. Moving it to the requested shelf is what the
+            // reader meant by adding it, and is what the second call does.
+            try await client.patch(
+                "/v1/my/library/\(seriesId)",
+                body: ["state": state.rawValue]
+            )
+        }
+        return created
+    }
+
+    func remove(seriesId: Int) async throws(APIError) {
+        try await client.delete("/v1/my/library/\(seriesId)")
     }
 
     func update(seriesId: Int, change: LibraryChange) async throws(APIError) {
