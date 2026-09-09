@@ -45,13 +45,30 @@ enum Palette {
     // MARK: Accent
 
     /// oklch(0.72 0.16 30) — approximately #FF7F63.
-    static let accent = Color(hex: 0xFF7F63)
+    /// The mockup states this as `oklch(0.72 0.16 30)`, which converts to
+    /// #F87966. It was #FF7F63 before, a difference of about 7/255 per channel
+    /// — invisible, but it is the spec, so it is the spec.
+    static let accent = Color(hex: 0xF87966)
     /// Text and icons on an accent fill. Never white: white on this fails contrast.
     static let onAccent = Color(hex: 0x180B06)
     /// oklch(0.72 0.16 145). Used only for the cached indicator dot.
     static let positive = Color(hex: 0x4FC98A)
 
     // MARK: Borders — always 0.5pt
+
+    /// Meta lines and inactive tab labels. Between textSecondary and
+    /// textTertiary, and the mockup uses it often enough to name.
+    static let textMuted = Color(hex: 0xEBEBF5).opacity(0.50)
+    /// The label under a stat number.
+    static let textFaint = Color(hex: 0xEBEBF5).opacity(0.40)
+
+    /// A floating control's fill, under the glass. The mockup's
+    /// rgba(30,30,36,0.62).
+    static let surfaceControl = Color(hex: 0x1E1E24).opacity(0.62)
+    /// The dark badge sitting on a cover. rgba(10,10,12,0.6).
+    static let surfaceBadge = Color(hex: 0x0A0A0C).opacity(0.60)
+    /// A floating control's edge. Brighter than `border`, which is for cards.
+    static let borderControl = Color.white.opacity(0.14)
 
     static let hairline = Color.white.opacity(0.08)
     static let border = Color.white.opacity(0.10)

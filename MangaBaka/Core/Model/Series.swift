@@ -38,6 +38,20 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// The same series on other trackers, with their ratings. Also real —
     /// the mockup faked these as arithmetic offsets from the base rating.
     let source: [String: TrackerEntry]?
+    /// First publication year. Present on the v1 endpoints; the v2 lean schema
+    /// returns null for it even with `schema=full` (verified 2026-09-09).
+    let year: Int?
+    /// How many people rated it. The reverse of `year`: present on v2, absent
+    /// on v1. Neither endpoint carries both, so the meta line renders whichever
+    /// parts it actually has rather than waiting for a complete set.
+    let ratingCount: Int?
+    /// Tag names, flattened.
+    ///
+    /// Three shapes across the API: v1 returns an array of plain strings, v2
+    /// with `schema=full` returns an array of objects, and the v2 lean schema
+    /// omits them. Normalised to names here so a caller does not care which it
+    /// was handed.
+    let tags: [String]?
 
     struct Publisher: Codable, Equatable, Sendable, Hashable {
         let name: String
@@ -97,6 +111,9 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         rating = container.lenientDouble(forKey: .rating)
         totalChapters = container.lenientDouble(forKey: .totalChapters)
         finalVolume = container.lenientDouble(forKey: .finalVolume)
+        year = container.lenientDouble(forKey: .year).map { Int($0) }
+        ratingCount = container.lenientDouble(forKey: .ratingCount).map { Int($0) }
+        tags = container.lenientTagNames(forKey: .tags)
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -106,7 +123,10 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         description: String?, authors: [String]?, artists: [String]?, status: String?,
         rating: Double?, type: String?, contentRating: String?, totalChapters: Double?,
         finalVolume: Double?, publishers: [Publisher]?, anime: AnimeAdaptation?,
-        source: [String: TrackerEntry]?
+        source: [String: TrackerEntry]?,
+        year: Int? = nil,
+        ratingCount: Int? = nil,
+        tags: [String]? = nil
     ) {
         self.id = id
         self.state = state
@@ -125,6 +145,9 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         self.publishers = publishers
         self.anime = anime
         self.source = source
+        self.year = year
+        self.ratingCount = ratingCount
+        self.tags = tags
     }
 
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
@@ -146,7 +169,19 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     }
 }
 
+private struct NamedTag: Decodable { let name: String? }
+
 private extension KeyedDecodingContainer {
+    /// Tag names, whichever of the API's three shapes arrived.
+    func lenientTagNames(forKey key: Key) -> [String]? {
+        if let names = try? decodeIfPresent([String].self, forKey: key) { return names }
+        if let objects = try? decodeIfPresent([NamedTag].self, forKey: key) {
+            return objects.compactMap(\.name)
+        }
+        // The lean v2 schema sends a placeholder string rather than a list.
+        return nil
+    }
+
     /// A number the API sends as a number on one endpoint and as a string on
     /// another. Returns nil rather than throwing: an unparsable value means the
     /// field is unknown, which the model already allows for, and throwing here

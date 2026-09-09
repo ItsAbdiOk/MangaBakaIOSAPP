@@ -127,9 +127,10 @@ struct DynamicTypeLayoutTests {
     /// The stack's caption is two stacked lines of scaled text over a card.
     /// Without this it truncates to a single line at accessibility sizes and
     /// the reason — the whole point of showing it — is the half that goes.
-    @Test("The stack's source caption is allowed to wrap")
+    @Test("The stack's caption is allowed to wrap")
     func stackCaptionWraps() throws {
-        let text = try source("MangaBaka/Features/Stack/StackView.swift")
+        // Lives in StackSections.swift since StackView hit the body-length cap.
+        let text = try source("MangaBaka/Features/Stack/StackSections.swift")
         #expect(text.contains("fixedSize(horizontal: false, vertical: true)"))
         #expect(text.contains("multilineTextAlignment(.center)"))
     }
@@ -220,13 +221,20 @@ struct InteractiveControlTests {
         #expect(source.contains("allowsHitTesting(false)"))
     }
 
-    /// The card behind showed its own title at half opacity directly beneath
-    /// the front card's, which reads as a ghosted duplicate of the wrong series
-    /// rather than as depth. Only the cover should peek.
-    @Test("The peeking card shows no text")
+    /// The card behind used to show its own title at half opacity directly
+    /// beneath the front card's, reading as a ghosted duplicate of the wrong
+    /// series rather than as depth.
+    ///
+    /// The mockup resolves this differently and better: neighbours peek in from
+    /// the sides as cover art only. `neighbour` is built from `CoverImage`, so
+    /// there is structurally no text to ghost.
+    @Test("The peeking neighbours are cover art only, and silent to VoiceOver")
     func peekingCardHidesText() throws {
         let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
-        #expect(source.contains("card(next, showsText: false)"))
+        #expect(source.contains("private func neighbour"))
+        #expect(source.contains("accessibilityHidden(true)"))
+        // The old text-bearing background card is gone.
+        #expect(!source.contains("card(next"))
     }
 }
 

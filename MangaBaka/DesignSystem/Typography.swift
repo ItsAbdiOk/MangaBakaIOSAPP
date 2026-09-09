@@ -64,6 +64,23 @@ extension View {
     func typeStackTitle() -> some View {
         scaledFont(size: 28, weight: .bold, relativeTo: .title, tracking: -0.9)
     }
+    /// A stat, as in the stack's saved counter.
+    func typeStatNumber() -> some View {
+        scaledFont(size: 22, weight: .bold, relativeTo: .title2, tracking: -0.5)
+    }
+    /// The series title on a stack card. Not to be confused with
+    /// `typeStackTitle`, which is the screen's own heading.
+    func typeStackCardTitle() -> some View {
+        scaledFont(size: 19, weight: .bold, relativeTo: .title3, tracking: -0.4, lineHeight: 1.25)
+    }
+    /// A line telling the reader how a surface works.
+    func typeInstruction() -> some View {
+        scaledFont(size: 12.5, weight: .regular, relativeTo: .footnote)
+    }
+    /// SKIP and SAVE on the stack card.
+    func typeBadge() -> some View {
+        scaledFont(size: 12, weight: .bold, relativeTo: .caption, tracking: 1)
+    }
     func typeDetailHeroTitle() -> some View {
         scaledFont(size: 24, weight: .bold, relativeTo: .title2, tracking: -0.7, lineHeight: 1.15)
     }

@@ -188,3 +188,70 @@ struct SearchAndMixTests {
         #expect(bare.reason == nil)
     }
 }
+
+/// The stack card shows tag chips, and the lean v2 schema omits tags entirely,
+/// so the surprise path has to ask for the full one or the chips silently never
+/// render. Verified against the live API 2026-09-09: lean returns no tags,
+/// `schema=full` returns 30.
+@Suite("Stack card data", .serialized)
+struct StackCardDataTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    @Test("The surprise feed asks for the schema that carries tags")
+    func surpriseAsksForTags() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: try AppDatabase.inMemory(),
+            clock: TestClock()
+        )
+        _ = await repository.feed(.surprise, forceRefresh: true)
+
+        let url = try #require(URLProtocolStub.requests.first?.url)
+        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(items.first { $0.name == "schema" }?.value == "full")
+    }
+
+    /// Tags arrive as plain strings from v1 and as objects from v2's full
+    /// schema. Both have to land as names or the chips are empty on one path.
+    @Test("Tag names decode from both API shapes")
+    func tagsDecodeFromBothShapes() throws {
+        let decoder = Fixture.decoder()
+        let v1 = try decoder.decode(Series.self, from: Data("""
+        {"id":1,"state":"active","cover":{},"tags":["Revenge","Historical"]}
+        """.utf8))
+        #expect(v1.tags == ["Revenge", "Historical"])
+
+        let v2 = try decoder.decode(Series.self, from: Data("""
+        {"id":1,"state":"active","cover":{},
+         "tags":[{"id":38,"name":"Revenge"},{"id":39,"name":"Historical"}]}
+        """.utf8))
+        #expect(v2.tags == ["Revenge", "Historical"])
+    }
+
+    /// No endpoint carries year, rating count and tags together, so the meta
+    /// line has to render whichever parts arrived.
+    @Test("Year and rating count decode whether string or number")
+    func metaFieldsAreLenient() throws {
+        let decoder = Fixture.decoder()
+        let asNumbers = try decoder.decode(Series.self, from: Data("""
+        {"id":1,"state":"active","cover":{},"year":2005,"rating_count":1128}
+        """.utf8))
+        #expect(asNumbers.year == 2005)
+        #expect(asNumbers.ratingCount == 1128)
+
+        let asStrings = try decoder.decode(Series.self, from: Data("""
+        {"id":1,"state":"active","cover":{},"year":"2005","rating_count":"1128"}
+        """.utf8))
+        #expect(asStrings.year == 2005)
+        #expect(asStrings.ratingCount == 1128)
+    }
+}

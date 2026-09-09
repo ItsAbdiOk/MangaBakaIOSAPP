@@ -29,6 +29,9 @@ enum Metrics {
 
     static let radiusSheet: CGFloat = 26
     static let radiusStackCard: CGFloat = 20
+    static let radiusStackNeighbour: CGFloat = 14
+    static let radiusBadge: CGFloat = 10
+    static let radiusSavedThumb: CGFloat = 9
     /// Cards and primary CTAs.
     static let radiusCard: CGFloat = 16
     /// A cover inside a horizontal row.
@@ -58,6 +61,22 @@ enum Metrics {
     static let coverDetailHeroWidth: CGFloat = 126
     static let coverSeedWidth: CGFloat = 82
     static let coverSavedStripWidth: CGFloat = 74
+
+    // MARK: The stack, as the mockup specifies it
+
+    /// The card area's fixed height. The cards centre inside it.
+    static let stackArea: CGFloat = 452
+    static let stackCardWidth: CGFloat = 268
+    /// The neighbouring covers that peek in from either side.
+    static let stackNeighbourWidth: CGFloat = 132
+    /// How far off-screen they sit, so only an edge shows.
+    static let stackNeighbourInset: CGFloat = 56
+    static let stackNeighbourOpacity: CGFloat = 0.3
+
+    static let actionSkip: CGFloat = 56
+    static let actionDetails: CGFloat = 48
+    static let actionSave: CGFloat = 64
+    static let actionGap: CGFloat = 16
     static let coverUpcomingThumb: CGFloat = 52
 
     /// Every cover in the app is 2:3.

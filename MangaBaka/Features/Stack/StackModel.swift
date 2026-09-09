@@ -45,6 +45,15 @@ final class StackModel {
 
     private var reasons: [Int: String] = [:]
 
+    /// Covers already saved, newest first, for the strip under the card.
+    private(set) var saved: [Series] = []
+    /// What the header counts.
+    var savedCount: Int { saved.count }
+
+    /// The cover peeking in from the left: the last one reacted to, so the
+    /// stack reads as a sequence with a behind and an ahead.
+    private(set) var previous: Series?
+
     private let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
     private let library: (any LibraryProviding)?
@@ -82,8 +91,13 @@ final class StackModel {
     var next: Series? { queue.count > 1 ? queue[1] : nil }
 
     func loadIfNeeded() async {
+        await refreshSaved()
         guard queue.isEmpty, !isLoading else { return }
         await refill()
+    }
+
+    private func refreshSaved() async {
+        saved = ((try? await shelf.entries(.saved)) ?? [])
     }
 
     func refill() async {
@@ -142,7 +156,10 @@ final class StackModel {
         guard let series = current else { return }
         queue.removeFirst()
         reacted.insert(series.id)
+        // The card just dealt with becomes the one peeking in from behind.
+        previous = series
         try? await shelf.record(series, as: kind)
+        if kind == .saved { saved.insert(series, at: 0) }
 
         // A save changes what the next blend should be built from, so the pool
         // is rebuilt rather than left pointing at the shelf as it was on load.

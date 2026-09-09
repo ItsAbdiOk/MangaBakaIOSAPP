@@ -186,7 +186,8 @@ struct PersonalRecommendation: Decodable, Identifiable, Sendable, Equatable {
             finalVolume: nil,
             publishers: nil,
             anime: nil,
-            source: nil
+            source: nil,
+            year: publishedYear
         )
     }
 }

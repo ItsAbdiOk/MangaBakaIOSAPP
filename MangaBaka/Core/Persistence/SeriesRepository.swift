@@ -187,7 +187,14 @@ enum FeedKind: Sendable, Hashable {
             seeds.map { URLQueryItem(name: "series", value: String($0)) }
                 + [URLQueryItem(name: "strict", value: "false")]
         case .surprise:
-            [URLQueryItem(name: "sort_by", value: "random")]
+            [
+                URLQueryItem(name: "sort_by", value: "random"),
+                // The lean v2 schema omits tags entirely, so the stack card's
+                // chips would never appear on this path. Asked for only here,
+                // where they are shown — the discovery rows do not need them
+                // and the fuller response is not free.
+                URLQueryItem(name: "schema", value: "full")
+            ]
         default:
             []
         }

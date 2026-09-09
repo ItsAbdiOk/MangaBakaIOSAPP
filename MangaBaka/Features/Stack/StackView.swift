@@ -1,16 +1,15 @@
 import SwiftUI
 
-/// Cover-forward triage. Drag right to save, left to skip, tap for detail.
+/// Cover-forward triage, laid out as the mockup specifies.
 ///
-/// Physics come from the design spec: 0.012° of rotation per point of drag, a
-/// 92pt commit threshold, and badge opacity tied to |dx| / 80 so the decision
-/// is legible before you let go.
+/// Physics come from the mockup's own script: 0.012 degrees of rotation per
+/// point of drag, a 92pt commit threshold, and badge opacity tied to |dx| / 80
+/// so the decision is legible before the reader lets go.
 struct StackView: View {
     @State private var model: StackModel
     @Binding private var path: [Series]
 
     @State private var drag: CGSize = .zero
-    @State private var isDragging = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let commitThreshold: CGFloat = 92
@@ -23,177 +22,230 @@ struct StackView: View {
     }
 
     var body: some View {
-        // A VStack, not a ZStack with the caption overlaid.
-        //
-        // Overlaid, the caption floated at the bottom of the same space the
-        // card occupies, so a title that wrapped to two lines rendered straight
-        // through the reason text underneath it (observed on device). Giving
-        // the caption its own row means the cards centre in what is left and
-        // the two can never meet.
-        VStack(spacing: 0) {
-            cardArea
-            caption
+        ScrollView {
+            VStack(spacing: 0) {
+                header
+                cardArea
+                if let current = model.current {
+                    StackCaption(series: current, reason: model.currentReason)
+                    actions
+                    StackSavedStrip(saved: model.saved, path: $path)
+                }
+            }
+            .padding(.top, 100)
+            .padding(.bottom, Metrics.scrollBottomInset)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .scrollIndicators(.hidden)
+        .background(Palette.ground)
         .task { await model.loadIfNeeded() }
     }
 
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("The stack")
+                    .typeStackTitle()
+                    .foregroundStyle(Palette.textEmphasis)
+                Text("Drag the cover aside · tap it to open")
+                    .typeInstruction()
+                    .foregroundStyle(Palette.textTertiary)
+            }
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("\(model.savedCount)")
+                    .typeStatNumber()
+                    .foregroundStyle(Palette.accent)
+                Text("saved")
+                    .typeGridMeta()
+                    .foregroundStyle(Palette.textFaint)
+            }
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(model.savedCount) saved")
+        }
+        .padding(.horizontal, Metrics.gutterStack)
+        .padding(.bottom, 14)
+    }
+
+    // MARK: - Cards
+
+    @ViewBuilder
     private var cardArea: some View {
         ZStack {
             if let current = model.current {
-                // The next card, peeking behind, so the stack reads as a stack.
-                if let next = model.next {
-                    card(next, showsText: false)
-                        .scaleEffect(0.94)
-                        .offset(y: 14)
-                        .opacity(0.5)
-                        .blur(radius: 1)
-                        .allowsHitTesting(false)
-                }
+                // Neighbours peek in from either side rather than stacking
+                // behind, so the stack reads as a sequence with a behind and an
+                // ahead rather than a pile.
+                neighbour(model.previous, alignment: .leading)
+                neighbour(model.next, alignment: .trailing)
 
                 card(current)
                     .offset(drag)
                     .rotationEffect(.degrees(drag.width * rotationPerPoint))
-                    .overlay(alignment: .top) { decisionBadges }
                     .gesture(dragGesture)
                     .onTapGesture { path.append(current) }
                     // VoiceOver cannot perform a drag, so saving and skipping
-                    // are exposed as actions. Without these the entire screen
-                    // is unusable with the screen reader on.
+                    // are exposed as actions too. The buttons below are the
+                    // visible equivalent.
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(current.displayTitle ?? "Untitled series")
                     .accessibilityHint("Double tap for details")
-                    .accessibilityAction(named: "Save") {
-                        Task { await model.react(.saved) }
-                    }
-                    .accessibilityAction(named: "Skip") {
-                        Task { await model.react(.skipped) }
-                    }
+                    .accessibilityAction(named: "Save") { Task { await model.react(.saved) } }
+                    .accessibilityAction(named: "Skip") { Task { await model.react(.skipped) } }
             } else if model.isLoading {
                 ProgressView().tint(Palette.textTertiary)
             } else {
                 emptyState
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(height: model.current == nil ? nil : Metrics.stackArea)
+        .frame(maxWidth: .infinity)
+        .clipped()
     }
 
-    /// Says what the queue is built from, because "are these actually based on
-    /// my taste?" is otherwise unanswerable from the screen. A random queue
-    /// says so rather than passing itself off as personalised.
     @ViewBuilder
-    private var caption: some View {
-        if model.current != nil {
-            VStack(spacing: 4) {
-                // The per-card reason when the recommender gave one, and the
-                // source underneath. Only the profile recommender explains
-                // itself; nothing is invented for the others, and an
-                // explanation that cannot be shown safely is simply absent.
-                if let reason = model.currentReason {
-                    Text(reason)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textSecondary)
-                }
-                Text(model.source.caption)
-                    .typeFootnote()
-                    .foregroundStyle(Palette.textTertiary)
-            }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, Metrics.gutter)
-            .padding(.bottom, Metrics.tabBarClearance)
-            .accessibilityElement(children: .combine)
+    private func neighbour(_ series: Series?, alignment: Alignment) -> some View {
+        if let series {
+            CoverImage(
+                cover: series.cover,
+                width: Metrics.stackNeighbourWidth,
+                radius: Metrics.radiusStackNeighbour
+            )
+            .opacity(Metrics.stackNeighbourOpacity)
+            .blur(radius: 1)
+            .frame(maxWidth: .infinity, alignment: alignment)
+            .offset(x: alignment == .leading ? -Metrics.stackNeighbourInset
+                                             : Metrics.stackNeighbourInset)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
+    private func card(_ series: Series) -> some View {
+        CoverImage(
+            cover: series.cover,
+            width: Metrics.stackCardWidth,
+            radius: Metrics.radiusStackCard,
+            accessibilityText: series.displayTitle ?? "Untitled series"
+        )
+        .shadow(color: .black.opacity(0.65), radius: 30, y: 24)
+        .overlay(alignment: .topLeading) {
+            badge("SKIP", fill: Palette.surfaceBadge, text: Palette.textPrimary, bordered: true)
+                .opacity(drag.width < 0 ? badgeStrength : 0)
+                .padding(16)
+        }
+        .overlay(alignment: .topTrailing) {
+            badge("SAVE", fill: Palette.accent, text: Palette.onAccent, bordered: false)
+                .opacity(drag.width > 0 ? badgeStrength : 0)
+                .padding(16)
+        }
+    }
+
+    private var badgeStrength: Double {
+        Double(min(abs(drag.width) / badgeDivisor, 1))
+    }
+
+    private func badge(_ text: String, fill: Color, text color: Color, bordered: Bool) -> some View {
+        Text(text)
+            .typeBadge()
+            .foregroundStyle(color)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(fill, in: RoundedRectangle(cornerRadius: Metrics.radiusBadge, style: .continuous))
+            .overlay {
+                if bordered {
+                    RoundedRectangle(cornerRadius: Metrics.radiusBadge, style: .continuous)
+                        .strokeBorder(Palette.glassEdge, lineWidth: 0.5)
+                }
+            }
+    }
+
     private var dragGesture: some Gesture {
-        DragGesture()
+        // The mockup's card sets `touch-action: pan-y`: the card takes
+        // horizontal drags, the page keeps vertical scrolling. Without the
+        // minimum distance this gesture swallowed every vertical swipe and the
+        // page below the card — the actions and the saved strip — could not be
+        // reached at all.
+        DragGesture(minimumDistance: 12)
             .onChanged { value in
-                isDragging = true
+                // Only claim the gesture once it is clearly horizontal.
+                guard abs(value.translation.width) >= abs(value.translation.height)
+                else { return }
                 drag = value.translation
             }
             .onEnded { value in
                 let dx = value.translation.width
-                if abs(dx) > commitThreshold {
-                    let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
-                    // Throw the card off-screen in the direction of travel.
-                    // A card thrown the width of the screen is a lot of motion.
-                    // With Reduce Motion on, it simply goes.
-                    if reduceMotion {
-                        drag = .zero
-                    } else {
-                        withAnimation(.easeOut(duration: 0.22)) {
-                            drag.width = dx > 0 ? 700 : -700
-                        }
-                    }
-                    Task {
-                        await model.react(kind)
-                        drag = .zero
-                        isDragging = false
-                    }
+                // A vertical swipe never moved the card, so there is nothing to
+                // settle and nothing to commit.
+                guard drag != .zero else { return }
+                guard abs(dx) > commitThreshold else {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) { drag = .zero }
+                    return
+                }
+                let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
+                // A card thrown the width of the screen is a lot of motion.
+                // With Reduce Motion on, it simply goes.
+                if reduceMotion {
+                    drag = .zero
                 } else {
-                    // The spec's return spring.
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) {
-                        drag = .zero
-                    }
-                    isDragging = false
+                    withAnimation(.easeOut(duration: 0.22)) { drag.width = dx > 0 ? 700 : -700 }
+                }
+                Task {
+                    await model.react(kind)
+                    drag = .zero
                 }
             }
     }
 
-    /// - Parameter showsText: false for the card peeking behind. Its title used
-    ///   to render at half opacity directly under the front card's title, which
-    ///   read as a ghosted duplicate of the wrong series rather than as depth.
-    ///   Only the cover should peek.
-    private func card(_ series: Series, showsText: Bool = true) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            CoverImage(cover: series.cover, width: 268, radius: Metrics.radiusStackCard)
-                .shadow(color: .black.opacity(0.65), radius: 30, y: 24)
+    // MARK: - Caption, actions, saved
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(series.displayTitle ?? "Untitled series")
-                    .typeStackTitle()
+    private var actions: some View {
+        HStack(spacing: Metrics.actionGap) {
+            circleAction("xmark", size: Metrics.actionSkip, label: "Skip") {
+                Task { await model.react(.skipped) }
+            }
+
+            Button { if let current = model.current { path.append(current) } } label: {
+                Text("Details")
+                    .typeRowTitle()
                     .foregroundStyle(Palette.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let authors = series.authors, !authors.isEmpty {
-                    Text(authors.joined(separator: ", "))
-                        .typeSubtitle()
-                        .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(1)
-                }
+                    .padding(.horizontal, 20)
+                    .frame(height: Metrics.actionDetails)
+                    .background { Glass.floating(Capsule()) }
             }
-            .frame(width: 268, alignment: .leading)
-            // Hidden rather than removed, so both cards keep the same height
-            // and the one behind stays exactly the intended amount lower.
-            .opacity(showsText ? 1 : 0)
+            .buttonStyle(.plain)
+
+            Button { Task { await model.react(.saved) } } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(Palette.onAccent)
+                    .frame(width: Metrics.actionSave, height: Metrics.actionSave)
+                    .background(Palette.accent, in: Circle())
+                    .shadow(color: .black.opacity(0.5), radius: 13, y: 10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Save")
         }
-        .padding(.horizontal, Metrics.gutterStack)
+        .padding(.top, 22)
     }
 
-    /// SAVE and SKIP fade in with the drag, so the outcome is readable before
-    /// the reader commits to it.
-    private var decisionBadges: some View {
-        let strength = min(abs(drag.width) / badgeDivisor, 1)
-        return HStack {
-            badge("SKIP", Palette.textPrimary)
-                .opacity(drag.width < 0 ? strength : 0)
-            Spacer()
-            badge("SAVE", Palette.accent)
-                .opacity(drag.width > 0 ? strength : 0)
+    private func circleAction(
+        _ symbol: String,
+        size: CGFloat,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Palette.textSecondary)
+                .frame(width: size, height: size)
+                .background { Glass.floating(Circle()) }
         }
-        .padding(.horizontal, 34)
-        .padding(.top, 26)
-    }
-
-    private func badge(_ text: String, _ color: Color) -> some View {
-        Text(text)
-            .typeEyebrow()
-            .foregroundStyle(color)
-            .padding(.horizontal, 13)
-            .frame(height: Metrics.headerPill)
-            .overlay(Capsule().strokeBorder(color, lineWidth: 1.5))
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private var emptyState: some View {
@@ -214,5 +266,6 @@ struct StackView: View {
                 .padding(.top, 6)
         }
         .padding(.horizontal, 44)
+        .padding(.vertical, 60)
     }
 }
