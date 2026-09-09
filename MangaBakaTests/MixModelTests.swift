@@ -434,3 +434,81 @@ struct ExcludedStrandTests {
         #expect(model.excludedTags.isEmpty)
     }
 }
+
+/// Requiring tags in a blend, drawn from the blend's own DNA so every chip is a
+/// tag that blend actually contains.
+@Suite("Mix tag filter", .serialized)
+struct MixTagFilterTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeRepository() throws -> SeriesRepository {
+        SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: try AppDatabase.inMemory(),
+            clock: TestClock()
+        )
+    }
+
+    private func items(from request: URLRequest?) throws -> [URLQueryItem] {
+        let url = try #require(request?.url)
+        return try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+    }
+
+    @Test("Required tags reach a blend as repeated keys with a mode")
+    func tagsReachTheBlend() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        var filters = SearchQuery()
+        filters.tags = ["Kuudere", "Twins"]
+        filters.tagMode = "and"
+        _ = try await makeRepository().mix(seeds: [1], filters: filters, excludedTags: [])
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Kuudere", "Twins"])
+        #expect(sent.first { $0.name == "tag_mode" }?.value == "and")
+    }
+
+    /// Requiring a tag and excluding it are opposite instructions. Sending both
+    /// would ask the API for something impossible and return nothing, which on
+    /// screen reads as "no matches" rather than as a contradiction.
+    @Test("A required tag and an excluded strand are different parameters")
+    func requireAndExcludeAreDistinct() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        var filters = SearchQuery()
+        filters.tags = ["Twins"]
+        _ = try await makeRepository().mix(seeds: [1], filters: filters, excludedTags: [467])
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        #expect(sent.contains { $0.name == "tag" && $0.value == "Twins" })
+        #expect(sent.contains { $0.name == "tag_not" && $0.value == "467" })
+    }
+
+    /// One tag cannot be combined with anything, so a mode would be noise.
+    @Test("A single required tag sends no mode")
+    func singleTagNoMode() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        var filters = SearchQuery()
+        filters.tags = ["Kuudere"]
+        filters.tagMode = "and"
+        _ = try await makeRepository().mix(seeds: [1], filters: filters, excludedTags: [])
+
+        let names = try items(from: URLProtocolStub.requests.first).map(\.name)
+        #expect(names.contains("tag"))
+        #expect(!names.contains("tag_mode"))
+    }
+}

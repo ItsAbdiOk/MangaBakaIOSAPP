@@ -139,19 +139,92 @@ struct MixView: View {
     // MARK: Filters
 
     private var filterStrip: some View {
-        FlowLayout {
-            ForEach(Self.typeOptions, id: \.self) { type in
-                chip(type.capitalized, isSelected: model.filters.types.contains(type)) {
-                    toggleType(type)
+        VStack(alignment: .leading, spacing: 0) {
+            FlowLayout {
+                ForEach(Self.typeOptions, id: \.self) { type in
+                    chip(type.capitalized, isSelected: model.filters.types.contains(type)) {
+                        toggleType(type)
+                    }
+                }
+                ForEach(Self.ratingOptions, id: \.label) { option in
+                    chip(option.label, isSelected: model.filters.minimumRating == option.minimum) {
+                        model.filters.minimumRating = option.minimum
+                    }
                 }
             }
-            ForEach(Self.ratingOptions, id: \.label) { option in
-                chip(option.label, isSelected: model.filters.minimumRating == option.minimum) {
-                    model.filters.minimumRating = option.minimum
-                }
-            }
+            tagFilter
         }
         .padding(.horizontal, Metrics.gutter)
+    }
+
+    /// Tags to require in the blend, with the mockup's AND/OR mode.
+    ///
+    /// Only offered once a blend has run: before that there is no DNA to pick
+    /// from, and a blank tag field on a screen with no results is a control
+    /// with nothing to control.
+    @ViewBuilder
+    private var tagFilter: some View {
+        if !model.dna.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Eyebrow(text: "Require tags")
+                    Spacer(minLength: 0)
+                    if model.filters.tags.count > 1 {
+                        Button { toggleTagMode() } label: {
+                            Text(model.filters.tagMode == "and" ? "ALL" : "ANY")
+                                .typeTabLabel()
+                                .tracking(0.6)
+                                .foregroundStyle(Palette.textSecondary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 4)
+                                .background(Palette.surfaceChip, in: RoundedRectangle(
+                                    cornerRadius: 7, style: .continuous
+                                ))
+                                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .strokeBorder(Palette.borderPill, lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            model.filters.tagMode == "and"
+                                ? "Requiring all tags. Switch to any."
+                                : "Requiring any tag. Switch to all."
+                        )
+                    }
+                }
+
+                // Drawn from the blend's own DNA, so every chip is a tag this
+                // blend actually contains rather than a guess at the taxonomy.
+                FlowLayout {
+                    ForEach(model.dna.strands) { strand in
+                        chip(
+                            strand.name,
+                            isSelected: model.filters.tags.contains(strand.name)
+                        ) {
+                            toggleTag(strand.name)
+                        }
+                    }
+                }
+            }
+            .padding(.top, Metrics.gapCovers)
+        }
+    }
+
+    private func toggleTag(_ name: String) {
+        if let index = model.filters.tags.firstIndex(of: name) {
+            model.filters.tags.remove(at: index)
+        } else {
+            model.filters.tags.append(name)
+        }
+        // Two or more tags need a rule for combining them; one does not.
+        if model.filters.tags.count > 1, model.filters.tagMode == nil {
+            model.filters.tagMode = "and"
+        }
+        Task { await model.run() }
+    }
+
+    private func toggleTagMode() {
+        model.filters.tagMode = model.filters.tagMode == "and" ? "or" : "and"
+        Task { await model.run() }
     }
 
     private func toggleType(_ type: String) {
