@@ -9,7 +9,8 @@ struct SeriesDetailView: View {
     let libraryStore: LibraryModel
     /// The release schedule, read from its cache only — see `cachedCadence`.
     let schedule: ReleaseScheduleService?
-    let characters: ShikimoriClient?
+    let characters: CharacterService?
+    let taste: TasteProfile?
     @Binding var path: [Series]
     /// Sends this series to Mix as a seed and switches to that tab.
     var onUseAsSeed: ((Series) -> Void)?
@@ -20,6 +21,7 @@ struct SeriesDetailView: View {
     @State private var similar: [Series] = []
     @State private var alsoLike: [Series] = []
     @State private var extras = SeriesExtras()
+    @State private var favouredTags: Set<String> = []
     @State private var cast: [SeriesCharacter] = []
     @State private var isCastLoading = false
     @State private var cadence: Cadence?
@@ -48,7 +50,7 @@ struct SeriesDetailView: View {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
-                DetailTags(tags: extras.tags) { tag in
+                DetailTags(tags: extras.tags, favoured: favouredTags) { tag in
                     onOpenTag?(tag)
                 }
                 DetailCredits(series: series)
@@ -258,20 +260,29 @@ struct SeriesDetailView: View {
         isLoading = false
         async let cast: Void = loadCast()
         async let cadence: Void = loadCadence()
-        _ = await (cast, cadence)
+        async let taste: Void = loadTaste()
+        _ = await (cast, cadence, taste)
     }
 
-    /// Shikimori's id comes from MangaBaka's own `source` block, so no lookup
-    /// is needed to find it — a series either carries one or has no cast to
-    /// show, and in the second case nothing is asked and no row appears.
+    /// Cached for the session after the first series page, so this is one
+    /// request per launch rather than one per page.
+    private func loadTaste() async {
+        favouredTags = await taste?.favouredTagNames() ?? []
+    }
+
+    /// Both tracker ids come from MangaBaka's own `source` block, so no lookup
+    /// is needed to find them. A series carrying neither has no cast to show,
+    /// and in that case nothing is asked and no row appears.
     private func loadCast() async {
         guard let characters,
-              let raw = series.source?["shikimori"]?.id,
-              let id = Int(raw)
+              series.aniListID != nil || series.shikimoriID != nil
         else { return }
         isCastLoading = true
         defer { isCastLoading = false }
-        cast = (try? await characters.characters(mangaId: id)) ?? []
+        cast = await characters.characters(
+            aniListID: series.aniListID,
+            shikimoriID: series.shikimoriID
+        )
     }
 
     /// Asked separately from everything else, and after it.

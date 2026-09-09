@@ -96,6 +96,9 @@ struct DetailCredits: View {
 /// specifically this part of it" — was missing.
 struct DetailTags: View {
     let tags: [String]
+    /// The reader's own tag affinities, lowercased. Empty means no profile, in
+    /// which case the API's order stands.
+    var favoured: Set<String> = []
     let onOpen: (String) -> Void
 
     @State private var isExpanded = false
@@ -107,8 +110,18 @@ struct DetailTags: View {
     /// the rest are one tap away.
     static let collapsedLimit = 12
 
+    /// The reader's own interests first, then the API's order.
+    ///
+    /// This is what makes the cap defensible. Without it the twelve shown are
+    /// whichever the API listed first, so a reader who reads fantasy and action
+    /// can have both sitting behind "+104 more" on a series that is exactly
+    /// what they like.
+    var ordered: [String] {
+        TagOrdering.favouredFirst(tags, favoured: favoured)
+    }
+
     var visible: [String] {
-        isExpanded ? tags : Array(tags.prefix(Self.collapsedLimit))
+        isExpanded ? ordered : Array(ordered.prefix(Self.collapsedLimit))
     }
 
     var hiddenCount: Int { max(0, tags.count - Self.collapsedLimit) }
@@ -117,18 +130,26 @@ struct DetailTags: View {
         if !tags.isEmpty {
             FlowLayout(spacing: Metrics.gapChips) {
                 ForEach(visible, id: \.self) { tag in
+                    let isMine = TagOrdering.isFavoured(tag, favoured: favoured)
                     Button { onOpen(tag) } label: {
                         Text(tag)
                             .typeChip()
-                            .foregroundStyle(Palette.textSecondary)
+                            // Marked, not shouted: the ordering already does
+                            // the work, and a row of accent chips would read as
+                            // selection rather than affinity.
+                            .foregroundStyle(isMine ? Palette.accent : Palette.textSecondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .padding(.horizontal, 12)
                             .frame(minHeight: Metrics.headerPill)
                             .background(Palette.surfaceChip, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
+                            .overlay(Capsule().strokeBorder(
+                                isMine ? Palette.accent.opacity(0.45) : Palette.border,
+                                lineWidth: 0.5
+                            ))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(isMine ? "\(tag), one of your interests" : tag)
                     .accessibilityHint("Search for this tag")
                 }
                 if hiddenCount > 0, !isExpanded {

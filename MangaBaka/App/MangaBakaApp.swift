@@ -9,7 +9,8 @@ struct MangaBakaApp: App {
     private let formats: FormatPreferencesStore
     private let library: LibraryService
     private let schedule: ReleaseScheduleService
-    private let characters = ShikimoriClient()
+    private let characters = CharacterService()
+    private let taste: TasteProfile
     private let catalogue: CatalogueService
     private let blockedTags: BlockedTagsStore
     private let lenses = SearchLensStore()
@@ -75,6 +76,7 @@ struct MangaBakaApp: App {
         library = libraryService
 
         schedule = ReleaseScheduleService(library: libraryService, database: database)
+        taste = TasteProfile(library: libraryService)
         catalogue = CatalogueService(client: apiClient)
 
         let blocked = BlockedTagsStore()
@@ -123,6 +125,7 @@ struct MangaBakaApp: App {
                 library: library,
                 schedule: schedule,
                 characters: characters,
+                taste: taste,
                 catalogue: catalogue,
                 blockedTags: blockedTags,
                 lenses: lenses,

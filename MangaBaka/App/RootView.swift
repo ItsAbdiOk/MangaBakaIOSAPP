@@ -16,7 +16,8 @@ struct RootView: View {
     let formats: FormatPreferencesStore
     let library: LibraryService
     let schedule: ReleaseScheduleService
-    let characters: ShikimoriClient
+    let characters: CharacterService
+    let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
     let lenses: SearchLensStore
@@ -224,6 +225,7 @@ struct RootView: View {
             libraryStore: libraryModel ?? LibraryModel(library: library),
             schedule: schedule,
             characters: characters,
+            taste: taste,
             path: path,
             onUseAsSeed: { series in
                 mixModel?.addSeed(series)
