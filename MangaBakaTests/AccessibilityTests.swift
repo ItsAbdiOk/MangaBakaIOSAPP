@@ -411,10 +411,26 @@ struct DetailAccessibilityLayoutTests {
     )
     func stacksWhenTextIsLarge(_ path: String) throws {
         let source = try SourceTree.read(path)
+        // Either strategy is valid. `ViewThatFits` is the better one where the
+        // trigger is "does this fit" rather than "is the reader using
+        // accessibility sizes" — the stats strip wrapped its labels one notch
+        // above default, long before any accessibility size.
         #expect(
-            source.contains("typeSize.isAccessibilitySize"),
-            "\(path) puts content side by side with no accessibility-size fallback"
+            source.contains("typeSize.isAccessibilitySize") || source.contains("ViewThatFits"),
+            "\(path) puts content side by side with no fallback when the text grows"
         )
+    }
+
+    /// A one-word label that wraps is always a defect, never a layout. Without
+    /// `lineLimit(1)` the columns compromise by wrapping instead of declaring
+    /// a width they cannot meet, and `ViewThatFits` never drops to its
+    /// alternative because everything always "fits".
+    @Test("The stats strip's labels cannot wrap")
+    func statLabelsNeverWrap() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailStatsStrip.swift")
+        #expect(source.contains("ViewThatFits"))
+        #expect(source.contains("lineLimit(1)"))
+        #expect(source.contains("fixedSize(horizontal: true"))
     }
 
     /// A fixed `height` around text that scales is the specific bug: the frame

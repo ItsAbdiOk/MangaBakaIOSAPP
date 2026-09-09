@@ -82,7 +82,7 @@ struct LibraryControlTests {
     }
 
     private func model(_ library: FakeLibrary, id: Int = 7) -> LibraryControlModel {
-        LibraryControlModel(library: library, seriesId: id)
+        LibraryControlModel(library: library, store: LibraryModel(library: library), seriesId: id)
     }
 
     /// The control renders nothing until the library has answered. Flashing
@@ -114,14 +114,18 @@ struct LibraryControlTests {
     /// The library is paged with no by-series lookup, so the read is the
     /// expensive part. Re-reading on every redraw would hammer a rate limit
     /// shared with strangers.
-    @Test("The library is read once, not on every redraw")
+    /// The shared store pages once and caches; the control must not restart
+    /// that on every redraw. Re-reading a 937-entry library ten pages at a time
+    /// per series page opened would spend a rate limit shared with strangers.
+    @Test("The library is paged once, not on every redraw")
     func loadIsIdempotent() async {
         let library = FakeLibrary()
         let subject = model(library)
         await subject.load()
+        let afterFirst = library.reads
         await subject.load()
         await subject.load()
-        #expect(library.reads == 1)
+        #expect(library.reads == afterFirst)
     }
 
     @Test("Adding writes the chosen state and re-reads what the server holds")
@@ -224,7 +228,7 @@ struct LibraryControlReachabilityTests {
     @Test("The detail screen carries the control")
     func detailShowsIt() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
-        #expect(source.contains("LibraryControl(series: series, library: library)"))
+        #expect(source.contains("LibraryControl(series: series, library: library, store: libraryStore)"))
     }
 
     @Test("Every library state can be chosen when adding")

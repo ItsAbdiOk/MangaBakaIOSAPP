@@ -5,6 +5,8 @@ struct SeriesDetailView: View {
     let series: Series
     let repository: any SeriesRepositoryProtocol
     let library: any LibraryProviding
+    /// The app's one copy of the reader's library.
+    let libraryStore: LibraryModel
     /// The release schedule, read from its cache only — see `cachedCadence`.
     let schedule: ReleaseScheduleService?
     @Binding var path: [Series]
@@ -95,7 +97,7 @@ struct SeriesDetailView: View {
     }
 
     private var libraryAction: some View {
-        LibraryControl(series: series, library: library)
+        LibraryControl(series: series, library: library, store: libraryStore)
     }
 
     @ViewBuilder

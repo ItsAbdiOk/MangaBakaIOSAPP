@@ -11,6 +11,8 @@ import SwiftUI
 @Observable
 final class LibraryControlModel {
     private let library: any LibraryProviding
+    /// The app's one copy of the reader's library, shared with the Library tab.
+    private let store: LibraryModel
     private let seriesId: Int
 
     /// Nil while unknown, `.some(nil)` once we know it is not in the library.
@@ -21,20 +23,27 @@ final class LibraryControlModel {
     var isKnown: Bool { entry != nil }
     var current: LibraryEntry? { entry.flatMap { $0 } }
 
-    init(library: any LibraryProviding, seriesId: Int) {
+    init(library: any LibraryProviding, store: LibraryModel, seriesId: Int) {
         self.library = library
+        self.store = store
         self.seriesId = seriesId
     }
 
-    /// The library is paged and there is no by-series lookup, so this reads
-    /// the reader's own entries and finds the one for this series. It is the
-    /// same call `LibraryModel` makes, and the response is small enough that a
-    /// second read costs less than threading shared state through every screen
-    /// that can push a detail view.
+    /// Looks the series up in the shared library rather than fetching its own.
+    ///
+    /// This used to ask for one page of 500 and treat the answer as the whole
+    /// library. It is not: `/v1/my/series` is paged, which is why `LibraryModel`
+    /// loops until a short page. On a 937-entry library the control therefore
+    /// saw at most the first page and offered "Add to library" for series the
+    /// reader was already reading — the write would then 409, having told them
+    /// something false first.
+    ///
+    /// Sharing the store also means one paging pass per session instead of one
+    /// per series page opened, against a rate limit shared with strangers.
     func load() async {
         guard entry == nil else { return }
-        let entries = await library.library(page: 1, limit: 500)
-        entry = .some(entries.first { $0.seriesId == seriesId })
+        await store.load()
+        entry = .some(store.entries.first { $0.seriesId == seriesId })
     }
 
     func add(state: LibraryEntry.State) async {
@@ -47,8 +56,7 @@ final class LibraryControlModel {
             return
         }
         failure = nil
-        entry = nil
-        await load()
+        await refresh()
     }
 
     func apply(_ change: LibraryChange) async -> String? {
@@ -58,9 +66,15 @@ final class LibraryControlModel {
         } catch {
             return error.userFacingMessage
         }
-        entry = nil
-        await load()
+        await refresh()
         return nil
+    }
+
+    /// Re-reads the shared library after a write, so both this control and the
+    /// Library tab show what the server now holds rather than what was typed.
+    private func refresh() async {
+        await store.reload()
+        entry = .some(store.entries.first { $0.seriesId == seriesId })
     }
 
     /// One tap for the commonest edit there is. A reader who has just finished
@@ -84,7 +98,7 @@ final class LibraryControlModel {
             return
         }
         failure = nil
-        entry = .some(nil)
+        await refresh()
     }
 }
 
@@ -97,9 +111,13 @@ struct LibraryControl: View {
     @State private var isEditing = false
     @State private var isChoosingState = false
 
-    init(series: Series, library: any LibraryProviding) {
+    init(series: Series, library: any LibraryProviding, store: LibraryModel) {
         self.series = series
-        _model = State(initialValue: LibraryControlModel(library: library, seriesId: series.id))
+        _model = State(initialValue: LibraryControlModel(
+            library: library,
+            store: store,
+            seriesId: series.id
+        ))
     }
 
     var body: some View {

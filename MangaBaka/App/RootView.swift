@@ -220,6 +220,7 @@ struct RootView: View {
             series: series,
             repository: repository,
             library: library,
+            libraryStore: libraryModel ?? LibraryModel(library: library),
             schedule: schedule,
             path: path,
             onUseAsSeed: { series in

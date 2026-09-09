@@ -16,8 +16,6 @@ struct DetailStatsStrip: View {
     /// against the live API, on both the feeds and `/v2/series/{id}`.
     var year: Int?
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-
     struct Stat: Identifiable {
         let id: String
         let value: String
@@ -46,20 +44,25 @@ struct DetailStatsStrip: View {
 
     var body: some View {
         if !stats.isEmpty {
-            // Five segments across a phone are already narrow; at accessibility
-            // text sizes they cannot hold a five-digit rating count and a word,
-            // so the strip becomes a wrapping grid rather than clipping.
-            Group {
-                if typeSize.isAccessibilitySize {
-                    // Each segment takes its own width here. Left at
-                    // maxWidth: .infinity — right for five columns — a wrapped
-                    // segment claimed the whole row, so "2025 / STARTED" sat
-                    // alone across the screen at title size.
-                    FlowLayout(spacing: 0) { segments(fillsWidth: false) }
-                } else {
-                    HStack(spacing: 0) { segments(fillsWidth: true) }
-                }
+            // Five equal columns while they fit, then wrapped segments at their
+            // own widths.
+            //
+            // Not keyed to a text-size threshold, which is what shipped first
+            // and was wrong: at one notch above default — nowhere near an
+            // accessibility size — "CHAPTERS" and "VOLUMES" already wrapped
+            // inside their own columns and rendered as "CHAPTE / RS". The
+            // labels are one word each, so a wrap is always a defect, never a
+            // layout. `lineLimit(1)` makes the columns declare a width they
+            // cannot compromise on, and ViewThatFits drops to the wrapping
+            // arrangement at whatever size that stops fitting.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 0) { segments(fillsWidth: true) }
+                FlowLayout(spacing: 0) { segments(fillsWidth: false) }
             }
+            // The wrapped arrangement is only as wide as its content, so
+            // without this the card stopped short of the margin and read as a
+            // different component from the one that fits on one row.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.surface, in: RoundedRectangle(
                 cornerRadius: Metrics.radiusCard, style: .continuous
             ))
@@ -74,11 +77,14 @@ struct DetailStatsStrip: View {
                 Text(stat.value)
                     .typeRowTitle()
                     .foregroundStyle(Palette.textEmphasis)
+                    .lineLimit(1)
                 Text(stat.label.uppercased())
                     .typeGridMeta()
                     .tracking(0.4)
                     .foregroundStyle(Palette.textQuaternary)
+                    .lineLimit(1)
             }
+            .fixedSize(horizontal: true, vertical: false)
             .frame(maxWidth: fillsWidth ? .infinity : nil)
             .padding(.vertical, 12)
             .padding(.horizontal, fillsWidth ? 6 : 14)

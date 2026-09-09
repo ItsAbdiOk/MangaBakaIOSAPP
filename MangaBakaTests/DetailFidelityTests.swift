@@ -262,3 +262,41 @@ struct DetailTagsTests {
         #expect(view.hiddenCount == 0)
     }
 }
+
+/// The control claimed a series was not in the library when it was.
+///
+/// It asked `/v1/my/series` for one page of 500 and treated the answer as the
+/// whole library. The endpoint is paged — which is why `LibraryModel` loops
+/// until a short page — so on a 937-entry library the control saw at most the
+/// first page and offered "Add to library" for a series the reader was already
+/// reading. The write would then fail with a 409, having told them something
+/// false first.
+@Suite("The library lookup sees the whole library", .enabled(if: SourceTree.isAvailable))
+struct LibraryLookupTests {
+    @Test("The control reads the shared library rather than fetching a page")
+    func usesSharedStore() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/LibraryControl.swift")
+        #expect(source.contains("await store.load()"))
+        #expect(
+            !source.contains("library.library(page:"),
+            "LibraryControl is fetching its own page again — one page is not the library"
+        )
+    }
+
+    /// The loop is the thing that makes it the whole library. A single call,
+    /// at any limit, is a page.
+    @Test("The shared store pages until it runs out")
+    func storePages() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Library/LibraryModel.swift")
+        #expect(source.contains("for page in 1...10"))
+        #expect(source.contains("if batch.count < 100 { break }"))
+    }
+
+    /// A write has to refresh the shared copy, or the Library tab and the
+    /// series page disagree about the same entry.
+    @Test("Writes refresh the shared copy, not a local one")
+    func writesRefreshShared() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/LibraryControl.swift")
+        #expect(source.contains("await store.reload()"))
+    }
+}
