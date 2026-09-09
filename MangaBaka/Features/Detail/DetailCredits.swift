@@ -77,10 +77,25 @@ struct DetailTags: View {
     let tags: [String]
     let onOpen: (String) -> Void
 
+    @State private var isExpanded = false
+
+    /// The mockup draws three tags. Real series carry far more — Solo Leveling
+    /// has 43 — and rendering them all turned the page into a wall of chips
+    /// eight rows deep that pushed everything below it off the screen. Twelve
+    /// is roughly four rows, which reads as a summary rather than a dump, and
+    /// the rest are one tap away.
+    static let collapsedLimit = 12
+
+    var visible: [String] {
+        isExpanded ? tags : Array(tags.prefix(Self.collapsedLimit))
+    }
+
+    var hiddenCount: Int { max(0, tags.count - Self.collapsedLimit) }
+
     var body: some View {
         if !tags.isEmpty {
             FlowLayout(spacing: Metrics.gapChips) {
-                ForEach(tags, id: \.self) { tag in
+                ForEach(visible, id: \.self) { tag in
                     Button { onOpen(tag) } label: {
                         Text(tag)
                             .typeChip()
@@ -94,6 +109,20 @@ struct DetailTags: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Search for this tag")
+                }
+                if hiddenCount > 0, !isExpanded {
+                    Button { isExpanded = true } label: {
+                        Text("+\(hiddenCount) more")
+                            .typeChip()
+                            .foregroundStyle(Palette.accent)
+                            .lineLimit(1)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: Metrics.headerPill)
+                            .background(Palette.surfaceChip, in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show \(hiddenCount) more tags")
                 }
             }
             .padding(.horizontal, Metrics.gutter)

@@ -35,14 +35,14 @@ struct SeriesDetailView: View {
                 )
                 .padding(.top, 4)
                 actions
-                DetailStatsStrip(series: series)
+                DetailStatsStrip(series: series, year: extras.year)
                 if let description = series.description, !description.isEmpty {
                     Text(Self.prose(from: description))
                         .typeBody()
                         .foregroundStyle(Palette.textBody)
                         .padding(.horizontal, Metrics.gutter)
                 }
-                DetailTags(tags: series.tags ?? []) { tag in
+                DetailTags(tags: extras.tags) { tag in
                     onOpenTag?(tag)
                 }
                 DetailCredits(series: series)

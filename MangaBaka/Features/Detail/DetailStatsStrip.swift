@@ -12,6 +12,9 @@ import SwiftUI
 /// series with no volumes is ordinary, and "—" in a box is not information.
 struct DetailStatsStrip: View {
     let series: Series
+    /// From `/v1/series/{id}`, because v2 has no `year` field at all — checked
+    /// against the live API, on both the feeds and `/v2/series/{id}`.
+    var year: Int?
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -35,7 +38,7 @@ struct DetailStatsStrip: View {
         if let volumes = series.finalVolume, volumes > 0 {
             out.append(Stat(id: "Volumes", value: String(Int(volumes))))
         }
-        if let year = series.year, year > 0 {
+        if let year = year ?? series.year, year > 0 {
             out.append(Stat(id: "Started", value: String(year)))
         }
         return out

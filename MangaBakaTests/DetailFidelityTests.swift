@@ -25,7 +25,7 @@ struct DetailFidelityTests {
             year: 2018,
             ratingCount: 541_000
         )
-        let labels = DetailStatsStrip(series: series).stats.map(\.label)
+        let labels = DetailStatsStrip(series: series, year: 2018).stats.map(\.label)
         #expect(labels == ["Rating", "Ratings", "Chapters", "Volumes", "Started"])
     }
 
@@ -187,5 +187,78 @@ struct DescriptionParagraphTests {
         let rendered = String(SeriesDetailView.prose(from: source).characters)
         #expect(!rendered.contains("TappytoonKnown"))
         #expect(!rendered.contains("---"))
+    }
+}
+
+/// v1 and v2 are not the same API wearing two version numbers. This is the
+/// divergence that matters to the series page, measured against the live API on
+/// 2026-09-09 and asserted here so a refactor onto "just use v2" is caught.
+@Suite("Tags and year come from v1 only")
+@MainActor
+struct DetailVersionDivergenceTests {
+    /// `/v2/series/{id}` returns the same 23 keys the feeds do, and neither
+    /// `tags` nor `year` is among them. A series page built from a feed's own
+    /// copy therefore shows no tags and no start year — which is exactly the
+    /// bug: the tag row rendered empty and nobody could tell it from a series
+    /// that genuinely has no tags.
+    @Test("The v1 series fetch is what fills the tag row")
+    func extrasCarryTags() {
+        var extras = SeriesExtras()
+        #expect(extras.tags.isEmpty)
+        #expect(extras.year == nil)
+
+        extras.tags = ["Dungeon", "Level System"]
+        extras.year = 2018
+        #expect(extras.tags.count == 2)
+    }
+
+    /// The v2 copy has no year, so the strip has to take v1's. Preferring the
+    /// series' own value would silently drop the stat on every real page.
+    @Test("The strip prefers the v1 year over the series' own missing one")
+    func yearComesFromExtras() {
+        let series = SeriesFactory.make(id: 1, year: nil)
+        let strip = DetailStatsStrip(series: series, year: 2018)
+        #expect(strip.stats.contains { $0.label == "Started" && $0.value == "2018" })
+
+        let without = DetailStatsStrip(series: series, year: nil)
+        #expect(!without.stats.contains { $0.label == "Started" })
+    }
+}
+
+/// The mockup draws three tags. Solo Leveling carries 43, and rendering all of
+/// them made the tag row eight rows deep and pushed the rest of the page off
+/// the screen.
+@Suite("The tag row summarises rather than dumps")
+@MainActor
+struct DetailTagsTests {
+    private func tags(_ count: Int) -> [String] {
+        (1...count).map { "Tag \($0)" }
+    }
+
+    /// Solo Leveling's real 43, the case that produced the wall.
+    @Test("A long list shows the limit and offers the remainder")
+    func longListCollapses() {
+        let view = DetailTags(tags: tags(43)) { _ in }
+        #expect(view.visible.count == DetailTags.collapsedLimit)
+        #expect(view.hiddenCount == 43 - DetailTags.collapsedLimit)
+        // The first tags shown are the first the API returned, in order.
+        #expect(view.visible.first == "Tag 1")
+        #expect(view.visible.last == "Tag 12")
+    }
+
+    /// A "+0 more" button is a control that does nothing, and a list at exactly
+    /// the limit must not grow one.
+    @Test("A list at or under the limit has nothing to expand", arguments: [1, 3, 11, 12])
+    func shortListIsWhole(_ count: Int) {
+        let view = DetailTags(tags: tags(count)) { _ in }
+        #expect(view.visible.count == count)
+        #expect(view.hiddenCount == 0)
+    }
+
+    @Test("No tags renders nothing at all")
+    func noTagsNoRow() {
+        let view = DetailTags(tags: []) { _ in }
+        #expect(view.visible.isEmpty)
+        #expect(view.hiddenCount == 0)
     }
 }

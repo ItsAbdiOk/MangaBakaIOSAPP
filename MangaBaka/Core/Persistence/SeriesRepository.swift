@@ -76,6 +76,16 @@ struct SeriesExtras: Sendable, Equatable {
     var links: [SeriesLink] = []
     var news: [NewsItem] = []
     var relationships: [SeriesRelationship] = []
+    /// Tags, and a year, from `/v1/series/{id}`.
+    ///
+    /// Measured against the live API on 2026-09-09: v2 returns neither, on the
+    /// feed endpoints *or* on `/v2/series/{id}` — its keys are identical in
+    /// both, and `tags` and `year` are not among them. v1 carries `tags`,
+    /// `genres` and `year`. So the series page's tag row and its "Started"
+    /// stat are only ever populated from v1, and a series page built from a
+    /// feed's own copy shows neither.
+    var tags: [String] = []
+    var year: Int?
 }
 
 /// A search or filter request. Only non-nil fields are sent, so an untouched
@@ -546,11 +556,16 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         async let related: [SeriesRelationship]? = try? client.get(
             "/v1/series/\(seriesId)/relationships"
         )
+        // The only source of tags and year — see SeriesExtras.
+        async let full: Series? = try? client.get("/v1/series/\(seriesId)")
 
+        let detail = await full
         return await SeriesExtras(
             links: links ?? [],
             news: news ?? [],
-            relationships: (related ?? []).filter(\.series.isDiscoverable)
+            relationships: (related ?? []).filter(\.series.isDiscoverable),
+            tags: detail?.tags ?? [],
+            year: detail?.year
         )
     }
 
