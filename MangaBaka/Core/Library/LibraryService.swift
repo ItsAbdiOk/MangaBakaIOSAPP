@@ -19,6 +19,9 @@ protocol LibraryProviding: Sendable {
     /// Tags the reader has not opted into seeing named. Nil when unknown.
     func hiddenTagIDs() async -> Set<Int>?
 
+    /// The reader's strongest tag affinities, highest first.
+    func topGenres() async -> [TopGenre]
+
     /// Puts a series into the reader's library.
     ///
     /// Returns false when it was already there. Verified against the live API
@@ -257,6 +260,12 @@ actor LibraryService: LibraryProviding {
     }
 
     /// The reader's strongest tag affinities, highest first.
+    ///
+    /// Sent with no `limit`, deliberately. The parameter is documented, and
+    /// passing any value returns zero rows (verified 2026-09-09 with 20 and
+    /// 50). Omitting it returns the real answer, which is a handful — three on
+    /// a 937-series library — so this is a short list by nature, not a
+    /// truncated one.
     func topGenres() async -> [TopGenre] {
         let results: [TopGenre]? = try? await client.getResults(
             "/v1/my/series/discover/top-genres"

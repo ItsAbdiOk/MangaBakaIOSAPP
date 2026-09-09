@@ -20,6 +20,7 @@ struct ScheduleGroupingTests {
         ) async -> [PersonalRecommendation] { [] }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
+        func topGenres() async -> [TopGenre] { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
         func remove(seriesId: Int) async throws(APIError) {}

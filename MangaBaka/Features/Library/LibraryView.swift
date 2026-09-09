@@ -7,6 +7,7 @@ struct LibraryView: View {
     @Binding private var path: [Series]
     private let scheduleSummary: String?
     private let onOpenSchedule: () -> Void
+    private let onOpenTaste: () -> Void
     private let onOpenShelf: (LibraryEntry.State) -> Void
 
     init(
@@ -14,12 +15,14 @@ struct LibraryView: View {
         path: Binding<[Series]>,
         scheduleSummary: String?,
         onOpenSchedule: @escaping () -> Void,
+        onOpenTaste: @escaping () -> Void,
         onOpenShelf: @escaping (LibraryEntry.State) -> Void
     ) {
         _model = State(initialValue: model)
         _path = path
         self.scheduleSummary = scheduleSummary
         self.onOpenSchedule = onOpenSchedule
+        self.onOpenTaste = onOpenTaste
         self.onOpenShelf = onOpenShelf
     }
 
@@ -33,6 +36,7 @@ struct LibraryView: View {
                     noAccount
                 } else {
                     scheduleCard
+                    tasteCard
                     pickBackUp
                     shelfCards
                     if let shape = model.shapeLine {
@@ -131,6 +135,43 @@ struct LibraryView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 22)
+    }
+
+    private var tasteCard: some View {
+        Button(action: onOpenTaste) {
+            HStack(spacing: 12) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Palette.textPrimary)
+                    .frame(width: 34, height: 34)
+                    .background(Palette.surfacePill, in: RoundedRectangle(
+                        cornerRadius: 11, style: .continuous
+                    ))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Your taste")
+                        .typeRowTitle()
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("Counted from your own library")
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.textQuaternary)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 13)
+            .background(Palette.surface, in: RoundedRectangle(
+                cornerRadius: Metrics.radiusCard, style: .continuous
+            ))
+            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
+            .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Metrics.gutter)
+        .padding(.top, Metrics.gapCovers)
     }
 
     @ViewBuilder

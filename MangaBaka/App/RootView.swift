@@ -23,6 +23,7 @@ struct RootView: View {
     @State private var stackPath: [Series] = []
     @State private var shelfPath: [Series] = []
     @State private var showsSchedule = false
+    @State private var showsTaste = false
     @State private var libraryModel: LibraryModel?
     @State private var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
@@ -108,6 +109,7 @@ struct RootView: View {
                         path: $shelfPath,
                         scheduleSummary: nil,
                         onOpenSchedule: { showsSchedule = true },
+                        onOpenTaste: { showsTaste = true },
                         onOpenShelf: { state in
                             openShelf = libraryModel?.shelves.first { $0.state == state }
                         }
@@ -118,6 +120,12 @@ struct RootView: View {
                                 shelf: shelf,
                                 path: $shelfPath,
                                 onSave: saveLibraryChange
+                            )
+                        }
+                        .navigationDestination(isPresented: $showsTaste) {
+                            TasteView(
+                                model: TasteModel(library: library),
+                                entries: libraryModel?.entries ?? []
                             )
                         }
                         .navigationDestination(isPresented: $showsSchedule) {
@@ -228,7 +236,8 @@ struct RootView: View {
         // rather than onto shelfPath, so checking the path alone reported
         // "at root" while a screen was open — and the top bar covered its
         // back button.
-        case .library: shelfPath.isEmpty && openShelf == nil && !showsSchedule
+        case .library:
+            shelfPath.isEmpty && openShelf == nil && !showsSchedule && !showsTaste
         case .search: searchPath.isEmpty && !showsBrowse
         }
     }
@@ -243,6 +252,7 @@ struct RootView: View {
             shelfPath.removeAll()
             openShelf = nil
             showsSchedule = false
+            showsTaste = false
         case .search:
             searchPath.removeAll()
             showsBrowse = false
