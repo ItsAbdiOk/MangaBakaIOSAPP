@@ -205,17 +205,10 @@ struct LibraryTests {
 /// A personal access token never expires and grants full account access, so a
 /// Release build must not be able to carry one — anyone with the .ipa could
 /// extract it and act as its owner.
-@Suite("Release builds cannot carry a token")
+@Suite("Release builds cannot carry a token", .enabled(if: SourceTree.isAvailable))
 struct ReleaseTokenTests {
-    private var root: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
-
     private func config(_ name: String) throws -> String {
-        try String(contentsOfFile: "\(root)/Configs/\(name)", encoding: .utf8)
+        try String(contentsOfFile: "\(SourceTree.root)/Configs/\(name)", encoding: .utf8)
     }
 
     /// Relying on Xcode Cloud simply not having the secrets file was not

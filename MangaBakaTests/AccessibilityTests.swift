@@ -5,7 +5,7 @@ import Testing
 
 /// Accessibility is a build requirement the design spec names but the mockup
 /// does not demonstrate, so it is asserted here rather than assumed.
-@Suite("Accessibility")
+@Suite("Accessibility", .enabled(if: SourceTree.isAvailable))
 struct AccessibilityTests {
     /// Cover art carries the title visually. Without a label, a VoiceOver
     /// reader hears nothing at all on a screen made almost entirely of covers.
@@ -93,17 +93,10 @@ struct AccessibilityTests {
 /// Fixed heights containing scaled text are the recurring Dynamic Type bug in
 /// this codebase: three separate places clipped or collided at accessibility
 /// sizes. These assert the shape of the fix rather than the symptom.
-@Suite("Dynamic Type layout")
+@Suite("Dynamic Type layout", .enabled(if: SourceTree.isAvailable))
 struct DynamicTypeLayoutTests {
-    private var root: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
-
     private func source(_ path: String) throws -> String {
-        try String(contentsOfFile: "\(root)/\(path)", encoding: .utf8)
+        try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
     }
 
     /// A row holding two lines of scaled text cannot have a fixed height, or
@@ -147,15 +140,8 @@ struct DynamicTypeLayoutTests {
 /// Every scrolling screen must be able to scroll clear of the floating tab bar.
 /// Content passing *under* the translucent bar is intended; content that can
 /// never emerge from behind it is not.
-@Suite("Tab bar clearance")
+@Suite("Tab bar clearance", .enabled(if: SourceTree.isAvailable))
 struct TabBarClearanceTests {
-    private var root: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
-
     private static let scrollingScreens = [
         "MangaBaka/Features/Discovery/DiscoverView.swift",
         "MangaBaka/Features/Detail/SeriesDetailView.swift",
@@ -176,7 +162,7 @@ struct TabBarClearanceTests {
         arguments: TabBarClearanceTests.scrollingScreens
     )
     func everyScreenReservesIt(path: String) throws {
-        let text = try String(contentsOfFile: "\(root)/\(path)", encoding: .utf8)
+        let text = try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
         #expect(
             text.contains("Metrics.tabBarClearance"),
             "\(path) can leave its last row stranded behind the tab bar"
@@ -186,19 +172,12 @@ struct TabBarClearanceTests {
 
 /// Combining an interactive control into a single accessibility element
 /// swallows direct interaction with it.
-@Suite("Interactive controls stay tappable")
+@Suite("Interactive controls stay tappable", .enabled(if: SourceTree.isAvailable))
 struct InteractiveControlTests {
-    private var root: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
-
     @Test("Settings rows do not combine an interactive child into one element")
     func rowsAreNotCombined() throws {
         let source = try String(
-            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
             encoding: .utf8
         )
         #expect(
@@ -212,7 +191,7 @@ struct InteractiveControlTests {
     @Test("The border overlay is not hit-testable")
     func borderDoesNotStealTouches() throws {
         let source = try String(
-            contentsOfFile: "\(root)/MangaBaka/DesignSystem/Metrics.swift",
+            contentsOfFile: "\(SourceTree.root)/MangaBaka/DesignSystem/Metrics.swift",
             encoding: .utf8
         )
         #expect(source.contains("allowsHitTesting(false)"))
@@ -223,19 +202,12 @@ struct InteractiveControlTests {
 /// Toggle. SwiftUI's Toggle here only responded to a drag across the switch and
 /// never to a tap — verified repeatedly on device, with a drag succeeding at
 /// the exact coordinate a tap failed at.
-@Suite("Content rows are tappable")
+@Suite("Content rows are tappable", .enabled(if: SourceTree.isAvailable))
 struct ContentRowTests {
-    private var root: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
-
     @Test("The whole row is the control, not a nested Toggle")
     func rowIsTheControl() throws {
         let source = try String(
-            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
             encoding: .utf8
         )
         #expect(source.contains("switchIndicator"), "The switch is drawn, not a live control")
@@ -250,7 +222,7 @@ struct ContentRowTests {
     @Test("State is announced on the row, not on the decoration")
     func stateIsOnTheRow() throws {
         let source = try String(
-            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
             encoding: .utf8
         )
         #expect(source.contains("accessibilityValue(isOn ? \"On\" : \"Off\")"))

@@ -5,7 +5,7 @@ import Testing
 /// MangaBaka's data is community-maintained, so every URL the app might open
 /// was typed in by someone else. Opening an arbitrary scheme on a reader's
 /// behalf hands a contributor the ability to trigger another installed app.
-@Suite("Link safety")
+@Suite("Link safety", .enabled(if: SourceTree.isAvailable))
 struct SafeLinkTests {
     @Test("Ordinary web links are allowed")
     func allowsWebLinks() {
