@@ -183,3 +183,77 @@ struct TabBarClearanceTests {
         )
     }
 }
+
+/// Combining an interactive control into a single accessibility element
+/// swallows direct interaction with it.
+@Suite("Interactive controls stay tappable")
+struct InteractiveControlTests {
+    private var root: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .path
+    }
+
+    @Test("Settings rows do not combine an interactive child into one element")
+    func rowsAreNotCombined() throws {
+        let source = try String(
+            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+        #expect(
+            !source.contains("accessibilityElement(children: .combine)"),
+            "Combining a row around an interactive child breaks direct interaction"
+        )
+    }
+
+    /// A decorative overlay sitting on top of interactive content must not
+    /// compete for touches.
+    @Test("The border overlay is not hit-testable")
+    func borderDoesNotStealTouches() throws {
+        let source = try String(
+            contentsOfFile: "\(root)/MangaBaka/DesignSystem/Metrics.swift",
+            encoding: .utf8
+        )
+        #expect(source.contains("allowsHitTesting(false)"))
+    }
+}
+
+/// The content rows are a Button wrapping a drawn indicator rather than a live
+/// Toggle. SwiftUI's Toggle here only responded to a drag across the switch and
+/// never to a tap — verified repeatedly on device, with a drag succeeding at
+/// the exact coordinate a tap failed at.
+@Suite("Content rows are tappable")
+struct ContentRowTests {
+    private var root: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .path
+    }
+
+    @Test("The whole row is the control, not a nested Toggle")
+    func rowIsTheControl() throws {
+        let source = try String(
+            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+        #expect(source.contains("switchIndicator"), "The switch is drawn, not a live control")
+        #expect(source.contains("contentShape(Rectangle())"), "The whole row must be the target")
+        #expect(
+            !source.contains("Toggle(isOn:"),
+            "A live Toggle inside the row competes for the tap and loses"
+        )
+    }
+
+    /// The indicator is decoration; the Button carries the state for VoiceOver.
+    @Test("State is announced on the row, not on the decoration")
+    func stateIsOnTheRow() throws {
+        let source = try String(
+            contentsOfFile: "\(root)/MangaBaka/Features/Settings/SettingsView.swift",
+            encoding: .utf8
+        )
+        #expect(source.contains("accessibilityValue(isOn ? \"On\" : \"Off\")"))
+        #expect(source.contains("accessibilityHidden(true)"), "The drawn switch is not announced")
+    }
+}

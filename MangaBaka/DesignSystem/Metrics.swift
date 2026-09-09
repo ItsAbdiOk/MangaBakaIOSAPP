@@ -85,10 +85,16 @@ enum Metrics {
 
 extension View {
     /// A 0.5pt border, which is what the spec calls for everywhere.
+    ///
+    /// The overlay is explicitly not hit-testable. It is decoration sitting on
+    /// top of its content, and both places this wraps hold interactive controls
+    /// — a stroke that competes for touches makes buttons and switches feel
+    /// broken for no visible reason.
     func hairlineBorder(_ color: Color, radius: CGFloat) -> some View {
         overlay(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .strokeBorder(color, lineWidth: 0.5)
+                .allowsHitTesting(false)
         )
     }
 }

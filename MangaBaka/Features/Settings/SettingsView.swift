@@ -173,36 +173,64 @@ struct SettingsView: View {
 
     private func ratingRow(_ rating: ContentPreferences.Rating) -> some View {
         let isOn = content.preferences.allowed.contains(rating)
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rating.title)
-                    .typeRowTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                if rating == .safe {
-                    Text("Always included")
-                        .typeGridMeta()
-                        .foregroundStyle(Palette.textTertiary)
+        let isLocked = rating == .safe
+        // A Button rather than a bare Toggle. SwiftUI's Toggle here would only
+        // respond to a drag across the switch, never to an ordinary tap —
+        // verified repeatedly on device, with the drag working at the exact
+        // coordinate the tap failed at. Rather than keep guessing at whose
+        // gesture was winning, the whole row is the control, and the switch
+        // beside it is presentation.
+        return Button {
+            guard !isLocked else { return }
+            Task { await content.set(rating, allowed: !isOn) }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(rating.title)
+                        .typeRowTitle()
+                        .foregroundStyle(isLocked ? Palette.textTertiary : Palette.textPrimary)
+                    if isLocked {
+                        Text("Always included")
+                            .typeGridMeta()
+                            .foregroundStyle(Palette.textTertiary)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                switchIndicator(isOn: isOn, isLocked: isLocked)
             }
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { isOn },
-                set: { newValue in Task { await content.set(rating, allowed: newValue) } }
-            ))
-            .labelsHidden()
-            .tint(Palette.accent)
-            // Safe cannot be turned off: a reader who excluded everything would
-            // see an empty app with no explanation for it.
-            .disabled(rating == .safe)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            // minHeight rather than height: these rows hold two lines of scaled
+            // text, and a fixed height made one row's caption overlap the next
+            // row's title at accessibility sizes.
+            .frame(minHeight: Metrics.ctaSecondary)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        // minHeight rather than height: these rows hold two lines of scaled
-        // text, and a fixed height made one row's caption overlap the next
-        // row's title at accessibility sizes.
-        .frame(minHeight: Metrics.ctaSecondary)
-        .accessibilityElement(children: .combine)
+        .buttonStyle(.plain)
+        .disabled(isLocked)
         .accessibilityLabel("\(rating.title) content")
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Drawn rather than a real switch, because this row's tap target is the
+    /// whole row and a live control inside it would compete for the gesture.
+    private func switchIndicator(isOn: Bool, isLocked: Bool) -> some View {
+        let track = isOn ? Palette.accent : Palette.surfaceChip
+        return ZStack(alignment: isOn ? .trailing : .leading) {
+            Capsule()
+                .fill(track.opacity(isLocked ? 0.4 : 1))
+                .frame(width: 51, height: 31)
+            Circle()
+                .fill(.white.opacity(isLocked ? 0.6 : 1))
+                .frame(width: 27, height: 27)
+                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                .padding(.horizontal, 2)
+        }
+        .frame(width: 51, height: 31)
+        .animation(.snappy(duration: 0.2), value: isOn)
+        .accessibilityHidden(true)
     }
 
     /// Required by the data licence, not decoration.
