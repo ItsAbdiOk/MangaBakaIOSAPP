@@ -11,24 +11,6 @@ import Testing
 @Suite("What the screens say")
 @MainActor
 struct PresentationTests {
-    // MARK: - The cache pill
-
-    /// Absent rather than invented when nothing has been cached.
-    @Test("No cache means no pill")
-    func noCacheNoPill() {
-        #expect(AppTopBar.cacheLabel(for: nil) == nil)
-        // A negative age means the clock moved; not something to report.
-        #expect(AppTopBar.cacheLabel(for: -60) == nil)
-    }
-
-    @Test("Cache age reads in the largest sensible unit")
-    func cacheAgeUnits() {
-        #expect(AppTopBar.cacheLabel(for: 5) == "Cached now")
-        #expect(AppTopBar.cacheLabel(for: 120) == "Cached 2m")
-        #expect(AppTopBar.cacheLabel(for: 3 * 3600) == "Cached 3h")
-        #expect(AppTopBar.cacheLabel(for: 50 * 3600) == "Cached 2d")
-    }
-
     // MARK: - The stack card's meta line
 
     /// No endpoint carries year, rating count and tags together, so each part

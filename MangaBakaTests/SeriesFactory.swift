@@ -99,7 +99,5 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
 
     func updateBlockedTags(_ ids: [Int]) async {}
 
-    func newestCacheDate() async -> Date? { nil }
-
     func cachedSeriesCount() async -> Int { 0 }
 }

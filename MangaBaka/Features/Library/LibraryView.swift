@@ -9,6 +9,7 @@ struct LibraryView: View {
     private let onOpenSchedule: () -> Void
     private let onOpenTaste: () -> Void
     private let onOpenShelf: (LibraryEntry.State) -> Void
+    private let onOpenSettings: () -> Void
 
     init(
         model: LibraryModel,
@@ -16,7 +17,8 @@ struct LibraryView: View {
         scheduleSummary: String?,
         onOpenSchedule: @escaping () -> Void,
         onOpenTaste: @escaping () -> Void,
-        onOpenShelf: @escaping (LibraryEntry.State) -> Void
+        onOpenShelf: @escaping (LibraryEntry.State) -> Void,
+        onOpenSettings: @escaping () -> Void
     ) {
         self.model = model
         _path = path
@@ -24,6 +26,7 @@ struct LibraryView: View {
         self.onOpenSchedule = onOpenSchedule
         self.onOpenTaste = onOpenTaste
         self.onOpenShelf = onOpenShelf
+        self.onOpenSettings = onOpenSettings
     }
 
     var body: some View {
@@ -62,14 +65,29 @@ struct LibraryView: View {
         .task { await model.load() }
     }
 
+    /// Settings sits here rather than in a navigation bar. The bar is empty on
+    /// this screen — no title, no back button — so iOS collapses it to nothing
+    /// and the gear went with it, which is how Settings became unreachable.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Library")
-                .typeScreenTitle()
-                .foregroundStyle(Palette.textEmphasis)
-            Text(model.subtitle)
-                .typeSubtitle()
-                .foregroundStyle(Palette.textMuted)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Library")
+                    .typeScreenTitle()
+                    .foregroundStyle(Palette.textEmphasis)
+                Text(model.subtitle)
+                    .typeSubtitle()
+                    .foregroundStyle(Palette.textMuted)
+            }
+            Spacer(minLength: 0)
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, Metrics.gutter)
     }

@@ -36,7 +36,6 @@ struct RootView: View {
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
     @State private var mixModel: MixModel?
-    @State private var cacheAge: TimeInterval?
 
     var body: some View {
         tabs
@@ -100,7 +99,8 @@ struct RootView: View {
                         onOpenTaste: { showsTaste = true },
                         onOpenShelf: { state in
                             openShelf = libraryModel?.shelves.first { $0.state == state }
-                        }
+                        },
+                        onOpenSettings: { showsSettings = true }
                     )
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                         .navigationDestination(item: $openShelf) { shelf in
@@ -129,20 +129,6 @@ struct RootView: View {
                                 formats: formats,
                                 blockedTags: blockedTags
                             )
-                        }
-                        .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button { showsSchedule = true } label: {
-                                    Image(systemName: "calendar")
-                                }
-                                .accessibilityLabel("Next chapters")
-                            }
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button { showsSettings = true } label: {
-                                    Image(systemName: "gearshape")
-                                }
-                                .accessibilityLabel("Settings")
-                            }
                         }
                 }
                 .toolbar(.hidden, for: .tabBar)
@@ -186,14 +172,6 @@ struct RootView: View {
                 onReselect: popToRoot
             )
         }
-        .overlay(alignment: .top) {
-            // Only at a tab's root. The bar is drawn over everything, so on a
-            // pushed screen it sat on top of the navigation bar and hid its
-            // back button — leaving an edge-swipe as the only way out.
-            if isAtRoot {
-                AppTopBar(cacheAge: cacheAge)
-            }
-        }
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
             // a half-typed query or an assembled set of mix seeds.
@@ -202,38 +180,8 @@ struct RootView: View {
             if libraryModel == nil { libraryModel = LibraryModel(library: library) }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
         }
-        .task {
-            // Nothing is cached when the app opens — the first feed has not
-            // landed yet — so a single read at launch always found nothing and
-            // the pill never appeared. This re-reads as feeds arrive and as the
-            // age ticks over. One indexed MAX() every half minute.
-            while !Task.isCancelled {
-                await refreshCacheAge()
-                try? await Task.sleep(for: .seconds(30))
-            }
-        }
-        .onChange(of: selection) { _, _ in
-            Task { await refreshCacheAge() }
-        }
         .tint(Palette.accent)
         .preferredColorScheme(.dark)
-    }
-
-    /// Whether the selected tab is showing its root screen.
-    private var isAtRoot: Bool {
-        switch selection {
-        case .discover: discoverPath.isEmpty
-        case .stack: stackPath.isEmpty
-        case .mix: mixPath.isEmpty
-        // The shelf and schedule screens are pushed by their own bindings
-        // rather than onto shelfPath, so checking the path alone reported
-        // "at root" while a screen was open — and the top bar covered its
-        // back button.
-        case .library:
-            shelfPath.isEmpty && openShelf == nil
-                && !showsSchedule && !showsTaste && !showsSettings
-        case .search: searchPath.isEmpty && !showsBrowse
-        }
     }
 
     /// Tapping the current tab returns to its root.
@@ -265,14 +213,6 @@ struct RootView: View {
         await libraryModel?.reload()
         openShelf = libraryModel?.shelves.first { $0.state == openShelf?.state }
         return nil
-    }
-
-    private func refreshCacheAge() async {
-        guard let newest = await repository.newestCacheDate() else {
-            cacheAge = nil
-            return
-        }
-        cacheAge = Date().timeIntervalSince(newest)
     }
 
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {

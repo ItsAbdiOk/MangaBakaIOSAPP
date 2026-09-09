@@ -128,6 +128,7 @@
 		E660C1970FF471564D6F9700 /* SourceTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45FF467BEFD81175BFF95FDB /* SourceTree.swift */; };
 		E9C082F0B780450E23C5BF86 /* RequestBudgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B45FF8662C3905B86528A1 /* RequestBudgetTests.swift */; };
 		ED00F93A37DFF0D2B9FF596D /* CatalogueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41ECF7D63843DAAF9E6030D4 /* CatalogueTests.swift */; };
+		F22AF5DB92BAED94AE2E7017 /* ChromeReachabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A0D9E8407AC0EA137D8EF2 /* ChromeReachabilityTests.swift */; };
 		F36E3452DFDD3B0F873C8F17 /* Recommendation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C6BF62D4109C171EC07945 /* Recommendation.swift */; };
 		F6953E1E4C6AA0B7D585ED6F /* BlurHashTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45258C08149205EE5C59A6D4 /* BlurHashTests.swift */; };
 		FC3C5740CFB67CA11EC5C763 /* ShelfCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5832DB5979A2F371B282B39D /* ShelfCard.swift */; };
@@ -214,6 +215,7 @@
 		7F8D61B24CD0D96F100A6584 /* mix.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = mix.json; sourceTree = "<group>"; };
 		819CBCA7CC77592406630D74 /* PresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationTests.swift; sourceTree = "<group>"; };
 		820BFEEE577A74175EF5D73C /* OnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingTests.swift; sourceTree = "<group>"; };
+		83A0D9E8407AC0EA137D8EF2 /* ChromeReachabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChromeReachabilityTests.swift; sourceTree = "<group>"; };
 		8655E5F70D5BC83C78BFB1B6 /* LinksSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinksSection.swift; sourceTree = "<group>"; };
 		89A3F36BE4913A5F397493A2 /* MangaBakaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MangaBakaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D7593963422F18CB134D317 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -510,6 +512,7 @@
 				F4AF1E2E22F461E340D4EC53 /* BrowseModelTests.swift */,
 				20668C2667DE9B789068F76B /* CadenceTests.swift */,
 				41ECF7D63843DAAF9E6030D4 /* CatalogueTests.swift */,
+				83A0D9E8407AC0EA137D8EF2 /* ChromeReachabilityTests.swift */,
 				14EE38018284B8A8CE0EF516 /* ContentPreferencesTests.swift */,
 				FAD591CE7A28AE2A62A1086B /* CoverLayoutTests.swift */,
 				C99014FFFB9D8B7223D1E11C /* CoverTests.swift */,
@@ -882,6 +885,7 @@
 				85056A26FF6DE8B6D5266F4B /* BrowseModelTests.swift in Sources */,
 				104D43D6D9584310D18D22E2 /* CadenceTests.swift in Sources */,
 				ED00F93A37DFF0D2B9FF596D /* CatalogueTests.swift in Sources */,
+				F22AF5DB92BAED94AE2E7017 /* ChromeReachabilityTests.swift in Sources */,
 				7D780404FC308E7601768023 /* ContentPreferencesTests.swift in Sources */,
 				D7175152ED07C74D5BE05D3D /* CoverLayoutTests.swift in Sources */,
 				B8EBCA8DAAEF29E50F74D9FC /* CoverTests.swift in Sources */,

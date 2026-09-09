@@ -67,10 +67,6 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// subtitle counts them, so it has to be a real number.
     func cachedSeriesCount() async -> Int
 
-    /// When the freshest cached feed was written, or nil if nothing is cached.
-    /// Drives the top bar's "Cached 2m" so it reports a real timestamp rather
-    /// than a decorative one.
-    func newestCacheDate() async -> Date?
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -487,6 +483,12 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         try? discardCachedFeeds()
     }
 
+    func updateBlockedTags(_ ids: [Int]) async {
+        guard ids != blockedTags else { return }
+        blockedTags = ids
+        try? discardCachedFeeds()
+    }
+
     func cachedSeriesCount() async -> Int {
         cachedSeriesCountSync()
     }
@@ -495,27 +497,6 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         (try? database.writer.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM series") ?? 0
         }) ?? 0
-    }
-
-    func newestCacheDate() async -> Date? {
-        // GRDB offers a sync and an async `read`; in an async context `try?`
-        // picks the async one, which does not type-check here. Same reason
-        // `discardCachedFeeds` is split out.
-        newestCacheDateSync()
-    }
-
-    private func newestCacheDateSync() -> Date? {
-        try? database.writer.read { db in
-            try Date.fetchOne(db, sql: "SELECT MAX(cachedAt) FROM feedMetadata")
-        }
-    }
-
-    func updateBlockedTags(_ ids: [Int]) async {
-        guard ids != blockedTags else { return }
-        blockedTags = ids
-        // Cached feeds were fetched without the block and still hold what the
-        // reader has just chosen not to see.
-        try? discardCachedFeeds()
     }
 
     func updateLibraryExclusion(userID: String?) async {

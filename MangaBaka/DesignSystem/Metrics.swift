@@ -88,7 +88,11 @@ enum Metrics {
     /// Between the capsule and the search button beside it.
     static let tabCapsuleGap: CGFloat = 10
     /// How far the whole assembly sits off the bottom.
-    static let tabBarBottomInset: CGFloat = 30
+    ///
+    /// Measured from the SAFE AREA, not the screen edge, so the home indicator
+    /// already lifts it about 34pt. At 30 on top of that the bar floated well
+    /// clear of the bottom and read as sitting in the middle of the screen.
+    static let tabBarBottomInset: CGFloat = 8
     static let searchButton: CGFloat = 58
     static let coverUpcomingThumb: CGFloat = 52
 
@@ -99,7 +103,12 @@ enum Metrics {
     //
     // The tab capsule floats over content, so scroll views need bottom room or
     // the last row hides behind it.
-    static let scrollTopInset: CGFloat = 106
+    /// Where a screen's content begins.
+    ///
+    /// Was 106 to clear the floating wordmark bar the mockup drew across the
+    /// top. That bar is gone, so 106 became a large empty gap under the status
+    /// bar. This is breathing room under the safe area, nothing more.
+    static let scrollTopInset: CGFloat = 24
 
     /// Bottom room for the floating tab bar.
     ///
@@ -111,7 +120,9 @@ enum Metrics {
     /// Sized to the capsule plus the home indicator rather than guessed: the
     /// bar is 62pt tall and sits 22pt from the bottom, and a little slack keeps
     /// a descender off the edge.
-    static let scrollBottomInset: CGFloat = 150
+    /// Clearance under the floating tab bar: its height, its inset, and room to
+    /// read the last row rather than have it hug the glass.
+    static let scrollBottomInset: CGFloat = 124
 }
 
 extension View {
