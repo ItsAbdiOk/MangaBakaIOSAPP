@@ -176,12 +176,11 @@ struct TabBarClearanceTests {
     ]
 
     /// The floating capsule is roughly 61pt tall and sits `tabBarBottomInset`
-    /// off the bottom edge. Whichever token a screen reserves has to clear that.
-    @Test("Both clearance tokens exceed the tab bar's height plus its inset")
+    /// off the bottom edge. The bottom inset every screen reserves has to clear
+    /// that, or its last row is stranded.
+    @Test("The bottom inset exceeds the tab bar's height plus its inset")
     func clearanceIsEnough() {
-        let needed = 61 + Metrics.tabBarBottomInset
-        #expect(Metrics.tabBarClearance >= needed)
-        #expect(Metrics.scrollBottomInset >= needed)
+        #expect(Metrics.scrollBottomInset >= 61 + Metrics.tabBarBottomInset)
     }
 
     @Test(
@@ -194,8 +193,7 @@ struct TabBarClearanceTests {
         // both. The screens now use the mockup's own 150pt bottom padding, so
         // naming only the old token would fail a screen that reserves MORE.
         #expect(
-            text.contains("Metrics.scrollBottomInset")
-                || text.contains("Metrics.tabBarClearance"),
+            text.contains("Metrics.scrollBottomInset"),
             "\(path) can leave its last row stranded behind the tab bar"
         )
     }

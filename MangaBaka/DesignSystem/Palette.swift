@@ -63,20 +63,13 @@ enum Palette {
     /// The label under a stat number.
     static let textFaint = Color(hex: 0xEBEBF5).opacity(0.40)
 
-    /// A floating control's fill, under the glass. The mockup's
-    /// rgba(30,30,36,0.62).
-    static let surfaceControl = Color(hex: 0x1E1E24).opacity(0.62)
     /// The dark badge sitting on a cover. rgba(10,10,12,0.6).
     static let surfaceBadge = Color(hex: 0x0A0A0C).opacity(0.60)
-    /// The tab capsule and the floating search button. rgba(26,26,32,0.6).
-    static let surfaceFloating = Color(hex: 0x1A1A20).opacity(0.60)
     /// The top bar, thinner so content reads through it. rgba(12,12,16,0.55).
     static let surfaceTopBar = Color(hex: 0x0C0C10).opacity(0.55)
     /// A small pill in the top bar. rgba(255,255,255,0.07).
     static let surfacePill = Color.white.opacity(0.07)
     static let borderPill = Color.white.opacity(0.12)
-    /// A floating control's edge. Brighter than `border`, which is for cards.
-    static let borderControl = Color.white.opacity(0.14)
 
     static let hairline = Color.white.opacity(0.08)
     static let border = Color.white.opacity(0.10)

@@ -111,7 +111,6 @@ enum Metrics {
     /// Sized to the capsule plus the home indicator rather than guessed: the
     /// bar is 62pt tall and sits 22pt from the bottom, and a little slack keeps
     /// a descender off the edge.
-    static let tabBarClearance: CGFloat = 96
     static let scrollBottomInset: CGFloat = 150
 }
 

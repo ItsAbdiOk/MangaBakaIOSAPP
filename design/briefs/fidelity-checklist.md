@@ -110,3 +110,44 @@ design. They are not.
 - Pagination affordances and their spinners
 - The Stack's source caption and per-card reasons
 - The drawn switch component
+
+
+---
+
+## Result of the pass (2026-09-09)
+
+All nine screens in `NewBakaManga.html` are built: home, stack, search, mix,
+library, dropped, schedule, tags, plus the floating chrome.
+
+`Glass.swift` went from **zero uses to six**. The unused-token count went from
+**13 to 6**, and three of the six that remain are deliberate.
+
+### Still unused, deliberately
+
+| Token | Why |
+|---|---|
+| `Metrics.gutterStatus` | The mockup draws a fake iOS status bar. The real one is drawn by iOS. |
+| `Metrics.backButton` | The mockup has a custom 38pt circular back button. The system navigation bar's own control is used instead: it handles the edge-swipe gesture and VoiceOver for free, and the custom top bar now hides on pushed screens so it is visible. |
+| `Metrics.coverRowWidthCompact` | The mockup has a density setting (compact covers at 100pt). No setting exists yet. |
+| `Metrics.ratingSegment` | Mix's rating step control is not built to the mockup's segment shape yet. |
+| `Metrics.toggle` | Belongs to Mix's blocked-tags switch, which is not built. |
+| `Palette.rowOpaque` | No surface currently needs an opaque row. |
+
+### Not built from the mockup
+
+- Mix's **Tags** and **Blocked tags** filter sections. The API supports both and
+  `SearchQuery` carries tags; only the UI is missing.
+- Mix's **"Save as a lens"** button. Lenses ship as presets; writing your own
+  needs a design.
+- The **density** setting behind `coverRowWidthCompact`.
+- A **library search** field on the Library screen.
+
+### Deviations added during the pass
+
+- Tag chips on the stack card left-align where the mockup centres, because
+  `FlowLayout` caps an over-wide item and a long tag used to hang off the edge.
+- The stack's left-hand neighbour is absent until the first card is dealt with,
+  because there genuinely is no previous card yet.
+- Discover's "Open the stack" shortcut says what it does rather than "N left in
+  today's stack", which Discover cannot know without duplicating the stack.
+- The accent moved to `#F87966`, the sRGB of the mockup's `oklch(0.72 0.16 30)`.

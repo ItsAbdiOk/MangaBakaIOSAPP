@@ -131,8 +131,7 @@ struct AppTopBar: View {
         .padding(.top, 8)
         .padding(.bottom, 12)
         .background {
-            Palette.surfaceTopBar
-                .background(.ultraThinMaterial)
+            Glass.topBar(Rectangle())
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(Palette.hairline).frame(height: 0.5)
                 }
