@@ -68,23 +68,23 @@ struct ScheduleRow: View {
                         in: RoundedRectangle(cornerRadius: 7, style: .continuous)
                     )
 
-                Text(stateText(cadence, isLate: isLate, now: now))
+                Text(Self.stateText(cadence, isLate: isLate, now: now))
                     .typeChip()
                     .foregroundStyle(isLate ? Palette.accent : Palette.textPrimary)
             }
 
-            Text(cadenceLine(cadence))
+            Text(Self.cadenceLine(cadence))
                 .typeSmallMeta()
                 .foregroundStyle(Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(provenance(cadence))
+            Text(Self.provenance(cadence))
                 .typeFootnote()
                 .foregroundStyle(Palette.textQuaternary)
         }
     }
 
-    private func stateText(_ cadence: Cadence, isLate: Bool, now: Date) -> String {
+    static func stateText(_ cadence: Cadence, isLate: Bool, now: Date) -> String {
         let days = abs(cadence.overdueDays(asOf: now))
         if isLate {
             if days > 365 { return "\(days / 365) year\(days / 365 == 1 ? "" : "s") overdue" }
@@ -95,7 +95,7 @@ struct ScheduleRow: View {
     }
 
     /// "About every 7 days, give or take 1."
-    private func cadenceLine(_ cadence: Cadence) -> String {
+    static func cadenceLine(_ cadence: Cadence) -> String {
         let gap = "About every \(cadence.medianGapDays) day\(cadence.medianGapDays == 1 ? "" : "s")"
         return cadence.spreadDays == 0
             ? "\(gap), very evenly"
@@ -104,7 +104,7 @@ struct ScheduleRow: View {
 
     /// Where the number came from. An estimate that will not say what it was
     /// built from is asking to be trusted rather than checked.
-    private func provenance(_ cadence: Cadence) -> String {
+    static func provenance(_ cadence: Cadence) -> String {
         let last = cadence.lastRelease.formatted(.dateTime.day().month(.abbreviated).year())
         return "From \(cadence.samples) releases on MangaUpdates · last \(last)"
     }

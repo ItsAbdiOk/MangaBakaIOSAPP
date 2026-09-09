@@ -6,6 +6,7 @@ import SwiftUI
 /// point of drag, a 92pt commit threshold, and badge opacity tied to |dx| / 80
 /// so the decision is legible before the reader lets go.
 struct StackView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var model: StackModel
     @Binding private var path: [Series]
 
@@ -42,31 +43,58 @@ struct StackView: View {
 
     // MARK: - Header
 
+    /// Title and counter sit side by side until the text is large enough that
+    /// they squeeze each other — at which point the title truncated to
+    /// "The sta…" and the counter broke into "4" over "saved".
+    @ViewBuilder
     private var header: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                headerTitle
+                headerCount
+            }
+            .padding(.horizontal, Metrics.gutterStack)
+            .padding(.bottom, 14)
+        } else {
+            headerRow
+        }
+    }
+
+    private var headerRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("The stack")
-                    .typeStackTitle()
-                    .foregroundStyle(Palette.textEmphasis)
-                Text("Drag the cover aside · tap it to open")
-                    .typeInstruction()
-                    .foregroundStyle(Palette.textTertiary)
-            }
+            headerTitle
             Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 0) {
-                Text("\(model.savedCount)")
-                    .typeStatNumber()
-                    .foregroundStyle(Palette.accent)
-                Text("saved")
-                    .typeGridMeta()
-                    .foregroundStyle(Palette.textFaint)
-            }
-            .fixedSize()
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(model.savedCount) saved")
+            headerCount
         }
         .padding(.horizontal, Metrics.gutterStack)
         .padding(.bottom, 14)
+    }
+
+    private var headerTitle: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("The stack")
+                .typeStackTitle()
+                .foregroundStyle(Palette.textEmphasis)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Drag the cover aside · tap it to open")
+                .typeInstruction()
+                .foregroundStyle(Palette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var headerCount: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text("\(model.savedCount)")
+                .typeStatNumber()
+                .foregroundStyle(Palette.accent)
+            Text("saved")
+                .typeGridMeta()
+                .foregroundStyle(Palette.textFaint)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(model.savedCount) saved")
     }
 
     // MARK: - Cards

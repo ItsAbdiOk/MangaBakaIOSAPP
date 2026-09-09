@@ -134,6 +134,27 @@ struct SearchQuery: Sendable, Equatable {
     }
 }
 
+/// The API's sort keys, and what to call them in front of a reader.
+///
+/// "popularity_desc" is a value for a query string, not a word for a screen —
+/// and at large text sizes it broke across four lines mid-word.
+enum SortOrder {
+    static let all: [(value: String, label: String)] = [
+        ("relevance_desc", "Relevance"),
+        ("trending_7d", "Trending (7d)"),
+        ("trending_30d", "Trending (30d)"),
+        ("score_desc", "Score"),
+        ("popularity_desc", "Popularity"),
+        ("latest", "Latest"),
+        ("random", "Random")
+    ]
+
+    static func label(for value: String?) -> String? {
+        guard let value else { return nil }
+        return all.first { $0.value == value }?.label
+    }
+}
+
 /// Which feed, and how long its cache stays fresh.
 enum FeedKind: Sendable, Hashable {
     case rising

@@ -60,8 +60,10 @@ struct StackCaption: View {
         .padding(.top, 6)
     }
 
+    private var metaLine: String? { Self.metaLine(for: series) }
+
     /// "Manhwa · 2022 · 7.8 from 6.4k", minus whatever is absent.
-    private var metaLine: String? {
+    static func metaLine(for series: Series) -> String? {
         var parts: [String] = []
         if let type = series.type, !type.isEmpty { parts.append(type.capitalized) }
         if let year = series.year { parts.append(String(year)) }
@@ -77,7 +79,7 @@ struct StackCaption: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    private static func compact(_ count: Int) -> String {
+    static func compact(_ count: Int) -> String {
         count >= 1_000 ? String(format: "%.1fk", Double(count) / 1_000) : String(count)
     }
 }
@@ -89,14 +91,28 @@ struct StackSavedStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Saved from the stack")
-                    .typeSubsectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                Spacer(minLength: 10)
-                Text("Shelf ›")
-                    .typeInstruction()
-                    .foregroundStyle(Palette.accent)
+            // A row until the text is large, then stacked. Side by side at
+            // accessibility sizes the two collapsed into "Saved from Shelf"
+            // with the rest off the screen edge.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Text("Saved from the stack")
+                        .typeSubsectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                    Spacer(minLength: 10)
+                    Text("Shelf ›")
+                        .typeInstruction()
+                        .foregroundStyle(Palette.accent)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Saved from the stack")
+                        .typeSubsectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Shelf ›")
+                        .typeInstruction()
+                        .foregroundStyle(Palette.accent)
+                }
             }
             .padding(.horizontal, 2)
             .padding(.bottom, 10)

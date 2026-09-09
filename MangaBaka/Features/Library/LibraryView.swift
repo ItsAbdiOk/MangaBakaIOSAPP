@@ -113,7 +113,7 @@ struct LibraryView: View {
                     Text(scheduleSummary ?? "Estimate when each one is due")
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textTertiary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right")
@@ -240,19 +240,46 @@ struct ShelfCard: View {
     /// walked away from.
     private var isDropped: Bool { shelf.state == .dropped }
 
+    private var countColour: Color {
+        isDropped ? Palette.textEmphasis : Palette.textSecondary
+    }
+
+    private var shelfName: some View {
+        Text(shelf.label)
+            .typeSubsectionHeader()
+            .foregroundStyle(Palette.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Palette.textQuaternary)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(shelf.label)
-                    .typeSubsectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(shelf.count.formatted())
-                    .typeStatNumber()
-                    .foregroundStyle(isDropped ? Palette.textEmphasis : Palette.textSecondary)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textQuaternary)
+            // Side by side until they no longer fit. Squeezed, the name broke
+            // mid-word — "Complete" over a lone "d" — because the count and
+            // chevron took their width first.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    shelfName
+                    Text(shelf.count.formatted())
+                        .typeStatNumber()
+                        .foregroundStyle(countColour)
+                    chevron
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    shelfName
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(shelf.count.formatted())
+                            .typeStatNumber()
+                            .foregroundStyle(countColour)
+                        chevron
+                    }
+                }
             }
 
             HStack(spacing: 7) {

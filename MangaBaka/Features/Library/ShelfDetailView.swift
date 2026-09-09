@@ -165,8 +165,13 @@ struct LibraryRow: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var progressLine: String { Self.progressLine(entry, series: series) }
+
     /// "left at 18/112 · 16%", or a plain state when there is no progress.
-    private var progressLine: String {
+    ///
+    /// A series with no chapter count still gets a number: an ongoing series
+    /// has no denominator, and "left at ch 17" is more use than nothing.
+    static func progressLine(_ entry: LibraryEntry, series: Series) -> String {
         guard let read = entry.progressChapter, read > 0 else {
             return entry.state.title
         }

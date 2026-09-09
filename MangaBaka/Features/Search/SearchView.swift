@@ -24,27 +24,19 @@ struct SearchView: View {
                 searchBar
                     .padding(.horizontal, Metrics.gutter)
 
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(heading)
-                        .typeSubsectionHeader()
-                        .foregroundStyle(Palette.textPrimary)
-                    Spacer(minLength: 0)
-                    Button(action: onBrowse) {
-                        Text("Browse")
-                            .typeInstruction()
-                            .foregroundStyle(Palette.accent)
+                // A heading and two links. Kept on one row until they no
+                // longer fit: squeezed by both links, "30 results" broke into
+                // "30" / "result" / "s" at the largest text size.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        headingText
+                        Spacer(minLength: 0)
+                        headerActions
                     }
-                    .buttonStyle(.plain)
-                    Button {
-                        model.query.sort = "random"
-                        Task { model.cancelPendingDebounce(); await model.search() }
-                    } label: {
-                        Text("Surprise me")
-                            .typeInstruction()
-                            .foregroundStyle(Palette.accent)
+                    VStack(alignment: .leading, spacing: 8) {
+                        headingText
+                        headerActions
                     }
-                    .buttonStyle(.plain)
-                    .disabled(model.isSearching)
                 }
                 .padding(.horizontal, Metrics.gutter + 2)
 
@@ -99,12 +91,41 @@ struct SearchView: View {
         }
     }
 
-    /// "12 results · score_desc" once anything is asked for, "Saved lenses"
+    private var headingText: some View {
+        Text(heading)
+            .typeSubsectionHeader()
+            .foregroundStyle(Palette.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 14) {
+            Button(action: onBrowse) {
+                Text("Browse")
+                    .typeInstruction()
+                    .foregroundStyle(Palette.accent)
+            }
+            .buttonStyle(.plain)
+            Button {
+                model.query.sort = "random"
+                Task { model.cancelPendingDebounce(); await model.search() }
+            } label: {
+                Text("Surprise me")
+                    .typeInstruction()
+                    .foregroundStyle(Palette.accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.isSearching)
+        }
+        .fixedSize()
+    }
+
+    /// "12 results · Score" once anything is asked for, "Saved lenses"
     /// before that — the mockup's own wording.
     private var heading: String {
         guard !model.query.isEmpty else { return "Saved lenses" }
         let count = "\(model.results.count) result\(model.results.count == 1 ? "" : "s")"
-        guard let sort = model.query.sort else { return count }
+        guard let sort = SortOrder.label(for: model.query.sort) else { return count }
         return "\(count) · \(sort)"
     }
 
@@ -264,15 +285,7 @@ private struct FilterSheet: View {
 
     private let types = ["manga", "novel", "manhwa", "manhua", "oel", "other"]
     private let statuses = ["releasing", "completed", "hiatus", "cancelled", "upcoming"]
-    private let sorts: [(value: String, label: String)] = [
-        ("relevance_desc", "Relevance"),
-        ("trending_7d", "Trending (7d)"),
-        ("trending_30d", "Trending (30d)"),
-        ("score_desc", "Score"),
-        ("popularity_desc", "Popularity"),
-        ("latest", "Latest"),
-        ("random", "Random")
-    ]
+    private let sorts = SortOrder.all
 
     var body: some View {
         ScrollView {

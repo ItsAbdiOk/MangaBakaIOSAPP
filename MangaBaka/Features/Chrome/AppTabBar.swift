@@ -8,6 +8,7 @@ import SwiftUI
 /// loading and state restoration, and this draws over the top. Rebuilding tab
 /// switching by hand would have thrown all of that away for a visual change.
 struct AppTabBar: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Binding var selection: RootView.AppTab
     /// Search is not in the capsule; it is the button beside it.
     let isSearching: Bool
@@ -42,12 +43,24 @@ struct AppTabBar: View {
                         Image(systemName: tab.symbol)
                             .font(.system(size: 17, weight: .medium))
                             .frame(height: Metrics.tabIcon)
-                        Text(tab.title)
-                            .typeTabLabel()
+                        // Labels are dropped at accessibility sizes rather than
+                        // scaled. Scaled, they wrapped to three lines each
+                        // ("Dis/cov/er"), the capsule ballooned into the middle
+                        // of the screen, and it covered content on every screen
+                        // — including its own tap targets, which moved 80pt
+                        // from where they are drawn. The system tab bar does
+                        // the same thing for the same reason; every tab keeps
+                        // its accessibilityLabel, so nothing is lost to
+                        // VoiceOver.
+                        if !typeSize.isAccessibilitySize {
+                            Text(tab.title)
+                                .typeTabLabel()
+                                .lineLimit(1)
+                        }
                     }
                     .frame(width: Metrics.tabWidth)
                     .padding(.top, 7)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, typeSize.isAccessibilitySize ? 7 : 6)
                     .foregroundStyle(isSelected(tab) ? Palette.textEmphasis : Palette.textMuted)
                     .background {
                         if isSelected(tab) {
@@ -139,11 +152,13 @@ struct AppTopBar: View {
         }
     }
 
+    private var cacheLabel: String? { Self.cacheLabel(for: cacheAge) }
+
     /// "Cached 2m". Built from a real timestamp, so it is absent rather than
     /// invented when nothing has been cached yet.
-    private var cacheLabel: String? {
-        guard let cacheAge, cacheAge >= 0 else { return nil }
-        let minutes = Int(cacheAge / 60)
+    static func cacheLabel(for age: TimeInterval?) -> String? {
+        guard let age, age >= 0 else { return nil }
+        let minutes = Int(age / 60)
         if minutes < 1 { return "Cached now" }
         if minutes < 60 { return "Cached \(minutes)m" }
         let hours = minutes / 60

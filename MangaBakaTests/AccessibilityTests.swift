@@ -290,3 +290,28 @@ struct ContentRowTests {
         #expect(indicator.contains("accessibilityHidden(true)"))
     }
 }
+
+/// The floating tab bar replaced the system one, so it also has to survive what
+/// the system one survives.
+@Suite("The tab bar holds its size", .enabled(if: SourceTree.isAvailable))
+struct TabBarSizingTests {
+    /// At the largest accessibility size the labels wrapped to three lines each,
+    /// the capsule ballooned into the middle of the screen, and it covered
+    /// content on every screen — including its own tap targets, which ended up
+    /// 80pt from where they were drawn.
+    @Test("Labels are dropped at accessibility sizes rather than scaled")
+    func dropsLabelsWhenHuge() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Chrome/AppTabBar.swift")
+        #expect(source.contains("isAccessibilitySize"))
+        #expect(source.contains("dynamicTypeSize"))
+    }
+
+    /// Dropping the label must not drop the name: the icons are not labelled by
+    /// anything else.
+    @Test("Every tab keeps an accessibility label")
+    func keepsAccessibilityLabels() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Chrome/AppTabBar.swift")
+        #expect(source.contains("accessibilityLabel(tab.title)"))
+        #expect(source.contains("accessibilityLabel(\"Search\")"))
+    }
+}
