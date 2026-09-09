@@ -33,7 +33,7 @@ struct SeriesDetailView: View {
                 provenance
             }
             .padding(.top, 12)
-            .padding(.bottom, 24)
+            .padding(.bottom, Metrics.tabBarClearance)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
@@ -273,9 +273,11 @@ struct FlowChips: View {
                         .typeChip()
                         .foregroundStyle(Palette.textSecondary)
                         .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .truncationMode(.tail)
                         .padding(.horizontal, 9)
-                        .frame(height: Metrics.headerPill)
+                        // minHeight, not height: at accessibility text sizes a
+                        // fixed 30pt pill clips its own label.
+                        .frame(minHeight: Metrics.headerPill)
                         .background(Palette.surfaceChip, in: Capsule())
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
                 }

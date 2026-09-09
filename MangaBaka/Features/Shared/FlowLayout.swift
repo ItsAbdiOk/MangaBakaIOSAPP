@@ -31,7 +31,12 @@ struct FlowLayout: Layout {
         for row in rows {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                var size = subviews[index].sizeThatFits(.unspecified)
+                // A single item wider than the container used to hang off the
+                // edge. At large text sizes that is ordinary, not exotic — one
+                // long publisher name is enough — so it is capped and left to
+                // truncate inside its own bounds.
+                size.width = min(size.width, bounds.width)
                 subviews[index].place(
                     at: CGPoint(x: x, y: y),
                     proposal: ProposedViewSize(size)
@@ -53,7 +58,8 @@ struct FlowLayout: Layout {
         var current = Row()
 
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            var size = subviews[index].sizeThatFits(.unspecified)
+            size.width = min(size.width, maxWidth)
             let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
             if needed > maxWidth, !current.indices.isEmpty {
                 rows.append(current)

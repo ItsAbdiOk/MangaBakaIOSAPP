@@ -65,11 +65,27 @@ struct CoverCard: View {
     var radius: CGFloat = Metrics.radiusCoverRow
     var meta: String?
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// At accessibility text sizes a two-line clamp truncates almost every
+    /// title. Allowing more lines costs vertical space, which a horizontal row
+    /// has to spare, and keeps titles readable rather than merely present.
+    private var titleLineLimit: Int {
+        typeSize.isAccessibilitySize ? 4 : 2
+    }
+
+    /// Cards widen with the text. Keeping them fixed meant larger type simply
+    /// wrapped more inside the same narrow column until the title ran past the
+    /// card and disappeared under the floating tab bar.
+    private var scaledWidth: CGFloat {
+        typeSize.isAccessibilitySize ? width * 1.5 : width
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             CoverImage(
                 cover: series.cover,
-                width: width,
+                width: scaledWidth,
                 radius: radius,
                 accessibilityText: series.displayTitle ?? "Untitled series"
             )
@@ -78,7 +94,7 @@ struct CoverCard: View {
             Text(series.displayTitle ?? "Untitled series")
                 .typeCardTitle()
                 .foregroundStyle(Palette.textPrimary)
-                .lineLimit(2)
+                .lineLimit(titleLineLimit)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 7)
@@ -91,6 +107,17 @@ struct CoverCard: View {
                     .padding(.top, 2)
             }
         }
-        .frame(width: width, alignment: .leading)
+        .frame(width: scaledWidth, alignment: .leading)
+        // One element rather than three: VoiceOver should announce a card as a
+        // single thing to tap, not read cover, title and meta separately.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilityLabel: String {
+        let title = series.displayTitle ?? "Untitled series"
+        guard let meta else { return title }
+        return "\(title), \(meta)"
     }
 }

@@ -34,7 +34,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, 62)
-            .padding(.bottom, 24)
+            .padding(.bottom, Metrics.tabBarClearance)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
@@ -196,7 +196,11 @@ struct SettingsView: View {
             .disabled(rating == .safe)
         }
         .padding(.horizontal, 14)
-        .frame(height: Metrics.ctaSecondary)
+        .padding(.vertical, 10)
+        // minHeight rather than height: these rows hold two lines of scaled
+        // text, and a fixed height made one row's caption overlap the next
+        // row's title at accessibility sizes.
+        .frame(minHeight: Metrics.ctaSecondary)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(rating.title) content")
     }

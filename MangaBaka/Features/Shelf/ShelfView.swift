@@ -50,7 +50,7 @@ struct ShelfView: View {
                 }
             }
             .padding(.top, 62)
-            .padding(.bottom, 24)
+            .padding(.bottom, Metrics.tabBarClearance)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)

@@ -68,6 +68,18 @@ enum Metrics {
     // The tab capsule floats over content, so scroll views need bottom room or
     // the last row hides behind it.
     static let scrollTopInset: CGFloat = 106
+
+    /// Bottom room for the floating tab bar.
+    ///
+    /// Content scrolling *under* the translucent bar is intended — that is what
+    /// Liquid Glass is for. The bug is content that can never scroll clear of
+    /// it: with only a few points of padding, the last line of the last row
+    /// stays permanently behind the glass and cannot be read.
+    ///
+    /// Sized to the capsule plus the home indicator rather than guessed: the
+    /// bar is 62pt tall and sits 22pt from the bottom, and a little slack keeps
+    /// a descender off the edge.
+    static let tabBarClearance: CGFloat = 96
     static let scrollBottomInset: CGFloat = 150
 }
 

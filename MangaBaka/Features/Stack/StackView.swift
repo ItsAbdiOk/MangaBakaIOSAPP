@@ -11,6 +11,7 @@ struct StackView: View {
 
     @State private var drag: CGSize = .zero
     @State private var isDragging = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let commitThreshold: CGFloat = 92
     private let rotationPerPoint: Double = 0.012
@@ -42,6 +43,18 @@ struct StackView: View {
                     .overlay(alignment: .top) { decisionBadges }
                     .gesture(dragGesture)
                     .onTapGesture { path.append(current) }
+                    // VoiceOver cannot perform a drag, so saving and skipping
+                    // are exposed as actions. Without these the entire screen
+                    // is unusable with the screen reader on.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(current.displayTitle ?? "Untitled series")
+                    .accessibilityHint("Double tap for details")
+                    .accessibilityAction(named: "Save") {
+                        Task { await model.react(.saved) }
+                    }
+                    .accessibilityAction(named: "Skip") {
+                        Task { await model.react(.skipped) }
+                    }
             } else if model.isLoading {
                 ProgressView().tint(Palette.textTertiary)
             } else {
@@ -62,8 +75,14 @@ struct StackView: View {
                 if abs(dx) > commitThreshold {
                     let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
                     // Throw the card off-screen in the direction of travel.
-                    withAnimation(.easeOut(duration: 0.22)) {
-                        drag.width = dx > 0 ? 700 : -700
+                    // A card thrown the width of the screen is a lot of motion.
+                    // With Reduce Motion on, it simply goes.
+                    if reduceMotion {
+                        drag = .zero
+                    } else {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            drag.width = dx > 0 ? 700 : -700
+                        }
                     }
                     Task {
                         await model.react(kind)
