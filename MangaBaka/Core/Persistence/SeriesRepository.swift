@@ -25,6 +25,13 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// Everything the detail screen shows beyond the series itself. Fetched
     /// together so one slow endpoint does not stagger the screen into place.
     func extras(for seriesId: Int) async -> SeriesExtras
+
+    /// Replaces the content filter and discards every cached feed.
+    ///
+    /// The discard is the point: a cached feed was fetched under the previous
+    /// filter, so keeping it would keep showing content the reader has just
+    /// excluded — or hide content they have just allowed.
+    func updateContentRatings(_ ratings: [String]) async
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -206,7 +213,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Content ratings to request, or `nil` for no filter. Defaults to the
     /// product decision: safe and suggestive, with anything stronger behind a
     /// deliberate opt-in that does not exist yet.
-    private let contentRatings: [String]?
+    private var contentRatings: [String]?
 
     init(
         client: APIClient,
@@ -283,6 +290,23 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             return results.filter(\.series.isDiscoverable)
         } catch {
             return []
+        }
+    }
+
+    func updateContentRatings(_ ratings: [String]) async {
+        guard ratings != contentRatings else { return }
+        contentRatings = ratings
+        try? discardCachedFeeds()
+    }
+
+    /// Split out because GRDB offers both a sync and an async `write`, and in
+    /// an async context `try?` picks the async one, which does not compile here.
+    private func discardCachedFeeds() throws {
+        try database.writer.write { db in
+            // Only the feed cache is cleared. The shelf holds the reader's own
+            // saves and is not derived from the filter.
+            try db.execute(sql: "DELETE FROM feedEntry")
+            try db.execute(sql: "DELETE FROM feedMetadata")
         }
     }
 

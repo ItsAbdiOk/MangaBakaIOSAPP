@@ -7,6 +7,7 @@ import SwiftUI
 /// normal way to sign in.
 struct SettingsView: View {
     let validate: (String) async -> String?
+    let content: ContentPreferencesStore
 
     @State private var entry = ""
     @State private var status: Status = .idle
@@ -28,6 +29,7 @@ struct SettingsView: View {
                     .foregroundStyle(Palette.textPrimary)
 
                 accountSection
+                contentSection
                 attributionSection
             }
             .padding(.horizontal, Metrics.gutter)
@@ -122,6 +124,81 @@ struct SettingsView: View {
                 .foregroundStyle(Palette.textQuaternary)
             }
         }
+    }
+
+    /// The opt-in for stronger content.
+    ///
+    /// Deliberately plain about what changes rather than a switch buried in a
+    /// list: the default excludes explicit material, so turning it on should be
+    /// a decision rather than an accident.
+    private var contentSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Eyebrow(text: "Content")
+
+            Text(contentExplanation)
+                .typeSubtitle()
+                .foregroundStyle(Palette.textSecondary)
+
+            VStack(spacing: 0) {
+                ForEach(ContentPreferences.Rating.allCases, id: \.rawValue) { rating in
+                    ratingRow(rating)
+                    if rating != ContentPreferences.Rating.allCases.last {
+                        Rectangle()
+                            .fill(Palette.hairline)
+                            .frame(height: 0.5)
+                            .padding(.leading, 14)
+                    }
+                }
+            }
+            .background(Palette.surface, in: RoundedRectangle(
+                cornerRadius: Metrics.radiusCard, style: .continuous
+            ))
+            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
+
+            Text(contentCacheNote)
+                .typeFootnote()
+                .foregroundStyle(Palette.textQuaternary)
+        }
+    }
+
+    private var contentExplanation: String {
+        "By default you see everything rated safe or suggestive. "
+            + "Turn these on to include stronger material in feeds, search and the stack."
+    }
+
+    private var contentCacheNote: String {
+        "Changing this clears downloaded feeds, because they were fetched "
+            + "under the previous setting."
+    }
+
+    private func ratingRow(_ rating: ContentPreferences.Rating) -> some View {
+        let isOn = content.preferences.allowed.contains(rating)
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rating.title)
+                    .typeRowTitle()
+                    .foregroundStyle(Palette.textPrimary)
+                if rating == .safe {
+                    Text("Always included")
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.textTertiary)
+                }
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { newValue in Task { await content.set(rating, allowed: newValue) } }
+            ))
+            .labelsHidden()
+            .tint(Palette.accent)
+            // Safe cannot be turned off: a reader who excluded everything would
+            // see an empty app with no explanation for it.
+            .disabled(rating == .safe)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Metrics.ctaSecondary)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(rating.title) content")
     }
 
     /// Required by the data licence, not decoration.

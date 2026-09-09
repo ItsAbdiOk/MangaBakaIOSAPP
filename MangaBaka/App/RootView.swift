@@ -9,6 +9,7 @@ struct RootView: View {
     let repository: SeriesRepository
     let shelf: ShelfStore
     let client: APIClient
+    let content: ContentPreferencesStore
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
@@ -94,7 +95,7 @@ struct RootView: View {
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
                                 NavigationLink {
-                                    SettingsView(validate: validateToken)
+                                    SettingsView(validate: validateToken, content: content)
                                 } label: {
                                     Image(systemName: "gearshape")
                                 }

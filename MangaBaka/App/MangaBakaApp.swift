@@ -5,6 +5,7 @@ struct MangaBakaApp: App {
     private let repository: SeriesRepository
     private let shelf: ShelfStore
     private let client: APIClient
+    private let content: ContentPreferencesStore
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -45,11 +46,24 @@ struct MangaBakaApp: App {
 
         repository = SeriesRepository(client: apiClient, database: database)
         shelf = ShelfStore(database: database)
+
+        // The store owns the reader's choice; the repository owns acting on it.
+        // Wiring them together here keeps the repository out of UserDefaults and
+        // keeps the store from knowing anything about caches.
+        let built = repository
+        let store = ContentPreferencesStore()
+        store.onChange = { ratings in await built.updateContentRatings(ratings) }
+        content = store
+
+        // Apply the stored choice before the first request goes out, or the
+        // opening feed would be fetched under the default filter.
+        let initial = store.preferences.queryValues
+        Task { await built.updateContentRatings(initial) }
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView(repository: repository, shelf: shelf, client: client)
+            RootView(repository: repository, shelf: shelf, client: client, content: content)
         }
     }
 }
