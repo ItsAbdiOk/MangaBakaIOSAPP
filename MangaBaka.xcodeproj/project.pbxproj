@@ -134,6 +134,7 @@
 		DB639DB55378A1D95799A40C /* FormatPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41B78E9BC45F46C39BABCE7 /* FormatPreferences.swift */; };
 		DC0BAC00956380F4B187E44B /* LibraryWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5140A9265F7AD2392EAC27 /* LibraryWriteTests.swift */; };
 		DF9B62750FA0D1206C79662E /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20330A856CAA2475C0B1C392 /* Typography.swift */; };
+		E04DBD622CF7CECD84F026B6 /* TrackerScores.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB642496F52D0741D870AB55 /* TrackerScores.swift */; };
 		E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DABEF481B90078120854DE1 /* ShelfDetailView.swift */; };
 		E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE431E64B0087435EC511EF /* StackSections.swift */; };
 		E30F00A5B893F7CD6D2189F3 /* SurpriseAndStackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE5A9E7DDC428AB083B28B0 /* SurpriseAndStackTests.swift */; };
@@ -304,6 +305,7 @@
 		FA4D1799EDF9EFD24E6F8135 /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
 		FAD591CE7A28AE2A62A1086B /* CoverLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverLayoutTests.swift; sourceTree = "<group>"; };
 		FAFBD039E636AD1D47EAE31A /* library.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = library.json; sourceTree = "<group>"; };
+		FB642496F52D0741D870AB55 /* TrackerScores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackerScores.swift; sourceTree = "<group>"; };
 		FE022EC45BBE2B43323AB02D /* Metrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Metrics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -359,6 +361,7 @@
 				CCE3CCF279C256CEBA790EBE /* LibraryControl.swift */,
 				8655E5F70D5BC83C78BFB1B6 /* LinksSection.swift */,
 				3B477C4A8ED2D572DEB4DB6F /* SeriesDetailView.swift */,
+				FB642496F52D0741D870AB55 /* TrackerScores.swift */,
 			);
 			path = Detail;
 			sourceTree = "<group>";
@@ -918,6 +921,7 @@
 				D8F574211C01E3219F6984B7 /* TasteView.swift in Sources */,
 				07F17EF16F50DB02B3C04627 /* TokenProvider.swift in Sources */,
 				D7BB799564E52E6E814831F8 /* TokenStore.swift in Sources */,
+				E04DBD622CF7CECD84F026B6 /* TrackerScores.swift in Sources */,
 				DF9B62750FA0D1206C79662E /* Typography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -20,6 +20,7 @@ struct SeriesDetailView: View {
     @State private var cadence: Cadence?
     @State private var isLoading = true
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -49,7 +50,7 @@ struct SeriesDetailView: View {
                 relatedRow
                 onwardRow("Similar", similar)
                 onwardRow("Readers also like", alsoLike)
-                trackerScores
+                TrackerScores(series: series)
                 readElsewhere
                 newsSection
                 provenance
@@ -71,16 +72,43 @@ struct SeriesDetailView: View {
     /// only place in the app that sends a specific series into a blend from the
     /// screen where you decided you liked it.
     private var actions: some View {
-        HStack(spacing: Metrics.gapStrip) {
-            LibraryControl(series: series, library: library)
+        // Side by side normally; stacked at accessibility text sizes, where
+        // two fixed-height buttons sharing a row truncated into "Add to li…"
+        // and "Use as…" — both unreadable, and the primary action of the page
+        // among them.
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Metrics.gapStrip) {
+                    libraryAction
+                    seedAction
+                }
                 .padding(.leading, Metrics.gutter)
-            if onUseAsSeed != nil {
+            } else {
+                HStack(spacing: Metrics.gapStrip) {
+                    libraryAction
+                        .padding(.leading, Metrics.gutter)
+                    seedAction
+                }
+            }
+        }
+        .padding(.trailing, Metrics.gutter)
+    }
+
+    private var libraryAction: some View {
+        LibraryControl(series: series, library: library)
+    }
+
+    @ViewBuilder
+    private var seedAction: some View {
+        if onUseAsSeed != nil {
                 Button { onUseAsSeed?(series) } label: {
                     Text("Use as seed")
                         .typeChip()
                         .lineLimit(1)
                         .padding(.horizontal, 16)
-                        .frame(height: Metrics.ctaPrimary)
+                        // minHeight, not height: at accessibility text sizes a
+                        // fixed 52pt button clips its own label.
+                        .frame(minHeight: Metrics.ctaPrimary)
                         .foregroundStyle(Palette.textPrimary)
                         .background(
                             Palette.surfaceChip,
@@ -95,9 +123,7 @@ struct SeriesDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("Adds this series to the Mix and opens it")
-            }
         }
-        .padding(.trailing, Metrics.gutter)
     }
 
     @ViewBuilder
@@ -152,63 +178,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Sections
-
-    /// The same series scored by other trackers. Real data from the API's
-    /// `source` field, normalised to 0-100 so the numbers are comparable —
-    /// AniList's 100-point scale and Anime-Planet's 5-star scale otherwise
-    /// sit side by side meaning different things.
-    @ViewBuilder
-    private var trackerScores: some View {
-        let entries = (series.source ?? [:])
-            .compactMap { name, entry -> (String, Double)? in
-                guard let score = entry.ratingNormalized else { return nil }
-                return (name, score)
-            }
-            .sorted { $0.0 < $1.0 }
-
-        if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: 11) {
-                Text("Scores elsewhere")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-
-                ScrollView(.horizontal) {
-                    HStack(spacing: Metrics.gapStrip) {
-                        ForEach(entries, id: \.0) { name, score in
-                            VStack(spacing: 3) {
-                                Text(String(format: "%.1f", score / 10))
-                                    .scaledFont(size: 22, weight: .bold, relativeTo: .title2)
-                                    .foregroundStyle(Palette.textPrimary)
-                                Text(trackerName(name))
-                                    .typeGridMeta()
-                                    .foregroundStyle(Palette.textTertiary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Palette.surface, in: RoundedRectangle(
-                                cornerRadius: Metrics.radiusThumb, style: .continuous
-                            ))
-                        }
-                    }
-                    .padding(.horizontal, Metrics.gutter)
-                }
-                .scrollIndicators(.hidden)
-            }
-        }
-    }
-
-    private func trackerName(_ key: String) -> String {
-        switch key {
-        case "anilist": "AniList"
-        case "my_anime_list": "MyAnimeList"
-        case "anime_planet": "Anime-Planet"
-        case "manga_updates": "MangaUpdates"
-        case "anime_news_network": "ANN"
-        case "kitsu": "Kitsu"
-        default: key.replacingOccurrences(of: "_", with: " ").capitalized
-        }
-    }
 
     /// Sequels, prequels, spin-offs and source novels. The strongest onward
     /// path there is, because it is an explicit link rather than a guess.

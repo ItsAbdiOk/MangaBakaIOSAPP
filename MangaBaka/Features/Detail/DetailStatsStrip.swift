@@ -51,9 +51,13 @@ struct DetailStatsStrip: View {
             // so the strip becomes a wrapping grid rather than clipping.
             Group {
                 if typeSize.isAccessibilitySize {
-                    FlowLayout(spacing: 0) { segments }
+                    // Each segment takes its own width here. Left at
+                    // maxWidth: .infinity — right for five columns — a wrapped
+                    // segment claimed the whole row, so "2025 / STARTED" sat
+                    // alone across the screen at title size.
+                    FlowLayout(spacing: 0) { segments(fillsWidth: false) }
                 } else {
-                    HStack(spacing: 0) { segments }
+                    HStack(spacing: 0) { segments(fillsWidth: true) }
                 }
             }
             .background(Palette.surface, in: RoundedRectangle(
@@ -64,7 +68,7 @@ struct DetailStatsStrip: View {
         }
     }
 
-    private var segments: some View {
+    private func segments(fillsWidth: Bool) -> some View {
         ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
             VStack(spacing: 3) {
                 Text(stat.value)
@@ -75,11 +79,11 @@ struct DetailStatsStrip: View {
                     .tracking(0.4)
                     .foregroundStyle(Palette.textQuaternary)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
             .padding(.vertical, 12)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, fillsWidth ? 6 : 14)
             .overlay(alignment: .trailing) {
-                if index < stats.count - 1 {
+                if fillsWidth, index < stats.count - 1 {
                     Rectangle().fill(Palette.hairline).frame(width: 0.5)
                 }
             }

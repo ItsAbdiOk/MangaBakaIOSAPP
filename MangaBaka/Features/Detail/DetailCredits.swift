@@ -14,6 +14,8 @@ import SwiftUI
 struct DetailCredits: View {
     let series: Series
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     struct Row: Identifiable {
         let id: String
         let value: String
@@ -42,16 +44,35 @@ struct DetailCredits: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                HStack(alignment: .firstTextBaseline, spacing: 14) {
-                    Text(row.id)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textQuaternary)
-                    Spacer(minLength: 0)
-                    Text(row.value)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .fixedSize(horizontal: false, vertical: true)
+                // Label and value share a row until they cannot. At
+                // accessibility sizes both halves are wide enough to overlap
+                // in the middle, and "Anime adaptation" printed straight
+                // through "None listed".
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(row.id)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textQuaternary)
+                            Text(row.value)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Text(row.id)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textQuaternary)
+                            Spacer(minLength: 0)
+                            Text(row.value)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textPrimary)
+                                .multilineTextAlignment(.trailing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)

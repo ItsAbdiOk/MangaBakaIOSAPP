@@ -384,3 +384,53 @@ struct EmptyStateTests {
         #expect(!empty.contains("APIError"))
     }
 }
+
+/// The series page at the largest accessibility text size, found by running it
+/// there rather than by reading it. Three defects, all the same mistake in
+/// different clothes: a layout that assumes text stays small enough to sit
+/// beside something else.
+///
+/// - The hero's title broke mid-word — "Regress / ed" — because the cover is a
+///   fixed 126pt and what remains is narrower than one long word.
+/// - "Add to library" and "Use as seed" truncated to "Add to li…" and
+///   "Use as…", the page's primary action among them.
+/// - A credits row printed "Anime adaptation" straight through "None listed".
+///
+/// These assert the switch exists. The layout itself cannot be measured from a
+/// test, but its absence can.
+@Suite("The series page survives accessibility text sizes", .enabled(if: SourceTree.isAvailable))
+struct DetailAccessibilityLayoutTests {
+    @Test(
+        "Side-by-side layouts stack at accessibility sizes",
+        arguments: [
+            "MangaBaka/Features/Detail/DetailHero.swift",
+            "MangaBaka/Features/Detail/SeriesDetailView.swift",
+            "MangaBaka/Features/Detail/DetailCredits.swift",
+            "MangaBaka/Features/Detail/DetailStatsStrip.swift"
+        ]
+    )
+    func stacksWhenTextIsLarge(_ path: String) throws {
+        let source = try SourceTree.read(path)
+        #expect(
+            source.contains("typeSize.isAccessibilitySize"),
+            "\(path) puts content side by side with no accessibility-size fallback"
+        )
+    }
+
+    /// A fixed `height` around text that scales is the specific bug: the frame
+    /// stays put and the label clips inside it. `minHeight` grows instead.
+    @Test("Controls around scaling text use minHeight, not height")
+    func noFixedHeightsAroundText() throws {
+        for path in [
+            "MangaBaka/Features/Detail/SeriesDetailView.swift",
+            "MangaBaka/Features/Shared/RatingSegments.swift"
+        ] {
+            let source = try SourceTree.read(path)
+            #expect(
+                !source.contains(".frame(height: Metrics.ctaPrimary)"),
+                "\(path) pins a control's height around text that scales"
+            )
+            #expect(!source.contains(".frame(height: Metrics.ratingSegment)"))
+        }
+    }
+}

@@ -12,16 +12,50 @@ struct DetailHero: View {
     let schedule: Cadence?
     let onOpenSchedule: (() -> Void)?
 
-    var body: some View {
-        HStack(alignment: .bottom, spacing: Metrics.gapHero) {
-            CoverImage(
-                cover: series.cover,
-                width: Metrics.coverDetailHeroWidth,
-                radius: 14
-            )
-            .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
+    @Environment(\.dynamicTypeSize) private var typeSize
 
-            VStack(alignment: .leading, spacing: 0) {
+    /// Side by side normally; stacked at accessibility text sizes.
+    ///
+    /// The cover is a fixed 126pt, so the title gets whatever is left — about
+    /// 200pt on a phone. At AX5 that is narrower than the word "Regressed",
+    /// and the title broke mid-word across four lines. Stacking gives the
+    /// title the full width, which is the only thing that fixes it: shrinking
+    /// the cover far enough would leave a thumbnail.
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Metrics.gapHero) {
+                cover
+                text
+            }
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.top, 24)
+            .padding(.bottom, Metrics.gutter)
+        } else {
+            wide
+        }
+    }
+
+    private var cover: some View {
+        CoverImage(
+            cover: series.cover,
+            width: Metrics.coverDetailHeroWidth,
+            radius: 14
+        )
+        .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
+    }
+
+    private var wide: some View {
+        HStack(alignment: .bottom, spacing: Metrics.gapHero) {
+            cover
+            text
+        }
+        .padding(.horizontal, Metrics.gutter)
+        .padding(.top, 24)
+        .padding(.bottom, Metrics.gutter)
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 0) {
                 if let schedule {
                     DetailScheduleBlock(estimate: schedule, onOpen: onOpenSchedule)
                         .padding(.bottom, 13)
@@ -45,12 +79,8 @@ struct DetailHero: View {
                         .padding(.top, 7)
                 }
             }
-            .padding(.bottom, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, Metrics.gutter)
-        .padding(.top, 24)
-        .padding(.bottom, Metrics.gutter)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// "Manhwa · Completed". Either half alone is still worth showing.

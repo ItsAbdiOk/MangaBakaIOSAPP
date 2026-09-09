@@ -129,7 +129,7 @@ struct DetailOrderTests {
             "DetailCredits(",
             "relatedRow",
             "onwardRow(\"Similar\"",
-            "trackerScores",
+            "TrackerScores(",
             "readElsewhere",
             "provenance"
         ]
