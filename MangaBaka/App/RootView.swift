@@ -15,11 +15,13 @@ struct RootView: View {
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
     let library: LibraryService
+    let schedule: ReleaseScheduleService
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
     @State private var stackPath: [Series] = []
     @State private var shelfPath: [Series] = []
+    @State private var showsSchedule = false
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
     @State private var searchModel: SearchModel?
@@ -97,7 +99,19 @@ struct RootView: View {
                 NavigationStack(path: $shelfPath) {
                     ShelfView(shelf: shelf, path: $shelfPath)
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
+                        .navigationDestination(isPresented: $showsSchedule) {
+                            ScheduleView(
+                                model: ScheduleModel(service: schedule),
+                                path: $shelfPath
+                            )
+                        }
                         .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button { showsSchedule = true } label: {
+                                    Image(systemName: "calendar")
+                                }
+                                .accessibilityLabel("Next chapters")
+                            }
                             ToolbarItem(placement: .topBarTrailing) {
                                 NavigationLink {
                                     SettingsView(
