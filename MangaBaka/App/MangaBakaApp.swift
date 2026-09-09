@@ -9,6 +9,7 @@ struct MangaBakaApp: App {
     private let formats: FormatPreferencesStore
     private let library: LibraryService
     private let schedule: ReleaseScheduleService
+    private let catalogue: CatalogueService
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -70,6 +71,7 @@ struct MangaBakaApp: App {
         library = libraryService
 
         schedule = ReleaseScheduleService(library: libraryService, database: database)
+        catalogue = CatalogueService(client: apiClient)
 
         // Recommendations are built from the reader's own library and are not
         // content filtered by default, so the same choice has to reach both.
@@ -110,7 +112,8 @@ struct MangaBakaApp: App {
                 content: content,
                 formats: formats,
                 library: library,
-                schedule: schedule
+                schedule: schedule,
+                catalogue: catalogue
             )
         }
     }

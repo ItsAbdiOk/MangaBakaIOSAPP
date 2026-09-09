@@ -105,6 +105,20 @@ final class SearchModel {
         hasMore = result.series.count >= query.limit
     }
 
+    /// Runs a search for a genre or tag picked while browsing.
+    ///
+    /// Replaces the query rather than adding to it: arriving from a browse
+    /// screen means "show me this", not "narrow whatever I had".
+    func applyBrowse(genre: String? = nil, tag: String? = nil) {
+        var next = SearchQuery()
+        if let genre { next.tags = [genre] }
+        if let tag { next.tags = [tag] }
+        next.sort = "popularity_desc"
+        query = next
+        debounceTask?.cancel()
+        Task { await search() }
+    }
+
     /// Drops a pending debounce without touching an in-flight search. Call this
     /// before an explicit `search()` so a queued keystroke cannot re-fire after
     /// the reader has already submitted.

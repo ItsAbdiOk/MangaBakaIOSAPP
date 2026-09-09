@@ -4,6 +4,12 @@ import SwiftUI
 struct SearchView: View {
     @Bindable var model: SearchModel
     @Binding var path: [Series]
+    /// Opens the genre and tag browser.
+    ///
+    /// Lives in the screen's own header rather than the navigation bar: the
+    /// app's custom top bar is drawn over the navigation bar on a root screen,
+    /// so a toolbar button there was clipped to a sliver at the screen edge.
+    let onBrowse: () -> Void
 
     @State private var showFilters = false
 
@@ -23,6 +29,12 @@ struct SearchView: View {
                         .typeSubsectionHeader()
                         .foregroundStyle(Palette.textPrimary)
                     Spacer(minLength: 0)
+                    Button(action: onBrowse) {
+                        Text("Browse")
+                            .typeInstruction()
+                            .foregroundStyle(Palette.accent)
+                    }
+                    .buttonStyle(.plain)
                     Button {
                         model.query.sort = "random"
                         Task { model.cancelPendingDebounce(); await model.search() }

@@ -16,6 +16,7 @@ struct RootView: View {
     let formats: FormatPreferencesStore
     let library: LibraryService
     let schedule: ReleaseScheduleService
+    let catalogue: CatalogueService
 
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
@@ -27,6 +28,8 @@ struct RootView: View {
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
     @State private var searchModel: SearchModel?
+    @State private var browseModel: BrowseModel?
+    @State private var showsBrowse = false
     @State private var mixModel: MixModel?
     @State private var cacheAge: TimeInterval?
 
@@ -144,9 +147,23 @@ struct RootView: View {
                 NavigationStack(path: $searchPath) {
                     SearchView(
                         model: searchModel ?? SearchModel(repository: repository),
-                        path: $searchPath
+                        path: $searchPath,
+                        onBrowse: { showsBrowse = true }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
+                    .navigationDestination(isPresented: $showsBrowse) {
+                        BrowseView(
+                            model: browseModel ?? BrowseModel(catalogue: catalogue),
+                            onPickGenre: { genre in
+                                searchModel?.applyBrowse(genre: genre.value)
+                                showsBrowse = false
+                            },
+                            onPickTag: { tag in
+                                searchModel?.applyBrowse(tag: tag.name)
+                                showsBrowse = false
+                            }
+                        )
+                    }
                 }
                 .toolbar(.hidden, for: .tabBar)
             }
@@ -177,6 +194,7 @@ struct RootView: View {
             if searchModel == nil { searchModel = SearchModel(repository: repository) }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
             if libraryModel == nil { libraryModel = LibraryModel(library: library) }
+            if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
         }
         .task {
             // Nothing is cached when the app opens — the first feed has not
@@ -206,7 +224,7 @@ struct RootView: View {
         // "at root" while a screen was open — and the top bar covered its
         // back button.
         case .library: shelfPath.isEmpty && openShelf == nil && !showsSchedule
-        case .search: searchPath.isEmpty
+        case .search: searchPath.isEmpty && !showsBrowse
         }
     }
 
@@ -220,7 +238,9 @@ struct RootView: View {
             shelfPath.removeAll()
             openShelf = nil
             showsSchedule = false
-        case .search: searchPath.removeAll()
+        case .search:
+            searchPath.removeAll()
+            showsBrowse = false
         }
     }
 
