@@ -66,7 +66,14 @@ enum DisplayTitle {
         case .romanised:
             titles.first { $0.language.hasSuffix("-Latn") }?.title
         case .original:
+            // The trait first, then the script. Most series carry no "native"
+            // trait at all — the origin-language title is simply tagged `ja`
+            // or `ko` with nothing else — so requiring it answered an
+            // "original language" request with English and said nothing about
+            // having done so. A "-Latn" tag is excluded on purpose: a
+            // romanisation is a reading of the original, not the original.
             titles.first { $0.traits.contains("native") }?.title
+                ?? titles.first { isNativeScript($0) }?.title
         case .english:
             // Explicit, not "fall through to the device's languages": the
             // choice is the reader's, so a French phone must not quietly
@@ -88,6 +95,17 @@ enum DisplayTitle {
         let inLanguage = titles.filter { languageCode(of: $0.language) == code }
         return inLanguage.first { $0.traits.contains("official") }?.title
             ?? inLanguage.first?.title
+    }
+
+    /// A title written in the language the series came from.
+    ///
+    /// Everything that is not English and not a romanisation. Deliberately
+    /// broad rather than a list of origin languages: the API does not say
+    /// which language a series originated in on the titles themselves, and a
+    /// hard-coded ja/ko/zh list would silently exclude everything else.
+    private static func isNativeScript(_ title: SeriesTitle) -> Bool {
+        let code = languageCode(of: title.language)
+        return code != "en" && !code.hasSuffix("-latn")
     }
 
     /// "pt-BR" and "pt-br" and "pt" all compare equal; "ko-Latn" stays distinct

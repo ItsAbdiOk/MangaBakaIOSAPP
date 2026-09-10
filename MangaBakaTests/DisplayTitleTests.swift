@@ -56,6 +56,38 @@ struct DisplayTitleTests {
         )
     }
 
+    @Test("An untagged native-script title still satisfies the original preference")
+    func originalFindsUntaggedNativeScript() {
+        // Most series carry no "native" trait at all: the origin-language
+        // title is simply tagged `ja` or `ko` with no traits. Requiring the
+        // trait meant the app quietly answered an "original language" request
+        // with English — the reader's setting silently doing nothing.
+        let titles = [
+            Self.title("Frieren: Beyond Journey's End", "en", ["official"]),
+            Self.title("Sousou no Frieren", "ja-Latn"),
+            Self.title("葬送のフリーレン", "ja")
+        ]
+        #expect(
+            DisplayTitle.choose(from: titles, preferredLanguages: ["en"], preference: .original)
+                == "葬送のフリーレン"
+        )
+    }
+
+    @Test("A romanisation is not mistaken for the original")
+    func originalIgnoresRomanisations() {
+        // "-Latn" is a reading of the original, not the original. A series
+        // with only a romanisation and an English title cannot satisfy the
+        // preference, and should fall through rather than pick the Latin one.
+        let titles = [
+            Self.title("Frieren: Beyond Journey's End", "en", ["official"]),
+            Self.title("Sousou no Frieren", "ja-Latn")
+        ]
+        #expect(
+            DisplayTitle.choose(from: titles, preferredLanguages: ["en"], preference: .original)
+                == "Frieren: Beyond Journey's End"
+        )
+    }
+
     @Test("A preference the series cannot satisfy falls through rather than showing nothing")
     func fallsThrough() {
         let englishOnly = [Self.title("Lout of Count's Family", "en", ["official"])]
