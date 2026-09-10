@@ -180,6 +180,26 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v7_libraryCache") { db in
+            // The reader's own library, on disk.
+            //
+            // Measured on a real account: 939 entries, thirteen requests,
+            // 24.7 MB — thirty times everything else the app fetches put
+            // together. Paying that on every launch is indefensible on a
+            // cellular connection, and it is the same answer every time.
+            try db.create(table: "libraryEntry") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("payload", .blob).notNull()
+            }
+            // One row, holding when the whole walk finished. Per-entry
+            // timestamps would let a half-written library look fresh.
+            try db.create(table: "libraryMetadata") { table in
+                table.primaryKey("id", .integer)
+                table.column("cachedAt", .datetime).notNull()
+                table.column("isComplete", .boolean).notNull()
+            }
+        }
+
         return migrator
     }
 }

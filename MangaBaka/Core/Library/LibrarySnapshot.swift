@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// The reader's whole library, fetched once and shared.
 ///
@@ -34,12 +35,28 @@ actor LibrarySnapshot {
         var failure: APIError?
     }
 
+    /// How long a cached library stays good.
+    ///
+    /// Six hours, and it is discarded outright on any write — so the only way
+    /// to see a stale library is to change it somewhere else, on the website or
+    /// another device, and come back within six hours. The alternative is
+    /// 24.7 MB every launch.
+    private static let freshness: TimeInterval = 6 * 60 * 60
+
     private let library: any LibraryProviding
+    private let database: AppDatabase?
+    private let clock: any Clock
     private var cached: Result?
     private var inFlight: Task<Result, Never>?
 
-    init(library: any LibraryProviding) {
+    init(
+        library: any LibraryProviding,
+        database: AppDatabase? = nil,
+        clock: any Clock = SystemClock()
+    ) {
         self.library = library
+        self.database = database
+        self.clock = clock
     }
 
     /// Everything, fetched once.
@@ -62,6 +79,13 @@ actor LibrarySnapshot {
     func load() async -> Result {
         if let cached { return cached }
         if let inFlight { return await inFlight.value }
+        // Disk before network. The answer is the same every launch and it is
+        // the most expensive thing the app fetches by thirty to one.
+        if let stored = readCache(), !stored.entries.isEmpty {
+            cached = stored
+            onPage?(stored.entries)
+            return stored
+        }
 
         let task = Task<Result, Never> { [library, onPage] in
             var result = Result()
@@ -90,7 +114,10 @@ actor LibrarySnapshot {
         let result = await task.value
         // A walk that failed is not cached: the next caller should try again
         // rather than inherit a bad connection for the rest of the session.
-        if result.failure == nil { cached = result }
+        if result.failure == nil {
+            cached = result
+            writeCache(result)
+        }
         inFlight = nil
         return result
     }
@@ -108,7 +135,53 @@ actor LibrarySnapshot {
     /// Called after a write: adding a series or changing its state makes the
     /// copy in memory wrong, and a stale library is how the app once offered
     /// "Add to library" for something already in it.
+    /// The library as it was last written, if that was recently enough.
+    private func readCache() -> Result? {
+        guard let database else { return nil }
+        return try? database.writer.read { db in
+            guard let meta = try LibraryMetadata.fetchOne(db, key: 1) else { return nil }
+            let age = clock.now.timeIntervalSince(meta.cachedAt)
+            // A negative age means the device clock moved backwards; treat that
+            // as stale rather than trusting it.
+            guard age >= 0, age < Self.freshness else { return nil }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let rows = try CachedLibraryEntry.fetchAll(db)
+            let entries = rows.compactMap {
+                try? decoder.decode(LibraryEntry.self, from: $0.payload)
+            }
+            guard !entries.isEmpty else { return nil }
+            return Result(entries: entries, isComplete: meta.isComplete, failure: nil)
+        }
+    }
+
+    private func writeCache(_ result: Result) {
+        guard let database, !result.entries.isEmpty else { return }
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        try? database.writer.write { db in
+            // Replaced wholesale rather than merged: an entry removed on the
+            // website would otherwise survive here forever.
+            try db.execute(sql: "DELETE FROM libraryEntry")
+            for entry in result.entries {
+                guard let payload = try? encoder.encode(entry) else { continue }
+                try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).save(db)
+            }
+            try LibraryMetadata(
+                cachedAt: clock.now, isComplete: result.isComplete
+            ).save(db)
+        }
+    }
+
     func invalidate() {
+        // The copy on disk is wrong too. A write is exactly when a stale
+        // library is most visible — the reader just changed the thing they are
+        // looking at.
+        try? database?.writer.write { db in
+            try db.execute(sql: "DELETE FROM libraryEntry")
+            try db.execute(sql: "DELETE FROM libraryMetadata")
+        }
         cached = nil
         inFlight?.cancel()
         inFlight = nil

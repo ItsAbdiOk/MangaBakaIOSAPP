@@ -75,6 +75,24 @@ struct CachedDetail: Codable, FetchableRecord, PersistableRecord, Sendable {
     var cachedAt: Date
 }
 
+/// One library entry, cached on disk.
+struct CachedLibraryEntry: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "libraryEntry"
+
+    var seriesId: Int
+    var payload: Data
+}
+
+/// When the library was last walked in full.
+struct LibraryMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "libraryMetadata"
+
+    /// Always 1. One row, because the timestamp is about the whole walk.
+    var id: Int = 1
+    var cachedAt: Date
+    var isComplete: Bool
+}
+
 /// When a feed was last fetched.
 struct FeedMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "feedMetadata"

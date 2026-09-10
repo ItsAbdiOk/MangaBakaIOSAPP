@@ -5,7 +5,11 @@ import Foundation
 /// The seven states are richer than the usual five. `considering` is the one
 /// that matters most here: the swipe stack's "maybe" pile has a real home on
 /// the server rather than being a local invention.
-struct LibraryEntry: Decodable, Identifiable, Sendable, Equatable {
+///
+/// `Codable` rather than `Decodable` so the library can be cached on disk. The
+/// encode side exists only for that cache: 939 entries is 24.7 MB over the wire
+/// and the same answer every launch.
+struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
     enum State: String, Codable, CaseIterable, Sendable {
         case considering
         case planToRead = "plan_to_read"

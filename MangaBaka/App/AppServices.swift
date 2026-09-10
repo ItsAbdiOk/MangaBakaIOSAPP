@@ -67,7 +67,7 @@ struct AppServices {
 
         // Built before anything that reads the library, because three of them
         // do and the library is the most expensive thing the app fetches.
-        let sharedLibrary = LibrarySnapshot(library: libraryService)
+        let sharedLibrary = LibrarySnapshot(library: libraryService, database: database)
         librarySnapshot = sharedLibrary
 
         schedule = ReleaseScheduleService(library: libraryService, database: database)
