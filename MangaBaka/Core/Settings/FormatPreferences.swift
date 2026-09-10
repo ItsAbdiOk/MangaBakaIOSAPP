@@ -31,8 +31,11 @@ struct FormatPreferences: Sendable, Equatable {
 
         var subtitle: String {
             switch self {
-            case .manga: "Japanese"
-            case .manhwa: "Korean"
+            // The reading direction is the part that actually changes the
+            // experience, and it is the part a reader new to the categories
+            // does not know. "Korean" alone teaches nobody anything.
+            case .manga: "Japanese, right to left"
+            case .manhwa: "Korean, usually vertical"
             case .manhua: "Chinese"
             case .novel: "Prose, including light novels"
             case .oel: "Originally in English"

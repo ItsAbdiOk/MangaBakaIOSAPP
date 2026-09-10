@@ -157,10 +157,17 @@ struct BlockedTagsRequestTests {
 struct BlockedTagsDiscoverabilityTests {
     @Test("Settings lists what has been blocked, and can unblock it")
     func settingsListsThem() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Settings/SettingsView.swift")
+        // Moved to its own file when the section stopped hiding itself while
+        // empty — the one place a reader looks to find out what they have
+        // hidden used to disappear exactly when the answer was "nothing".
+        let source = try SourceTree.read("MangaBaka/Features/Settings/BlockedTagsSection.swift")
         #expect(source.contains("Blocked tags"))
         #expect(source.contains("blockedTags.toggle"))
         #expect(source.contains("Unblock"))
+        #expect(
+            !source.contains("if !blockedTags.blocked.isEmpty"),
+            "the section has to be there when the list is empty, or the feature looks absent"
+        )
     }
 
     /// Blocking happens where the tags are; the list lives where a reader looks

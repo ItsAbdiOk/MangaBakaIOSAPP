@@ -34,6 +34,9 @@ enum Metrics {
     static let radiusSavedThumb: CGFloat = 9
     /// Cards and primary CTAs.
     static let radiusCard: CGFloat = 16
+    /// Tighter than a card, for something that sits inside a section rather
+    /// than being one.
+    static let radiusChip: CGFloat = 12
     /// A cover inside a horizontal row.
     static let radiusCoverRow: CGFloat = 13
     /// A cover inside a grid.
@@ -44,14 +47,16 @@ enum Metrics {
     // MARK: Control heights
 
     static let ctaPrimary: CGFloat = 52
-    static let ctaDetail: CGFloat = 48
+    /// The one CTA height. There were two — a 48pt "detail" variant for the
+    /// Save-token button — until the state family gave every screen the same
+    /// button component. A second height with no second meaning is how a design
+    /// system starts drifting.
     static let ctaSecondary: CGFloat = 46
     /// Search field and filter button.
     static let field: CGFloat = 40
     static let backButton: CGFloat = 38
     static let ratingSegment: CGFloat = 34
     static let headerPill: CGFloat = 30
-    static let toggle: CGFloat = 28
 
     // MARK: Covers
 

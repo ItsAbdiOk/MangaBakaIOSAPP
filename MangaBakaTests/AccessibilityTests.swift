@@ -101,27 +101,23 @@ struct DynamicTypeLayoutTests {
 
     /// A row holding two lines of scaled text cannot have a fixed height, or
     /// one row's caption overlaps the next row's title.
+    ///
+    /// This used to be asserted twice, once per settings file, because the
+    /// format rows arrived in a second file and were outside the check. There
+    /// is one row component now, so there is one place to check — and one place
+    /// where the mistake can be made.
     @Test("Settings rows size to their content")
     func settingsRowsAreFlexible() throws {
-        let text = try source("MangaBaka/Features/Settings/SettingsView.swift")
-        #expect(text.contains("frame(minHeight: Metrics.ctaSecondary)"))
+        let text = try source("MangaBaka/Features/Settings/SettingsRow.swift")
+        #expect(text.contains("frame(minHeight: 63)"))
         #expect(
-            !text.contains("frame(height: Metrics.ctaSecondary)"),
+            !text.contains("frame(height: 63)"),
             "A fixed height clips scaled text"
         )
-    }
-
-    /// The format rows arrived in a second file after this suite was written,
-    /// so they were outside every check it makes. Two lines of scaled text per
-    /// row, same trap.
-    @Test("Format rows size to their content")
-    func formatRowsAreFlexible() throws {
-        let text = try source("MangaBaka/Features/Settings/FormatSection.swift")
-        #expect(text.contains("frame(minHeight: Metrics.ctaSecondary)"))
-        #expect(
-            !text.contains("frame(height: Metrics.ctaSecondary)"),
-            "A fixed height clips scaled text"
-        )
+        // Above the accessibility sizes the row stops being a horizontal thing
+        // altogether: side by side, the title and the switch fight over 393pt
+        // and the caption wraps to four lines.
+        #expect(text.contains("typeSize >= .accessibility1"))
     }
 
     /// The stack's caption is two stacked lines of scaled text over a card.
@@ -293,9 +289,9 @@ struct InteractiveControlTests {
 /// the exact coordinate a tap failed at.
 @Suite("Content rows are tappable", .enabled(if: SourceTree.isAvailable))
 struct ContentRowTests {
-    /// Both settings sections, not just the first one written. The format
-    /// rows were added in a second file and would otherwise have been free to
-    /// repeat the bug this suite exists to prevent.
+    /// Both settings sections, not just the first one written. They share one
+    /// row component now, but each still builds its own Button around it and
+    /// each can still get the accessibility wrong on its own.
     private static let rowFiles = [
         "MangaBaka/Features/Settings/SettingsView.swift",
         "MangaBaka/Features/Settings/FormatSection.swift"
@@ -305,11 +301,14 @@ struct ContentRowTests {
     func rowIsTheControl(_ path: String) throws {
         let source = try SourceTree.read(path)
         #expect(source.contains("SwitchIndicator"), "The switch is drawn, not a live control")
-        #expect(source.contains("contentShape(Rectangle())"), "The whole row must be the target")
         #expect(
             !source.contains("Toggle(isOn:"),
             "A live Toggle inside the row competes for the tap and loses"
         )
+        // The tap target is the row itself, which now lives in the shared
+        // component rather than being re-declared per section.
+        let row = try SourceTree.read("MangaBaka/Features/Settings/SettingsRow.swift")
+        #expect(row.contains("contentShape(Rectangle())"), "The whole row must be the target")
     }
 
     /// The indicator is decoration; the Button carries the state for VoiceOver.
@@ -321,13 +320,40 @@ struct ContentRowTests {
         #expect(source.contains("accessibilityElement(children: .combine)"))
     }
 
+    /// A locked row is a rule, not a broken control.
+    ///
+    /// `.disabled(isLocked)` is the trap, and it was shipped: SwiftUI fades a
+    /// disabled Button's entire label, so the row title went grey with
+    /// everything else and the design read as unavailable rather than fixed.
+    /// Found by looking at the built screen against the board, not by a test —
+    /// hence this one.
+    @Test("A locked row is not a disabled Button", arguments: rowFiles)
+    func lockedRowsKeepTheirContrast(_ path: String) throws {
+        // Comments stripped first: the fix is documented in a comment that
+        // names the thing it forbids, and a test that cannot tell code from a
+        // note about the code fails on its own explanation.
+        let source = try SourceTree.read(path)
+        let code = source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        #expect(
+            !code.contains(".disabled(isLocked)"),
+            "a disabled Button dims its whole label, including the title"
+        )
+        #expect(source.contains("LockPill()"), "the rule needs something that says it is a rule")
+    }
+
     @Test("State is announced on the row, not on the decoration", arguments: rowFiles)
     func stateIsOnTheRow(_ path: String) throws {
         let source = try SourceTree.read(path)
-        #expect(source.contains("accessibilityValue(isOn ? \"On\" : \"Off\")"))
-        // The indicator itself lives in FormatSection.swift alongside the
-        // format rows; wherever it is, it must not be announced.
-        let indicator = try SourceTree.read("MangaBaka/Features/Settings/FormatSection.swift")
+        // A locked row announces the rule rather than a switch position, so the
+        // value is no longer a bare on/off — but it must still be on the row.
+        #expect(source.contains("accessibilityValue("))
+        #expect(source.contains("isOn ? \"On\" : \"Off\""))
+        // The indicator is decoration wherever it lives, and must not be
+        // announced separately from the row that carries its meaning.
+        let indicator = try SourceTree.read("MangaBaka/Features/Settings/SettingsRow.swift")
         #expect(indicator.contains("accessibilityHidden(true)"))
     }
 }

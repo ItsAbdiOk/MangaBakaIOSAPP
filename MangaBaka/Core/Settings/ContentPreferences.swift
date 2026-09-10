@@ -23,6 +23,18 @@ struct ContentPreferences: Sendable, Equatable {
             }
         }
 
+        /// What the rating actually covers, in the reader's terms rather than
+        /// the API's. "Suggestive" alone means nothing to someone deciding
+        /// whether to switch it on.
+        var caption: String {
+            switch self {
+            case .safe: "The baseline everyone sees"
+            case .suggestive: "Fan service, innuendo"
+            case .erotica: "Sex, not explicit"
+            case .pornographic: "Explicit"
+            }
+        }
+
         /// Whether turning this on is a deliberate act rather than a preference.
         var requiresOptIn: Bool {
             switch self {

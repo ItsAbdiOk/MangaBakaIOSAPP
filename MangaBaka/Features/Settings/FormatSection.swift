@@ -10,115 +10,61 @@ struct FormatSection: View {
     let formats: FormatPreferencesStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Eyebrow(text: "Formats")
-
-            Text("""
-            Shown everywhere: Discover, Search, the Stack and Mix. Turn off \
-            what you don't read.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textSecondary)
-
-            VStack(spacing: 0) {
-                ForEach(FormatPreferences.Format.allCases, id: \.rawValue) { format in
-                    row(format)
-                    if format != FormatPreferences.Format.allCases.last {
-                        Rectangle()
-                            .fill(Palette.hairline)
-                            .frame(height: 0.5)
-                            .padding(.leading, 14)
+        SettingsSection(
+            title: "Formats",
+            caption: "Which publication formats appear in results."
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                SettingsCard {
+                    ForEach(FormatPreferences.Format.allCases, id: \.rawValue) { format in
+                        row(format)
+                        if format != FormatPreferences.Format.allCases.last {
+                            SettingsDivider()
+                        }
                     }
                 }
-            }
-            .background(Palette.surface, in: RoundedRectangle(
-                cornerRadius: Metrics.radiusCard, style: .continuous
-            ))
-            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
 
-            Text("""
-            Changing this clears downloaded feeds, because they were fetched \
-            under the previous setting.
-            """)
-            .typeFootnote()
-            .foregroundStyle(Palette.textQuaternary)
+                // A plain line, where Content gets the tinted callout. Same
+                // mechanism, smaller blast radius: turning off novels drops
+                // some rows, turning off a rating discards every cached feed.
+                // If both got the box, the box would stop meaning anything.
+                Text("""
+                Changing this clears downloaded feeds, because they were \
+                fetched under the previous setting.
+                """)
+                .typeFootnote()
+                .foregroundStyle(Palette.textQuaternary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
-    /// A Button wrapping a drawn indicator, matching the content rows. A live
-    /// Toggle here only ever responded to a drag across the switch, never to an
-    /// ordinary tap — verified repeatedly on device.
     private func row(_ format: FormatPreferences.Format) -> some View {
         let isOn = formats.preferences.allowed.contains(format)
-        // The last one on cannot be switched off; turning everything off would
-        // leave an empty app with no visible cause.
+        // The last format on cannot be turned off: a reader who excluded every
+        // format would get an empty app and no explanation for it.
         let isLocked = isOn && formats.preferences.allowed.count == 1
 
         return Button {
             guard !isLocked else { return }
             Task { await formats.set(format, allowed: !isOn) }
         } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(format.title)
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                    Text(isLocked ? "Keep at least one format on" : format.subtitle)
-                        .typeGridMeta()
-                        .foregroundStyle(Palette.textTertiary)
+            SettingsRow(title: format.title, caption: format.subtitle) {
+                if isLocked {
+                    LockPill()
+                } else {
+                    SwitchIndicator(isOn: isOn)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                SwitchIndicator(isOn: isOn, isLocked: isLocked)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            // minHeight rather than height: two lines of scaled text, and a
-            // fixed height made one row's caption overlap the next row's title
-            // at accessibility sizes.
-            .frame(minHeight: Metrics.ctaSecondary)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isLocked)
+        // NOT `.disabled(isLocked)`. That was the cause of the dimmed row the
+        // design board calls out by name: SwiftUI fades a disabled Button's
+        // whole label, so the title went grey along with everything else and a
+        // deliberate rule read as a broken control. The guard inside the action
+        // is what makes the row inert; the lock pill is what says why.
         .accessibilityLabel(format.title)
-        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityValue(isLocked ? "Always on" : (isOn ? "On" : "Off"))
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-/// The drawn switch used by both settings sections.
-///
-/// Drawn rather than a real `Toggle`, because each row's tap target is the
-/// whole row and a live control inside it would compete for the gesture. That
-/// competition is not theoretical: the content rows only responded to a drag
-/// across the switch until the row became the button and the switch became
-/// presentation.
-struct SwitchIndicator: View {
-    let isOn: Bool
-    let isLocked: Bool
-
-    /// The mockup's switch, not UIKit's: a 46x28 track with a 24pt knob and
-    /// 2pt of inset. It was drawn at UIKit's 51x31 with a 27pt knob, which is
-    /// the right size for a real `Toggle` and the wrong one here — noticeably
-    /// larger than every other control on the same screen.
-    private static let trackWidth: CGFloat = 46
-    private static let knob = Metrics.toggle - 4
-
-    var body: some View {
-        let track = isOn ? Palette.accent : Palette.surfaceChip
-        return ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule()
-                .fill(track.opacity(isLocked ? 0.4 : 1))
-                .frame(width: Self.trackWidth, height: Metrics.toggle)
-            Circle()
-                .fill(.white.opacity(isLocked ? 0.6 : 1))
-                .frame(width: Self.knob, height: Self.knob)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-                .padding(.horizontal, 2)
-        }
-        .frame(width: Self.trackWidth, height: Metrics.toggle)
-        .animation(.snappy(duration: 0.2), value: isOn)
-        .accessibilityHidden(true)
     }
 }

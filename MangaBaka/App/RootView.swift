@@ -138,6 +138,7 @@ struct RootView: View {
                                 content: content,
                                 formats: formats,
                                 blockedTags: blockedTags,
+                                catalogue: catalogue,
                                 history: history
                             )
                         }

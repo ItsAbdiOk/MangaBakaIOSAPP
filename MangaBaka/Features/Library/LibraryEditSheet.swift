@@ -190,7 +190,7 @@ struct LibraryEditSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                SwitchIndicator(isOn: isPrivate, isLocked: false)
+                SwitchIndicator(isOn: isPrivate)
             }
             .contentShape(Rectangle())
         }

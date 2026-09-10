@@ -62,6 +62,17 @@ enum Palette {
     /// what the colour is supposed to mean.
     static let stale = Color(hex: 0xEFA831)
 
+    /// A switch that is off. iOS's own off-track grey rather than the app's
+    /// chip fill, because the drawn switch is meant to be indistinguishable
+    /// from a real one and this is the colour a real one uses.
+    static let switchOff = Color(hex: 0x2C2C2E)
+
+    /// The tinted callout: a wash of the accent dark enough to sit under body
+    /// text, with a matching edge. Used where a setting discards content the
+    /// moment it changes. Sampled from the design board.
+    static let accentTint = Color(hex: 0x160B09)
+    static let accentEdge = Color(hex: 0x47231D)
+
     // MARK: Borders — always 0.5pt
 
     /// Meta lines and inactive tab labels. Between textSecondary and

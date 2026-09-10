@@ -16,17 +16,7 @@ struct HistorySection: View {
     @State private var isConfirming = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Eyebrow(text: "Recently viewed")
-
-            Text("""
-            The last \(HistoryStore.limit) series you opened appear on Discover \
-            so you can get back to them. The list is stored on this phone, is \
-            never sent anywhere, and clearing it does not touch your library.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textSecondary)
-
+        SettingsSection(title: "Recently viewed", caption: caption) {
             Button {
                 isConfirming = true
             } label: {
@@ -36,6 +26,9 @@ struct HistorySection: View {
                     Text(label)
                         .typeCTA()
                 }
+                // Inert rather than absent when there is nothing to clear. A
+                // control that vanishes makes the section look like it lost a
+                // feature, and the reader is left wondering what they did.
                 .foregroundStyle(held == 0 ? Palette.textTertiary : Palette.accent)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: Metrics.ctaSecondary)
@@ -65,6 +58,23 @@ struct HistorySection: View {
             // that reasonably frightens people.
             Text("Your library, saves and skips are not affected.")
         }
+    }
+
+    /// The empty caption is not the populated one with a word removed: with
+    /// nothing in the list the sentence has to explain what the list is FOR,
+    /// which the populated one can take for granted.
+    private var caption: String {
+        held == 0
+            ? """
+            Nothing opened yet. The last \(HistoryStore.limit) series you open \
+            appear on Discover so you can get back to them, stored on this \
+            phone and never sent anywhere.
+            """
+            : """
+            The last \(HistoryStore.limit) series you opened appear on Discover \
+            so you can get back to them. The list is stored on this phone, is \
+            never sent anywhere, and clearing it does not touch your library.
+            """
     }
 
     /// "Clear 12 series" — the number, so the reader knows what they are erasing

@@ -9,49 +9,55 @@ import SwiftUI
 /// page, or beside the series itself.
 ///
 /// Two obligations, not one: MangaBaka, **and** the provider each piece of
-/// third-party data came from, per that provider's own rules. The second is why
-/// the trackers are named here rather than lumped into "and others".
+/// third-party data came from, per that provider's own rules. The second one
+/// belongs on the series page's tracker row, where the third-party data
+/// actually is — that is a change to the detail screen and it has not been made
+/// yet.
 ///
-/// The link is the part that satisfies the licence — plain text naming them
-/// does not. Do not reduce this to a sentence.
-///
-/// Its own file for the reason `FormatSection` gives: `SettingsView` sits at the
-/// lint's body-length ceiling.
+/// The link is the part that satisfies the licence. Plain text naming them does
+/// not. Do not reduce this to a sentence.
 struct AttributionSection: View {
     /// Their site, not the API host. The licence asks for somewhere a reader
     /// can go, and `api.mangabaka.org` is not that.
     private static let home = URL(string: "https://mangabaka.org")
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: "Data")
+        SettingsSection(title: "Data and credit", caption: nil) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("""
+                Series data comes from MangaBaka, and through it from AniList, \
+                Kitsu, MangaUpdates, MyAnimeList and Anime-Planet.
+                """)
+                .typeSubtitle()
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Text("""
-            Series data comes from MangaBaka, and through it from AniList, \
-            Kitsu, MangaUpdates, MyAnimeList and Anime-Planet.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textSecondary)
-
-            if let home = Self.home {
-                Link(destination: home) {
-                    HStack(spacing: 5) {
-                        Text("mangabaka.org")
-                            .typeCTA()
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 11, weight: .semibold))
+                if let home = Self.home {
+                    Link(destination: home) {
+                        HStack(spacing: 5) {
+                            Text("mangabaka.org")
+                                .typeCTA()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(Palette.accent)
                     }
-                    .foregroundStyle(Palette.accent)
+                    .accessibilityLabel("Open mangabaka.org")
                 }
-                .accessibilityLabel("Open mangabaka.org")
-            }
 
-            Text("""
-            Licensed CC BY-NC-SA 4.0 — free for personal, non-commercial use \
-            with attribution. This app is free and carries no ads or purchases.
-            """)
-            .typeFootnote()
-            .foregroundStyle(Palette.textQuaternary)
+                Rectangle()
+                    .fill(Palette.hairline)
+                    .frame(height: 0.5)
+
+                Text("""
+                Licensed CC BY-NC-SA 4.0 — free for personal, non-commercial \
+                use with attribution. This app is free and carries no ads or \
+                purchases.
+                """)
+                .typeFootnote()
+                .foregroundStyle(Palette.textQuaternary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
