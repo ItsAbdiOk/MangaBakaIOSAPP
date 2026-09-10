@@ -71,18 +71,27 @@ struct LibraryModelTests {
         #expect(model.inProgress.map(\.seriesId).sorted() == [1, 5])
     }
 
-    @Test("The subtitle pluralises shelves correctly")
-    func pluralises() async throws {
-        let many = LibraryModel(library: StubLibrary(entries: [
-            try entry(1, .reading), try entry(2, .dropped)
+    /// The subtitle used to count shelves. It counts what is rated now: the
+    /// shape bar says how the library is divided far better than a number of
+    /// shelves did, and how much of it you have formed an opinion on is a thing
+    /// nothing else on the screen answers.
+    @Test("The subtitle says how much of the library is rated")
+    func subtitleCountsRatings() async throws {
+        let model = LibraryModel(library: StubLibrary(entries: [
+            try entry(1, .reading, rating: 80),
+            try entry(2, .dropped),
+            try entry(3, .completed, rating: 100)
         ]))
-        await many.load()
-        #expect(many.subtitle.contains("2 shelves"))
+        await model.load()
 
-        let one = LibraryModel(library: StubLibrary(entries: [try entry(1, .reading)]))
-        await one.load()
-        #expect(one.subtitle.contains("1 shelf"))
-        #expect(!one.subtitle.contains("shelfs"))
+        #expect(model.subtitle == "3 series · 2 rated")
+    }
+
+    @Test("An empty library says so rather than counting to zero")
+    func emptySubtitle() async throws {
+        let model = LibraryModel(library: StubLibrary(entries: []))
+        await model.load()
+        #expect(model.subtitle == "Nothing here yet")
     }
 
     /// The closing line states the shape of the library rather than flattering

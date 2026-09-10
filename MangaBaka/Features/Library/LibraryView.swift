@@ -5,11 +5,14 @@ import SwiftUI
 struct LibraryView: View {
     @Bindable private var model: LibraryModel
     @Binding private var path: [Series]
-    private let scheduleSummary: String?
-    private let onOpenSchedule: () -> Void
-    private let onOpenTaste: () -> Void
+    // Internal rather than private so the route cards can reach them. See
+    // LibraryRouteCards.swift — the split is the lint's doing.
+    let scheduleSummary: String?
+    let onOpenSchedule: () -> Void
+    let onOpenTaste: () -> Void
     private let onOpenShelf: (LibraryEntry.State) -> Void
     private let onOpenSettings: () -> Void
+    private let onOpenStack: () -> Void
 
     init(
         model: LibraryModel,
@@ -18,7 +21,8 @@ struct LibraryView: View {
         onOpenSchedule: @escaping () -> Void,
         onOpenTaste: @escaping () -> Void,
         onOpenShelf: @escaping (LibraryEntry.State) -> Void,
-        onOpenSettings: @escaping () -> Void
+        onOpenSettings: @escaping () -> Void,
+        onOpenStack: @escaping () -> Void
     ) {
         self.model = model
         _path = path
@@ -27,9 +31,25 @@ struct LibraryView: View {
         self.onOpenTaste = onOpenTaste
         self.onOpenShelf = onOpenShelf
         self.onOpenSettings = onOpenSettings
+        self.onOpenStack = onOpenStack
     }
 
     var body: some View {
+        ScrollViewReader { scroller in
+            list
+                .overlay(alignment: .trailing) {
+                    if model.showsJumpIndex {
+                        JumpIndex(targets: model.jumpTargets) { id in
+                            withAnimation(.snappy(duration: 0.25)) {
+                                scroller.scrollTo(id, anchor: .top)
+                            }
+                        }
+                    }
+                }
+        }
+    }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -38,23 +58,36 @@ struct LibraryView: View {
                     loading
                 } else if !model.hasAccount {
                     noAccount
+                } else if model.entries.isEmpty {
+                    emptyLibrary
                 } else {
-                    if model.isSearching {
-                        searchResults
-                    } else {
+                    LibraryFilterRow(
+                        shape: model.shape,
+                        total: model.total,
+                        selected: $model.filter
+                    )
+                    .padding(.top, 14)
+
+                    LibraryShapeBar(counts: model.shape, selected: $model.filter)
+                        .padding(.horizontal, Metrics.gutter)
+                        .padding(.top, 16)
+
+                    if !model.isComplete {
+                        partialLoad
+                    }
+
+                    // Kept above the list even though the board does not draw
+                    // them: they are the only route to the schedule and the
+                    // taste screen, and the board was not told those screens
+                    // exist.
+                    if !model.isSearching && model.filter == nil {
                         scheduleCard
                         tasteCard
                         PickBackUp(entries: model.inProgress, path: $path)
-                        shelfCards
                     }
-                    if let shape = model.shapeLine {
-                        Text(shape)
-                            .typeFootnote()
-                            .foregroundStyle(Palette.textQuaternary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                    }
+
+                    LibraryList(model: model, path: $path)
+                        .padding(.top, 22)
                 }
             }
             .padding(.top, Metrics.scrollTopInset)
@@ -92,11 +125,57 @@ struct LibraryView: View {
         .padding(.horizontal, Metrics.gutter)
     }
 
+    /// Settings sits here rather than in a navigation bar.
+    /// Nothing saved at all.
+    ///
+    /// No search field, no filter row, no shape bar — the board is explicit
+    /// that those three arrive with the first entry, and it is right: three
+    /// controls above an empty list are three ways to sort nothing.
+    private var emptyLibrary: some View {
+        EmptyState(
+            title: "Nothing saved yet",
+            message: """
+            Swipe through the stack and anything you keep lands here, with a \
+            reading state and a rating.
+            """,
+            actionTitle: "Open the stack",
+            actionWeight: .fixes,
+            action: onOpenStack
+        )
+    }
+
+    /// Some of the library, and saying so.
+    ///
+    /// The board draws "500 of 1,204 loaded", and its own critique names the
+    /// problem: that total comes from page one and never grows in front of the
+    /// reader. So this states what is true — how many have arrived — and what
+    /// follows from it, without a denominator it cannot stand behind.
+    private var partialLoad: some View {
+        HStack(spacing: 10) {
+            ProgressView().tint(Palette.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(model.total.formatted()) loaded so far")
+                    .typeRowTitle()
+                    .foregroundStyle(Palette.textPrimary)
+                Text("Counts and search cover what has arrived.")
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textTertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Palette.surface, in: RoundedRectangle(
+            cornerRadius: Metrics.radiusCard, style: .continuous
+        ))
+        .padding(.horizontal, Metrics.gutter)
+        .padding(.top, 16)
+    }
+
     /// Searching your own library, which at 937 entries is the difference
     /// between a list and an archive.
     private var searchField: some View {
         InlineSearchField(
-            prompt: "Search \(model.total.formatted()) series",
+            prompt: "Find in your library",
             text: $model.searchText
         )
         .padding(.horizontal, Metrics.gutter)
@@ -143,82 +222,6 @@ struct LibraryView: View {
             appears here.
             """
         )
-    }
-
-    /// The way into the schedule, carrying its own summary so the card says
-    /// something rather than just pointing.
-    private var scheduleCard: some View {
-        Button(action: onOpenSchedule) {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(width: 34, height: 34)
-                    .background(Palette.surfacePill, in: RoundedRectangle(
-                        cornerRadius: 11, style: .continuous
-                    ))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Next chapters")
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                    Text(scheduleSummary ?? "Estimate when each one is due")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textQuaternary)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .background(Palette.surface, in: RoundedRectangle(
-                cornerRadius: Metrics.radiusCard, style: .continuous
-            ))
-            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
-            .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Metrics.gutter)
-        .padding(.top, 22)
-    }
-
-    private var tasteCard: some View {
-        Button(action: onOpenTaste) {
-            HStack(spacing: 12) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(width: 34, height: 34)
-                    .background(Palette.surfacePill, in: RoundedRectangle(
-                        cornerRadius: 11, style: .continuous
-                    ))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Your taste")
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                    Text("Counted from your own library")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textQuaternary)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 13)
-            .background(Palette.surface, in: RoundedRectangle(
-                cornerRadius: Metrics.radiusCard, style: .continuous
-            ))
-            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
-            .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, Metrics.gutter)
-        .padding(.top, Metrics.gapCovers)
     }
 
     private var shelfCards: some View {

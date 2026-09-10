@@ -126,7 +126,8 @@ struct RootView: View {
                         onOpenShelf: { state in
                             openShelf = libraryModel?.shelves.first { $0.state == state }
                         },
-                        onOpenSettings: { showsSettings = true }
+                        onOpenSettings: { showsSettings = true },
+                        onOpenStack: { selection = .stack }
                     )
                         .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                         .navigationDestination(item: $openShelf) { shelf in

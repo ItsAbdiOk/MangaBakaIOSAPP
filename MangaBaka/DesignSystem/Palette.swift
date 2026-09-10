@@ -67,6 +67,14 @@ enum Palette {
     /// from a real one and this is the colour a real one uses.
     static let switchOff = Color(hex: 0x2C2C2E)
 
+    /// Paused, in the library's own colour set.
+    ///
+    /// Its own token rather than reusing `stale`, which is a near-identical
+    /// orange. They mean unrelated things — one is "you set this down", the
+    /// other is "what you are looking at is out of date" — and a colour that
+    /// carries two meanings carries neither. Sampled from the design board.
+    static let paused = Color(hex: 0xE38D3D)
+
     /// The tinted callout: a wash of the accent dark enough to sit under body
     /// text, with a matching edge. Used where a setting discards content the
     /// moment it changes. Sampled from the design board.

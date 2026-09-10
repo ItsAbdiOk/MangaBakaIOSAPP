@@ -27,6 +27,12 @@ final class LibraryModel {
     /// a request per keystroke against a shared rate limit would be absurd for
     /// something already on the device.
     var searchText = ""
+
+    /// Which state the list is narrowed to, or nil for all of them.
+    var filter: LibraryEntry.State?
+
+    /// How the list is ordered.
+    var sort: LibrarySort = .recentlyUpdated
     private(set) var isLoading = false
     private(set) var hasAccount = true
     /// Whether every page arrived. False means the counts on screen are a floor,
@@ -42,11 +48,76 @@ final class LibraryModel {
 
     var total: Int { entries.count }
 
-    /// "937 series across six shelves."
+    /// Every state that has anything in it, in reading order.
+    ///
+    /// Dropped is last on purpose — it is the one state a reader wants counted
+    /// but not offered first.
+    var shape: [(state: LibraryEntry.State, count: Int)] {
+        let order: [LibraryEntry.State] = [
+            .reading, .rereading, .paused, .completed, .planToRead, .considering, .dropped
+        ]
+        return order.compactMap { state in
+            let count = entries.count { $0.state == state }
+            return count > 0 ? (state, count) : nil
+        }
+    }
+
+    /// The list, after the filter, the search box and the sort.
+    ///
+    /// **Dropped is absent unless it is what you asked for.** It is a real part
+    /// of the library and it is counted everywhere — the shape bar, the
+    /// filter — but a list of everything you read that opens with the things
+    /// you gave up on is a worse answer than one that does not.
+    var listed: [LibraryEntry] {
+        var rows = entries
+        if let filter {
+            rows = rows.filter { $0.state == filter }
+        } else {
+            rows = rows.filter { $0.state != .dropped }
+        }
+
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty {
+            rows = rows.filter { entry in
+                guard let series = entry.series else { return false }
+                return series.matches(trimmed)
+            }
+        }
+        return rows.sorted(by: sort.comparator)
+    }
+
+    /// Whether a jump index is worth the space.
+    ///
+    /// The design board draws one on a screen sorted by "Recently updated",
+    /// and its own caption says the index only appears when sorted by title and
+    /// above about two hundred entries. The caption wins: an A-Z rail down a
+    /// list ordered by date points at nothing.
+    var showsJumpIndex: Bool {
+        sort == .title && listed.count >= 200
+    }
+
+    /// The letters actually present, in order, each paired with the first entry
+    /// filed under it — which is what the rail scrolls to.
+    ///
+    /// The letters present, not A to Z: a rail offering Q and X to a library
+    /// with neither is a rail that lies about where it can take you.
+    var jumpTargets: [(letter: String, id: Int)] {
+        var seen: [(letter: String, id: Int)] = []
+        for entry in listed where seen.last?.letter != entry.indexLetter {
+            seen.append((entry.indexLetter, entry.seriesId))
+        }
+        return seen
+    }
+
+    /// "1,204 series · 512 rated".
+    ///
+    /// Rated rather than shelved. The shape bar below says how the library is
+    /// divided far better than a count of shelves ever did, and how much of it
+    /// you have actually formed an opinion on is a thing nothing else answers.
     var subtitle: String {
         guard total > 0 else { return "Nothing here yet" }
-        let shelfCount = shelves.count
-        return "\(total.formatted()) series across \(shelfCount) \(shelfCount == 1 ? "shelf" : "shelves")"
+        let rated = entries.count { ($0.rating ?? 0) > 0 }
+        return "\(total.formatted()) series · \(rated.formatted()) rated"
     }
 
     /// Mid-way through something, and still on it.
