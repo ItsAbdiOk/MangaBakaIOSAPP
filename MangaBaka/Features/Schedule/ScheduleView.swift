@@ -19,8 +19,16 @@ struct ScheduleView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
 
-                if model.isEmpty {
+                // Announced dates lead, and appear even when there is nothing
+                // to estimate from: a reader with no measurable series can
+                // still have a volume arriving on Tuesday.
+                AnnouncedSection(works: model.announced)
+                    .padding(.bottom, model.announced.isEmpty ? 0 : 26)
+
+                if model.isEmpty && model.announced.isEmpty {
                     emptyState
+                } else if model.isEmpty {
+                    EmptyView()
                 } else {
                     controls
                     if model.isMeasuring { measuringCard }

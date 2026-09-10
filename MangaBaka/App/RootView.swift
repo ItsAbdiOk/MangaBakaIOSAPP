@@ -28,6 +28,7 @@ struct RootView: View {
     /// lazily here — a lazily-initialised @State plus an accessor, per model,
     /// is four things to read where there should be one.
     let session: SessionModels
+    let calendar: ReleaseCalendar
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
@@ -145,7 +146,7 @@ struct RootView: View {
                         }
                         .navigationDestination(isPresented: $showsSchedule) {
                             ScheduleView(
-                                model: ScheduleModel(service: schedule),
+                                model: ScheduleModel(service: schedule, calendar: calendar, library: library),
                                 path: $shelfPath
                             )
                         }

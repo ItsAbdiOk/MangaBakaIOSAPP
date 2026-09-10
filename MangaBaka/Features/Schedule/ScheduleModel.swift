@@ -24,11 +24,31 @@ final class ScheduleModel {
     private(set) var progress = ScheduleProgress()
     private(set) var isLoading = false
 
+    /// Volumes with dates their publishers have announced, for series the
+    /// reader actually has.
+    ///
+    /// The rest of this screen is inference. These are facts, and where a fact
+    /// exists the inference gets out of the way — see `groups`.
+    private(set) var announced: [UpcomingWork] = []
+
     private let service: ReleaseScheduleService
+    private let calendar: ReleaseCalendar?
+    private let library: (any LibraryProviding)?
     private var pollTask: Task<Void, Never>?
 
-    init(service: ReleaseScheduleService) {
+    init(
+        service: ReleaseScheduleService,
+        calendar: ReleaseCalendar? = nil,
+        library: (any LibraryProviding)? = nil
+    ) {
         self.service = service
+        self.calendar = calendar
+        self.library = library
+    }
+
+    /// Series with an announced date, so a guess about them can be suppressed.
+    var announcedSeriesIDs: Set<Int> {
+        Set(announced.compactMap(\.seriesId))
     }
 
     /// Nothing in scope: no account, or nothing being read is still publishing.
@@ -74,8 +94,14 @@ final class ScheduleModel {
         var later: [ScheduledWork] = []
         var late: [ScheduledWork] = []
 
+        // A series with an announced date is not guessed about. Showing both
+        // would put "probably around the 12th" beside "the 15th" for the same
+        // series, and the reader would have to work out which to believe.
+        let announcedIDs = announcedSeriesIDs
+
         for work in snapshot.dated {
             guard let cadence = work.cadence else { continue }
+            guard !announcedIDs.contains(work.series.id) else { continue }
             if cadence.state(asOf: now) == .late {
                 late.append(work)
             } else if cadence.due <= horizon {
@@ -133,6 +159,26 @@ final class ScheduleModel {
         snapshot = await service.snapshot()
         progress = await service.progress
         isLoading = false
+        await loadAnnounced()
+    }
+
+    /// The announced half, narrowed to the reader's own library.
+    ///
+    /// The unfiltered window is 246 works in a month and almost none of them
+    /// are yours, so an unnarrowed list would be a catalogue rather than a
+    /// schedule. Without a library there is nothing to narrow against and the
+    /// section simply does not appear — better than showing a stranger's
+    /// release calendar under the heading "yours".
+    private func loadAnnounced() async {
+        guard let calendar, let library else { return }
+        var ids: Set<Int> = []
+        for page in 1...10 {
+            let batch = await library.library(page: page, limit: 100)
+            if batch.isEmpty { break }
+            ids.formUnion(batch.map(\.seriesId))
+            if batch.count < 100 { break }
+        }
+        announced = await calendar.mine(seriesIDs: ids)
     }
 
     /// Starts a measurement and follows it.

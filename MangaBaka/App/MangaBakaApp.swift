@@ -17,6 +17,7 @@ struct MangaBakaApp: App {
     private let lenses = SearchLensStore()
     private let recents = RecentSearches()
     private let session: SessionModels
+    private let calendar: ReleaseCalendar
     private let onboarding = OnboardingState()
 
     init() {
@@ -82,6 +83,7 @@ struct MangaBakaApp: App {
         schedule = ReleaseScheduleService(library: libraryService, database: database)
         taste = TasteProfile(library: libraryService, ledger: TasteLedger(database: database))
         catalogue = CatalogueService(client: apiClient)
+        calendar = ReleaseCalendar(client: apiClient)
 
         let blocked = BlockedTagsStore()
         blocked.onChange = { ids in await built.updateBlockedTags(ids) }
@@ -102,20 +104,13 @@ struct MangaBakaApp: App {
             await libraryService.updateFormats(types)
         }
 
-        // Apply the stored choices before the first request goes out, or the
-        // opening feed would be fetched under the default filters.
-        let initialRatings = store.preferences.queryValues
-        let initialFormats = formatStore.preferences.queryValues
-        Task {
-            await built.updateContentRatings(initialRatings)
-            await built.updateFormats(initialFormats)
-            await libraryService.updateFormats(initialFormats)
-
-            // Lets a blend exclude what the reader already tracks. Nil when
-            // unauthenticated, which is the ordinary case and not a failure.
-            await built.updateBlockedTags(blocked.blocked.ids)
-            await built.updateLibraryExclusion(userID: libraryService.profileID())
-        }
+        Self.applyStoredFilters(
+            to: repository,
+            library: libraryService,
+            content: store,
+            formats: formatStore,
+            blocked: blocked
+        )
 
         // Reading the ratings through a closure rather than copying them in
         // means turning Explicit off empties the recently-viewed row on the
@@ -126,6 +121,37 @@ struct MangaBakaApp: App {
             history: history,
             allowedRatings: { store.preferences.allowed.map(\.rawValue) }
         )
+    }
+
+    /// Hands the repository and the library service the choices already on
+    /// disk, before the first request goes out.
+    ///
+    /// Its own function because the initialiser reached the lint's ceiling, and
+    /// because this is one idea rather than four: everything the reader has
+    /// already decided, applied once, in one place.
+    ///
+    /// A first application is deliberately not treated as a change — see
+    /// `SeriesRepository.updateFormats`. Treating it as one discarded the feed
+    /// cache on every launch.
+    private static func applyStoredFilters(
+        to repository: SeriesRepository,
+        library: LibraryService,
+        content: ContentPreferencesStore,
+        formats: FormatPreferencesStore,
+        blocked: BlockedTagsStore
+    ) {
+        let ratings = content.preferences.queryValues
+        let types = formats.preferences.queryValues
+        let blockedIDs = blocked.blocked.ids
+        Task {
+            await repository.updateContentRatings(ratings)
+            await repository.updateFormats(types)
+            await library.updateFormats(types)
+            await repository.updateBlockedTags(blockedIDs)
+            // Lets a blend exclude what the reader already tracks. Nil when
+            // unauthenticated, which is the ordinary case and not a failure.
+            await repository.updateLibraryExclusion(userID: library.profileID())
+        }
     }
 
     var body: some Scene {
@@ -146,6 +172,7 @@ struct MangaBakaApp: App {
                 lenses: lenses,
                 recents: recents,
                 session: session,
+                calendar: calendar,
                 onboarding: onboarding
             )
         }
