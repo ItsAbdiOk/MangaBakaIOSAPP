@@ -110,14 +110,17 @@ Ordered by what to do first. Each item names its evidence.
 
 ---
 
-## Still unknown — investigation, not fixes
+## H. The six unknowns — investigate, then fix, BEFORE the final push
 
-These are open questions, not items with a known answer:
+Decided 2026-09-11: these are not deferred. Each is investigated until the cause
+is known, then fixed like any other finding. An investigation that ends without
+an answer is recorded as a negative result with the reason, per CLAUDE.md.
 
-1. **Six screens were never audited on the device**: shelf detail, the Library
-   inline search with results, the cover gallery, Settings, the blocked-tags
-   screen, and a mid-drag Stack card.
-2. **Why series titles fail contrast.** Apple flags "ONE PIECE", "Solo Leveling",
+- [ ] **H1. Six screens were never audited on the device**: shelf detail, the Library
+      : shelf detail, the Library
+      inline search with results, the cover gallery, Settings, the blocked-tags
+      screen, and a mid-drag Stack card.
+- [ ] **H2. Why series titles fail contrast.** Apple flags "ONE PIECE", "Solo Leveling",
    "RUNAWAY FAMILY" — all `textPrimary`, which measures 18:1 against the ground.
    The audit is evidently measuring against what is really behind them. Reproduce
    before touching it.
