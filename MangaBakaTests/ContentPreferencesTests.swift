@@ -141,6 +141,11 @@ struct ContentFilterCacheTests {
         defer { URLProtocolStub.reset() }
 
         let repository = try makeRepository()
+        // Applied once first, the way the app does at launch. A first
+        // application is not a change: the repository starts with no filters,
+        // so treating that as one discarded the whole feed cache on every
+        // single launch and offline support never worked once.
+        await repository.updateContentRatings(["safe", "suggestive"])
         _ = await repository.feed(.rising, forceRefresh: false)
         #expect(await repository.feed(.rising, forceRefresh: false).origin == .cache)
         let before = URLProtocolStub.requests.count

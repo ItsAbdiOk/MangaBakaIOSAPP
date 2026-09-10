@@ -69,6 +69,26 @@ actor APIClient {
         return payload
     }
 
+    /// How many results a query has, without downloading them.
+    ///
+    /// The API reports the total in its pagination block, so a count costs one
+    /// request for one item rather than a page of twenty. That matters here:
+    /// the lens rows on Search's idle screen each carry a live count, and the
+    /// rate limit is per IP and shared with strangers on the same network.
+    ///
+    /// Nil when the response carried no total. A missing count is shown as a
+    /// missing count, never as zero — "0 now" beside a saved search is a
+    /// statement that it found nothing, which is a different and much worse
+    /// thing to say.
+    func total(_ path: String, query: [URLQueryItem] = []) async throws(APIError) -> Int? {
+        let data = try await rawData(path: path, query: query)
+        do {
+            return try decoder.decode(APIEnvelope<[Series]>.self, from: data).pagination?.count
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+    }
+
     /// Performs the request and returns the raw body, having already turned
     /// every transport and status failure into a named `APIError`.
     private func rawData(path: String, query: [URLQueryItem]) async throws(APIError) -> Data {

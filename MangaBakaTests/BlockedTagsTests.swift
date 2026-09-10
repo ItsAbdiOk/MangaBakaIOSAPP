@@ -140,6 +140,11 @@ struct BlockedTagsRequestTests {
         defer { URLProtocolStub.reset() }
 
         let repository = try makeRepository()
+        // Applied once first, the way the app does at launch. A first
+        // application is not a change: the repository starts with no filters,
+        // so treating that as one discarded the whole feed cache on every
+        // single launch and offline support never worked once.
+        await repository.updateBlockedTags([])
         _ = await repository.feed(.rising, forceRefresh: false)
         let before = URLProtocolStub.requests.count
         _ = await repository.feed(.rising, forceRefresh: false)

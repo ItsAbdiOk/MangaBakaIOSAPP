@@ -102,4 +102,7 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
     func updateBlockedTags(_ ids: [Int]) async {}
 
     func cachedSeriesCount() async -> Int { 0 }
+    /// Nil rather than zero: a stub that answers "no results" would make every
+    /// lens row claim its saved search now finds nothing.
+    func count(_ query: SearchQuery) async -> Int? { nil }
 }

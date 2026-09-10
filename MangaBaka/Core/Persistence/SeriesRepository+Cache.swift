@@ -54,10 +54,16 @@ extension SeriesRepository {
 
             // Order comes from the feed, not from the series table: the API's
             // ordering is editorial and must survive a round trip.
-            let series = entries.compactMap { entry -> Series? in
-                guard let row = byID[entry.seriesId] else { return nil }
-                return try? decoder.decode(Series.self, from: row.payload)
-            }
+            // Filtered on the way out as well as on the way in. A cached feed
+            // was written under whatever the format setting was at the time,
+            // and turning a format off should empty it from what is already on
+            // the phone rather than only from the next fetch.
+            let series = entries
+                .compactMap { entry -> Series? in
+                    guard let row = byID[entry.seriesId] else { return nil }
+                    return try? decoder.decode(Series.self, from: row.payload)
+                }
+                .filter(allowsFormat)
             return (series, metadata?.cachedAt)
         }
     }

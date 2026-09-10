@@ -70,6 +70,10 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// subtitle counts them, so it has to be a real number.
     func cachedSeriesCount() async -> Int
 
+    /// How many series a query would return, without downloading them.
+    /// Nil when the answer is unknown — never zero, which means something else.
+    func count(_ query: SearchQuery) async -> Int?
+
 }
 
 /// The onward paths from a series. Every field is independently optional: a
@@ -280,7 +284,10 @@ struct FeedResult: Sendable {
 }
 
 actor SeriesRepository: SeriesRepositoryProtocol {
-    private let client: APIClient
+    // Internal rather than private so the cache and count halves can reach
+    // them. See SeriesRepository+Cache.swift and +Count.swift — the splits are
+    // the lint's doing, not a widening of who is meant to touch these.
+    let client: APIClient
     // Internal rather than private so the cache half can reach them. See
     // SeriesRepository+Cache.swift — the split is the lint's doing, not a
     // widening of who is meant to touch these.
@@ -290,10 +297,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Content ratings to request, or `nil` for no filter. Defaults to the
     /// product decision: safe and suggestive, with anything stronger behind a
     /// deliberate opt-in that does not exist yet.
-    private var contentRatings: [String]?
+    var contentRatings: [String]?
     /// Formats to request, or empty for no filter. Empty is the default: the
     /// catalogue as it is, until the reader narrows it.
-    private var formats: [String] = []
+    var formats: [String] = []
     /// The reader's own 32-character user id. Sent as `exclude_user_library` on
     /// a blend so it stops recommending series they are already reading — the
     /// single largest source of "these recommendations are bad" for someone
@@ -304,7 +311,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// (HTTP 400, verified 2026-09-09). Only ever the reader's own id.
     private var libraryExclusionUserID: String?
     /// Tags the reader never wants to see, sent as `blocked_tag`.
-    private var blockedTags: [Int] = []
+    var blockedTags: [Int] = []
 
     init(
         client: APIClient,
@@ -344,7 +351,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             } else {
                 series = try await client.get(feed.path, query: query)
             }
-            let discoverable = series.filter(\.isDiscoverable)
+            let discoverable = series.filter { $0.isDiscoverable && allowsFormat($0) }
             try? write(discoverable, for: feed)
             return FeedResult(series: discoverable, origin: .network)
         } catch {
@@ -372,7 +379,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         query.append(contentsOf: filterQuery)
         do {
             let series: [Series] = try await client.get(feed.path, query: query)
-            return FeedResult(series: series.filter(\.isDiscoverable), origin: .network)
+            return FeedResult(
+                series: series.filter { $0.isDiscoverable && allowsFormat($0) },
+                origin: .network
+            )
         } catch {
             return FeedResult(series: [], origin: .staleAfter(error))
         }
@@ -395,7 +405,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         })
         do {
             let series: [Series] = try await client.get("/v2/series/search", query: items)
-            return FeedResult(series: series.filter(\.isDiscoverable), origin: .network)
+            return FeedResult(
+                series: series.filter { $0.isDiscoverable && allowsFormat($0) },
+                origin: .network
+            )
         } catch {
             return FeedResult(series: [], origin: .staleAfter(error))
         }
@@ -435,7 +448,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
                 query: items
             )
             return MixResult(
-                recommendations: (envelope.data ?? []).filter(\.series.isDiscoverable),
+                recommendations: (envelope.data ?? [])
+                    .filter { $0.series.isDiscoverable && allowsFormat($0.series) },
                 dna: BlendDNA(
                     strands: envelope.dna ?? [],
                     seedCount: envelope.seedCount ?? seeds.count
@@ -454,21 +468,46 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         let seedCount: Int?
     }
 
+    /// Which filters have been handed their stored value since launch.
+    ///
+    /// **This is the difference between a cache and no cache.** The repository
+    /// is built before the preference stores are read, so it starts with no
+    /// ratings, no formats and no blocked tags. The app then applies the stored
+    /// values — and every one of them differed from the empty starting state,
+    /// so every launch discarded the entire feed cache before the first screen
+    /// drew. Offline support was documented, tested, and silently dead.
+    ///
+    /// A first application is not a change. The cache on disk was written under
+    /// exactly these values, because they are the values it was written under
+    /// last time the app ran. Only a genuine change discards.
+    private var applied: Set<String> = []
+
+    private func shouldDiscard(_ key: String) -> Bool {
+        defer { applied.insert(key) }
+        return applied.contains(key)
+    }
+
     func updateContentRatings(_ ratings: [String]) async {
-        guard ratings != contentRatings else { return }
+        let changed = ratings != contentRatings
+        let discards = shouldDiscard("ratings")
         contentRatings = ratings
+        guard changed, discards else { return }
         try? discardCachedFeeds()
     }
 
     func updateFormats(_ formats: [String]) async {
-        guard formats != self.formats else { return }
+        let changed = formats != self.formats
+        let discards = shouldDiscard("formats")
         self.formats = formats
+        guard changed, discards else { return }
         try? discardCachedFeeds()
     }
 
     func updateBlockedTags(_ ids: [Int]) async {
-        guard ids != blockedTags else { return }
+        let changed = ids != blockedTags
+        let discards = shouldDiscard("blockedTags")
         blockedTags = ids
+        guard changed, discards else { return }
         try? discardCachedFeeds()
     }
 
@@ -501,6 +540,28 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     ///
     /// Both parameters reject a comma-joined value with HTTP 400 — a mistake
     /// that once broke every feed in the app while the tests stayed green.
+    /// Whether a series survives the reader's format filter.
+    ///
+    /// **A backstop, not a belt-and-braces nicety.** Measured against the live
+    /// API on 2026-09-10: `/v2/series/discover/rising?type=manga` answered with
+    /// fourteen manhwa out of twenty, and `hidden-gems?type=manga` returned a
+    /// novel. Those two endpoints ignore `type` entirely. Search honours it,
+    /// and `content_rating` is honoured everywhere it was tested — so the
+    /// setting looked like it worked, right up until you looked at Discover.
+    ///
+    /// Sending the parameter is still worth doing: where the server does honour
+    /// it, filtering happens before the page is chosen, so a full page comes
+    /// back. Where it does not, this catches what slipped through.
+    ///
+    /// An empty `formats` means every format is allowed, which is the default.
+    /// An unknown or absent `type` is kept: dropping a series because the API
+    /// did not say what it is would hide things nobody chose to hide.
+    func allowsFormat(_ series: Series) -> Bool {
+        guard !formats.isEmpty else { return true }
+        guard let type = series.type?.lowercased(), !type.isEmpty else { return true }
+        return formats.contains(type)
+    }
+
     private var filterQuery: [URLQueryItem] {
         (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
             + formats.map { URLQueryItem(name: "type", value: $0) }
