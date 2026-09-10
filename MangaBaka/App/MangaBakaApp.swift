@@ -78,7 +78,7 @@ struct MangaBakaApp: App {
         library = libraryService
 
         schedule = ReleaseScheduleService(library: libraryService, database: database)
-        taste = TasteProfile(library: libraryService)
+        taste = TasteProfile(library: libraryService, ledger: TasteLedger(database: database))
         catalogue = CatalogueService(client: apiClient)
 
         let blocked = BlockedTagsStore()

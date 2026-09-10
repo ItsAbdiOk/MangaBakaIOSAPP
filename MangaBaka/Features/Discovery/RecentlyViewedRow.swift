@@ -39,6 +39,7 @@ final class RecentlyViewedModel {
 /// One horizontal row, or nothing at all.
 struct RecentlyViewedRow: View {
     let model: RecentlyViewedModel
+    let namespace: Namespace.ID
     let onOpen: (Series) -> Void
 
     var body: some View {
@@ -53,6 +54,7 @@ struct RecentlyViewedRow: View {
                                 CoverCard(series: series, meta: DiscoverView.meta(for: series))
                             }
                             .buttonStyle(.plain)
+                            .matchedTransitionSource(id: "recent#\(series.id)", in: namespace)
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)

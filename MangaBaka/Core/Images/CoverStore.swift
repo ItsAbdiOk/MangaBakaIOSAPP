@@ -56,29 +56,11 @@ final class CoverStore {
         if let cached = cache.object(forKey: url as NSURL) { return cached }
         if let existing = inFlight[url] { return await existing.value }
 
+        // `fetch` is nonisolated, so awaiting it hops off the main actor and
+        // the work below happens on the cooperative pool. That hop is the whole
+        // point — see `fetch`.
         let task = Task<UIImage?, Never> { [session] in
-            for attempt in 0..<2 {
-                do {
-                    let (data, response) = try await session.data(from: url)
-                    guard let http = response as? HTTPURLResponse,
-                          (200..<300).contains(http.statusCode),
-                          let image = UIImage(data: data)
-                    else {
-                        // A 404 is settled; retrying it wastes a request. Any
-                        // other status might not be.
-                        if (response as? HTTPURLResponse)?.statusCode == 404 { return nil }
-                        continue
-                    }
-                    return image
-                } catch {
-                    if Task.isCancelled { return nil }
-                    // One short pause before the second try: the common failure
-                    // is a connection dropped mid-scroll, and an immediate
-                    // retry tends to hit the same condition.
-                    if attempt == 0 { try? await Task.sleep(for: .milliseconds(400)) }
-                }
-            }
-            return nil
+            await Self.fetch(url, session: session)
         }
 
         inFlight[url] = task
@@ -89,6 +71,58 @@ final class CoverStore {
             cache.setObject(image, forKey: url as NSURL, cost: image.approximateBytes)
         }
         return image
+    }
+
+    /// Warms the cache for covers that are about to scroll into view.
+    ///
+    /// A row only started fetching art once a cover was already on screen, so
+    /// the first thing a reader saw when they scrolled was a placeholder. This
+    /// asks for them early and throws the result away — the point is the cache
+    /// entry, and a duplicate request is deduped by `image(for:)` anyway.
+    func prefetch(_ urls: [URL?]) {
+        for url in urls.compactMap({ $0 }) where cache.object(forKey: url as NSURL) == nil {
+            guard inFlight[url] == nil else { continue }
+            Task { _ = await image(for: url) }
+        }
+    }
+
+    /// Downloads and decodes, off the main actor.
+    ///
+    /// `nonisolated` is load-bearing and was a real bug: this type is
+    /// `@MainActor`, so an unstructured `Task` created inside it inherited that
+    /// isolation and `UIImage(data:)` ran on the main thread. Every cover that
+    /// scrolled into view was decoded in competition with the scroll that
+    /// revealed it.
+    ///
+    /// `byPreparingForDisplay` matters for the same reason at the other end:
+    /// `UIImage(data:)` only holds the encoded bytes, and the bitmap is decoded
+    /// lazily on the thread that first draws it — which is always the main one.
+    /// Preparing it here moves that work off the main thread too. When it fails
+    /// (it is documented as able to return nil) the undecoded image is still a
+    /// correct answer, just a slower one.
+    nonisolated private static func fetch(_ url: URL, session: URLSession) async -> UIImage? {
+        for attempt in 0..<2 {
+            do {
+                let (data, response) = try await session.data(from: url)
+                guard let http = response as? HTTPURLResponse,
+                      (200..<300).contains(http.statusCode),
+                      let image = UIImage(data: data)
+                else {
+                    // A 404 is settled; retrying it wastes a request. Any
+                    // other status might not be.
+                    if (response as? HTTPURLResponse)?.statusCode == 404 { return nil }
+                    continue
+                }
+                return await image.byPreparingForDisplay() ?? image
+            } catch {
+                if Task.isCancelled { return nil }
+                // One short pause before the second try: the common failure
+                // is a connection dropped mid-scroll, and an immediate
+                // retry tends to hit the same condition.
+                if attempt == 0 { try? await Task.sleep(for: .milliseconds(400)) }
+            }
+        }
+        return nil
     }
 }
 

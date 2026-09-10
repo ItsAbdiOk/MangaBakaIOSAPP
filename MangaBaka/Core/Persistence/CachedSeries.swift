@@ -47,6 +47,25 @@ struct ViewedEntry: Codable, FetchableRecord, PersistableRecord, Sendable {
     var payload: Data
 }
 
+/// How strongly one tag runs through the reader's library.
+struct TagAffinity: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "tagAffinity"
+
+    var tagId: Int
+    var name: String
+    var score: Double
+    var seriesCount: Int
+}
+
+/// A series already counted into the affinities, and the state it counted as.
+struct TasteSource: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "tasteSource"
+
+    var seriesId: Int
+    var countedAt: Date
+    var state: String
+}
+
 /// When a feed was last fetched.
 struct FeedMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "feedMetadata"

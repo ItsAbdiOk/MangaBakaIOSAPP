@@ -63,6 +63,10 @@ private struct ToastOverlay: ViewModifier {
             }
         }
         .animation(.snappy(duration: 0.28), value: centre.message)
+        // A toast is the confirmation that an action worked. It appears near
+        // the bottom of a screen the reader may not be looking at, so the tap
+        // gets an answer even when the text does not.
+        .sensoryFeedback(.success, trigger: centre.message) { _, new in new != nil }
     }
 }
 

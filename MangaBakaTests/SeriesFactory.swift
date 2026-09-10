@@ -28,7 +28,8 @@ enum SeriesFactory {
         source: [String: Series.TrackerEntry]? = nil,
         year: Int? = nil,
         ratingCount: Int? = nil,
-        tags: [String]? = nil
+        tags: [String]? = nil,
+        tagsV2: [SeriesTag]? = nil
     ) -> Series {
         let resolvedTitles = titles ?? title.map {
             [SeriesTitle(language: "en", traits: ["official"], title: $0, isPrimary: true)]
@@ -39,7 +40,7 @@ enum SeriesFactory {
             status: status, rating: rating, type: type, contentRating: contentRating,
             totalChapters: totalChapters, finalVolume: finalVolume,
             publishers: publishers, anime: anime, source: source,
-            year: year, ratingCount: ratingCount, tags: tags
+            year: year, ratingCount: ratingCount, tags: tags, tagsV2: tagsV2
         )
     }
 }

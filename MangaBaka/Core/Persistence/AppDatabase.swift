@@ -135,6 +135,36 @@ struct AppDatabase: Sendable {
             try db.create(index: "viewedEntry_on_viewedAt", on: "viewedEntry", columns: ["viewedAt"])
         }
 
+        migrator.registerMigration("v5_taste") { db in
+            // How much each tag runs through the reader's own library.
+            //
+            // Counted locally rather than asked for, because the API's taste
+            // endpoint answers in GENRES — six of Solo Leveling's 146 tags are
+            // genres — so it can never say "you read a lot of Regression".
+            try db.create(table: "tagAffinity") { table in
+                table.primaryKey("tagId", .integer)
+                // Kept for diagnosis: a score with no name is unreadable when
+                // something looks wrong.
+                table.column("name", .text).notNull()
+                // Tag weight times reading state, summed across the library.
+                table.column("score", .double).notNull()
+                // How many of the reader's series carry it. A tag that appears
+                // once is a coincidence; the same tag in five is a habit.
+                table.column("seriesCount", .integer).notNull()
+            }
+
+            // Which series have already been counted, so re-reading a library
+            // page does not count the same tags twice. The count is a running
+            // total, so double-counting is silent and permanent without this.
+            try db.create(table: "tasteSource") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("countedAt", .datetime).notNull()
+                // The state it was counted under. A series moved from reading
+                // to dropped has to be recounted at its new weight.
+                table.column("state", .text).notNull()
+            }
+        }
+
         return migrator
     }
 }

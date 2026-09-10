@@ -41,6 +41,10 @@ struct RootView: View {
     @State private var showsBrowse = false
     @State private var mixModel: MixModel?
     @State private var recentlyViewed: RecentlyViewedModel?
+    /// The cover the detail page should grow out of, and the namespace the
+    /// source and destination share. Nil falls back to an ordinary push.
+    @State private var zoomSource: String?
+    @Namespace private var coverTransition
 
     var body: some View {
         tabs
@@ -64,6 +68,8 @@ struct RootView: View {
                         model: DiscoverModel(repository: repository),
                         recentlyViewed: recentlyViewedModel(),
                         path: $discoverPath,
+                        zoomSource: $zoomSource,
+                        namespace: coverTransition,
                         onOpenStack: { selection = .stack }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
@@ -271,6 +277,10 @@ struct RootView: View {
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
         .task { await recentlyViewedModel().record(series) }
+        // Grows out of the cover that was tapped. Only Discover marks its
+        // covers as sources so far; every other route falls through to the
+        // ordinary push, which is what an unmatched id already does.
+        .navigationTransition(.zoom(sourceID: zoomSource ?? "none", in: coverTransition))
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

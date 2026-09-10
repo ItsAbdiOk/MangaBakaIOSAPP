@@ -135,6 +135,11 @@ struct LibraryControl: View {
             }
         }
         .task { await model.load() }
+        // Adding a series, changing its state or advancing a chapter all write
+        // to the reader's real account over the network. The tap and the result
+        // are seconds apart, and until now nothing marked the moment it landed.
+        .sensoryFeedback(.success, trigger: model.current?.state)
+        .sensoryFeedback(.error, trigger: model.failure) { _, new in new != nil }
         .sheet(isPresented: $isEditing) {
             if let entry = model.current {
                 LibraryEditSheet(entry: entry, series: series) { change in

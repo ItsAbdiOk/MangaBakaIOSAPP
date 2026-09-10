@@ -5,18 +5,40 @@ struct DiscoverView: View {
     @State private var model: DiscoverModel
     private let recentlyViewed: RecentlyViewedModel?
     @Binding private var path: [Series]
+    /// Which cover the reader tapped, so the detail page can grow out of that
+    /// one. See `open(_:from:)`.
+    @Binding private var zoomSource: String?
+    private let namespace: Namespace.ID
     private let onOpenStack: () -> Void
+    @Environment(\.displayScale) private var displayScale
 
     init(
         model: DiscoverModel,
         recentlyViewed: RecentlyViewedModel? = nil,
         path: Binding<[Series]>,
+        zoomSource: Binding<String?>,
+        namespace: Namespace.ID,
         onOpenStack: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
         self.recentlyViewed = recentlyViewed
         _path = path
+        _zoomSource = zoomSource
+        self.namespace = namespace
         self.onOpenStack = onOpenStack
+    }
+
+    /// Opens a series, remembering which cover it came from.
+    ///
+    /// The same series can appear in two rows at once — rising and hidden gems
+    /// share entries constantly — so the transition cannot be keyed on the
+    /// series alone: two views would claim the same source id and the match
+    /// would be ambiguous. The row is part of the key, and the tapped id is
+    /// recorded here because the destination is built afterwards and has no
+    /// other way to know which cover the reader actually touched.
+    private func open(_ series: Series, from row: String) {
+        zoomSource = "\(row)#\(series.id)"
+        path.append(series)
     }
 
     var body: some View {
@@ -28,7 +50,9 @@ struct DiscoverView: View {
                 // Above the API's rows because it is the only one built from
                 // what this reader actually did.
                 if let recentlyViewed {
-                    RecentlyViewedRow(model: recentlyViewed) { path.append($0) }
+                    RecentlyViewedRow(model: recentlyViewed, namespace: namespace) {
+                        open($0, from: "recent")
+                    }
                 }
 
                 if model.isCompletelyEmpty {
@@ -136,15 +160,20 @@ struct DiscoverView: View {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(row.series) { series in
-                            Button { path.append(series) } label: {
+                            Button { open(series, from: row.id) } label: {
                                 CoverCard(series: series, meta: Self.meta(for: series))
                             }
                             .buttonStyle(.plain)
+                            // The detail page grows out of this cover rather
+                            // than sliding in over it, which is what makes the
+                            // tap read as opening the thing you touched.
+                            .matchedTransitionSource(id: "\(row.id)#\(series.id)", in: namespace)
                             // Fetch when the reader reaches the run-up to the
                             // end, not the end itself: by the time the last
                             // card is visible it is already too late to load
                             // without a visible stall.
                             .onAppear {
+                                prefetchCovers(after: series, in: row)
                                 guard shouldPrefetch(series, in: row) else { return }
                                 Task { await model.loadMore(row.id) }
                             }
@@ -164,6 +193,22 @@ struct DiscoverView: View {
                 .scrollIndicators(.hidden)
             }
         }
+    }
+
+    /// Asks for the next few covers before they are on screen.
+    ///
+    /// Without this a cover only started downloading once it was already
+    /// visible, so scrolling a row showed a BlurHash and then a pop-in for
+    /// every card. Three ahead is about one flick of a thumb; more would be
+    /// spending someone's data on covers they may never reach.
+    private func prefetchCovers(after series: Series, in row: DiscoverModel.Row) {
+        guard let index = row.series.firstIndex(where: { $0.id == series.id }) else { return }
+        let upcoming = row.series
+            .dropFirst(index + 1)
+            .prefix(3)
+            .map { $0.cover.url(forHeight: Metrics.coverRowWidth / Metrics.coverAspect,
+                                scale: displayScale) }
+        CoverStore.shared.prefetch(upcoming)
     }
 
     /// "Manhwa · 8.6". Each half only when the API supplied it.

@@ -175,8 +175,18 @@ struct TabBarClearanceTests {
         "MangaBaka/Features/Library/ShelfDetailView.swift",
         "MangaBaka/Features/Schedule/ScheduleView.swift",
         "MangaBaka/Features/Browse/BrowseView.swift",
-        "MangaBaka/Features/Settings/SettingsView.swift"
+        "MangaBaka/Features/Settings/SettingsView.swift",
+        // Added 2026-09-10. Its absence is why the Stack kept a hardcoded
+        // 100pt top inset for a bar that had been deleted: nothing checked it.
+        "MangaBaka/Features/Stack/StackView.swift"
     ]
+
+    /// The detail screen is deliberately absent: its hero artwork runs to the
+    /// top edge, so it has no top inset to name. Every other scrolling screen
+    /// starts below the status bar and does.
+    private static let screensWithATopInset = scrollingScreens.filter {
+        !$0.hasSuffix("SeriesDetailView.swift")
+    }
 
     /// The system tab bar is a floating capsule roughly 61pt tall sitting a
     /// little off the bottom edge. Content scrolling *under* it is intended —
@@ -189,6 +199,32 @@ struct TabBarClearanceTests {
     @Test("The bottom inset clears the system tab bar")
     func clearanceIsEnough() {
         #expect(Metrics.scrollBottomInset >= 96)
+    }
+
+    /// The top inset is a token because it changed once already and will
+    /// again.
+    ///
+    /// It was 106, to clear a floating wordmark bar the mockup drew across the
+    /// top of every screen. That bar was deleted and the token dropped to 24 —
+    /// but the Stack had written the number into itself rather than naming the
+    /// token, so it kept a hundred points of empty space under the status bar
+    /// long after the thing it was clearing was gone. Abdi found it, not a test.
+    ///
+    /// Asserted as "the screen names the token" rather than "the screen
+    /// contains no large number". The first version of this test scanned for
+    /// top paddings over 40 and failed two screens that were centring a spinner
+    /// in the content area — which is not a screen inset and not anyone's
+    /// business here.
+    @Test(
+        "Every scrolling screen names the top inset rather than writing one",
+        arguments: TabBarClearanceTests.screensWithATopInset
+    )
+    func topInsetIsNamedNotNumbered(path: String) throws {
+        let text = try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
+        #expect(
+            text.contains("Metrics.scrollTopInset"),
+            "\(path) sets its own top inset, so it will not follow when the token changes"
+        )
     }
 
     @Test(

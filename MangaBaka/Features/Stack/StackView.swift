@@ -11,6 +11,11 @@ struct StackView: View {
     @Binding private var path: [Series]
 
     @State private var drag: CGSize = .zero
+    /// What the last committed swipe was, and how many have happened.
+    ///
+    /// The count is what makes the trigger fire twice for two saves in a row —
+    /// the kind alone would not change, so the second save would be silent.
+    @State private var lastCommit: (kind: ShelfEntry.Kind, count: Int)?
     private let onOpenShelf: () -> Void
     /// Says a thing happened. A reset otherwise succeeds in silence, which is
     /// indistinguishable from a tap that missed.
@@ -48,7 +53,7 @@ struct StackView: View {
                     StackSavedStrip(saved: model.saved, path: $path, onOpenShelf: onOpenShelf)
                 }
             }
-            .padding(.top, 100)
+            .padding(.top, Metrics.scrollTopInset)
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
@@ -81,6 +86,17 @@ struct StackView: View {
                     .offset(drag)
                     .rotationEffect(.degrees(drag.width * rotationPerPoint))
                     .gesture(dragGesture)
+                    // The stack is the one screen driven entirely by a gesture,
+                    // so it is the one that most needs to answer the thumb. A
+                    // save lands heavier than a skip because keeping something
+                    // is the decision worth feeling.
+                    .sensoryFeedback(trigger: lastCommit?.count ?? 0) { _, _ in
+                        switch lastCommit?.kind {
+                        case .saved: .impact(weight: .medium)
+                        case .skipped: .impact(flexibility: .soft, intensity: 0.6)
+                        case nil: nil
+                        }
+                    }
                     .onTapGesture { path.append(current) }
                     // VoiceOver cannot perform a drag, so saving and skipping
                     // are exposed as actions too. The buttons below are the
@@ -176,6 +192,7 @@ struct StackView: View {
                     return
                 }
                 let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
+                lastCommit = (kind, (lastCommit?.count ?? 0) + 1)
                 // A card thrown the width of the screen is a lot of motion.
                 // With Reduce Motion on, it simply goes.
                 if reduceMotion {

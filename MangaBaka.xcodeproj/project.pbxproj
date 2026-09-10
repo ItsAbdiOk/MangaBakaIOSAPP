@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0192D74336094BD2A497CD0E /* StackHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3206B8E76D17989895A38DB /* StackHeader.swift */; };
 		0281A81A4ABE53247CFB8FFC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 992B4C3370C6C0E11826751F /* PrivacyInfo.xcprivacy */; };
+		066EC731FD7232CBD471A87F /* TasteLedgerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B5857B9B0D8F62B45DED4DB /* TasteLedgerTests.swift */; };
 		06A145E746BB94CE9AAE1A64 /* FormatSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4898CDB594322E3BE34C5F98 /* FormatSection.swift */; };
 		06EDFEADA7F7E44E0D268216 /* DetailBackdrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DFD502C3FF6AA14E5C00A7A /* DetailBackdrop.swift */; };
 		07F17EF16F50DB02B3C04627 /* TokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA0FAE13665B4C11439C5A4 /* TokenProvider.swift */; };
@@ -177,6 +178,7 @@
 		FC3C5740CFB67CA11EC5C763 /* ShelfCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5832DB5979A2F371B282B39D /* ShelfCard.swift */; };
 		FE9D48BF6F8F6C94A61BB78F /* MixModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EB62C466EA9D205CAF1E43 /* MixModel.swift */; };
 		FED4BE9B85B862E4DD39B937 /* DetailSynopsis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B0478C5E79631F422DE74E /* DetailSynopsis.swift */; };
+		FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */; };
 		FF8DA99F5481C26988FDD419 /* TasteModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658E85CDA5F805FE594CD22B /* TasteModelTests.swift */; };
 		FFE8036ADF7EBF35B553021B /* TasteProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0E5C3645601A4E1DAF73E0 /* TasteProfileTests.swift */; };
 /* End PBXBuildFile section */
@@ -278,6 +280,7 @@
 		7A1CB792D5E4AB8330A0F591 /* AccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTests.swift; sourceTree = "<group>"; };
 		7A88E5CDA1D68F1872D2A150 /* DiscoverModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverModel.swift; sourceTree = "<group>"; };
 		7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLProtocolStub.swift; sourceTree = "<group>"; };
+		7B5857B9B0D8F62B45DED4DB /* TasteLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteLedgerTests.swift; sourceTree = "<group>"; };
 		7BA84B4299E28390AD030CAD /* MangaUpdatesID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaUpdatesID.swift; sourceTree = "<group>"; };
 		7C24548E1E0D65E3BD4C3580 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
 		7DE5A9E7DDC428AB083B28B0 /* SurpriseAndStackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurpriseAndStackTests.swift; sourceTree = "<group>"; };
@@ -302,6 +305,7 @@
 		973428306988EF58297A58B3 /* FailureState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureState.swift; sourceTree = "<group>"; };
 		992B4C3370C6C0E11826751F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		9934115A7E74CC9CC2E920D5 /* LibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryTests.swift; sourceTree = "<group>"; };
+		993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteLedger.swift; sourceTree = "<group>"; };
 		99B0478C5E79631F422DE74E /* DetailSynopsis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailSynopsis.swift; sourceTree = "<group>"; };
 		9A8062597275E0B6DC97413D /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
 		9C39E8BE2F572DB37BE4CB59 /* TasteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteView.swift; sourceTree = "<group>"; };
@@ -656,6 +660,7 @@
 				3A6C7BDE02EF1D5618DBBF97 /* StackSaveTests.swift */,
 				7DE5A9E7DDC428AB083B28B0 /* SurpriseAndStackTests.swift */,
 				1A0D6462580D13B5583DD893 /* TagGroupingTests.swift */,
+				7B5857B9B0D8F62B45DED4DB /* TasteLedgerTests.swift */,
 				658E85CDA5F805FE594CD22B /* TasteModelTests.swift */,
 				5A0E5C3645601A4E1DAF73E0 /* TasteProfileTests.swift */,
 				7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */,
@@ -821,6 +826,7 @@
 			children = (
 				4C71542E5868966C685EA32C /* LibraryEntry.swift */,
 				BD9AF71ABDE6B2D1C23C30A4 /* LibraryService.swift */,
+				993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */,
 				793E2478DD1A6E103A4EF063 /* TasteProfile.swift */,
 			);
 			path = Library;
@@ -1035,6 +1041,7 @@
 				90E969A30611E9EA5F9ABE2C /* StackResetMenu.swift in Sources */,
 				E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */,
 				B72756445980F083663658AA /* StackView.swift in Sources */,
+				FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */,
 				DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */,
 				4A0C19E90EBFD088A4D3D5D0 /* TasteProfile.swift in Sources */,
 				D8F574211C01E3219F6984B7 /* TasteView.swift in Sources */,
@@ -1103,6 +1110,7 @@
 				D82EE639AF5818E765A8482A /* StackSaveTests.swift in Sources */,
 				E30F00A5B893F7CD6D2189F3 /* SurpriseAndStackTests.swift in Sources */,
 				3D4A4EC64B6872907B3174C9 /* TagGroupingTests.swift in Sources */,
+				066EC731FD7232CBD471A87F /* TasteLedgerTests.swift in Sources */,
 				FF8DA99F5481C26988FDD419 /* TasteModelTests.swift in Sources */,
 				FFE8036ADF7EBF35B553021B /* TasteProfileTests.swift in Sources */,
 				3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */,
