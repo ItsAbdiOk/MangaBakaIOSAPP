@@ -34,7 +34,11 @@ struct StackView: View {
                 header
                 cardArea
                 if let current = model.current {
-                    StackCaption(series: current, reason: model.currentReason, warning: model.saveWarning)
+                    StackCaption(
+                        series: current,
+                        reason: model.currentReason,
+                        warning: model.warning(for: current)
+                    )
                     actions
                     StackSavedStrip(saved: model.saved, path: $path, onOpenShelf: onOpenShelf)
                 }

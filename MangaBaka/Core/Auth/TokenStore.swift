@@ -76,3 +76,21 @@ struct TokenStore: Sendable {
         return trimmed.hasPrefix("mb-") && trimmed.count > 12
     }
 }
+
+/// What checking a token actually established.
+///
+/// Three outcomes, not two. Collapsing them is what let a network failure be
+/// reported as "That token was not accepted by MangaBaka" — and then delete a
+/// working token from the Keychain, because the save path treats a failed check
+/// as proof the token is bad.
+enum TokenCheck: Equatable, Sendable {
+    case accepted(String?)
+    /// MangaBaka answered, and said no. The only outcome that justifies
+    /// clearing the stored token.
+    case rejected
+    /// Something else went wrong — offline, rate limited, a 500. Says nothing
+    /// about the token.
+    case unknown(String)
+
+    var isRejection: Bool { self == .rejected }
+}

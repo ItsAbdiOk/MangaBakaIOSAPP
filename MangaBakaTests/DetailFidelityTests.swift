@@ -71,14 +71,17 @@ struct DetailFidelityTests {
         #expect(labels.contains("Content rating"))
     }
 
-    /// "None listed" is a real answer here — the API says whether it knows of
-    /// an adaptation, so silence would be indistinguishable from a missing
-    /// field. Everywhere else a missing value means the row is absent.
-    @Test("An unknown adaptation is stated; unknown everything else is omitted")
-    func adaptationAlwaysStated() {
+    /// This test used to assert the opposite, and the assertion was the bug.
+    ///
+    /// It claimed "None listed" was safe to state unconditionally because the
+    /// API says whether it knows of an adaptation. It does — in `exists`, which
+    /// the code never read. A series whose payload carries no `anime` field at
+    /// all (every library entry's embedded series) has said nothing, and
+    /// "None listed" is a claim rather than a shrug.
+    @Test("A series that said nothing about an anime has no row")
+    func adaptationOmittedWhenAbsent() {
         let bare = DetailCredits(series: SeriesFactory.make(id: 1)).rows
-        #expect(bare.map(\.id) == ["Anime adaptation"])
-        #expect(bare[0].value == "None listed")
+        #expect(bare.isEmpty)
     }
 
     /// Artists are only worth their own row when they are not the same people

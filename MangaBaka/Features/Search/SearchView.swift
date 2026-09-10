@@ -139,7 +139,10 @@ struct SearchView: View {
     /// before that — the mockup's own wording.
     private var heading: String {
         guard !model.query.isEmpty else { return "Saved lenses" }
-        let count = "\(model.results.count) result\(model.results.count == 1 ? "" : "s")"
+        // "shown", not "results": this is the number loaded so far, and a query
+        // matching thousands read "24 results" and then "47 results" as the
+        // reader scrolled — the same query reporting different totals.
+        let count = "\(model.results.count) shown"
         guard let sort = SortOrder.label(for: model.query.sort) else { return count }
         return "\(count) · \(sort)"
     }

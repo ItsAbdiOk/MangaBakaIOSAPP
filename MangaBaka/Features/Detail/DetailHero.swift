@@ -136,7 +136,8 @@ struct DetailHero: View {
 
     /// "Manhwa · Completed". Either half alone is still worth showing.
     private var kicker: String? {
-        let parts = [series.type?.capitalized, series.status?.capitalized].compactMap { $0 }
+        let parts = [series.type?.capitalized, SeriesStatus.label(for: series.status)]
+            .compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

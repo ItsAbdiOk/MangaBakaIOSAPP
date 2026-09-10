@@ -272,6 +272,17 @@ actor APIClient {
         try? await get("/v1/my/profile", as: Profile.self)
     }
 
+    /// The same fetch, keeping the reason it failed.
+    ///
+    /// `profile()` collapses offline, rate-limited, server-error and rejected
+    /// into one nil, which is fine for "are we signed in" and wrong for "was
+    /// this token any good". Settings used the collapsed answer to tell a
+    /// reader on a train that MangaBaka had rejected their token, and then
+    /// deleted it from the Keychain.
+    func verifiedProfile() async throws(APIError) -> Profile {
+        try await get("/v1/my/profile", as: Profile.self)
+    }
+
     /// Query parameters that put the reader's identity into a URL.
     ///
     /// `blend_user_id` is listed although the app does not send it: if it is

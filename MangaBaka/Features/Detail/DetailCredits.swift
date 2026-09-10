@@ -7,10 +7,10 @@ import SwiftUI
 /// chip, the content rating nowhere at all — but scattered. As a table it
 /// answers the questions a reader actually arrives with in one place.
 ///
-/// A row whose value the API did not give is omitted, never shown as "Unknown".
-/// The one exception is the anime adaptation, where "None listed" is a real
-/// answer: the API says whether it knows of one, so silence would be
-/// indistinguishable from a missing field.
+/// A row whose value the API did not give is omitted, never shown as "Unknown"
+/// — including the anime adaptation, which used to be stated unconditionally.
+/// A series whose payload carries no `anime` field has said nothing about one,
+/// and "None listed" is a claim, not a shrug.
 struct DetailCredits: View {
     let series: Series
 
@@ -59,7 +59,15 @@ struct DetailCredits: View {
         if let contentRating = series.contentRating {
             out.append(Row(id: "Content rating", value: contentRating.capitalized))
         }
-        out.append(Row(id: "Anime adaptation", value: series.anime == nil ? "None listed" : "Yes"))
+        // `exists` is the answer; the object being present is not. Checking
+        // only for nil printed "Yes" for The Greatest Estate Developer, whose
+        // API row is {"exists": false} — verified against the live endpoint on
+        // 2026-09-10. The row is omitted when the field is absent altogether,
+        // because a series fetched through a shape that does not carry it has
+        // told us nothing, and "None listed" is a claim.
+        if let anime = series.anime {
+            out.append(Row(id: "Anime adaptation", value: anime.exists == true ? "Yes" : "None listed"))
+        }
         return out
     }
 

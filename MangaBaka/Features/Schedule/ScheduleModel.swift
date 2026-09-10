@@ -47,6 +47,11 @@ final class ScheduleModel {
                 ? "\(snapshot.pending) still to measure"
                 : "Not measured yet"
         }
+        // "Measured 0 seconds ago" is what a relative formatter says the
+        // instant a build lands, and "in 0 seconds" is what it says a moment
+        // before that if the clocks disagree by a hair.
+        let age = Date().timeIntervalSince(measuredAt)
+        guard age >= 60 else { return "Measured just now" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return "Measured \(formatter.localizedString(for: measuredAt, relativeTo: Date()))"

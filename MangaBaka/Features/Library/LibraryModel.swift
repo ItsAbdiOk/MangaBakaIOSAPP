@@ -29,6 +29,10 @@ final class LibraryModel {
     var searchText = ""
     private(set) var isLoading = false
     private(set) var hasAccount = true
+    /// Whether every page arrived. False means the counts on screen are a floor,
+    /// not a total, and nothing may be stated as absent on the strength of them.
+    private(set) var isComplete = true
+    private(set) var failure: APIError?
 
     private let library: any LibraryProviding
 
@@ -85,14 +89,26 @@ final class LibraryModel {
         defer { isLoading = false }
 
         var all: [LibraryEntry] = []
+        var complete = true
         for page in 1...10 {
-            let batch = await library.library(page: page, limit: 100)
-            if batch.isEmpty { break }
-            all.append(contentsOf: batch)
-            if batch.count < 100 { break }
+            do {
+                let batch = try await library.libraryPage(page: page, limit: 100)
+                if batch.isEmpty { break }
+                all.append(contentsOf: batch)
+                if batch.count < 100 { break }
+            } catch {
+                // A failure partway through is not the end of the list. Saying
+                // so is the whole point: an empty result used to mean "no
+                // account", so a reader with 937 series on a bad connection was
+                // told to add a token they already had.
+                failure = error
+                complete = false
+                break
+            }
         }
         entries = all
-        hasAccount = !all.isEmpty
+        isComplete = complete
+        hasAccount = !all.isEmpty || !complete
         shelves = Self.shelves(from: all)
     }
 
@@ -136,14 +152,21 @@ final class LibraryModel {
         case .dropped:
             let withNote = entries.filter { !($0.note ?? "").isEmpty }.count
             return withNote > 0
-                ? "\(withNote) carry a note about why you stopped."
+                ? "\(withNote) \(withNote == 1 ? "carries" : "carry") a note about why you stopped."
                 : "What you gave up on. The strongest signal you have."
         case .reading, .rereading:
             let withProgress = entries.filter { ($0.progressChapter ?? 0) > 0 }.count
-            return "\(withProgress) have chapter progress recorded."
+            // "1 have chapter progress recorded" and "0 of these you rated" are
+            // both reachable on a real shelf, and this string is the screen's
+            // subtitle, so they read as the headline description of it.
+            return withProgress > 0
+                ? "\(withProgress) \(withProgress == 1 ? "has" : "have") chapter progress recorded."
+                : "Where you are partway through."
         case .completed:
             let rated = entries.filter { $0.rating != nil }.count
-            return "\(rated) of these you rated."
+            return rated > 0
+                ? "\(rated) of these you rated."
+                : "Finished. None of them rated yet."
         case .paused:
             return "Set down rather than abandoned."
         case .planToRead:

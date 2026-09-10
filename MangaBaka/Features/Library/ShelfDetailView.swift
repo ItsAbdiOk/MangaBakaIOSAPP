@@ -227,6 +227,11 @@ struct LibraryRow: View {
         guard let total = series.totalChapters, total > 0 else {
             return "left at ch \(Int(read))"
         }
+        // A reader can legitimately be past the recorded total: an ongoing
+        // series' chapter count lags what has actually released, and the +1
+        // button has no ceiling. "left at 205/201 · 102%" is the result, and
+        // the progress bar beside it already clamps, so the two disagreed.
+        guard read <= total else { return "left at ch \(Int(read))" }
         let percent = Int((read / total * 100).rounded())
         return "left at \(Int(read))/\(Int(total)) · \(percent)%"
     }

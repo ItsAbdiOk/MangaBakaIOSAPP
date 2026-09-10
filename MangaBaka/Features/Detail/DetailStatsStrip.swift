@@ -24,7 +24,11 @@ struct DetailStatsStrip: View {
 
     var stats: [Stat] {
         var out: [Stat] = []
-        if let rating = series.rating {
+        // `> 0` like every other stat here. A series that comes back rated 0
+        // rather than null showed "0.0 RATING" as a headline number, with the
+        // ratings count beside it dropped for being zero — so nothing on screen
+        // exposed it as an absence.
+        if let rating = series.rating, rating > 0 {
             out.append(Stat(id: "Rating", value: String(format: "%.1f", rating / 10)))
         }
         if let count = series.ratingCount, count > 0 {

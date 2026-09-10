@@ -6,22 +6,15 @@ import SwiftUI
 /// scoped, so this screen says that plainly rather than presenting it as the
 /// normal way to sign in.
 struct SettingsView: View {
-    let validate: (String) async -> String?
+    let validate: (String) async -> TokenCheck
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
 
     @State private var entry = ""
-    @State private var status: Status = .idle
+    @State private var status: TokenStatus = .idle
     @State private var storedTokenExists = TokenStore().read() != nil
     private let store = TokenStore()
-
-    enum Status: Equatable {
-        case idle
-        case checking
-        case signedIn(String)
-        case failed(String)
-    }
 
     var body: some View {
         ScrollView {
@@ -55,7 +48,7 @@ struct SettingsView: View {
             case let .signedIn(name):
                 HStack(spacing: 10) {
                     Circle().fill(Palette.positive).frame(width: 6, height: 6)
-                    Text("Signed in as \(name)")
+                    Text(name.map { "Signed in as \($0)" } ?? "Signed in")
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
                 }
@@ -88,10 +81,16 @@ struct SettingsView: View {
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))
 
-                if case let .failed(reason) = status {
-                    Text(reason)
+                if let message = status.message {
+                    Text(message)
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.accent)
+                        .foregroundStyle(
+                            // A rejection is the reader's problem to fix; an
+                            // unreachable server is not, and colouring both in
+                            // the accent reads as two errors.
+                            status.isRejection ? Palette.accent : Palette.textTertiary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Button {
@@ -289,8 +288,11 @@ struct SettingsView: View {
         storedTokenExists = true
         await check()
         if case .failed = status {
-            // A token that does not work is worse than none: it would make
-            // every authenticated call fail quietly.
+            // A token MangaBaka rejected is worse than none: it would make
+            // every authenticated call fail quietly. Only an actual rejection
+            // gets here — an unreachable server leaves the token alone, because
+            // deleting a credential over a dropped connection is a way to lose
+            // someone's account access for them.
             store.clear()
             storedTokenExists = false
         }
@@ -298,11 +300,17 @@ struct SettingsView: View {
 
     private func check() async {
         status = .checking
-        if let name = await validate(entry) {
+        switch await validate(entry) {
+        case let .accepted(name):
             status = .signedIn(name)
             entry = ""
-        } else {
+        case .rejected:
             status = .failed("That token was not accepted by MangaBaka.")
+        case let .unknown(reason):
+            // Not a verdict on the token. Saying so matters twice over: the
+            // reader is not told their token is bad when it is not, and `save`
+            // does not delete it.
+            status = .unverified(reason)
         }
     }
 }

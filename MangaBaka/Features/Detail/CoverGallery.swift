@@ -60,46 +60,133 @@ struct CoverGallery: View {
     }
 }
 
-/// One cover, pinch and double-tap to zoom.
+/// One cover, inset and rounded, floating on a wash of itself.
+///
+/// Edge to edge, the artwork ran into the bezel and the corners fought the
+/// screen's own radius. Inset with a glass rim it reads as the object it is —
+/// a book cover — and the blurred copy behind it means the page takes its
+/// colour from the art rather than sitting on flat black, the same trick the
+/// series page's hero uses.
 private struct ZoomableCover: View {
     let cover: Cover
     let title: String?
 
+    /// Enough that the artwork clearly stops before the screen does. Less and
+    /// it reads as a rendering mistake rather than a margin.
+    private static let inset: CGFloat = 26
+    private static let radius: CGFloat = 24
+
     @State private var scale: CGFloat = 1
     @State private var committed: CGFloat = 1
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         GeometryReader { proxy in
-            AsyncImage(
-                url: cover.url(forHeight: proxy.size.height, scale: displayScale)
-            ) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().scaledToFit()
-                case .failure:
-                    Image(systemName: "photo")
-                        .font(.system(size: 40))
-                        .foregroundStyle(Palette.textQuaternary)
-                default:
-                    ProgressView().tint(Palette.textQuaternary)
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .scaleEffect(scale)
-            .gesture(
-                MagnifyGesture()
-                    .onChanged { scale = max(1, committed * $0.magnification) }
-                    .onEnded { _ in committed = scale }
+            let available = CGSize(
+                width: proxy.size.width - Self.inset * 2,
+                height: proxy.size.height - Self.inset * 2
             )
-            .onTapGesture(count: 2) {
-                withAnimation(.snappy(duration: 0.25)) {
-                    scale = scale > 1 ? 1 : 2.5
-                    committed = scale
-                }
+            ZStack {
+                wash(in: proxy.size)
+                card(fitting: available)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
             }
         }
         .accessibilityLabel(title.map { "Cover art for \($0)" } ?? "Cover art")
+    }
+
+    /// The same artwork, blurred and over-saturated, filling the screen behind
+    /// the card. Skipped under Reduce Transparency, where a heavy blur is
+    /// exactly what the setting exists to remove.
+    @ViewBuilder
+    private func wash(in size: CGSize) -> some View {
+        if !reduceTransparency {
+            AsyncImage(url: cover.url(forHeight: size.height, scale: 1)) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.clear
+            }
+            .frame(width: size.width, height: size.height)
+            .scaleEffect(1.4)
+            .blur(radius: 60, opaque: false)
+            .saturation(1.6)
+            .opacity(0.35)
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// The card is sized to the artwork, not to the space around it.
+    ///
+    /// `scaledToFit` inside a larger frame leaves the frame the size it was, so
+    /// the rounded rim and the shadow were drawn around the available area and
+    /// floated above and below the image. Here the fitted size is worked out
+    /// first, from the cover's own reported ratio, and the frame is that.
+    ///
+    /// Per-cover ratio is right here and wrong in a row: a grid of covers at
+    /// their own ratios comes out ragged, which is why `CoverImage` fixes 2:3 —
+    /// but there is only one cover on this screen and cropping it would be
+    /// showing the reader less of the thing they tapped to see.
+    private func fitted(in available: CGSize) -> CGSize {
+        let ratio = cover.aspectRatio ?? Double(Metrics.coverAspect)
+        guard ratio > 0 else { return available }
+        let byWidth = CGSize(width: available.width, height: available.width / ratio)
+        return byWidth.height <= available.height
+            ? byWidth
+            : CGSize(width: available.height * ratio, height: available.height)
+    }
+
+    private func card(fitting available: CGSize) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let size = fitted(in: available)
+        return AsyncImage(
+            url: cover.url(forHeight: available.height, scale: displayScale)
+        ) { phase in
+            switch phase {
+            case let .success(image):
+                image.resizable().scaledToFit()
+            case .failure:
+                Image(systemName: "photo")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Palette.textQuaternary)
+            default:
+                ProgressView().tint(Palette.textQuaternary)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(shape)
+        // The rim is what makes it read as glass rather than as a cropped
+        // image: a bright hairline along the top edge falling to nothing at the
+        // bottom, which is how a lit pane of glass actually catches light.
+        .overlay {
+            shape.strokeBorder(
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.45),
+                        .white.opacity(0.10),
+                        .white.opacity(0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.75
+            )
+        }
+        .shadow(color: .black.opacity(0.6), radius: 30, y: 18)
+        .scaleEffect(scale)
+        .gesture(
+            MagnifyGesture()
+                .onChanged { scale = max(1, committed * $0.magnification) }
+                .onEnded { _ in committed = scale }
+        )
+        .onTapGesture(count: 2) {
+            withAnimation(.snappy(duration: 0.25)) {
+                scale = scale > 1 ? 1 : 2.5
+                committed = scale
+            }
+        }
     }
 }
 

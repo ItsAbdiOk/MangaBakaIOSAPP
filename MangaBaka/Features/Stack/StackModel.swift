@@ -40,7 +40,22 @@ final class StackModel {
     private(set) var lastSaveWentToLibrary = false
     /// Set when a save could not reach the library. The local shelf still has
     /// it, so this is a note rather than a failure.
-    private(set) var saveWarning: String?
+    /// The warning to show under a given card, or nothing.
+    ///
+    /// A warning belongs to one series. Asking by id is what stops it appearing
+    /// under a card it has nothing to do with.
+    func warning(for series: Series) -> String? {
+        saveWarning?.seriesId == series.id ? saveWarning?.message : nil
+    }
+
+    /// A warning about the save that just happened, and the series it happened
+    /// to.
+    ///
+    /// Paired with the id because `react` advances the queue before the write
+    /// completes, so a bare string was rendered under the *next* card — a
+    /// series the reader had not saved — and stayed there through every
+    /// subsequent skip until a later save cleared it.
+    private(set) var saveWarning: (seriesId: Int, message: String)?
     /// Why the current card was suggested, when the source can say. Only the
     /// profile recommender explains itself; a blend does not, and inventing a
     /// reason for it would be worse than showing none.
@@ -160,6 +175,7 @@ final class StackModel {
 
     func react(_ kind: ShelfEntry.Kind) async {
         guard let series = current else { return }
+        saveWarning = nil
         queue.removeFirst()
         reacted.insert(series.id)
         // The card just dealt with becomes the one peeking in from behind.
@@ -193,16 +209,17 @@ final class StackModel {
     private func pushSaveToLibrary(_ series: Series) async {
         guard let library else { return }
         do {
-            lastSaveWentToLibrary = try await library.add(
-                seriesId: series.id,
-                state: .planToRead
-            ) || true
+            // `add` answers false when the entry already existed, which is
+            // still a series that is in the library — the distinction the flag
+            // records is "is it there", not "did we put it there just now".
+            _ = try await library.add(seriesId: series.id, state: .planToRead)
+            lastSaveWentToLibrary = true
             saveWarning = nil
         } catch {
             // The shelf already has it, so this is worth mentioning rather than
             // undoing. Losing the save would be worse than a stale library.
             lastSaveWentToLibrary = false
-            saveWarning = "Saved here, but not to your MangaBaka library."
+            saveWarning = (series.id, "Saved here, but not to your MangaBaka library.")
         }
     }
 

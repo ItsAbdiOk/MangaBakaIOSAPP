@@ -248,7 +248,14 @@ struct RootView: View {
     ///
     /// The client resolves credentials per request, and Settings writes to the
     /// Keychain before calling this, so the token under test is the one used.
-    private func validateToken(_ token: String) async -> String? {
-        await client.profile()?.displayName
+    private func validateToken(_ token: String) async -> TokenCheck {
+        do {
+            return .accepted(try await client.verifiedProfile().displayName)
+        } catch {
+            // Only MangaBaka saying no means the token is bad. Everything else
+            // is a statement about the network, and the token is still whatever
+            // it was before the reader lost signal.
+            return error.needsAccount ? .rejected : .unknown(error.userFacingMessage)
+        }
     }
 }

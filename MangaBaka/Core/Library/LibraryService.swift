@@ -16,6 +16,13 @@ protocol LibraryProviding: Sendable {
     func recommendationStatus() async -> RecommendationStatus?
     func recommendations(limit: Int, page: Int, excluding: [Int]) async -> [PersonalRecommendation]
     func library(page: Int, limit: Int) async -> [LibraryEntry]
+
+    /// The same page, keeping the reason it failed, so a caller can tell an
+    /// empty library from an unreachable one.
+    ///
+    /// Defaulted to the swallowing version, so a conformance that has nothing
+    /// to fail — a test double, a stub — does not have to restate it.
+    func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry]
     /// Tags the reader has not opted into seeing named. Nil when unknown.
     func hiddenTagIDs() async -> Set<Int>?
 
@@ -39,6 +46,12 @@ protocol LibraryProviding: Sendable {
     /// Throws rather than returning a flag: this alters someone's real data and
     /// a caller that ignores the result should have to do so deliberately.
     func update(seriesId: Int, change: LibraryChange) async throws(APIError)
+}
+
+extension LibraryProviding {
+    func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] {
+        await library(page: page, limit: limit)
+    }
 }
 
 /// A change to one library entry.
@@ -139,15 +152,26 @@ actor LibraryService: LibraryProviding {
     }
 
     /// A page of the reader's library, newest first as the API returns it.
+    ///
+    /// Swallows the failure. Callers that need to tell "empty" from "could not
+    /// ask" — which is most of them — should use `libraryPage` instead.
     func library(page: Int = 1, limit: Int = 50) async -> [LibraryEntry] {
-        let items: [LibraryEntry]? = try? await client.get(
+        (try? await libraryPage(page: page, limit: limit)) ?? []
+    }
+
+    /// The same page, keeping the reason it failed.
+    ///
+    /// An empty list and a failed request are not the same thing, and treating
+    /// them as one told a signed-in reader with 937 series that they had no
+    /// account whenever they opened Library on a bad connection.
+    func libraryPage(page: Int = 1, limit: Int = 50) async throws(APIError) -> [LibraryEntry] {
+        try await client.get(
             "/v1/my/library",
             query: [
                 URLQueryItem(name: "page", value: String(page)),
                 URLQueryItem(name: "limit", value: String(limit))
             ]
         )
-        return items ?? []
     }
 
     /// Whether personalisation is available, and how much it has to work with.
