@@ -55,21 +55,19 @@ struct StackCaption: View {
             }
 
             if let tags = series.tags, !tags.isEmpty {
-                // DEVIATION: the mockup centres the chip row. FlowLayout
-                // left-aligns, and it is used anyway because it caps an
-                // over-wide item — a long tag name at large text sizes used to
-                // hang off the screen edge. Overflow is a bug; alignment is a
-                // preference.
-                FlowLayout(spacing: 7) {
-                    ForEach(tags.prefix(3), id: \.self) { tag in
-                        Text(tag)
-                            .typeSmallMeta()
-                            .foregroundStyle(Palette.textSecondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Palette.surfaceChip, in: Capsule())
-                            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
-                    }
+                // One line, always. Three chips wrapped to a second row as soon
+                // as one name was long — "Primarily Adult Cast" beside "Male
+                // Protagonist" is enough — and the extra row pushed the card's
+                // actions under the tab bar. This drops to two chips, then to
+                // one, rather than wrapping.
+                //
+                // Replaces a FlowLayout, whose job here was stopping a long tag
+                // hanging off the screen edge. The last candidate truncates
+                // instead, so overflow is still impossible.
+                ViewThatFits(in: .horizontal) {
+                    chips(Array(tags.prefix(3)))
+                    chips(Array(tags.prefix(2)))
+                    chips(Array(tags.prefix(1)), truncating: true)
                 }
                 .padding(.top, 12)
             }
@@ -94,6 +92,28 @@ struct StackCaption: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 26)
         .padding(.top, 6)
+    }
+
+    /// One row of tag chips, on one line.
+    ///
+    /// `fixedSize` on every chip but the truncating candidate is what makes
+    /// `ViewThatFits` measure honestly: without it a chip reports that it fits
+    /// by wrapping its own text, which is the thing being avoided.
+    private func chips(_ tags: [String], truncating: Bool = false) -> some View {
+        HStack(spacing: 7) {
+            ForEach(tags, id: \.self) { tag in
+                Text(tag)
+                    .typeSmallMeta()
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(Palette.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Palette.surfaceChip, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
+                    .fixedSize(horizontal: !truncating, vertical: true)
+            }
+        }
     }
 
     private var metaLine: String? { Self.metaLine(for: series) }

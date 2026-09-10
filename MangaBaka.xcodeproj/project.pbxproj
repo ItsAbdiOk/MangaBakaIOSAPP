@@ -163,6 +163,7 @@
 		E04DBD622CF7CECD84F026B6 /* TrackerScores.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB642496F52D0741D870AB55 /* TrackerScores.swift */; };
 		E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DABEF481B90078120854DE1 /* ShelfDetailView.swift */; };
 		E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE431E64B0087435EC511EF /* StackSections.swift */; };
+		E1F5D98A5DA05C786E830AF3 /* StackHint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C454FC722F35C1A939B850F1 /* StackHint.swift */; };
 		E30F00A5B893F7CD6D2189F3 /* SurpriseAndStackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE5A9E7DDC428AB083B28B0 /* SurpriseAndStackTests.swift */; };
 		E38CBB00B6B725DFDC509FE6 /* APIShapeContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AA7827799CD364196381C9C /* APIShapeContractTests.swift */; };
 		E46E02282E18D3D9271B0545 /* BlockedTagsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A8D53E3B98AA8AE039385DC /* BlockedTagsTests.swift */; };
@@ -332,6 +333,7 @@
 		C17FEBF52EDDF5C6DAE7F64B /* StackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackView.swift; sourceTree = "<group>"; };
 		C186B2EC6AF408B902991225 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		C3281DBC76CB8D1200495919 /* RecommendationQualityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationQualityTests.swift; sourceTree = "<group>"; };
+		C454FC722F35C1A939B850F1 /* StackHint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackHint.swift; sourceTree = "<group>"; };
 		C99014FFFB9D8B7223D1E11C /* CoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverTests.swift; sourceTree = "<group>"; };
 		CCE3CCF279C256CEBA790EBE /* LibraryControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryControl.swift; sourceTree = "<group>"; };
 		CDCBF5D620B264CE3642E9F9 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
@@ -523,6 +525,7 @@
 			isa = PBXGroup;
 			children = (
 				E3206B8E76D17989895A38DB /* StackHeader.swift */,
+				C454FC722F35C1A939B850F1 /* StackHint.swift */,
 				66AC80B7959AD108FCFD7FFF /* StackModel.swift */,
 				DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */,
 				2AE431E64B0087435EC511EF /* StackSections.swift */,
@@ -1037,6 +1040,7 @@
 				E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */,
 				2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */,
 				0192D74336094BD2A497CD0E /* StackHeader.swift in Sources */,
+				E1F5D98A5DA05C786E830AF3 /* StackHint.swift in Sources */,
 				1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */,
 				90E969A30611E9EA5F9ABE2C /* StackResetMenu.swift in Sources */,
 				E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */,

@@ -7,6 +7,8 @@ import SwiftUI
 /// the counter broke into "4" over "saved".
 struct StackHeader: View {
     let savedCount: Int
+    /// False once the reader has dragged a card. See `StackHint`.
+    let showsInstruction: Bool
     let onReset: () async -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -38,10 +40,12 @@ struct StackHeader: View {
                 .typeStackTitle()
                 .foregroundStyle(Palette.textEmphasis)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Drag the cover aside · tap it to open")
-                .typeInstruction()
-                .foregroundStyle(Palette.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            if showsInstruction {
+                Text("Drag the cover aside · tap it to open")
+                    .typeInstruction()
+                    .foregroundStyle(Palette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

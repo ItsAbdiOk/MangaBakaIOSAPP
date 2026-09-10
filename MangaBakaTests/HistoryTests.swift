@@ -114,3 +114,30 @@ struct HistoryTests {
         #expect(model.isWorthShowing)
     }
 }
+
+/// The stack's one-time instruction.
+@Suite("Stack instruction")
+@MainActor
+struct StackHintTests {
+    private func defaults() throws -> UserDefaults {
+        let suite = "stack.hint.\(UUID().uuidString)"
+        return try #require(UserDefaults(suiteName: suite))
+    }
+
+    @Test("Shown until the reader drags a card")
+    func showsUntilFirstDrag() throws {
+        let hint = StackHint(defaults: try defaults())
+        #expect(!hint.hasDragged)
+
+        hint.markDragged()
+        #expect(hint.hasDragged)
+    }
+
+    @Test("Stays gone across launches")
+    func survivesRelaunch() throws {
+        let store = try defaults()
+        StackHint(defaults: store).markDragged()
+
+        #expect(StackHint(defaults: store).hasDragged, "a tutorial that comes back is not one")
+    }
+}

@@ -11,6 +11,7 @@ struct StackView: View {
     @Binding private var path: [Series]
 
     @State private var drag: CGSize = .zero
+    @State private var hint = StackHint()
     /// What the last committed swipe was, and how many have happened.
     ///
     /// The count is what makes the trigger fire twice for two saves in a row —
@@ -64,7 +65,7 @@ struct StackView: View {
     // MARK: - Header
 
     private var header: some View {
-        StackHeader(savedCount: model.savedCount) {
+        StackHeader(savedCount: model.savedCount, showsInstruction: !hint.hasDragged) {
             await model.resetStack()
             onConfirm("The stack has been reset")
         }
@@ -193,6 +194,7 @@ struct StackView: View {
                 }
                 let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
                 lastCommit = (kind, (lastCommit?.count ?? 0) + 1)
+                hint.markDragged()
                 // A card thrown the width of the screen is a lot of motion.
                 // With Reduce Motion on, it simply goes.
                 if reduceMotion {
