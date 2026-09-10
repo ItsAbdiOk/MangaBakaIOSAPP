@@ -22,6 +22,12 @@ struct RootView: View {
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
     let lenses: SearchLensStore
+    let recents: RecentSearches
+    /// The models that live for the session rather than for a screen. Built in
+    /// `MangaBakaApp` alongside everything else they depend on, rather than
+    /// lazily here — a lazily-initialised @State plus an accessor, per model,
+    /// is four things to read where there should be one.
+    let session: SessionModels
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
@@ -40,7 +46,6 @@ struct RootView: View {
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
     @State private var mixModel: MixModel?
-    @State private var recentlyViewed: RecentlyViewedModel?
     /// The cover the detail page should grow out of, and the namespace the
     /// source and destination share. Nil falls back to an ordinary push.
     @State private var zoomSource: String?
@@ -77,7 +82,7 @@ struct RootView: View {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
                         model: DiscoverModel(repository: repository),
-                        recentlyViewed: recentlyViewedModel(),
+                        recentlyViewed: session.recentlyViewed,
                         path: $discoverPath,
                         zoomSource: $zoomSource,
                         namespace: coverTransition,
@@ -170,7 +175,9 @@ struct RootView: View {
                         model: searchModel ?? SearchModel(repository: repository),
                         path: $searchPath,
                         onBrowse: { showsBrowse = true },
-                        lenses: lenses
+                        lenses: lenses,
+                        counts: session.counts,
+                        recents: recents
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
                     .navigationDestination(isPresented: $showsBrowse) {
@@ -245,21 +252,6 @@ struct RootView: View {
         return nil
     }
 
-    /// One model, made on first use and kept.
-    ///
-    /// Reading the ratings through a closure rather than copying them in means
-    /// turning Explicit off empties the row on the next load, instead of
-    /// leaving the reader looking at what they just excluded.
-    private func recentlyViewedModel() -> RecentlyViewedModel {
-        if let recentlyViewed { return recentlyViewed }
-        let made = RecentlyViewedModel(
-            history: history,
-            allowedRatings: { content.preferences.allowed.map(\.rawValue) }
-        )
-        Task { @MainActor in recentlyViewed = made }
-        return made
-    }
-
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
         SeriesDetailView(
             series: series,
@@ -289,7 +281,7 @@ struct RootView: View {
         // Opening the page is what counts as having viewed it. Recorded here
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
-        .task { await recentlyViewedModel().record(series) }
+        .task { await session.recentlyViewed.record(series) }
         // Grows out of the cover that was tapped. Only Discover marks its
         // covers as sources so far; every other route falls through to the
         // ordinary push, which is what an unmatched id already does.

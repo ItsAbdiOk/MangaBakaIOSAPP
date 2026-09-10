@@ -11,9 +11,10 @@ struct SearchView: View {
     /// so a toolbar button there was clipped to a sliver at the screen edge.
     let onBrowse: () -> Void
     let lenses: SearchLensStore
+    let counts: LensCounts
+    let recents: RecentSearches
 
     @State private var isNamingLens = false
-    @State private var lensName = ""
 
     @State private var showFilters = false
 
@@ -45,27 +46,27 @@ struct SearchView: View {
                 .padding(.horizontal, Metrics.gutter + 2)
 
                 content
-                saveLens
             }
             .padding(.top, Metrics.scrollTopInset)
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
-        .alert("Name this lens", isPresented: $isNamingLens) {
-            TextField("Cosy fantasy, completed", text: $lensName)
-            Button("Cancel", role: .cancel) { lensName = "" }
-            Button("Save") {
-                lenses.save(name: lensName, query: model.query)
-                lensName = ""
+        .sheet(isPresented: $isNamingLens) {
+            SaveLensSheet(query: model.query) { name in
+                lenses.save(name: name, query: model.query)
             }
-        } message: {
-            Text(SearchLens.describe(model.query))
+            .presentationDetents([.height(420)])
+            .presentationCornerRadius(Metrics.radiusSheet)
         }
         .sheet(isPresented: $showFilters) {
-            FilterSheet(query: $model.query) {
-                Task { model.cancelPendingDebounce(); await model.search() }
-            }
+            FilterSheet(
+                query: $model.query,
+                onApply: {
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                },
+                onSaveLens: { isNamingLens = true }
+            )
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(Metrics.radiusSheet)
         }
@@ -84,7 +85,10 @@ struct SearchView: View {
                 .submitLabel(.search)
                 .foregroundStyle(Palette.textPrimary)
                 .typeBody()
-                .onSubmit { Task { model.cancelPendingDebounce(); await model.search() } }
+                .onSubmit {
+                    recents.record(model.query.text ?? "")
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                }
                 .onChange(of: model.query.text) { _, _ in model.queryDidChange() }
             }
             .padding(.horizontal, 14)
@@ -150,10 +154,19 @@ struct SearchView: View {
     @ViewBuilder
     private var content: some View {
         if model.query.isEmpty {
-            SearchLensList(lenses: lenses) { lens in
-                model.query = lens.query
-                Task { model.cancelPendingDebounce(); await model.search() }
-            }
+            SearchIdleView(
+                lenses: lenses,
+                counts: counts,
+                recents: recents,
+                onRun: { lens in
+                    model.query = lens.query
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                },
+                onRunTerm: { term in
+                    model.query = SearchQuery(text: term)
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                }
+            )
         } else if model.isSearching {
             ProgressView()
                 .tint(Palette.accent)
@@ -211,27 +224,6 @@ struct SearchView: View {
               let index = model.results.firstIndex(where: { $0.id == series.id })
         else { return false }
         return index >= model.results.count - Self.prefetchDistance
-    }
-
-    /// Saves whatever filter is applied as a lens of the reader's own.
-    @ViewBuilder
-    private var saveLens: some View {
-        if !model.query.isEmpty {
-            Button { isNamingLens = true } label: {
-                Text("Save as a lens")
-                    .typeRowTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: Metrics.ctaSecondary)
-                    .background(Palette.surface, in: RoundedRectangle(
-                        cornerRadius: 14, style: .continuous
-                    ))
-                    .hairlineBorder(Palette.borderPill, radius: 14)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, Metrics.gutter)
-            .padding(.top, Metrics.gapCovers)
-        }
     }
 
     private var emptyState: some View {

@@ -15,6 +15,8 @@ struct MangaBakaApp: App {
     private let catalogue: CatalogueService
     private let blockedTags: BlockedTagsStore
     private let lenses = SearchLensStore()
+    private let recents = RecentSearches()
+    private let session: SessionModels
     private let onboarding = OnboardingState()
 
     init() {
@@ -114,6 +116,16 @@ struct MangaBakaApp: App {
             await built.updateBlockedTags(blocked.blocked.ids)
             await built.updateLibraryExclusion(userID: libraryService.profileID())
         }
+
+        // Reading the ratings through a closure rather than copying them in
+        // means turning Explicit off empties the recently-viewed row on the
+        // next load, instead of leaving the reader looking at what they just
+        // excluded.
+        session = SessionModels(
+            repository: repository,
+            history: history,
+            allowedRatings: { store.preferences.allowed.map(\.rawValue) }
+        )
     }
 
     var body: some Scene {
@@ -132,6 +144,8 @@ struct MangaBakaApp: App {
                 catalogue: catalogue,
                 blockedTags: blockedTags,
                 lenses: lenses,
+                recents: recents,
+                session: session,
                 onboarding: onboarding
             )
         }

@@ -4,6 +4,10 @@ import SwiftUI
 struct FilterSheet: View {
     @Binding var query: SearchQuery
     let onApply: () -> Void
+    /// Saving a lens happens here, in the sheet that owns filters, so Search
+    /// and Mix both get it without it being designed twice. Absent where a
+    /// caller has nowhere to put a lens.
+    var onSaveLens: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -49,6 +53,13 @@ struct FilterSheet: View {
                 ratingSection
 
                 HStack(spacing: Metrics.gapChips) {
+                    if let onSaveLens {
+                        SaveLensButton(isEnabled: !query.isEmpty) {
+                            onSaveLens()
+                            dismiss()
+                        }
+                    }
+
                     Button {
                         query = SearchQuery()
                     } label: {
@@ -73,6 +84,14 @@ struct FilterSheet: View {
                             .background(Palette.accent)
                             .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
                     }
+                }
+
+                if onSaveLens != nil {
+                    Text("The bookmark saves this as a lens. Greyed until a filter is set.")
+                        .typeFootnote()
+                        .foregroundStyle(Palette.textQuaternary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(.center)
                 }
             }
             .padding(Metrics.gutter)
