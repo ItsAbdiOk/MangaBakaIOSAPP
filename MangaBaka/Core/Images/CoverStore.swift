@@ -115,6 +115,14 @@ final class CoverStore {
                     if (response as? HTTPURLResponse)?.statusCode == 404 { return nil }
                     continue
                 }
+                // Counted before decoding: what crossed the wire is the
+                // number that matters to someone on a metered connection.
+                //
+                // This line was written once already and silently did not
+                // apply, which is why the first real measurement reported
+                // "zero KB of cover art" on a screen visibly full of it. An
+                // instrument that reads zero is worse than no instrument.
+                await NetworkLedger.shared.recordImage(bytes: data.count)
                 return await image.byPreparingForDisplay() ?? image
             } catch {
                 if Task.isCancelled { return nil }

@@ -30,13 +30,16 @@ struct DataUseSection: View {
                     Button {
                         withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
                     } label: {
-                        Text(isExpanded ? "Hide the detail" : "Where the time goes")
+                        Text(isExpanded ? "Hide the detail" : "The eight slowest")
                             .typeInstruction()
                             .foregroundStyle(Palette.accent)
                     }
                     .buttonStyle(.plain)
 
                     if isExpanded {
+                        // Named as a top-eight rather than a breakdown. Read as
+                        // a breakdown, the numbers do not add up to the total
+                        // and the list quietly discredits itself.
                         SettingsCard {
                             ForEach(Array(slowest.enumerated()), id: \.offset) { index, row in
                                 endpointRow(row)

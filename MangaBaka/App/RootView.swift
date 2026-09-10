@@ -29,19 +29,24 @@ struct RootView: View {
     /// is four things to read where there should be one.
     let session: SessionModels
     let calendar: ReleaseCalendar
+    let librarySnapshot: LibrarySnapshot
     let reminders: ReleaseReminders
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
-    @State private var selection: AppTab = .discover
+    // Internal rather than private so the Library tab, which lives in
+    // RootView+Session.swift, can reach them. The split is the lint's doing:
+    // that one tab carries five destinations and was more than half this
+    // type's body.
+    @State var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
     @State private var stackPath: [Series] = []
-    @State private var shelfPath: [Series] = []
-    @State private var showsSchedule = false
-    @State private var showsTaste = false
-    @State private var showsSettings = false
-    @State private var libraryModel: LibraryModel?
-    @State private var openShelf: LibraryModel.Shelf?
+    @State var shelfPath: [Series] = []
+    @State var showsSchedule = false
+    @State var showsTaste = false
+    @State var showsSettings = false
+    @State var libraryModel: LibraryModel?
+    @State var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
     @State private var searchModel: SearchModel?
@@ -56,7 +61,7 @@ struct RootView: View {
     /// feed answers, which is the case the screen is built to survive.
     @State var onboardingCovers: [Series] = []
     /// Whether Settings should open with the token field already focused.
-    @State private var wantsAccountFocus = false
+    @State var wantsAccountFocus = false
 
     var body: some View {
         tabs
@@ -116,55 +121,7 @@ struct RootView: View {
                     .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
                 }
             }
-            Tab(AppTab.library.title, systemImage: AppTab.library.symbol, value: AppTab.library) {
-                NavigationStack(path: $shelfPath) {
-                    LibraryView(
-                        model: libraryModel ?? LibraryModel(library: library),
-                        path: $shelfPath,
-                        scheduleSummary: nil,
-                        onOpenSchedule: { showsSchedule = true },
-                        onOpenTaste: { showsTaste = true },
-                        onOpenShelf: { state in
-                            openShelf = libraryModel?.shelves.first { $0.state == state }
-                        },
-                        onOpenSettings: { showsSettings = true },
-                        onOpenStack: { selection = .stack }
-                    )
-                        .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
-                        .navigationDestination(item: $openShelf) { shelf in
-                            ShelfDetailView(
-                                shelf: shelf,
-                                path: $shelfPath,
-                                onSave: saveLibraryChange
-                            )
-                        }
-                        .navigationDestination(isPresented: $showsTaste) {
-                            TasteView(
-                                model: TasteModel(library: library),
-                                entries: libraryModel?.entries ?? []
-                            )
-                        }
-                        .navigationDestination(isPresented: $showsSchedule) {
-                            ScheduleView(
-                                model: ScheduleModel(service: schedule, calendar: calendar, library: library),
-                                path: $shelfPath
-                            )
-                        }
-                        .navigationDestination(isPresented: $showsSettings) {
-                            SettingsView(
-                                validate: validateToken,
-                                content: content,
-                                formats: formats,
-                                blockedTags: blockedTags,
-                                catalogue: catalogue,
-                                focusAccount: wantsAccountFocus,
-                                reminders: reminders,
-                                onRemindersChanged: { await refreshReminders() },
-                                history: history
-                            )
-                        }
-                }
-            }
+            libraryTab
             // `.search` is what renders it as the circle beside the capsule
             // rather than a fifth item inside it — the mockup's arrangement,
             // done by the system.
@@ -219,7 +176,7 @@ struct RootView: View {
             // a half-typed query or an assembled set of mix seeds.
             if searchModel == nil { searchModel = SearchModel(repository: repository) }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
-            if libraryModel == nil { libraryModel = LibraryModel(library: library) }
+            if libraryModel == nil { libraryModel = sharedLibraryModel }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
         }
         .tint(Palette.accent)
@@ -246,7 +203,7 @@ struct RootView: View {
 
     /// Writes a change to the reader's real library, then re-reads so the
     /// screen shows what the server now holds rather than what was typed.
-    private func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
+    func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
         do {
             try await library.update(seriesId: seriesId, change: change)
         } catch {
@@ -257,12 +214,12 @@ struct RootView: View {
         return nil
     }
 
-    private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
+    func detail(_ series: Series, path: Binding<[Series]>) -> some View {
         SeriesDetailView(
             series: series,
             repository: repository,
             library: library,
-            libraryStore: libraryModel ?? LibraryModel(library: library),
+            libraryStore: libraryModel ?? sharedLibraryModel,
             schedule: schedule,
             characters: characters,
             taste: taste,
@@ -298,7 +255,7 @@ struct RootView: View {
     ///
     /// The client resolves credentials per request, and Settings writes to the
     /// Keychain before calling this, so the token under test is the one used.
-    private func validateToken(_ token: String) async -> TokenCheck {
+    func validateToken(_ token: String) async -> TokenCheck {
         do {
             return .accepted(try await client.verifiedProfile().displayName)
         } catch {

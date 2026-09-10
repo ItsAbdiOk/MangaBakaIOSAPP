@@ -19,7 +19,9 @@ struct ChromeReachabilityTests {
         #expect(library.contains("gearshape"))
         #expect(library.contains("accessibilityLabel(\"Settings\")"))
 
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        // The Library tab and its five destinations moved out of RootView when
+        // that type hit the body-length ceiling. Settings is one of them.
+        let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
         #expect(root.contains("onOpenSettings: { showsSettings = true }"))
         #expect(root.contains("SettingsView("))
     }

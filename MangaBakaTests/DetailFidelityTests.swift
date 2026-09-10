@@ -296,7 +296,9 @@ struct LibraryLookupTests {
     /// checks the loop still exists and is not written as bare numbers.
     @Test("The shared store pages until it runs out")
     func storePages() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Library/LibraryModel.swift")
+        // The pager moved into LibrarySnapshot when the library stopped being
+        // walked three times a launch. It is one walk now, shared.
+        let source = try SourceTree.read("MangaBaka/Core/Library/LibrarySnapshot.swift")
         #expect(source.contains("for page in 1...Self.pageCap"))
         #expect(source.contains("if batch.count < Self.pageSize { break }"))
 

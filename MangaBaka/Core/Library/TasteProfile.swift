@@ -20,14 +20,22 @@ actor TasteProfile {
     /// Where the fine-grained half of the answer comes from. Optional so tests
     /// and previews can run without a database.
     private let ledger: TasteLedger?
+    /// The shared library walk. Without it this walked the library itself, and
+    /// the library is 24.7 MB.
+    private let snapshot: LibrarySnapshot?
     private var cached: Set<String>?
     private var cachedIDs: Set<Int>?
     private var inFlight: Task<Set<String>, Never>?
     private var inFlightIDs: Task<Set<Int>, Never>?
 
-    init(library: any LibraryProviding, ledger: TasteLedger? = nil) {
+    init(
+        library: any LibraryProviding,
+        ledger: TasteLedger? = nil,
+        snapshot: LibrarySnapshot? = nil
+    ) {
         self.library = library
         self.ledger = ledger
+        self.snapshot = snapshot
     }
 
     /// Favoured tag names, lowercased for matching.
@@ -69,8 +77,8 @@ actor TasteProfile {
         // Two series pages opened at once must not both page the library.
         if let inFlightIDs { return await inFlightIDs.value }
 
-        let task = Task<Set<Int>, Never> { [library, ledger] in
-            await Self.buildIDs(library: library, ledger: ledger)
+        let task = Task<Set<Int>, Never> { [library, ledger, snapshot] in
+            await Self.buildIDs(library: library, ledger: ledger, snapshot: snapshot)
         }
         inFlightIDs = task
         let ids = await task.value
@@ -88,16 +96,11 @@ actor TasteProfile {
     /// was not — Abdi's library is 937 entries against a 1,000 ceiling.
     private static func buildIDs(
         library: any LibraryProviding,
-        ledger: TasteLedger?
+        ledger: TasteLedger?,
+        snapshot: LibrarySnapshot?
     ) async -> Set<Int> {
-        if let ledger {
-            for page in 1...30 {
-                guard let batch = try? await library.libraryPage(page: page, limit: 100),
-                      !batch.isEmpty
-                else { break }
-                try? await ledger.absorb(batch)
-                if batch.count < 100 { break }
-            }
+        if let ledger, let snapshot {
+            try? await ledger.absorb(await snapshot.all())
         }
 
         let local = (try? await ledger?.favouredIDs()) ?? []

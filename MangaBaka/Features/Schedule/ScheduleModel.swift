@@ -33,17 +33,22 @@ final class ScheduleModel {
 
     private let service: ReleaseScheduleService
     private let calendar: ReleaseCalendar?
-    private let library: (any LibraryProviding)?
+    /// The shared library walk. This used to page the library itself, which on
+    /// a real account is 24.7 MB — for a set of ids.
+    ///
+    /// Named for the library rather than just `snapshot`, because this type
+    /// already has one of those and it means something else entirely.
+    private let librarySnapshot: LibrarySnapshot?
     private var pollTask: Task<Void, Never>?
 
     init(
         service: ReleaseScheduleService,
         calendar: ReleaseCalendar? = nil,
-        library: (any LibraryProviding)? = nil
+        snapshot: LibrarySnapshot? = nil
     ) {
         self.service = service
         self.calendar = calendar
-        self.library = library
+        librarySnapshot = snapshot
     }
 
     /// Series with an announced date, so a guess about them can be suppressed.
@@ -170,15 +175,8 @@ final class ScheduleModel {
     /// section simply does not appear — better than showing a stranger's
     /// release calendar under the heading "yours".
     private func loadAnnounced() async {
-        guard let calendar, let library else { return }
-        var ids: Set<Int> = []
-        for page in 1...10 {
-            let batch = await library.library(page: page, limit: 100)
-            if batch.isEmpty { break }
-            ids.formUnion(batch.map(\.seriesId))
-            if batch.count < 100 { break }
-        }
-        announced = await calendar.mine(seriesIDs: ids)
+        guard let calendar, let librarySnapshot else { return }
+        announced = await calendar.mine(seriesIDs: await librarySnapshot.seriesIDs())
     }
 
     /// Starts a measurement and follows it.

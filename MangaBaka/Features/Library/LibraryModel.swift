@@ -41,9 +41,11 @@ final class LibraryModel {
     private(set) var failure: APIError?
 
     private let library: any LibraryProviding
+    private let snapshot: LibrarySnapshot
 
-    init(library: any LibraryProviding) {
+    init(library: any LibraryProviding, snapshot: LibrarySnapshot? = nil) {
         self.library = library
+        self.snapshot = snapshot ?? LibrarySnapshot(library: library)
     }
 
     var total: Int { entries.count }
@@ -150,6 +152,11 @@ final class LibraryModel {
     /// Re-reads after a write, so the screen reflects the server rather than
     /// what was typed into a sheet.
     func reload() async {
+        // The shared snapshot has to be told, or a reload re-reads the copy
+        // that was already wrong. Caught by three existing tests the moment the
+        // snapshot was introduced: a write landed, the screen refetched, and
+        // the cache handed back the library as it had been before the write.
+        await snapshot.invalidate()
         entries = []
         await load()
     }
@@ -183,31 +190,15 @@ final class LibraryModel {
         isLoading = true
         defer { isLoading = false }
 
-        var all: [LibraryEntry] = []
-        var complete = true
-        for page in 1...Self.pageCap {
-            do {
-                let batch = try await library.libraryPage(page: page, limit: Self.pageSize)
-                if batch.isEmpty { break }
-                all.append(contentsOf: batch)
-                if batch.count < Self.pageSize { break }
-                // Ran out of pages before running out of library. Say so rather
-                // than presenting a truncated list as the whole thing.
-                if page == Self.pageCap { complete = false }
-            } catch {
-                // A failure partway through is not the end of the list. Saying
-                // so is the whole point: an empty result used to mean "no
-                // account", so a reader with 937 series on a bad connection was
-                // told to add a token they already had.
-                failure = error
-                complete = false
-                break
-            }
-        }
-        entries = all
-        isComplete = complete
-        hasAccount = !all.isEmpty || !complete
-        shelves = Self.shelves(from: all)
+        // One walk per session, shared with the taste ledger and the release
+        // reminders. Measured on a real account: 939 entries is 24.7 MB, and
+        // three separate walks was 74 MB to draw one screen.
+        let result = await snapshot.load()
+        entries = result.entries
+        isComplete = result.isComplete
+        failure = result.failure
+        hasAccount = !result.entries.isEmpty || !result.isComplete
+        shelves = Self.shelves(from: result.entries)
     }
 
     /// Shelves narrowed by the search box, empty ones dropped.

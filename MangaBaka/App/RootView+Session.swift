@@ -6,6 +6,77 @@ import SwiftUI
 /// whenever the reader's answer or the app's answer changes, rebuild the list
 /// rather than adding to it.
 extension RootView {
+    /// The Library tab and everything reachable from it.
+    ///
+    /// Its own property because this one tab carries five destinations — a
+    /// series, a shelf, the taste screen, the schedule and Settings — and it
+    /// had grown to more than half of `RootView`'s body on its own.
+    /// `TabContent`, not `View`: a `Tab` inside a `TabView` is not a view, and
+    /// typing it as one is accepted right up until the builder rejects it.
+    @TabContentBuilder<AppTab>
+    var libraryTab: some TabContent<AppTab> {
+                Tab(AppTab.library.title, systemImage: AppTab.library.symbol, value: AppTab.library) {
+                    NavigationStack(path: $shelfPath) {
+                        LibraryView(
+                            model: libraryModel ?? sharedLibraryModel,
+                            path: $shelfPath,
+                            scheduleSummary: nil,
+                            onOpenSchedule: { showsSchedule = true },
+                            onOpenTaste: { showsTaste = true },
+                            onOpenShelf: { state in
+                                openShelf = libraryModel?.shelves.first { $0.state == state }
+                            },
+                            onOpenSettings: { showsSettings = true },
+                            onOpenStack: { selection = .stack }
+                        )
+                            .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
+                            .navigationDestination(item: $openShelf) { shelf in
+                                ShelfDetailView(
+                                    shelf: shelf,
+                                    path: $shelfPath,
+                                    onSave: saveLibraryChange
+                                )
+                            }
+                            .navigationDestination(isPresented: $showsTaste) {
+                                TasteView(
+                                    model: TasteModel(library: library),
+                                    entries: libraryModel?.entries ?? []
+                                )
+                            }
+                            .navigationDestination(isPresented: $showsSchedule) {
+                                ScheduleView(
+                                    model: ScheduleModel(
+                                service: schedule,
+                                calendar: calendar,
+                                snapshot: librarySnapshot
+                            ),
+                                    path: $shelfPath
+                                )
+                            }
+                            .navigationDestination(isPresented: $showsSettings) {
+                                SettingsView(
+                                    validate: validateToken,
+                                    content: content,
+                                    formats: formats,
+                                    blockedTags: blockedTags,
+                                    catalogue: catalogue,
+                                    focusAccount: wantsAccountFocus,
+                                    reminders: reminders,
+                                    onRemindersChanged: { await refreshReminders() },
+                                    history: history
+                                )
+                            }
+                    }
+                }
+    }
+
+    /// A stand-in for the Library tab's own model, for screens that need one
+    /// before that tab has been opened. It shares the same snapshot, so it
+    /// costs no extra requests.
+    var sharedLibraryModel: LibraryModel {
+        LibraryModel(library: library, snapshot: librarySnapshot)
+    }
+
     /// The work a launch does once the first screen is on the way.
     ///
     /// One task rather than several: they are not independent — the reminders
@@ -33,22 +104,15 @@ extension RootView {
             return
         }
 
-        let snapshot = await schedule.snapshot()
-        var ids: Set<Int> = []
-        for page in 1...10 {
-            let batch = await library.library(page: page, limit: 100)
-            if batch.isEmpty { break }
-            ids.formUnion(batch.map(\.seriesId))
-            if batch.count < 100 { break }
-        }
-        let announced = await calendar.mine(seriesIDs: ids)
+        let scheduled = await schedule.snapshot()
+        let announced = await calendar.mine(seriesIDs: await librarySnapshot.seriesIDs())
 
         // A series with an announced date is not also guessed about, for the
         // same reason the Schedule screen drops it: two notices about the same
         // series, one a fact and one an estimate, leave the reader deciding
         // which to believe.
         let announcedIDs = Set(announced.compactMap(\.seriesId))
-        let predicted = snapshot.dated.filter { !announcedIDs.contains($0.series.id) }
+        let predicted = scheduled.dated.filter { !announcedIDs.contains($0.series.id) }
 
         await reminders.reschedule(announced: announced, predicted: predicted)
     }
