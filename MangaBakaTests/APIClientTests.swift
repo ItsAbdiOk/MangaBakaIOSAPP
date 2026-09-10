@@ -61,9 +61,12 @@ struct APIClientFailurePathTests {
     /// the same network. The message must never blame the reader.
     @Test("Rate-limit message does not blame the user")
     func rateLimitMessageIsBlameless() {
+        // See APIErrorPresentationTests for why this asserts the de-blaming
+        // clause rather than banning the word "you": the strongest sentence in
+        // the message contains it.
         let message = APIError.rateLimited(retryAfter: 30).userFacingMessage
-        #expect(!message.lowercased().contains("you "))
         #expect(!message.lowercased().contains("your request"))
+        #expect(message.lowercased().contains("shared"))
         #expect(message.contains("MangaBaka"))
     }
 

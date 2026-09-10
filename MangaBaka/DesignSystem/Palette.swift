@@ -53,6 +53,15 @@ enum Palette {
     /// The mockup's oklch(0.72 0.16 145), converted. Used for the cached dot.
     static let positive = Color(hex: 0x5BBE62)
 
+    /// The one amber in the app, and it means exactly one thing: what you are
+    /// looking at is real but out of date.
+    ///
+    /// Deliberately not the accent. The accent means "tap me"; a stale bar is a
+    /// fact with an optional action. Sampled from the design board at #EFA831.
+    /// If a second thing ever wants amber, that is the moment to stop and ask
+    /// what the colour is supposed to mean.
+    static let stale = Color(hex: 0xEFA831)
+
     // MARK: Borders — always 0.5pt
 
     /// Meta lines and inactive tab labels. Between textSecondary and

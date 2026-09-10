@@ -45,6 +45,16 @@ struct DiscoverView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
                 header
+
+                // Under the title, above the content, and it scrolls away with
+                // both. Pinned, it would be a permanent accusation about a
+                // screen that is working.
+                if let detail = model.staleDetail {
+                    StaleBar(headline: "Showing what you had", detail: detail) {
+                        await model.load(forceRefresh: true)
+                    }
+                }
+
                 openTheStack
 
                 // Above the API's rows because it is the only one built from
@@ -143,10 +153,6 @@ struct DiscoverView: View {
                     .typeInstruction()
                     .foregroundStyle(Palette.accent)
                     .padding(.trailing, Metrics.gutter)
-            }
-
-            if let staleReason = row.staleReason {
-                StaleBanner(message: staleReason)
             }
 
             if row.isLoading && row.series.isEmpty {

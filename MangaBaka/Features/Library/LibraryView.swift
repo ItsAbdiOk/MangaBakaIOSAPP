@@ -137,7 +137,6 @@ struct LibraryView: View {
 
     private var noAccount: some View {
         EmptyState(
-            symbol: "person.crop.circle.badge.questionmark",
             title: "No library yet",
             message: """
             Add a MangaBaka token in Settings and everything you track there \

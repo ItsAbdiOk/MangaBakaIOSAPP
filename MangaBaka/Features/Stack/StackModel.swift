@@ -68,6 +68,15 @@ final class StackModel {
 
     /// Covers already saved, newest first, for the strip under the card.
     private(set) var saved: [Series] = []
+
+    /// What this run of the app has got through.
+    ///
+    /// Deliberately not the shelf's totals. `saved` is every save the reader
+    /// has ever made, so "5 saved" from it would be a lifetime figure sitting
+    /// under the words "today's stack". These two count what actually happened
+    /// since launch, which is the only number the app can state honestly.
+    private(set) var seenThisRun = 0
+    private(set) var savedThisRun = 0
     /// What the header counts.
     var savedCount: Int { saved.count }
 
@@ -200,6 +209,8 @@ final class StackModel {
         saveWarning = nil
         queue.removeFirst()
         reacted.insert(series.id)
+        seenThisRun += 1
+        if kind == .saved { savedThisRun += 1 }
         // The card just dealt with becomes the one peeking in from behind.
         previous = series
         try? await shelf.record(series, as: kind)

@@ -123,7 +123,10 @@ struct LibraryWriteTests {
             try await makeService().update(seriesId: 1, change: change)
             Issue.record("a 401 must not read as success")
         } catch {
-            #expect(error.userFacingMessage.contains("Settings"))
+            // "Open Settings" is the button now, not the sentence. What the
+            // error must carry is that this is an account problem.
+            #expect(error.needsAccount)
+            #expect(error.headline == "This part needs an account")
         }
     }
 

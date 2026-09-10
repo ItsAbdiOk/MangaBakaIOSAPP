@@ -7,26 +7,45 @@ import Testing
 /// nothing, and blaming them for it is both wrong and infuriating.
 @Suite("Error presentation")
 struct APIErrorPresentationTests {
+    /// The rule is "never implicate the reader", and this test used to enforce
+    /// it by banning the words "you", "your" and "too many requests".
+    ///
+    /// The design board broke all three deliberately and is right to: the
+    /// headline is "Too many requests, briefly" and the body says "the limit is
+    /// shared by everyone on your network, so this may not be you at all". That
+    /// second clause is the strongest de-blaming sentence in the app, and the
+    /// old test would have banned it for containing the word "you".
+    ///
+    /// So the rule is asserted directly now — the shared-network fact must be
+    /// present, and no phrasing may tell the reader they did too much.
     @Test("A rate limit never blames the reader")
     func rateLimitIsBlameless() {
         for retry in [nil, TimeInterval(5), TimeInterval(300)] {
             let message = APIError.rateLimited(retryAfter: retry).userFacingMessage.lowercased()
-            #expect(!message.contains("you "))
-            #expect(!message.contains("your "))
-            #expect(!message.contains("too many requests"), "That phrasing implicates the reader")
+            #expect(
+                message.contains("shared"),
+                "the only line in the family that defends the reader must be present"
+            )
+            #expect(message.contains("may not be you"))
+            for accusation in ["slow down", "you have used", "you've used", "wait your turn"] {
+                #expect(!message.contains(accusation))
+            }
         }
     }
 
+    /// The countdown moved out of the message and into its own property, so it
+    /// can be set in bold at the end of the body rather than buried in it.
     @Test("A wait is expressed in plain units")
     func humanDurations() {
-        #expect(APIError.rateLimited(retryAfter: 1).userFacingMessage.contains("1 second"))
-        #expect(APIError.rateLimited(retryAfter: 30).userFacingMessage.contains("30 seconds"))
-        #expect(APIError.rateLimited(retryAfter: 120).userFacingMessage.contains("2 minutes"))
-        #expect(APIError.rateLimited(retryAfter: 60).userFacingMessage.contains("1 minute"))
+        #expect(APIError.rateLimited(retryAfter: 1).countdown?.contains("1 second") == true)
+        #expect(APIError.rateLimited(retryAfter: 30).countdown?.contains("30 seconds") == true)
+        #expect(APIError.rateLimited(retryAfter: 120).countdown?.contains("2 minutes") == true)
+        #expect(APIError.rateLimited(retryAfter: 60).countdown?.contains("1 minute") == true)
     }
 
-    @Test("With no Retry-After the message promises no specific time")
+    @Test("With no Retry-After nothing promises a specific time")
     func noFalsePrecision() {
+        #expect(APIError.rateLimited(retryAfter: nil).countdown == nil)
         let message = APIError.rateLimited(retryAfter: nil).userFacingMessage
         #expect(!message.contains("second"))
         #expect(!message.contains("minute"))
@@ -82,7 +101,14 @@ struct AuthErrorPresentationTests {
     func authErrorsAreActionable(_ status: Int) {
         let error = APIError.server(status: status, message: "Unauthenticated.")
         #expect(error.needsAccount)
-        #expect(error.userFacingMessage.contains("Settings"))
+        // The fix moved from the sentence to the button: FailureState gives
+        // this case, and only this case, a filled "Open Settings". What the
+        // message must still do is name what is missing and say what keeps
+        // working without it — an error that only says "no" reads as the whole
+        // app being broken.
+        #expect(error.headline == "This part needs an account")
+        #expect(error.userFacingMessage.contains("token"))
+        #expect(error.userFacingMessage.contains("keep working"))
         #expect(!error.userFacingMessage.contains("Unauthenticated"))
         #expect(error.symbolName == "person.crop.circle.badge.plus")
     }

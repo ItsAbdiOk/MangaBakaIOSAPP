@@ -267,6 +267,9 @@ struct FeedResult: Sendable {
 
     let series: [Series]
     let origin: Origin
+    /// When the cached copy was written, for a stale result that needs to say
+    /// how old it is. Nil for anything that came off the network.
+    var cachedAt: Date?
 
     /// An error to show only when there is nothing at all to display. When
     /// stale content exists, the content is shown instead of an error page.
@@ -278,9 +281,12 @@ struct FeedResult: Sendable {
 
 actor SeriesRepository: SeriesRepositoryProtocol {
     private let client: APIClient
-    private let database: AppDatabase
-    private let clock: any Clock
-    private let decoder: JSONDecoder
+    // Internal rather than private so the cache half can reach them. See
+    // SeriesRepository+Cache.swift — the split is the lint's doing, not a
+    // widening of who is meant to touch these.
+    let database: AppDatabase
+    let clock: any Clock
+    let decoder: JSONDecoder
     /// Content ratings to request, or `nil` for no filter. Defaults to the
     /// product decision: safe and suggestive, with anything stronger behind a
     /// deliberate opt-in that does not exist yet.
@@ -344,8 +350,13 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         } catch {
             // Falling back to stale cache is the whole point of the cache on a
             // train. An empty result here is handled by `blockingError`.
-            let stale = (try? readCache(feed, requireFresh: false)) ?? []
-            return FeedResult(series: stale, origin: .staleAfter(error))
+            let stale: (series: [Series], cachedAt: Date?) =
+                (try? readCacheWithDate(feed, requireFresh: false)) ?? (series: [], cachedAt: nil)
+            return FeedResult(
+                series: stale.series,
+                origin: .staleAfter(error),
+                cachedAt: stale.cachedAt
+            )
         }
     }
 
@@ -548,64 +559,4 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         )
     }
 
-    // MARK: - Cache
-
-    private func readCache(_ feed: FeedKind, requireFresh: Bool) throws -> [Series] {
-        try database.writer.read { db in
-            if requireFresh {
-                guard let metadata = try FeedMetadata
-                    .filter(Column("feedKey") == feed.cacheKey)
-                    .fetchOne(db)
-                else { return [] }
-
-                let age = clock.now.timeIntervalSince(metadata.cachedAt)
-                // A negative age means the device clock moved backwards; treat
-                // that as stale rather than trusting it.
-                guard age >= 0, age < feed.freshness else { return [] }
-            }
-
-            let entries = try FeedEntry
-                .filter(Column("feedKey") == feed.cacheKey)
-                .order(Column("position"))
-                .fetchAll(db)
-            guard !entries.isEmpty else { return [] }
-
-            let rows = try CachedSeries
-                .filter(entries.map(\.seriesId).contains(Column("id")))
-                .fetchAll(db)
-            let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
-
-            // Order comes from the feed, not from the series table: the API's
-            // ordering is editorial and must survive a round trip.
-            return entries.compactMap { entry in
-                guard let row = byID[entry.seriesId] else { return nil }
-                return try? decoder.decode(Series.self, from: row.payload)
-            }
-        }
-    }
-
-    private func write(_ series: [Series], for feed: FeedKind) throws {
-        let now = clock.now
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-
-        try database.writer.write { db in
-            for item in series {
-                let payload = try encoder.encode(item)
-                try CachedSeries(id: item.id, payload: payload, cachedAt: now)
-                    .save(db)
-            }
-            // Replace the feed wholesale rather than merging: a feed is an
-            // ordered snapshot, and merging two snapshots produces an order
-            // that never existed.
-            try FeedEntry
-                .filter(Column("feedKey") == feed.cacheKey)
-                .deleteAll(db)
-            for (index, item) in series.enumerated() {
-                try FeedEntry(feedKey: feed.cacheKey, position: index, seriesId: item.id)
-                    .insert(db)
-            }
-            try FeedMetadata(feedKey: feed.cacheKey, cachedAt: now).save(db)
-        }
-    }
 }

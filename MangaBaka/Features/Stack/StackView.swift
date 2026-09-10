@@ -258,14 +258,40 @@ struct StackView: View {
         .accessibilityLabel(label)
     }
 
+    /// Run out, or failed to load. Two different things, said differently.
+    ///
+    /// The board draws this as a finished thing — no filled button, because
+    /// nothing is broken and nothing needs fixing. It also says a new stack is
+    /// dealt tomorrow morning, which is true: the rising feed this is built
+    /// from has a one-day cache life.
+    ///
+    /// But the header already carries a reset that re-deals immediately, and a
+    /// reader who has just run out is exactly the person who wants it. Abdi's
+    /// call, 2026-09-10: keep tomorrow as the expectation and offer the reset
+    /// here rather than making them find the ... menu.
+    @ViewBuilder
     private var emptyState: some View {
-        EmptyState(
-            symbol: model.message == nil ? "checkmark.circle" : "exclamationmark.triangle",
-            title: model.message == nil ? "That's the stack for now" : "Can't load the stack",
-            message: model.message
-                ?? "Save a few and the next batch will lean towards them.",
-            actionTitle: "Load more",
-            action: { Task { await model.refill() } }
-        )
+        if let message = model.message {
+            EmptyState(
+                title: "Can't load the stack",
+                message: message,
+                actionTitle: "Try again",
+                actionWeight: .wayOut,
+                action: { Task { await model.refill() } }
+            )
+        } else {
+            EmptyState(
+                title: "That's today's stack",
+                message: """
+                \(model.seenThisRun) seen, \(model.savedThisRun) saved. \
+                A new one is dealt tomorrow morning.
+                """,
+                actionTitle: "See what you saved",
+                actionWeight: .aside,
+                action: onOpenShelf,
+                secondaryTitle: "Deal another now",
+                secondaryAction: { Task { await model.resetStack() } }
+            )
+        }
     }
 }

@@ -16,7 +16,6 @@ final class DiscoverModel {
         /// its own label rather than one shared "See all".
         let more: String
         var series: [Series] = []
-        var staleReason: String?
         var isLoading = true
         /// The last page fetched. 1 until the row is scrolled to its end.
         var page = 1
@@ -66,6 +65,9 @@ final class DiscoverModel {
 
     func load(forceRefresh: Bool = false) async {
         defer { Task { await refreshCachedCount() } }
+        // A successful refresh has to clear this, or the bar outlives the
+        // failure it describes.
+        staleSince = nil
         await withTaskGroup(of: (Int, FeedResult).self) { group in
             for (index, row) in rows.enumerated() {
                 group.addTask { [repository] in
@@ -82,14 +84,42 @@ final class DiscoverModel {
                 rows[index].page = 1
                 rows[index].hasReachedEnd = false
                 if case let .staleAfter(error) = result.origin {
-                    rows[index].staleReason = result.series.isEmpty ? nil : error.userFacingMessage
                     firstFailure = firstFailure ?? error
-                } else {
-                    rows[index].staleReason = nil
+                    // One bar for the screen, not one per row. Four rows all
+                    // failing the same refresh produced four identical banners
+                    // saying the same thing about the same network.
+                    if !result.series.isEmpty {
+                        staleSince = [staleSince, result.cachedAt].compactMap { $0 }.min()
+                    }
                 }
             }
             failure = firstFailure
         }
+    }
+
+    /// When the oldest thing on screen was downloaded, if the last refresh
+    /// failed and there is still content to show. Nil means nothing is stale.
+    ///
+    /// Oldest rather than newest: the bar states an age, and the honest age of
+    /// a screen is that of its stalest part.
+    private(set) var staleSince: Date?
+
+    /// Whether there is content on screen that a failed refresh left behind.
+    ///
+    /// Both halves matter: a failure with nothing to show is a `FailureState`,
+    /// and content with no failure is just the app working.
+    var isShowingStale: Bool {
+        failure != nil && rows.contains { !$0.series.isEmpty }
+    }
+
+    /// "Last updated 19 hours ago · refresh failed".
+    var staleDetail: String? {
+        guard isShowingStale else { return nil }
+        guard let staleSince else { return "Refresh failed" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        let age = formatter.localizedString(for: staleSince, relativeTo: Date())
+        return "Last updated \(age) · refresh failed"
     }
 
     private func refreshCachedCount() async {

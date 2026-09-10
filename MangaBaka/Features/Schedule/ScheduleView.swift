@@ -180,12 +180,16 @@ struct ScheduleView: View {
     }
 
     private var emptyState: some View {
+        // DRAFT COPY (Claude, 2026-09-10). The design board left this one
+        // undrawn and said the sentence needs Abdi's wording more than its
+        // layout — it has to explain a rule the reader never set. Flagged to
+        // him; replace this rather than adding to it.
         EmptyState(
-            symbol: "calendar.badge.clock",
-            title: "Nothing to estimate from",
+            title: "Nothing to predict yet",
             message: """
-            Estimates are built from the series you are reading. Add a \
-            MangaBaka account and the schedule fills itself in.
+            Predictions are built from series you are reading, rereading or \
+            have paused. Completed and dropped series are left alone on \
+            purpose — there is no next chapter to wait for.
             """
         )
     }
