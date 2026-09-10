@@ -45,6 +45,34 @@ struct SeasonReadingTests {
         #expect(SeasonReading.currentSeason(releases) == nil)
     }
 
+    @Test("A print volume that starts partway down is not a new season")
+    func volumeSplitsAreNotSeasons() {
+        // The case the old threshold got wrong. A print volume ending at
+        // chapter 20 followed by one starting at chapter 9 — an overlapping
+        // or mis-tagged collected edition — satisfied "less than half of the
+        // previous highest" and was announced as season 2. A season starts
+        // again from the beginning; chapter 9 is not the beginning.
+        let releases = [
+            sample(volume: 1, chapter: 18, day: 1),
+            sample(volume: 1, chapter: 20, day: 8),
+            sample(volume: 2, chapter: 9, day: 15),
+            sample(volume: 2, chapter: 11, day: 22)
+        ]
+        #expect(!SeasonReading.hasSeasons(releases))
+        #expect(SeasonReading.currentSeason(releases) == nil)
+    }
+
+    @Test("A short run that restarts is not enough to call it a season")
+    func shortRunsAreNotSeasons() {
+        // Four chapters then a restart is far more likely to be a mis-tagged
+        // volume field than a series that ran a season and came back.
+        let releases = [
+            sample(volume: 1, chapter: 4, day: 1),
+            sample(volume: 2, chapter: 1, day: 8)
+        ]
+        #expect(!SeasonReading.hasSeasons(releases))
+    }
+
     @Test("One volume is never a season")
     func singleVolumeIsNothing() {
         // Solo Leveling's shape: everything tagged v.1, no seasons at all.

@@ -27,10 +27,32 @@ enum SeasonReading {
         let date: Date
     }
 
+    /// How low a later volume has to start before it counts as starting again.
+    ///
+    /// **A guess, not derived.** A season restarts at chapter 1; the slack is
+    /// for the mis-tagged straggler, and 5 is a judgement about how much slack
+    /// that needs, made against no dataset. The previous rule — "below half of
+    /// the last volume's highest chapter" — was also a guess and a worse one:
+    /// a print volume ending at chapter 20 followed by one starting at 9
+    /// satisfied it, and the app announced season 2 of a series with no
+    /// seasons. Deriving this properly needs a sample of MangaUpdates volume
+    /// fields with known ground truth, which we do not have.
+    static let restartCeiling: Double = 5
+
+    /// How far the previous volume has to have got before a restart means
+    /// anything.
+    ///
+    /// **Also a guess.** A four-chapter run followed by a chapter 1 is much
+    /// more likely to be a wrong volume field than a series that ran a season
+    /// and came back. 20 is the shortest run that felt like a season; nothing
+    /// measured it.
+    static let minimumRun: Double = 20
+
     /// Whether these releases describe a series with seasons.
     ///
-    /// Needs at least two distinct volumes and a restart: a later volume whose
-    /// chapters begin below where the previous volume ended.
+    /// Needs at least two distinct volumes and a genuine restart: a later
+    /// volume beginning at the very start of the numbering, after a previous
+    /// volume that got far enough for "again" to mean something.
     static func hasSeasons(_ samples: [Sample]) -> Bool {
         let byVolume = Dictionary(grouping: samples, by: \.volume)
         guard byVolume.count > 1 else { return false }
@@ -42,9 +64,12 @@ enum SeasonReading {
             guard let previousHighest = previous.map(\.chapter).max(),
                   let currentLowest = current.map(\.chapter).min()
             else { continue }
-            // A restart, with room for the odd mis-tagged release rather than
-            // demanding chapter 1 exactly.
-            if currentLowest < previousHighest / 2 { return true }
+            // Starting again, rather than merely starting lower. Both halves
+            // matter: without the ceiling a volume split reads as a season,
+            // and without the run length a two-release series does.
+            if currentLowest <= Self.restartCeiling, previousHighest >= Self.minimumRun {
+                return true
+            }
         }
         return false
     }
