@@ -120,6 +120,21 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v4_history") { db in
+            // What the reader has opened. Its own table rather than a column on
+            // `series`, because the cache is disposable and this is not —
+            // clearing the cache must not erase the history, and erasing the
+            // history must not cost a re-download.
+            try db.create(table: "viewedEntry") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("viewedAt", .datetime).notNull()
+                // The series as it was when opened, so the row renders offline
+                // and after a cache clear.
+                table.column("payload", .blob).notNull()
+            }
+            try db.create(index: "viewedEntry_on_viewedAt", on: "viewedEntry", columns: ["viewedAt"])
+        }
+
         return migrator
     }
 }

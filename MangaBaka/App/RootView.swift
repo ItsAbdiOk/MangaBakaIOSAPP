@@ -11,6 +11,7 @@ import SwiftUI
 struct RootView: View {
     let repository: SeriesRepository
     let shelf: ShelfStore
+    let history: HistoryStore
     let client: APIClient
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
@@ -39,6 +40,7 @@ struct RootView: View {
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
     @State private var mixModel: MixModel?
+    @State private var recentlyViewed: RecentlyViewedModel?
 
     var body: some View {
         tabs
@@ -60,6 +62,7 @@ struct RootView: View {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
                         model: DiscoverModel(repository: repository),
+                        recentlyViewed: recentlyViewedModel(),
                         path: $discoverPath,
                         onOpenStack: { selection = .stack }
                     )
@@ -128,7 +131,8 @@ struct RootView: View {
                                 validate: validateToken,
                                 content: content,
                                 formats: formats,
-                                blockedTags: blockedTags
+                                blockedTags: blockedTags,
+                                history: history
                             )
                         }
                 }
@@ -222,6 +226,21 @@ struct RootView: View {
         return nil
     }
 
+    /// One model, made on first use and kept.
+    ///
+    /// Reading the ratings through a closure rather than copying them in means
+    /// turning Explicit off empties the row on the next load, instead of
+    /// leaving the reader looking at what they just excluded.
+    private func recentlyViewedModel() -> RecentlyViewedModel {
+        if let recentlyViewed { return recentlyViewed }
+        let made = RecentlyViewedModel(
+            history: history,
+            allowedRatings: { content.preferences.allowed.map(\.rawValue) }
+        )
+        Task { @MainActor in recentlyViewed = made }
+        return made
+    }
+
     private func detail(_ series: Series, path: Binding<[Series]>) -> some View {
         SeriesDetailView(
             series: series,
@@ -248,6 +267,10 @@ struct RootView: View {
                 showsSchedule = true
             }
         )
+        // Opening the page is what counts as having viewed it. Recorded here
+        // rather than inside the detail view so every route into it — a feed,
+        // the stack, search, a related-series row — is remembered the same way.
+        .task { await recentlyViewedModel().record(series) }
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

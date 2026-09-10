@@ -10,6 +10,7 @@ struct SettingsView: View {
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
+    let history: HistoryStore
 
     @State private var entry = ""
     @State private var status: TokenStatus = .idle
@@ -27,7 +28,8 @@ struct SettingsView: View {
                 FormatSection(formats: formats)
                 contentSection
                 blockedSection
-                attributionSection
+                HistorySection(history: history)
+                AttributionSection()
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)
@@ -257,25 +259,6 @@ struct SettingsView: View {
                     }
                 }
             }
-        }
-    }
-
-    /// Required by the data licence, not decoration.
-    private var attributionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: "Data")
-            Text("""
-            Series data comes from MangaBaka, and through it from AniList, \
-            Kitsu, MangaUpdates, MyAnimeList and Anime-Planet.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textSecondary)
-            Text("""
-            Licensed CC BY-NC-SA 4.0 — free for personal, non-commercial use \
-            with attribution. This app is free and carries no ads or purchases.
-            """)
-            .typeFootnote()
-            .foregroundStyle(Palette.textQuaternary)
         }
     }
 

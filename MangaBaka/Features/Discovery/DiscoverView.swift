@@ -3,11 +3,18 @@ import SwiftUI
 /// The Discover screen: several horizontal cover rows under a large title.
 struct DiscoverView: View {
     @State private var model: DiscoverModel
+    private let recentlyViewed: RecentlyViewedModel?
     @Binding private var path: [Series]
     private let onOpenStack: () -> Void
 
-    init(model: DiscoverModel, path: Binding<[Series]>, onOpenStack: @escaping () -> Void) {
+    init(
+        model: DiscoverModel,
+        recentlyViewed: RecentlyViewedModel? = nil,
+        path: Binding<[Series]>,
+        onOpenStack: @escaping () -> Void
+    ) {
         _model = State(initialValue: model)
+        self.recentlyViewed = recentlyViewed
         _path = path
         self.onOpenStack = onOpenStack
     }
@@ -17,6 +24,12 @@ struct DiscoverView: View {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
                 header
                 openTheStack
+
+                // Above the API's rows because it is the only one built from
+                // what this reader actually did.
+                if let recentlyViewed {
+                    RecentlyViewedRow(model: recentlyViewed) { path.append($0) }
+                }
 
                 if model.isCompletelyEmpty {
                     emptyState
@@ -33,6 +46,7 @@ struct DiscoverView: View {
         .background(Palette.ground)
         .refreshable { await model.load(forceRefresh: true) }
         .task { await model.load() }
+        .task { await recentlyViewed?.load() }
     }
 
     private var header: some View {

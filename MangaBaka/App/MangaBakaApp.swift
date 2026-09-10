@@ -4,6 +4,7 @@ import SwiftUI
 struct MangaBakaApp: App {
     private let repository: SeriesRepository
     private let shelf: ShelfStore
+    private let history: HistoryStore
     private let client: APIClient
     private let content: ContentPreferencesStore
     private let formats: FormatPreferencesStore
@@ -55,6 +56,7 @@ struct MangaBakaApp: App {
 
         repository = SeriesRepository(client: apiClient, database: database)
         shelf = ShelfStore(database: database)
+        history = HistoryStore(database: database)
 
         // The store owns the reader's choice; the repository owns acting on it.
         // Wiring them together here keeps the repository out of UserDefaults and
@@ -119,6 +121,7 @@ struct MangaBakaApp: App {
             RootView(
                 repository: repository,
                 shelf: shelf,
+                history: history,
                 client: client,
                 content: content,
                 formats: formats,

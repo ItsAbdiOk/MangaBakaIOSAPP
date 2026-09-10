@@ -34,6 +34,19 @@ struct ShelfEntry: Codable, FetchableRecord, PersistableRecord, Sendable {
     var payload: Data
 }
 
+/// A series the reader opened, and when.
+///
+/// Keyed by the series so re-opening one moves it up the list instead of
+/// adding a duplicate. Carries its own copy of the series for the same reason
+/// `ShelfEntry` does: the feed cache is disposable and this is not.
+struct ViewedEntry: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "viewedEntry"
+
+    var seriesId: Int
+    var viewedAt: Date
+    var payload: Data
+}
+
 /// When a feed was last fetched.
 struct FeedMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "feedMetadata"
