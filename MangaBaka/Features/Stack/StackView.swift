@@ -12,6 +12,9 @@ struct StackView: View {
 
     @State private var drag: CGSize = .zero
     private let onOpenShelf: () -> Void
+    /// Says a thing happened. A reset otherwise succeeds in silence, which is
+    /// indistinguishable from a tap that missed.
+    private let onConfirm: (String) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let commitThreshold: CGFloat = 92
@@ -21,11 +24,13 @@ struct StackView: View {
     init(
         model: StackModel,
         path: Binding<[Series]>,
-        onOpenShelf: @escaping () -> Void
+        onOpenShelf: @escaping () -> Void,
+        onConfirm: @escaping (String) -> Void = { _ in }
     ) {
         _model = State(initialValue: model)
         _path = path
         self.onOpenShelf = onOpenShelf
+        self.onConfirm = onConfirm
     }
 
     var body: some View {
@@ -53,64 +58,11 @@ struct StackView: View {
 
     // MARK: - Header
 
-    /// Title and counter sit side by side until the text is large enough that
-    /// they squeeze each other — at which point the title truncated to
-    /// "The sta…" and the counter broke into "4" over "saved".
-    @ViewBuilder
     private var header: some View {
-        if typeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 12) {
-                headerTitle
-                headerCount
-            }
-            .padding(.horizontal, Metrics.gutterStack)
-            .padding(.bottom, 14)
-            .overlay(alignment: .topTrailing) { resetMenu }
-        } else {
-            headerRow
+        StackHeader(savedCount: model.savedCount) {
+            await model.resetStack()
+            onConfirm("The stack has been reset")
         }
-    }
-
-    private var headerRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            headerTitle
-            Spacer(minLength: 0)
-            headerCount
-            resetMenu
-        }
-        .padding(.horizontal, Metrics.gutterStack)
-        .padding(.bottom, 14)
-    }
-
-    private var resetMenu: some View {
-        StackResetMenu { await model.resetStack() }
-    }
-
-    private var headerTitle: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("The stack")
-                .typeStackTitle()
-                .foregroundStyle(Palette.textEmphasis)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("Drag the cover aside · tap it to open")
-                .typeInstruction()
-                .foregroundStyle(Palette.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var headerCount: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text("\(model.savedCount)")
-                .typeStatNumber()
-                .foregroundStyle(Palette.accent)
-            Text("saved")
-                .typeGridMeta()
-                .foregroundStyle(Palette.textFaint)
-        }
-        .fixedSize()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(model.savedCount) saved")
     }
 
     // MARK: - Cards

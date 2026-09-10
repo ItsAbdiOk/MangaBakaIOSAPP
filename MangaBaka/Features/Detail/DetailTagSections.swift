@@ -24,21 +24,61 @@ struct DetailTagSections: View {
     /// Groups collapse past this. Genres has six tags; Character Types has
     /// twenty-eight, and a reader scanning for the shape of a series does not
     /// want twenty-eight of anything.
-    private static let collapsedPerGroup = 8
+    private static let collapsedPerGroup = 6
 
+    /// The groups worth showing before the reader asks for more.
+    ///
+    /// Grouping 146 tags fixed the wall and then rebuilt it taller: seventeen
+    /// sections of up to eight chips each is more on screen than the flat list
+    /// ever was. These four answer what a series *is*; the other thirteen
+    /// answer questions a reader has only after deciding to read it.
+    private static let leadingGroups: Set<String> = [
+        "Genres", "Themes", "Narrative Tropes", "Settings"
+    ]
+
+    @State private var showsAllGroups = false
     @State private var expandedGroups: Set<String> = []
     /// Groups whose spoilers the reader has chosen to see.
     @State private var revealedSpoilers: Set<String> = []
 
+    private var visibleGroups: [TagGroup] {
+        showsAllGroups ? groups : groups.filter { Self.leadingGroups.contains($0.name) }
+    }
+
     var body: some View {
         if !groups.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
-                ForEach(groups) { group in
+                ForEach(visibleGroups) { group in
                     section(group)
+                }
+                if groups.count > visibleGroups.count || showsAllGroups {
+                    moreGroupsButton
                 }
             }
             .padding(.horizontal, Metrics.gutter)
         }
+    }
+
+    private var moreGroupsButton: some View {
+        let remaining = groups.count - Self.leadingGroups.intersection(
+            Set(groups.map(\.name))
+        ).count
+
+        return Button {
+            withAnimation(.snappy(duration: 0.24)) { showsAllGroups.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Text(showsAllGroups ? "Fewer tags" : "\(remaining) more tag groups")
+                    .typeChip()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .rotationEffect(.degrees(showsAllGroups ? 180 : 0))
+            }
+            .foregroundStyle(Palette.accent)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func section(_ group: TagGroup) -> some View {

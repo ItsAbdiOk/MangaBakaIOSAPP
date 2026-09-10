@@ -172,3 +172,108 @@ struct TagGroupingTests {
         #expect(shallow.lineage == nil)
     }
 }
+
+/// A series' editions, which the mockup drew as something else entirely.
+@Suite("Editions")
+struct SeriesEditionTests {
+    private func edition(
+        id: String,
+        language: String? = "en",
+        publisher: String? = "Ize Press",
+        licensed: Bool? = true,
+        volumes: Int? = 12,
+        medium: String? = "print",
+        status: String? = "complete"
+    ) -> SeriesEdition {
+        let json = """
+        {"id": "\(id)",
+         "title": "A Series",
+         "language": {"iso": \(language.map { "\"\($0)\"" } ?? "null"), "language": null},
+         "publisher": {"id": 1, "name": \(publisher.map { "\"\($0)\"" } ?? "null"), "type": "imprint"},
+         "medium": \(medium.map { "\"\($0)\"" } ?? "null"),
+         "status": \(status.map { "\"\($0)\"" } ?? "null"),
+         "licensed": \(licensed.map(String.init) ?? "null"),
+         "count_main": \(volumes.map(String.init) ?? "null"),
+         "count_extra": null, "start_date": "2021-03-02", "end_date": null}
+        """
+        guard let decoded = try? Fixture.decoder().decode(SeriesEdition.self, from: Data(json.utf8))
+        else { fatalError("SeriesEdition fixture no longer decodes: \(json)") }
+        return decoded
+    }
+
+    /// The two things a reader is looking for.
+    @Test("An edition leads with its language and publisher")
+    func headline() {
+        #expect(edition(id: "a").headline == "EN · Ize Press")
+    }
+
+    /// Only what the API answered. A missing field is left out rather than
+    /// printed as unknown.
+    @Test("Detail lists only what is known")
+    func detailOmitsGaps() {
+        #expect(edition(id: "a").detail == "12 volumes · print · complete")
+        #expect(edition(id: "b", volumes: nil, medium: nil, status: nil).detail == nil)
+    }
+
+    @Test("One volume is not 1 volumes")
+    func singularVolume() {
+        #expect(edition(id: "a", volumes: 1).detail?.hasPrefix("1 volume ·") == true)
+    }
+
+    /// Official first, because that is the one a reader can actually buy. A
+    /// scanlation listed above the licensed English release would be the wrong
+    /// answer to the question the section exists to answer.
+    @Test("Licensed editions lead")
+    func licensedFirst() {
+        let editions = [
+            edition(id: "unofficial", licensed: false, volumes: 40),
+            edition(id: "official", licensed: true, volumes: 12)
+        ]
+        #expect(editions.presentable.map(\.id) == ["official", "unofficial"])
+    }
+
+    /// Among equals, the longest run — it is the most complete release.
+    @Test("Longer runs lead among equals")
+    func longestRunNext() {
+        let editions = [
+            edition(id: "short", volumes: 3),
+            edition(id: "long", volumes: 20)
+        ]
+        #expect(editions.presentable.map(\.id) == ["long", "short"])
+    }
+
+    /// A missing licence flag is not a claim that it is unlicensed, so it must
+    /// not be printed as one — it simply loses the "Official" mark.
+    @Test("An unknown licence is not called unofficial")
+    func unknownLicence() {
+        #expect(edition(id: "a", licensed: nil).licensed == nil)
+    }
+
+    @Test("A start date yields a year, a missing one yields nothing")
+    func startYear() {
+        #expect(edition(id: "a").startYear == "2021")
+    }
+}
+
+/// Grouping fixed one wall and could have built another.
+@Suite("The tag section stays scannable", .enabled(if: SourceTree.isAvailable))
+struct TagSectionSizeTests {
+    /// Seventeen sections of eight chips is more on screen than the flat list
+    /// of twelve ever was. Four groups answer what a series *is*; the rest
+    /// answer questions a reader only has after deciding to read it.
+    @Test("Only the leading groups show until asked")
+    func leadingGroupsOnly() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailTagSections.swift")
+        #expect(source.contains("leadingGroups"))
+        #expect(source.contains("showsAllGroups"))
+        for group in ["Genres", "Themes", "Narrative Tropes", "Settings"] {
+            #expect(source.contains("\"\(group)\""))
+        }
+    }
+
+    @Test("Groups themselves still collapse")
+    func groupsCollapse() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailTagSections.swift")
+        #expect(source.contains("collapsedPerGroup"))
+    }
+}

@@ -62,6 +62,7 @@ struct SeriesDetailView: View {
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
                 DetailCredits(series: series)
+                DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
                     relationships: extras.relationships,
                     similar: similar,

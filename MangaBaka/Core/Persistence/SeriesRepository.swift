@@ -92,6 +92,8 @@ struct SeriesExtras: Sendable, Equatable {
     /// see `SeriesTag`. v1's flat `tags` is kept only as a fallback for a
     /// series whose payload has no `tags_v2`.
     var richTags: [SeriesTag] = []
+    /// Published editions — see `SeriesEdition`.
+    var editions: [SeriesEdition] = []
     var year: Int?
 }
 
@@ -530,6 +532,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         )
         // The only source of tags and year — see SeriesExtras.
         async let full: Series? = try? client.get("/v1/series/\(seriesId)")
+        async let editions: [SeriesEdition]? = try? client.get(
+            "/v1/series/\(seriesId)/collections"
+        )
 
         let detail = await full
         return await SeriesExtras(
@@ -538,6 +543,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             relationships: (related ?? []).filter(\.series.isDiscoverable),
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
+            editions: (await editions ?? []).presentable,
             year: detail?.year
         )
     }

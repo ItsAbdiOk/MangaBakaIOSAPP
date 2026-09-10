@@ -23,6 +23,7 @@ struct RootView: View {
     let lenses: SearchLensStore
     let onboarding: OnboardingState
 
+    @State private var toasts = ToastCentre()
     @State private var selection: AppTab = .discover
     @State private var discoverPath: [Series] = []
     @State private var stackPath: [Series] = []
@@ -70,7 +71,8 @@ struct RootView: View {
                     StackView(
                         model: StackModel(repository: repository, shelf: shelf, library: library),
                         path: $stackPath,
-                        onOpenShelf: { selection = .library }
+                        onOpenShelf: { selection = .library },
+                        onConfirm: { toasts.show($0) }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
                 }
@@ -176,6 +178,7 @@ struct RootView: View {
         // tabs under a dragging finger, the scroll-away behaviour, and the
         // specular response of real Liquid Glass to what is behind it.
         .tabBarMinimizeBehavior(.onScrollDown)
+        .toasts(toasts)
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
             // a half-typed query or an assembled set of mix seeds.
@@ -233,6 +236,7 @@ struct RootView: View {
             onUseAsSeed: { series in
                 mixModel?.addSeed(series)
                 selection = .mix
+                toasts.show("Added to the mix")
             },
             onOpenTag: { tag in
                 searchModel?.query = SearchQuery(tags: [tag])

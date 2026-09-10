@@ -151,6 +151,30 @@ else in the app has, and two places to change one thing is how they drift. If a
 design wants per-search blocking, that is a feature to spec, not a token to use
 up.
 
+### Deviations added 2026-09-10, with reasons
+
+**The tab bar is the system's, not a drawing of the mockup's.** The mockup draws
+a floating capsule of four tabs plus a detached search circle. On iOS 26 the
+system tab bar *is* a floating glass capsule, and `TabRole.search` is what
+detaches search from it — so the mockup's arrangement is what the system already
+produces. The hand-drawn version cost the selection indicator that sizes to its
+label and slides under a dragging finger, the scroll-away behaviour, and real
+Liquid Glass's specular response. `AppTabBar` is deleted.
+
+**The mockup's "In collections" row could never have worked.** It draws other
+series' covers. `/v1/series/{id}/collections` returns *editions of the series
+you asked about* — every row carries the same `series_id`, checked live on
+2026-09-10. The mockup's row was populated from a hardcoded list of unrelated
+series, so it was placeholder content shaped like a feature. Built instead as
+**Editions**: publisher, language, volume count, format, and whether the release
+is licensed — which answers a question nothing else in the app answers.
+
+**Tags are grouped rather than listed.** The mockup draws three tag chips; a
+real series carries 146. Grouped by `tags_v2`'s own taxonomy, weighted by how
+central each tag is to the series, spoilers held back per group. Four groups
+show by default and the other thirteen sit behind one control, because grouping
+all seventeen fixed the wall and rebuilt it taller.
+
 ### Not built from the mockup
 
 - Mix's **Tags** and **Blocked tags** filter sections. The API supports both and
