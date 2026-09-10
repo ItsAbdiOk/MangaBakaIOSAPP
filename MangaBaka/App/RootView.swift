@@ -226,6 +226,7 @@ struct RootView: View {
             schedule: schedule,
             characters: characters,
             taste: taste,
+            contentRatings: content.preferences.allowed.map(\.rawValue),
             path: path,
             onUseAsSeed: { series in
                 mixModel?.addSeed(series)

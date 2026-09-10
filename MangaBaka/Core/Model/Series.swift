@@ -52,6 +52,13 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// omits them. Normalised to names here so a caller does not care which it
     /// was handed.
     let tags: [String]?
+    /// `tags_v2`. Everything a tag list needs to be readable rather than a
+    /// wall: group, weight, spoiler flag, and what implied what.
+    ///
+    /// Named for the wire, not for the app: `Series` decodes with
+    /// `convertFromSnakeCase` and has no explicit `CodingKeys`, so the property
+    /// name is the contract. `richTags` reads it.
+    let tagsV2: [SeriesTag]?
 
     struct Publisher: Codable, Equatable, Sendable, Hashable {
         let name: String
@@ -114,6 +121,9 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         year = container.lenientDouble(forKey: .year).map { Int($0) }
         ratingCount = container.lenientDouble(forKey: .ratingCount).map { Int($0) }
         tags = container.lenientTagNames(forKey: .tags)
+        // Absent on v2 entirely, and on any v1 payload that predates it. A
+        // series with no rich tags falls back to the flat names.
+        tagsV2 = try? container.decodeIfPresent([SeriesTag].self, forKey: .tagsV2)
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -126,7 +136,8 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         source: [String: TrackerEntry]?,
         year: Int? = nil,
         ratingCount: Int? = nil,
-        tags: [String]? = nil
+        tags: [String]? = nil,
+        tagsV2: [SeriesTag]? = nil
     ) {
         self.id = id
         self.state = state
@@ -148,7 +159,11 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         self.year = year
         self.ratingCount = ratingCount
         self.tags = tags
+        self.tagsV2 = tagsV2
     }
+
+    /// The rich tags, or none. See `tagsV2`.
+    var richTags: [SeriesTag] { tagsV2 ?? [] }
 
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.

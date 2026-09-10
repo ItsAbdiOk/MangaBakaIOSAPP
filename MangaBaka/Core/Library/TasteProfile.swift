@@ -18,6 +18,7 @@ import Foundation
 actor TasteProfile {
     private let library: any LibraryProviding
     private var cached: Set<String>?
+    private var cachedIDs: Set<Int>?
     private var inFlight: Task<Set<String>, Never>?
 
     init(library: any LibraryProviding) {
@@ -45,9 +46,25 @@ actor TasteProfile {
         return result
     }
 
+    /// The same profile as tag ids.
+    ///
+    /// The reliable way to match. `/v1/my/series/discover/top-genres` is
+    /// documented as returning *genre* tags — the coarse ones that drive the
+    /// "Top in {genre}" rails — while a series page lists fine-grained tags, so
+    /// comparing the two by name was nearly always going to miss. Ids are the
+    /// same ids on both sides.
+    func favouredTagIDs() async -> Set<Int> {
+        if let cachedIDs { return cachedIDs }
+        let genres = await library.topGenres()
+        let ids = Set(genres.map(\.tagId))
+        cachedIDs = ids
+        return ids
+    }
+
     /// Forgets the profile, so a change to the library is reflected.
     func invalidate() {
         cached = nil
+        cachedIDs = nil
         inFlight = nil
     }
 }

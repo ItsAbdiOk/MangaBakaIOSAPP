@@ -88,6 +88,10 @@ struct SeriesExtras: Sendable, Equatable {
     /// stat are only ever populated from v1, and a series page built from a
     /// feed's own copy shows neither.
     var tags: [String] = []
+    /// The same tags with their group, weight, spoiler flag and implications —
+    /// see `SeriesTag`. v1's flat `tags` is kept only as a fallback for a
+    /// series whose payload has no `tags_v2`.
+    var richTags: [SeriesTag] = []
     var year: Int?
 }
 
@@ -524,6 +528,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             news: news ?? [],
             relationships: (related ?? []).filter(\.series.isDiscoverable),
             tags: detail?.tags ?? [],
+            richTags: detail?.richTags ?? [],
             year: detail?.year
         )
     }

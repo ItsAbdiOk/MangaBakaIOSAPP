@@ -25,30 +25,54 @@ struct CoverImage: View {
         return BlurHashCache.shared.image(for: hash)
     }
 
+    @State private var loaded: UIImage?
+
+    private var url: URL? { cover.url(forHeight: height, scale: displayScale) }
+
     var body: some View {
-        AsyncImage(url: cover.url(forHeight: height, scale: displayScale)) { phase in
-            switch phase {
-            case let .success(image):
-                image.resizable().scaledToFill()
-            case .failure:
-                // A broken image must not break the layout: keep the frame.
-                Palette.imagePlaceholder
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundStyle(Palette.textQuaternary)
-                    )
-            default:
-                // The API ships a BlurHash with every cover, so the placeholder
-                // can carry the artwork's real colours. A loading grid then
-                // looks like the grid it is about to become, rather than a wall
-                // of grey.
-                if let blur = blurPlaceholder {
-                    Image(uiImage: blur).resizable()
-                } else {
-                    Palette.imagePlaceholder
+        content
+            // Keyed on the URL so a recycled row loads its new cover rather
+            // than keeping the old one. `.task` also re-runs when the view
+            // reappears, which is what makes a failed cover retry on scroll-back
+            // instead of staying broken for the life of the screen.
+            .task(id: url) {
+                if let cached = CoverStore.shared.cached(url) {
+                    loaded = cached
+                    return
                 }
+                loaded = await CoverStore.shared.image(for: url)
             }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let loaded {
+            Image(uiImage: loaded)
+                .resizable()
+                .scaledToFill()
+                .modifier(CoverFrame(width: width, height: height, radius: radius))
+        } else if let blur = blurPlaceholder {
+            // The API ships a BlurHash with every cover, so the placeholder can
+            // carry the artwork's real colours. A loading grid then looks like
+            // the grid it is about to become rather than a wall of grey.
+            Image(uiImage: blur)
+                .resizable()
+                .modifier(CoverFrame(width: width, height: height, radius: radius))
+        } else {
+            Palette.imagePlaceholder
+                .modifier(CoverFrame(width: width, height: height, radius: radius))
         }
+    }
+}
+
+/// The frame every cover shares.
+private struct CoverFrame: ViewModifier {
+    let width: CGFloat
+    let height: CGFloat
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
         // Every cover in a row is the same size, always.
         //
         // This used to frame each cover at the API's own reported ratio
@@ -61,7 +85,6 @@ struct CoverImage: View {
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
-        .accessibilityLabel(accessibilityText)
     }
 }
 

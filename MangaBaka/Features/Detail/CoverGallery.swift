@@ -8,6 +8,7 @@ struct CoverGallery: View {
     let series: Series
     let images: [SeriesImage]
     @State private var selection: Int
+    @State private var scrolledIndex: Int?
     @Environment(\.dismiss) private var dismiss
 
     init(series: Series, frontCover: Cover, images: [SeriesImage], startAt: Int = 0) {
@@ -15,6 +16,8 @@ struct CoverGallery: View {
         self.frontCover = frontCover
         self.images = images
         _selection = State(initialValue: startAt)
+        _scrolledIndex = State(initialValue: startAt)
+        _progress = State(initialValue: Double(startAt))
     }
 
     let frontCover: Cover
@@ -28,15 +31,16 @@ struct CoverGallery: View {
         [(nil, frontCover)] + images.map { ($0.caption, $0.image) }
     }
 
+    /// Fractional page position, so the background can follow the drag rather
+    /// than snap when the page changes.
+    @State private var progress: Double = 0
+
     var body: some View {
         NavigationStack {
-            TabView(selection: $selection) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                    ZoomableCover(cover: page.cover, title: series.displayTitle)
-                        .tag(index)
-                }
+            ZStack {
+                backdrop
+                pager
             }
-            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 ? .automatic : .never))
             .background(Palette.ground)
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle(caption)
@@ -51,12 +55,85 @@ struct CoverGallery: View {
         .preferredColorScheme(.dark)
     }
 
+    /// A paged scroll view rather than a `TabView`.
+    ///
+    /// `TabView` gives no access to where the drag has got to, so the only
+    /// thing it can drive is a change of page — and a background that changes
+    /// on a page boundary is a slideshow. A scroll view reports its offset
+    /// continuously, which is what lets the light behind the cards move with
+    /// the reader's thumb.
+    private var pager: some View {
+        GeometryReader { outer in
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
+                        ZoomableCover(cover: page.cover, title: series.displayTitle)
+                            .frame(width: outer.size.width, height: outer.size.height)
+                            .id(index)
+                            // The glide: a card settles as it reaches the
+                            // middle and leans back as it leaves, so the stack
+                            // reads as objects moving over a surface rather
+                            // than as pictures being swapped.
+                            .scrollTransition(.interactive, axis: .horizontal) { view, phase in
+                                view
+                                    .scaleEffect(1 - abs(phase.value) * 0.10)
+                                    .opacity(1 - abs(phase.value) * 0.35)
+                                    .rotation3DEffect(
+                                        .degrees(phase.value * -14),
+                                        axis: (x: 0, y: 1, z: 0),
+                                        perspective: 0.5
+                                    )
+                            }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollIndicators(.hidden)
+            .scrollPosition(id: $scrolledIndex)
+            .onScrollGeometryChange(for: Double.self) { geometry in
+                guard outer.size.width > 0 else { return 0 }
+                return geometry.contentOffset.x / outer.size.width
+            } action: { _, position in
+                progress = position
+            }
+        }
+    }
+
+    /// The light behind the cards.
+    ///
+    /// Two washes, the covers on either side of the drag, blended by how far
+    /// through the drag the reader is. Nothing switches at a page boundary:
+    /// halfway between two covers the background is halfway between their
+    /// colours, which is what makes it read as one lit surface the cards are
+    /// sliding over rather than a picture behind each one.
+    private var backdrop: some View {
+        let lower = Int(progress.rounded(.down))
+        let upper = lower + 1
+        let blend = progress - Double(lower)
+
+        return ZStack {
+            if let cover = pages[safe: lower]?.cover {
+                DetailBackdrop(cover: cover, height: 1000)
+                    .opacity(1 - blend)
+            }
+            if let cover = pages[safe: upper]?.cover {
+                DetailBackdrop(cover: cover, height: 1000)
+                    .opacity(blend)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
     /// "Vol. 3 · EN", or the count when the cover has nothing to say about
     /// itself. Never "1 of 1" — a gallery of one has nothing to count.
     private var caption: String {
-        if let own = pages[safe: selection]?.caption { return own }
+        let index = scrolledIndex ?? selection
+        if let own = pages[safe: index]?.caption { return own }
         guard pages.count > 1 else { return "Cover" }
-        return "\(selection + 1) of \(pages.count)"
+        return "\(index + 1) of \(pages.count)"
     }
 }
 
@@ -64,9 +141,8 @@ struct CoverGallery: View {
 ///
 /// Edge to edge, the artwork ran into the bezel and the corners fought the
 /// screen's own radius. Inset with a glass rim it reads as the object it is —
-/// a book cover — and the blurred copy behind it means the page takes its
-/// colour from the art rather than sitting on flat black, the same trick the
-/// series page's hero uses.
+/// a book cover. The wash behind it belongs to the gallery, not to this view —
+/// see `backdrop`.
 private struct ZoomableCover: View {
     let cover: Cover
     let title: String?
@@ -79,7 +155,6 @@ private struct ZoomableCover: View {
     @State private var scale: CGFloat = 1
     @State private var committed: CGFloat = 1
     @Environment(\.displayScale) private var displayScale
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         GeometryReader { proxy in
@@ -87,35 +162,10 @@ private struct ZoomableCover: View {
                 width: proxy.size.width - Self.inset * 2,
                 height: proxy.size.height - Self.inset * 2
             )
-            ZStack {
-                wash(in: proxy.size)
-                card(fitting: available)
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-            }
+            card(fitting: available)
+                .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .accessibilityLabel(title.map { "Cover art for \($0)" } ?? "Cover art")
-    }
-
-    /// The same artwork, blurred and over-saturated, filling the screen behind
-    /// the card. Skipped under Reduce Transparency, where a heavy blur is
-    /// exactly what the setting exists to remove.
-    @ViewBuilder
-    private func wash(in size: CGSize) -> some View {
-        if !reduceTransparency {
-            AsyncImage(url: cover.url(forHeight: size.height, scale: 1)) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Color.clear
-            }
-            .frame(width: size.width, height: size.height)
-            .scaleEffect(1.4)
-            .blur(radius: 60, opaque: false)
-            .saturation(1.6)
-            .opacity(0.35)
-            .clipped()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
     }
 
     /// The card is sized to the artwork, not to the space around it.

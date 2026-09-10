@@ -128,7 +128,7 @@ struct DetailOrderTests {
             "actions",
             "DetailStatsStrip(",
             "DetailSynopsis(",
-            "DetailTags(",
+            "tagSection",
             "DetailCredits(",
             "DetailOnwardRows(",
             "TrackerScores(",

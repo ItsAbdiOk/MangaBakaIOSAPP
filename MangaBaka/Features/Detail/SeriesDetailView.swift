@@ -11,6 +11,10 @@ struct SeriesDetailView: View {
     let schedule: ReleaseScheduleService?
     let characters: CharacterService?
     let taste: TasteProfile?
+    /// The reader's content filter, so an explicit tag name is not shown to
+    /// someone who filtered explicit content — a tag is rated independently of
+    /// its series.
+    var contentRatings: [String]?
     @Binding var path: [Series]
     /// Sends this series to Mix as a seed and switches to that tab.
     var onUseAsSeed: ((Series) -> Void)?
@@ -24,6 +28,7 @@ struct SeriesDetailView: View {
     @State private var covers: [SeriesImage] = []
     @State private var openCoversAt: GalleryStart?
     @State private var favouredTags: Set<String> = []
+    @State private var favouredTagIDs: Set<Int> = []
     @State private var cast: [SeriesCharacter] = []
     @State private var isCastLoading = false
     @State private var cadence: Cadence?
@@ -55,9 +60,7 @@ struct SeriesDetailView: View {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
-                DetailTags(tags: extras.tags, favoured: favouredTags) { tag in
-                    onOpenTag?(tag)
-                }
+                tagSection
                 DetailCredits(series: series)
                 DetailOnwardRows(
                     relationships: extras.relationships,
@@ -231,10 +234,38 @@ struct SeriesDetailView: View {
         _ = await (cast, cadence, taste)
     }
 
+    /// Grouped `tags_v2` where the series has them, the flat v1 names where it
+    /// does not. The fallback matters: v2 payloads carry no tags at all, so a
+    /// series reached through a shape that never fetched v1 would otherwise
+    /// lose its tag row entirely rather than degrade.
+    @ViewBuilder
+    private var tagSection: some View {
+        if !extras.richTags.isEmpty {
+            DetailTagSections(
+                groups: TagGrouping.groups(
+                    from: extras.richTags,
+                    allowedRatings: contentRatings,
+                    favouredIDs: favouredTagIDs
+                ),
+                favouredIDs: favouredTagIDs
+            ) { tag in
+                onOpenTag?(tag.name)
+            }
+        } else {
+            DetailTags(tags: extras.tags, favoured: favouredTags) { tag in
+                onOpenTag?(tag)
+            }
+        }
+    }
+
     /// Cached for the session after the first series page, so this is one
     /// request per launch rather than one per page.
     private func loadTaste() async {
         favouredTags = await taste?.favouredTagNames() ?? []
+        // Matched by id, never by name. The taste endpoint and the tag list are
+        // different endpoints with different spellings, and matching strings
+        // found exactly one tag in a series carrying 146.
+        favouredTagIDs = await taste?.favouredTagIDs() ?? []
     }
 
     /// Both tracker ids come from MangaBaka's own `source` block, so no lookup
