@@ -56,10 +56,10 @@ extension LibraryView {
                         cornerRadius: 11, style: .continuous
                     ))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Your taste")
+                    Text("Your reading")
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
-                    Text("Counted from your own library")
+                    Text("What is waiting, what you finish, what you drop")
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

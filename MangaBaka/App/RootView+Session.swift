@@ -38,9 +38,12 @@ extension RootView {
                                 )
                             }
                             .navigationDestination(isPresented: $showsTaste) {
-                                TasteView(
-                                    model: TasteModel(library: library),
-                                    entries: libraryModel?.entries ?? []
+                                // Reading insights rather than the old taste
+                                // screen: the same route, six answers instead
+                                // of one, and none of them from an endpoint.
+                                ReadingInsightsView(
+                                    entries: libraryModel?.entries ?? [],
+                                    path: $shelfPath
                                 )
                             }
                             .navigationDestination(isPresented: $showsSchedule) {
@@ -115,6 +118,10 @@ extension RootView {
         let announcedIDs = Set(announced.compactMap(\.seriesId))
         let predicted = scheduled.dated.filter { !announcedIDs.contains($0.series.id) }
 
-        await reminders.reschedule(announced: announced, predicted: predicted)
+        await reminders.reschedule(
+            announced: announced,
+            predicted: predicted,
+            library: await librarySnapshot.all()
+        )
     }
 }

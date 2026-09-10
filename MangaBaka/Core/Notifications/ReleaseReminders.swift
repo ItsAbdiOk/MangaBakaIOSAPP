@@ -73,7 +73,11 @@ final class ReleaseReminders {
     /// library, a reader changes their mind. Adding to what is already there
     /// accumulates notifications for things that are no longer true, and there
     /// is no way for the reader to tell which is which.
-    func reschedule(announced: [UpcomingWork], predicted: [ScheduledWork]) async {
+    func reschedule(
+        announced: [UpcomingWork],
+        predicted: [ScheduledWork],
+        library: [LibraryEntry] = []
+    ) async {
         await centre.removeAll()
         guard isEnabled else { return }
 
@@ -103,12 +107,62 @@ final class ReleaseReminders {
             ))
         }
 
+        requests.append(contentsOf: Self.catchUp(in: library))
+
         let soonest = requests
             .sorted { $0.date < $1.date }
             .prefix(Self.limit)
         for request in soonest {
             await centre.add(request)
         }
+    }
+}
+
+extension ReleaseReminders {
+    /// Two nudges about the library rather than about the calendar.
+    ///
+    /// These are the ones that solve the problem a tracker actually has. A
+    /// release date tells you about one chapter of one series; these tell you
+    /// about the reading you lost track of, which for most people is the larger
+    /// pile by far.
+    ///
+    /// Deliberately not daily. A reminder that arrives every morning about the
+    /// same forty-chapter backlog is a reminder you turn off — so the backlog
+    /// one is monthly, and the finished one fires once per series because a
+    /// series can only end once.
+    static func catchUp(in entries: [LibraryEntry]) -> [ReminderRequest] {
+        var requests: [ReminderRequest] = []
+
+        // It ended and nobody said. The worst way to lose a story: the last few
+        // chapters are sitting there and you think you are up to date.
+        for item in ReadingInsights.nearlyFinished(in: entries).prefix(3) {
+            let title = item.series?.displayTitle ?? "A series you were reading"
+            requests.append(ReminderRequest(
+                id: "finished-\(item.entry.seriesId)",
+                title: "\(title) has finished",
+                body: item.waiting == 1
+                    ? "You are one chapter from the end."
+                    : "You are \(item.waiting) chapters from the end.",
+                date: Date().addingTimeInterval(60 * 60 * 24)
+            ))
+        }
+
+        // The backlog, once a month, and only when it is worth saying.
+        let behind = ReadingInsights.waiting(in: entries, minimum: 10)
+        if let biggest = behind.first {
+            let title = biggest.series?.displayTitle ?? "something you were reading"
+            let others = behind.count - 1
+            requests.append(ReminderRequest(
+                id: "catch-up",
+                title: "\(biggest.waiting) chapters of \(title) are waiting",
+                body: others > 0
+                    ? "And \(others) other series you were part way through."
+                    : "Still where you left it.",
+                date: Date().addingTimeInterval(60 * 60 * 24 * 30)
+            ))
+        }
+
+        return requests
     }
 }
 
