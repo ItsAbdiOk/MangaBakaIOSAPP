@@ -161,6 +161,36 @@ struct LibraryDiskCacheTests {
         #expect(library.calls == afterFirst, "nothing over the wire the second time")
     }
 
+    /// The cache must hand back what it was given, not a hollow copy.
+    ///
+    /// The existing tests all counted requests, and a count cannot see this:
+    /// the second launch read 939 rows from disk, made no request, and drew a
+    /// screen of "Untitled series" with blank covers, because the entry's one
+    /// capitalised key — `Series` — was written lowercased by the encoder's
+    /// snake-case strategy and matched nothing on the way back. Observed on
+    /// device 2026-09-10. The fixture above passes `series: nil`, which is
+    /// precisely why it never caught it.
+    @Test("What comes back off disk still has its series")
+    func seriesSurvivesTheRoundTrip() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestClock()
+        let entry = LibraryEntry(
+            id: 1, seriesId: 638, state: .reading, progressChapter: 12,
+            progressVolume: nil, rating: 80, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil,
+            isPrivate: nil, readLink: nil,
+            series: SeriesFactory.make(id: 638, title: "Lout of Count's Family")
+        )
+        let library = Recording(entries: [entry])
+
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+
+        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        let cached = try #require(reread.first)
+        #expect(cached.series?.displayTitle == "Lout of Count's Family")
+        #expect(cached.progressChapter == 12, "the ordinary fields too, not just the odd one")
+    }
+
     @Test("A stale cache is refetched")
     func expires() async throws {
         let database = try AppDatabase.inMemory()

@@ -7,8 +7,18 @@ import Testing
 @Suite("Blocked tags", .serialized)
 @MainActor
 struct BlockedTagsTests {
+    /// One fixed suite, wiped before each test.
+    ///
+    /// It used to be `blocked.tests.<uuid>`, one per test, and nothing ever
+    /// removed them: the simulator's Preferences folder had accumulated
+    /// hundreds of `blocked.tests.*.plist` files, growing by two on every run.
+    /// A `deinit` that removed the domain did not help — measured, still +2 a
+    /// run — so the leak is fixed by never making more than one. Safe because
+    /// this suite is `.serialized`.
     private func makeDefaults() throws -> UserDefaults {
-        try #require(UserDefaults(suiteName: "blocked.tests.\(UUID().uuidString)"))
+        let name = "blocked.tests"
+        UserDefaults.standard.removePersistentDomain(forName: name)
+        return try #require(UserDefaults(suiteName: name))
     }
 
     @Test("Blocking and unblocking are the same control")

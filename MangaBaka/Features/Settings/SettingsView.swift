@@ -16,6 +16,7 @@ struct SettingsView: View {
     let onRemindersChanged: () async -> Void
     let history: HistoryStore
     let taste: TasteProfile
+    @Binding var titleRevision: Int
 
     @State private var entry = ""
     @State private var status: TokenStatus = .idle
@@ -30,6 +31,7 @@ struct SettingsView: View {
                     .foregroundStyle(Palette.textPrimary)
 
                 accountSection
+                TitleSection(revision: $titleRevision)
                 FormatSection(formats: formats)
                 contentSection
                 BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)

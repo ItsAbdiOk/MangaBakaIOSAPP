@@ -22,17 +22,19 @@ enum DisplayTitle {
     ///   handle that rather than force-unwrapping.
     static func choose(
         from titles: [SeriesTitle]?,
-        preferredLanguages: [String] = Locale.preferredLanguages
+        preferredLanguages: [String] = Locale.preferredLanguages,
+        preference: TitlePreference = TitleSettings.preference
     ) -> String? {
         guard let titles, !titles.isEmpty else { return nil }
+
+        if let chosen = matching(preference, in: titles) { return chosen }
 
         let normalizedPreferred = preferredLanguages.map(languageCode(of:))
 
         for preferred in normalizedPreferred {
-            if let match = titles.first(where: { languageCode(of: $0.language) == preferred }) {
-                return match.title
-            }
+            if let match = best(inLanguage: preferred, of: titles) { return match }
         }
+
         if let officialEnglish = titles.first(where: {
             languageCode(of: $0.language) == "en" && $0.traits.contains("official")
         }) {
@@ -48,6 +50,44 @@ enum DisplayTitle {
             return native.title
         }
         return titles.first?.title
+    }
+
+    /// The reader's explicit choice, where the series can satisfy it.
+    ///
+    /// Comes before the device's languages: someone who asked for the original
+    /// script wants it whatever iOS says their preferred language is. Falls
+    /// through when the series carries nothing in that form, because a missing
+    /// romanisation should show a title rather than nothing.
+    private static func matching(
+        _ preference: TitlePreference,
+        in titles: [SeriesTitle]
+    ) -> String? {
+        switch preference {
+        case .romanised:
+            titles.first { $0.language.hasSuffix("-Latn") }?.title
+        case .original:
+            titles.first { $0.traits.contains("native") }?.title
+        case .english:
+            // Explicit, not "fall through to the device's languages": the
+            // choice is the reader's, so a French phone must not quietly
+            // override an English preference. Still nil-able — a series with
+            // no English title should show something rather than nothing.
+            best(inLanguage: "en", of: titles)
+        }
+    }
+
+    /// The best title in one language.
+    ///
+    /// **Official first.** A series can carry two titles tagged `en`, and the
+    /// API returns them alphabetically: "Lout of Count's Family" is tagged
+    /// official, and a ROMANISATION mis-tagged as English — "Baekjakga-ui
+    /// Mangnani-ga Doeeotda" — sorts before it. Taking the first match showed
+    /// the romanisation to a reader who had asked for English. Verified against
+    /// series 638 on 2026-09-10.
+    private static func best(inLanguage code: String, of titles: [SeriesTitle]) -> String? {
+        let inLanguage = titles.filter { languageCode(of: $0.language) == code }
+        return inLanguage.first { $0.traits.contains("official") }?.title
+            ?? inLanguage.first?.title
     }
 
     /// "pt-BR" and "pt-br" and "pt" all compare equal; "ko-Latn" stays distinct

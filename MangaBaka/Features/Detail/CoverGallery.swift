@@ -42,9 +42,17 @@ struct CoverGallery: View {
                 pager
             }
             .background(Palette.ground)
-            .ignoresSafeArea(edges: .bottom)
+            // The whole screen, not the space under the navigation bar.
+            //
+            // Ignoring only the bottom edge left the cover centred inside a
+            // frame that started below the bar and ran past the home
+            // indicator — so its middle sat about seventy points below the
+            // screen's, which reads as the card having slipped downwards. The
+            // bar floats over the artwork instead, which is what it is for.
+            .ignoresSafeArea()
             .navigationTitle(caption)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }

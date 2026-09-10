@@ -67,7 +67,8 @@ extension RootView {
                                     reminders: reminders,
                                     onRemindersChanged: { await refreshReminders() },
                                     history: history,
-                                taste: taste
+                                    taste: taste,
+                                    titleRevision: $titleRevision
                                 )
                             }
                     }

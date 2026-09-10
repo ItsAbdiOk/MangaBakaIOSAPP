@@ -69,7 +69,14 @@ enum Metrics {
     /// controls the app was meant to ship.
     static let coverRowWidth: CGFloat = 118
     static let coverDetailRowWidth: CGFloat = 106
-    static let coverDetailHeroWidth: CGFloat = 126
+    /// The series page's cover.
+    ///
+    /// Was 126, which left it floating in the middle of a hero whose text
+    /// column is much taller — the schedule block, the kicker, a three-line
+    /// title and a byline. At 150 the cover fills the block it shares, and the
+    /// title still has about 180pt, which is what the accessibility-size
+    /// fallback exists for anyway.
+    static let coverDetailHeroWidth: CGFloat = 150
     static let coverSeedWidth: CGFloat = 82
     static let coverSavedStripWidth: CGFloat = 74
 

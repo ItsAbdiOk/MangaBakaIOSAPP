@@ -2,78 +2,93 @@ import Foundation
 import Testing
 @testable import MangaBaka
 
-@Suite("Display title selection")
+/// Which of a series' titles gets shown.
+///
+/// Series 638 is the case that motivated all of this: it carries TWO titles
+/// tagged `en`, one of them a romanisation that was mis-tagged, and the API
+/// returns them alphabetically so the wrong one came first. Verified live on
+/// 2026-09-10.
+@Suite(.serialized)
 struct DisplayTitleTests {
-    private func title(_ language: String, _ traits: [String], _ text: String) -> SeriesTitle {
+    private static func title(_ text: String, _ language: String, _ traits: [String] = []) -> SeriesTitle {
         SeriesTitle(language: language, traits: traits, title: text, isPrimary: true)
     }
 
-    /// The bug this guards against: every title in a real response carries
-    /// `is_primary: true`, so choosing by that flag returns an arbitrary
-    /// language. Verified against live data on 2026-09-08 (25/25, 14/14, 18/18).
-    @Test("is_primary alone does not decide the title")
-    func isPrimaryIsNotTheSelector() {
+    /// The real payload, in the order the API sends it.
+    private static let series638 = [
+        title("Baekjakga-ui Mangnani-ga Doeeotda", "en"),
+        title("Lout of Count's Family", "en", ["official"]),
+        title("백작가의 망나니가 되었다", "ko", ["native"]),
+        title("Baekjakgaui Mangnaniga Doeeotda", "ko-Latn")
+    ]
+
+    @Test("An official English title beats a romanisation mis-tagged as English")
+    func officialWinsWithinALanguage() {
+        // Fails without the official-first sort: returns the romanisation,
+        // because it sorts first alphabetically and arrives first.
+        #expect(
+            DisplayTitle.choose(from: Self.series638, preferredLanguages: ["en"], preference: .english)
+                == "Lout of Count's Family"
+        )
+    }
+
+    @Test("Each preference picks its own form")
+    func eachPreference() {
+        #expect(
+            DisplayTitle.choose(from: Self.series638, preferredLanguages: ["en"], preference: .romanised)
+                == "Baekjakgaui Mangnaniga Doeeotda"
+        )
+        #expect(
+            DisplayTitle.choose(from: Self.series638, preferredLanguages: ["en"], preference: .original)
+                == "백작가의 망나니가 되었다"
+        )
+    }
+
+    @Test("An English preference is not overridden by the device's language")
+    func choiceBeatsLocale() {
         let titles = [
-            title("ko", ["native"], "나 혼자만 레벨업"),
-            title("hu", [], "Hungarian"),
-            title("en", ["official"], "Solo Leveling")
-        ]
-        #expect(titles.allSatisfy { $0.isPrimary == true })
-        #expect(DisplayTitle.choose(from: titles, preferredLanguages: ["en-GB"]) == "Solo Leveling")
-    }
-
-    @Test("Reader's preferred language wins over English")
-    func preferredLanguageWins() {
-        let titles = [
-            title("en", ["official"], "English"),
-            title("fr", ["official"], "French")
-        ]
-        #expect(DisplayTitle.choose(from: titles, preferredLanguages: ["fr-FR"]) == "French")
-    }
-
-    @Test("Regional variants match their base language")
-    func regionalVariantsMatch() {
-        let titles = [title("pt-br", ["official"], "Portuguese")]
-        #expect(DisplayTitle.choose(from: titles, preferredLanguages: ["pt-PT"]) == "Portuguese")
-    }
-
-    @Test("Falls back to official English, then any English")
-    func englishFallback() {
-        let officialAndPlain = [
-            title("en", [], "Plain English"),
-            title("en", ["official"], "Official English")
+            Self.title("Le Vaurien", "fr"),
+            Self.title("Lout of Count's Family", "en", ["official"])
         ]
         #expect(
-            DisplayTitle.choose(from: officialAndPlain, preferredLanguages: ["de-DE"])
-                == "Official English"
+            DisplayTitle.choose(from: titles, preferredLanguages: ["fr"], preference: .english)
+                == "Lout of Count's Family"
         )
-
-        let plainOnly = [title("en", [], "Plain English")]
-        #expect(DisplayTitle.choose(from: plainOnly, preferredLanguages: ["de-DE"]) == "Plain English")
     }
 
-    @Test("Prefers a romanisation over a native script when neither is the reader's language")
-    func romanisedBeatsNative() {
-        let titles = [
-            title("ja", ["native"], "ネイティブ"),
-            title("ja-Latn", [], "Romanised")
-        ]
-        #expect(DisplayTitle.choose(from: titles, preferredLanguages: ["de-DE"]) == "Romanised")
+    @Test("A preference the series cannot satisfy falls through rather than showing nothing")
+    func fallsThrough() {
+        let englishOnly = [Self.title("Lout of Count's Family", "en", ["official"])]
+        for preference in TitlePreference.allCases {
+            #expect(
+                DisplayTitle.choose(
+                    from: englishOnly, preferredLanguages: ["en"], preference: preference
+                ) != nil
+            )
+        }
     }
 
-    @Test("A romanisation is not treated as its base language")
-    func romanisationIsDistinctFromBaseLanguage() {
-        let titles = [
-            title("ja-Latn", [], "Romanised"),
-            title("ja", ["native"], "ネイティブ")
-        ]
-        // A reader who asked for Japanese wants Japanese, not a transliteration.
-        #expect(DisplayTitle.choose(from: titles, preferredLanguages: ["ja-JP"]) == "ネイティブ")
+    @Test("No titles at all is nil, not a crash")
+    func noTitles() {
+        #expect(DisplayTitle.choose(from: nil) == nil)
+        #expect(DisplayTitle.choose(from: []) == nil)
     }
 
-    @Test("No titles yields nil rather than a crash or a placeholder")
-    func emptyAndNil() {
-        #expect(DisplayTitle.choose(from: nil, preferredLanguages: ["en"]) == nil)
-        #expect(DisplayTitle.choose(from: [], preferredLanguages: ["en"]) == nil)
+    @Test("The stored preference round-trips, and defaults to English")
+    func settingsRoundTrip() throws {
+        // A throwaway suite, not the app's own defaults: the first version of
+        // this test wrote .original into the real store, and the simulator
+        // then launched with the Korean title selected.
+        let scratch = try #require(UserDefaults(suiteName: "titles.tests"))
+        // What the app itself holds, which this test must leave exactly as it
+        // found it — the reader may well have chosen something.
+        let appValue = UserDefaults.standard.string(forKey: "titles.preference")
+        TitleSettings.resetForTesting(store: scratch)
+        defer { TitleSettings.resetForTesting() }
+
+        #expect(TitleSettings.preference == .english)
+        TitleSettings.set(.original)
+        #expect(TitleSettings.preference == .original)
+        #expect(UserDefaults.standard.string(forKey: "titles.preference") == appValue)
     }
 }

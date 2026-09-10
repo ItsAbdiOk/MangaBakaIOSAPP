@@ -150,7 +150,6 @@ actor LibrarySnapshot {
             guard age >= 0, age < Self.freshness else { return nil }
 
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             let rows = try CachedLibraryEntry.fetchAll(db)
             let entries = rows.compactMap {
                 try? decoder.decode(LibraryEntry.self, from: $0.payload)
@@ -160,10 +159,18 @@ actor LibrarySnapshot {
         }
     }
 
+    /// Written and read with NO key strategy, deliberately.
+    ///
+    /// This is a cache of our own type talking to itself, not the wire. With
+    /// `convertToSnakeCase` on the way out, `LibraryEntry`'s one capitalised
+    /// key — `series = "Series"`, which the API really does spell that way —
+    /// was written as `"series"` and then matched nothing on the way back in.
+    /// Every cached entry decoded with a nil series: 939 rows of "Untitled
+    /// series" with blank covers on the second launch. Observed on device
+    /// 2026-09-10. Symmetry is the fix; a strategy on one side only is the bug.
     private func writeCache(_ result: Result) {
         guard let database, !result.entries.isEmpty else { return }
         let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
         try? database.writer.write { db in
             // Replaced wholesale rather than merged: an entry removed on the
             // website would otherwise survive here forever.

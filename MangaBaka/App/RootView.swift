@@ -61,9 +61,14 @@ struct RootView: View {
     @State var onboardingCovers: [Series] = []
     /// Whether Settings should open with the token field already focused.
     @State var wantsAccountFocus = false
+    /// Bumped when the title preference changes, so every screen redraws with
+    /// the new names. Titles are read in a hundred places and changed roughly
+    /// never; a version number is cheaper than making all of them observe.
+    @State var titleRevision = 0
 
     var body: some View {
         tabs
+            .id(titleRevision)
             .task { await startSession() }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(

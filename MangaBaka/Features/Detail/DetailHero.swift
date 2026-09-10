@@ -55,12 +55,16 @@ struct DetailHero: View {
     }
 
     private var wide: some View {
-        HStack(alignment: .bottom, spacing: Metrics.gapHero) {
+        // Top-aligned, not bottom. Bottom-aligning a 126pt cover against a
+        // column carrying the schedule block, a kicker, a three-line title and
+        // a byline pushed the artwork half way down the screen, so the page
+        // opened on a gap.
+        HStack(alignment: .top, spacing: Metrics.gapHero) {
             cover
             text
         }
         .padding(.horizontal, Metrics.gutter)
-        .padding(.top, 24)
+        .padding(.top, 12)
         .padding(.bottom, Metrics.gutter)
     }
 
