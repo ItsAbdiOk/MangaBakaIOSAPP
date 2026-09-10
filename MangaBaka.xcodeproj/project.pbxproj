@@ -64,6 +64,7 @@
 		3E01D708FFDD5CB138E6E4C0 /* RateLimitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5698F5863047F965EA299F22 /* RateLimitTests.swift */; };
 		403C8681077D3BEAF6180A05 /* NonsenseGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192355E1466D48ADE1969CEA /* NonsenseGuardTests.swift */; };
 		40FB972BB92664AEAE56BE30 /* PickBackUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E8D05B8A16F72E1C223EAD /* PickBackUp.swift */; };
+		4146DA4C4BAC4F617EA56452 /* SeasonReadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53ABB1E4EAB88CB109D99103 /* SeasonReadingTests.swift */; };
 		419BEF328CDCDDA07952ED80 /* control.json in Resources */ = {isa = PBXBuildFile; fileRef = DA80EE3FE0BAFFD883C3E1CA /* control.json */; };
 		41B27358EAD76CDBE4EDB6EB /* RecentlyViewedRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83FE75C7250E14C3BF97DA5D /* RecentlyViewedRow.swift */; };
 		43712EAA1449BE99C07DD147 /* CoverGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871365D1FF3C09052F18666C /* CoverGallery.swift */; };
@@ -98,6 +99,7 @@
 		6F38316E308E2FE9AB7F2CC3 /* InlineSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F802D2AA14D67DE40DE3F4C /* InlineSearchField.swift */; };
 		6F91F7BEA60D38535C99EF57 /* MangaBakaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */; };
 		6FF0EDF562F8868FB08D4813 /* RecommendationQualityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3281DBC76CB8D1200495919 /* RecommendationQualityTests.swift */; };
+		7352C9121D7E2287291F9841 /* SeasonReading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD1F7809A8C1FB835D61ADF /* SeasonReading.swift */; };
 		759BC9C9777FA5601F05A021 /* ResultsEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB59EF6E9F6BAFBB79F5BC68 /* ResultsEnvelope.swift */; };
 		75A8D0061B5A643927B9A778 /* SeriesDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FCE8ED9E1CBA46CA151CAA3 /* SeriesDecodingTests.swift */; };
 		780D0911BF0BFFA0978D2149 /* SearchQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5D2D80FCE2142ABEACE07C /* SearchQuery.swift */; };
@@ -285,6 +287,7 @@
 		3B477C4A8ED2D572DEB4DB6F /* SeriesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesDetailView.swift; sourceTree = "<group>"; };
 		3BF9FF4C8FA8E99AD6AA2588 /* ReleaseSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSchedule.swift; sourceTree = "<group>"; };
 		3CBD83BDCD64BB6F70FBC4F4 /* LensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensTests.swift; sourceTree = "<group>"; };
+		3CD1F7809A8C1FB835D61ADF /* SeasonReading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeasonReading.swift; sourceTree = "<group>"; };
 		3E2D007D87EC856BF1844D85 /* CharacterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterService.swift; sourceTree = "<group>"; };
 		3F5D04922A2C422FF4312264 /* Palette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Palette.swift; sourceTree = "<group>"; };
 		3F802D2AA14D67DE40DE3F4C /* InlineSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineSearchField.swift; sourceTree = "<group>"; };
@@ -308,6 +311,7 @@
 		530B5C869E932A5DF2238597 /* CoverImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImage.swift; sourceTree = "<group>"; };
 		533409A4F8D0EB72D1B0A569 /* InlineSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineSearchTests.swift; sourceTree = "<group>"; };
 		53AA072C03A0C7369887770B /* PaginationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaginationTests.swift; sourceTree = "<group>"; };
+		53ABB1E4EAB88CB109D99103 /* SeasonReadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeasonReadingTests.swift; sourceTree = "<group>"; };
 		5698F5863047F965EA299F22 /* RateLimitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitTests.swift; sourceTree = "<group>"; };
 		5832DB5979A2F371B282B39D /* ShelfCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfCard.swift; sourceTree = "<group>"; };
 		59214612EE7CEE08A0FBE7E0 /* DetailCredits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailCredits.swift; sourceTree = "<group>"; };
@@ -499,6 +503,7 @@
 				7BA84B4299E28390AD030CAD /* MangaUpdatesID.swift */,
 				280496860C8D8C6CE7963A95 /* ReleaseCalendar.swift */,
 				3BF9FF4C8FA8E99AD6AA2588 /* ReleaseSchedule.swift */,
+				3CD1F7809A8C1FB835D61ADF /* SeasonReading.swift */,
 				F719B87D935EE7F86C0A2B5A /* UpcomingWork.swift */,
 			);
 			path = Schedule;
@@ -786,6 +791,7 @@
 				65EE5304AC21E3D3FDFCAD34 /* ScheduleModelTests.swift */,
 				5EF948E62761E7CFD4F55CB3 /* SearchAndMixTests.swift */,
 				F491AA914115AD5A1FC2C79A /* SearchModelTests.swift */,
+				53ABB1E4EAB88CB109D99103 /* SeasonReadingTests.swift */,
 				427FE3E6E3A09701E3A650D1 /* SecurityTests.swift */,
 				1FCE8ED9E1CBA46CA151CAA3 /* SeriesDecodingTests.swift */,
 				D9A8619A97BD3D79D30DB90B /* SeriesExtrasTests.swift */,
@@ -1221,6 +1227,7 @@
 				286B4C74D3D45846D41EFE29 /* SearchModel.swift in Sources */,
 				780D0911BF0BFFA0978D2149 /* SearchQuery.swift in Sources */,
 				B26A26C9E2D20C07F7E0F4DC /* SearchView.swift in Sources */,
+				7352C9121D7E2287291F9841 /* SeasonReading.swift in Sources */,
 				8001BF5D2AECCA2FC1AB2831 /* SectionHeader.swift in Sources */,
 				98731D006DCABF3074A98475 /* Series.swift in Sources */,
 				94B7F6C7E0E887A9DE98D019 /* SeriesCharacter.swift in Sources */,
@@ -1326,6 +1333,7 @@
 				63B339CB5931911276BADACA /* ScheduleModelTests.swift in Sources */,
 				2EAE470F7F27AFD57FCCF6B4 /* SearchAndMixTests.swift in Sources */,
 				A2D9F1FA7D1D7736FB8583D7 /* SearchModelTests.swift in Sources */,
+				4146DA4C4BAC4F617EA56452 /* SeasonReadingTests.swift in Sources */,
 				ADF59B85F5F0ABB7F0049AA8 /* SecurityTests.swift in Sources */,
 				75A8D0061B5A643927B9A778 /* SeriesDecodingTests.swift in Sources */,
 				7E6F50ABE110986FD1E83529 /* SeriesExtrasTests.swift in Sources */,

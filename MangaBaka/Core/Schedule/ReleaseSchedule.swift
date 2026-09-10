@@ -268,7 +268,11 @@ actor ReleaseScheduleService {
 
             do {
                 let releases = try await mangaUpdates.releases(seriesNumber: number)
-                let cadence = Cadence.estimate(from: releases.compactMap(\.date))
+                var cadence = Cadence.estimate(from: releases.compactMap(\.date))
+                // Only set where the release history actually shows seasons —
+                // see SeasonReading. A volume number is not a season just
+                // because the series is a manhwa.
+                cadence?.season = SeasonReading.currentSeason(releases.compactMap(\.sample))
                 try? write(seriesId: series.id, cadence: cadence, failure: nil)
             } catch {
                 // Recorded as a failure so the next build retries it, rather

@@ -40,6 +40,24 @@ actor MangaUpdatesClient {
         /// the live endpoint 2026-09-09.
         let releaseDate: String?
 
+        /// The release reduced to what `SeasonReading` needs, where both
+        /// numbers are actually there.
+        var sample: SeasonReading.Sample? {
+            guard let date,
+                  let volume, let volumeNumber = Int(volume.trimmingCharacters(in: .whitespaces)),
+                  let chapter, let chapterNumber = Self.firstNumber(in: chapter)
+            else { return nil }
+            return SeasonReading.Sample(
+                volume: volumeNumber, chapter: chapterNumber, date: date
+            )
+        }
+
+        /// "57-58" and "c.12 (end)" both start with the number that matters.
+        private static func firstNumber(in text: String) -> Double? {
+            let digits = text.drop { !$0.isNumber }.prefix { $0.isNumber || $0 == "." }
+            return Double(digits)
+        }
+
         var date: Date? {
             guard let releaseDate, releaseDate.count >= 10 else { return nil }
             return Self.formatter.date(from: String(releaseDate.prefix(10)))

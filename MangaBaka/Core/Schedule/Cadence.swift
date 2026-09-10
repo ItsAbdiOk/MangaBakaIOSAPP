@@ -19,6 +19,14 @@ struct Cadence: Equatable, Sendable, Codable {
     /// How many distinct release dates the estimate was built from.
     let samples: Int
 
+    /// Which season the series is currently releasing, where it has seasons.
+    ///
+    /// MangaUpdates tags a webtoon's releases with a volume number that is
+    /// really the season — Tower of God's latest are `v.3 c.235`. It does not
+    /// say which it means, so this is only set where the release history shows
+    /// chapters restarting. See `SeasonReading`.
+    var season: Int?
+
     /// How much to trust the rhythm. Derived from spread, never from the clock.
     enum Confidence: String, Equatable, Sendable, Codable {
         case likely

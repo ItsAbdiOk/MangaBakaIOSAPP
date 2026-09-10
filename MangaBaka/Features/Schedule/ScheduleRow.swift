@@ -97,9 +97,14 @@ struct ScheduleRow: View {
     /// "About every 7 days, give or take 1."
     static func cadenceLine(_ cadence: Cadence) -> String {
         let gap = "About every \(cadence.medianGapDays) day\(cadence.medianGapDays == 1 ? "" : "s")"
-        return cadence.spreadDays == 0
+        let rhythm = cadence.spreadDays == 0
             ? "\(gap), very evenly"
             : "\(gap), give or take \(cadence.spreadDays)"
+        // The season leads where there is one: for a series on its third
+        // season, "chapter 235" means nothing without it — the numbering
+        // started again twice.
+        guard let season = cadence.season else { return rhythm }
+        return "Season \(season) · \(rhythm.lowercased())"
     }
 
     /// Where the number came from. An estimate that will not say what it was
