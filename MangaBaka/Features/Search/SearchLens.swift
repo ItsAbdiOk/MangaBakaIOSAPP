@@ -124,6 +124,9 @@ extension SearchLens {
             let joiner = query.tags.count > 1 && query.tagMode == "and" ? " AND " : ", "
             parts.append("tags: " + query.tags.joined(separator: joiner))
         }
+        if let publisher = query.publisher, !publisher.isEmpty {
+            parts.append("publisher: \(publisher)")
+        }
         if let rating = query.minimumRating { parts.append("rating \u{2265} \(rating / 10)") }
         if let sort = SortOrder.label(for: query.sort) { parts.append("sort: \(sort.lowercased())") }
         return parts.isEmpty ? "Everything" : parts.joined(separator: " \u{00B7} ")

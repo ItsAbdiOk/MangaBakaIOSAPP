@@ -186,18 +186,18 @@ struct RootView: View {
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
                     .navigationDestination(isPresented: $showsBrowse) {
-                        BrowseView(
+                        BrowseDestination(
                             model: browseModel ?? BrowseModel(catalogue: catalogue),
                             blocked: blockedTags,
-                            onPickGenre: { genre in
-                                searchModel?.applyBrowse(genre: genre.value)
-                                showsBrowse = false
-                            },
-                            onPickTag: { tag in
-                                searchModel?.applyBrowse(tag: tag.name)
-                                showsBrowse = false
-                            }
-                        )
+                            catalogue: catalogue
+                        ) { pick in
+                            searchModel?.applyBrowse(
+                                genre: pick.genre,
+                                tag: pick.tag,
+                                publisher: pick.publisher
+                            )
+                            showsBrowse = false
+                        }
                     }
                 }
             }

@@ -17,6 +17,12 @@ struct SearchQuery: Sendable, Equatable, Codable {
     var tagMode: String?
     /// 0-100 as the API expresses it.
     var minimumRating: Int?
+    /// A publisher's name, as `/v1/publishers/search` spells it.
+    ///
+    /// Verified against the live API on 2026-09-10: `publisher=Seven Seas`
+    /// answers 1,265 of 304,096 and every row really is theirs, while a
+    /// nonsense publisher answers 0 rather than being ignored.
+    var publisher: String?
     var limit = 30
     /// 1-based, as the API counts. `/v2/series/search` accepts up to page 100.
     var page = 1
@@ -31,7 +37,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
     var isEmpty: Bool {
         (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
-            && sort == nil && tags.isEmpty
+            && sort == nil && tags.isEmpty && (publisher ?? "").isEmpty
     }
 
     /// Repeated keys where the API wants them; a comma-joined list is rejected
@@ -51,6 +57,9 @@ struct SearchQuery: Sendable, Equatable, Codable {
         if let sort { items.append(URLQueryItem(name: "sort_by", value: sort)) }
         if let minimumRating {
             items.append(URLQueryItem(name: "rating_lower", value: String(minimumRating)))
+        }
+        if let publisher, !publisher.isEmpty {
+            items.append(URLQueryItem(name: "publisher", value: publisher))
         }
         return items
     }

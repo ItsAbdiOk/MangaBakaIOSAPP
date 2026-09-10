@@ -109,10 +109,11 @@ final class SearchModel {
     ///
     /// Replaces the query rather than adding to it: arriving from a browse
     /// screen means "show me this", not "narrow whatever I had".
-    func applyBrowse(genre: String? = nil, tag: String? = nil) {
+    func applyBrowse(genre: String? = nil, tag: String? = nil, publisher: String? = nil) {
         var next = SearchQuery()
         if let genre { next.tags = [genre] }
         if let tag { next.tags = [tag] }
+        if let publisher { next.publisher = publisher }
         next.sort = "popularity_desc"
         query = next
         debounceTask?.cancel()

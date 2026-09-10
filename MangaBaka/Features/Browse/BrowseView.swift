@@ -6,17 +6,25 @@ struct BrowseView: View {
     private let onPickGenre: (Genre) -> Void
     private let onPickTag: (Tag) -> Void
     private let blocked: BlockedTagsStore
+    /// Publishers are searched rather than listed, so this needs the service
+    /// directly. Absent where a caller has no route out of a publisher.
+    let catalogue: CatalogueService?
+    let onOpenPublisher: ((PublisherRecord) -> Void)?
 
     init(
         model: BrowseModel,
         blocked: BlockedTagsStore,
         onPickGenre: @escaping (Genre) -> Void,
-        onPickTag: @escaping (Tag) -> Void
+        onPickTag: @escaping (Tag) -> Void,
+        catalogue: CatalogueService? = nil,
+        onOpenPublisher: ((PublisherRecord) -> Void)? = nil
     ) {
         _model = State(initialValue: model)
         self.blocked = blocked
         self.onPickGenre = onPickGenre
         self.onPickTag = onPickTag
+        self.catalogue = catalogue
+        self.onOpenPublisher = onOpenPublisher
     }
 
     var body: some View {
@@ -24,6 +32,16 @@ struct BrowseView: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header
                 genreChips
+
+                // Publishers, above the tag tree: "everything Seven Seas
+                // licenses" is a coarser question than any tag, and a reader
+                // who came here to browse should meet the coarse ones first.
+                if let catalogue, let onOpenPublisher {
+                    PublisherBrowser(catalogue: catalogue, onOpen: onOpenPublisher)
+                        .padding(.horizontal, -Metrics.gutter)
+                        .padding(.bottom, 24)
+                }
+
                 tagHeader
                 blockedSummary
                 ForEach(model.sections, id: \.name) { section in
