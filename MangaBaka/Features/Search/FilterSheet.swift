@@ -8,6 +8,11 @@ struct FilterSheet: View {
     /// and Mix both get it without it being designed twice. Absent where a
     /// caller has nowhere to put a lens.
     var onSaveLens: (() -> Void)?
+    /// The tag catalogue, so tags can be picked here rather than typed. Absent
+    /// where a caller has none to offer.
+    var catalogue: CatalogueService?
+
+    @State private var isPickingTags = false
 
     @Environment(\.dismiss) private var dismiss
 
@@ -47,6 +52,12 @@ struct FilterSheet: View {
                                 query.sort = query.sort == sort.value ? nil : sort.value
                             }
                         }
+                    }
+                }
+
+                if catalogue != nil {
+                    section("Tags") {
+                        tagRow
                     }
                 }
 
@@ -98,6 +109,57 @@ struct FilterSheet: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .sheet(isPresented: $isPickingTags) {
+            if let catalogue {
+                TagPickerSheet(
+                    catalogue: catalogue,
+                    selected: $query.tags,
+                    mode: $query.tagMode
+                )
+            }
+        }
+    }
+
+    /// The tags currently filtering, and the way in to choose more.
+    private var tagRow: some View {
+        FlowLayout(spacing: Metrics.gapChips) {
+            ForEach(query.tags, id: \.self) { tag in
+                Button {
+                    query.tags.removeAll { $0 == tag }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(tag).typeChip()
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundStyle(Palette.accent)
+                    .padding(.horizontal, 12)
+                    .frame(height: Metrics.headerPill)
+                    .background(Palette.accentTint, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.5), lineWidth: 0.5))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(tag)")
+            }
+
+            // Dashed, because it is a slot rather than a chosen thing.
+            Button { isPickingTags = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Palette.accent)
+                    Text("Add tags").typeChip()
+                }
+                .foregroundStyle(Palette.textPrimary)
+                .padding(.horizontal, 12)
+                .frame(height: Metrics.headerPill)
+                .overlay(Capsule().strokeBorder(Palette.borderDashed, style: StrokeStyle(
+                    lineWidth: 0.5, dash: [3]
+                )))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {

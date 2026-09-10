@@ -12,6 +12,7 @@ struct SearchView: View {
     let onBrowse: () -> Void
     let lenses: SearchLensStore
     let counts: LensCounts
+    let catalogue: CatalogueService
     let recents: RecentSearches
 
     @State private var isNamingLens = false
@@ -32,14 +33,20 @@ struct SearchView: View {
                 // A heading and two links. Kept on one row until they no
                 // longer fit: squeezed by both links, "30 results" broke into
                 // "30" / "result" / "s" at the largest text size.
+                //
+                // The heading is absent while the screen is idle: the idle
+                // screen carries its own section headers, and a standing
+                // "Saved lenses" title sat above a Presets section even when
+                // the reader had saved none — announcing a thing that was not
+                // there.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        headingText
+                        if !model.query.isEmpty { headingText }
                         Spacer(minLength: 0)
                         headerActions
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        headingText
+                        if !model.query.isEmpty { headingText }
                         headerActions
                     }
                 }
@@ -65,7 +72,8 @@ struct SearchView: View {
                 onApply: {
                     Task { model.cancelPendingDebounce(); await model.search() }
                 },
-                onSaveLens: { isNamingLens = true }
+                onSaveLens: { isNamingLens = true },
+                catalogue: catalogue
             )
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(Metrics.radiusSheet)
@@ -139,10 +147,10 @@ struct SearchView: View {
         .fixedSize()
     }
 
-    /// "12 results · Score" once anything is asked for, "Saved lenses"
-    /// before that — the mockup's own wording.
+    /// "12 results · Score" once anything is asked for. Nothing before that —
+    /// see the note where it is used.
     private var heading: String {
-        guard !model.query.isEmpty else { return "Saved lenses" }
+        guard !model.query.isEmpty else { return "" }
         // "shown", not "results": this is the number loaded so far, and a query
         // matching thousands read "24 results" and then "47 results" as the
         // reader scrolled — the same query reporting different totals.

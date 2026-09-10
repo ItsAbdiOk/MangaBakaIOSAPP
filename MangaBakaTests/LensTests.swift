@@ -141,3 +141,48 @@ struct LensSaveEntryTests {
         #expect(sheet.contains("SaveLensButton(isEnabled: !query.isEmpty)"))
     }
 }
+
+/// The bar beside each tag in the picker.
+///
+/// It is not the design board's weight bar and cannot be: weight says how
+/// central a tag is to *one series*, and a filter picker has no series. What a
+/// bare tag does have is how many series carry it, which answers the question a
+/// filter picker actually raises — is this narrow or broad.
+@Suite("Tag breadth reads as four steps")
+struct TagBreadthTests {
+    private func tag(_ id: Int, count: Int?) -> MangaBaka.Tag {
+        MangaBaka.Tag(
+            id: id, name: "T\(id)", namePath: nil, parentId: nil, level: 0,
+            description: nil, seriesCount: count, isGenre: nil, isSpoiler: nil,
+            mergedWith: nil, contentRating: nil
+        )
+    }
+
+    /// The first version scaled against the largest count and put every bar on
+    /// step one, because tag counts are wildly skewed: a few genres carry tens
+    /// of thousands and the tail carries dozens. Seen on device as eight
+    /// identical bars in a row.
+    @Test("A skewed catalogue still fills all four steps")
+    func skewDoesNotFlattenTheBar() {
+        // One giant and a long tail — the real shape of a tag catalogue.
+        let counts = [40_000] + (0..<20).map { $0 + 5 }
+        let tags = counts.enumerated().map { tag($0.offset, count: $0.element) }
+
+        let steps = Set(tags.map { TagBreadth.step(for: $0, among: tags) })
+        #expect(steps.count == 4, "a bar with one value in it is decoration")
+        #expect(steps.allSatisfy { (1...4).contains($0) })
+    }
+
+    @Test("The broadest tag is at the top step and the narrowest at the bottom")
+    func endsOfTheRange() {
+        let tags = [tag(1, count: 5), tag(2, count: 500), tag(3, count: 50_000)]
+        #expect(TagBreadth.step(for: tags[2], among: tags) == 4)
+        #expect(TagBreadth.step(for: tags[0], among: tags) == 1)
+    }
+
+    @Test("A tag the API did not count reads as the narrowest rather than crashing")
+    func missingCountIsLowest() {
+        let tags: [MangaBaka.Tag] = [tag(1, count: nil), tag(2, count: 500)]
+        #expect(TagBreadth.step(for: tags[0], among: tags) == 1)
+    }
+}
