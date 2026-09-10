@@ -78,6 +78,7 @@ struct DiscoverView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdge()
         .refreshable { await model.load(forceRefresh: true) }
         .task { await model.load() }
         .task { await recentlyViewed?.load() }

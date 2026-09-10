@@ -125,6 +125,13 @@ enum Metrics {
     /// the bar is about 62pt tall and sits ~22pt from the bottom, and a little
     /// slack keeps a descender off the glass.
     static let scrollBottomInset: CGFloat = 124
+
+    /// How far the top scroll edge fades out below the safe area.
+    ///
+    /// Matched to the navigation bar's own effect rather than picked: iOS fades
+    /// its scroll edge over roughly a line of text, so a hard stop at the safe
+    /// area boundary would read as a painted band instead of an edge.
+    static let scrollEdgeFade: CGFloat = 14
 }
 
 extension View {

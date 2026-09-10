@@ -56,6 +56,7 @@ struct ReadingInsightsView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle("Your reading")
         .navigationBarTitleDisplayMode(.inline)
         // Every visit, not keyed on a count: a library can change without

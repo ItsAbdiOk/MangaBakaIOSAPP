@@ -32,6 +32,7 @@ struct TasteView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle("Your taste")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(entries: entries) }

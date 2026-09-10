@@ -96,6 +96,7 @@ struct SeriesDetailView: View {
                 .background(Palette.ground)
                 .ignoresSafeArea()
         }
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle(shown.displayTitle ?? "Series")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $openCoversAt) { start in

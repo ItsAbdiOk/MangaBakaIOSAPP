@@ -58,6 +58,7 @@ struct MixView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdge()
         .task {
             suggestedSeeds = await model.suggestedSeeds()
         }

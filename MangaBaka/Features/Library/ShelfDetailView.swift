@@ -94,6 +94,7 @@ struct ShelfDetailView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle(shelf.label)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { entry in

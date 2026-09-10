@@ -59,6 +59,7 @@ struct SearchView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdge()
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.query) { name in
                 lenses.save(name: name, query: model.query)

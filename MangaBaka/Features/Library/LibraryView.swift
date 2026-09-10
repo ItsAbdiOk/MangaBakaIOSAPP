@@ -95,6 +95,7 @@ struct LibraryView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        .scrollEdge()
         .task { await model.load() }
     }
 
