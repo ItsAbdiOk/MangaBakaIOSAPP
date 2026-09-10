@@ -105,6 +105,59 @@ struct LibraryModelTests {
         #expect(!model.hasAccount)
     }
 
+    @Test("A library past a thousand entries loads all of it")
+    func loadsPastTheOldCeiling() async throws {
+        // 1,204, the number the design board uses. The old loop stopped at ten
+        // pages of a hundred, so anything past 1,000 vanished with no error —
+        // and Abdi's own library is 937, sixty-four short of that ceiling.
+        let paged = PagedLibrary(total: 1_204)
+        let model = LibraryModel(library: paged)
+        await model.load()
+
+        #expect(model.entries.count == 1_204)
+        #expect(model.isComplete, "a library that fits inside the cap is complete")
+    }
+
+    @Test("A library past even the new cap says it is incomplete")
+    func admitsTruncation() async throws {
+        // The cap exists so a misbehaving server cannot spin this loop forever.
+        // What matters is that hitting it is admitted rather than presented as
+        // the whole library — the mistake that once offered "Add to library"
+        // for a series already in it.
+        let model = LibraryModel(library: PagedLibrary(total: 9_000))
+        await model.load()
+
+        #expect(!model.isComplete)
+    }
+
+    /// A library that actually pages, unlike `StubLibrary`.
+    private final class PagedLibrary: LibraryProviding, @unchecked Sendable {
+        let total: Int
+        init(total: Int) { self.total = total }
+
+        func library(page: Int, limit: Int) async -> [LibraryEntry] {
+            let start = (page - 1) * limit
+            guard start < total else { return [] }
+            return (start..<min(start + limit, total)).map { index in
+                LibraryEntry(
+                    id: index, seriesId: index, state: .reading, progressChapter: nil,
+                    progressVolume: nil, rating: nil, note: nil, startDate: nil,
+                    finishDate: nil, numberOfRereads: nil, priority: nil,
+                    isPrivate: nil, readLink: nil, series: nil
+                )
+            }
+        }
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func hiddenTagIDs() async -> Set<Int>? { [] }
+        func topGenres() async -> [TopGenre] { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+
     private final class StubLibrary: LibraryProviding, @unchecked Sendable {
         let entries: [LibraryEntry]
         init(entries: [LibraryEntry]) { self.entries = entries }

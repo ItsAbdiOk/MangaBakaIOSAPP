@@ -287,11 +287,25 @@ struct LibraryLookupTests {
 
     /// The loop is the thing that makes it the whole library. A single call,
     /// at any limit, is a page.
+    ///
+    /// Asserted against named constants rather than the literals this test used
+    /// to pin. Pinning `1...10` and `< 100` is what made the test pass while
+    /// the app silently truncated any library over a thousand entries — the
+    /// test agreed with the code and both were wrong. `LibraryModelTests` now
+    /// checks the behaviour with a library that actually pages; this only
+    /// checks the loop still exists and is not written as bare numbers.
     @Test("The shared store pages until it runs out")
     func storePages() throws {
         let source = try SourceTree.read("MangaBaka/Features/Library/LibraryModel.swift")
-        #expect(source.contains("for page in 1...10"))
-        #expect(source.contains("if batch.count < 100 { break }"))
+        #expect(source.contains("for page in 1...Self.pageCap"))
+        #expect(source.contains("if batch.count < Self.pageSize { break }"))
+
+        // A thousand is not a cap, it is a real library. Abdi's is 937.
+        let cap = source
+            .components(separatedBy: "pageCap = ")
+            .dropFirst().first
+            .flatMap { Int($0.prefix { $0.isNumber }) }
+        #expect((cap ?? 0) > 10, "the cap has to clear a real library, not sit on top of one")
     }
 
     /// A write has to refresh the shared copy, or the Library tab and the

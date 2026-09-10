@@ -83,16 +83,15 @@ actor TasteProfile {
     ///
     /// The library pass is not an extra cost in the sense that matters: v1 list
     /// responses embed the whole `tags_v2` array, so the pages carry their own
-    /// tags and nothing is fetched per series. It is capped at ten pages of a
-    /// hundred for the same reason `LibraryModel` is — a thousand entries is
-    /// past the point where one more page changes what the reader is told about
-    /// themselves.
+    /// tags and nothing is fetched per series. The cap matches `LibraryModel`'s
+    /// for the same reason: bounded, but far past any real library. Ten pages
+    /// was not — Abdi's library is 937 entries against a 1,000 ceiling.
     private static func buildIDs(
         library: any LibraryProviding,
         ledger: TasteLedger?
     ) async -> Set<Int> {
         if let ledger {
-            for page in 1...10 {
+            for page in 1...30 {
                 guard let batch = try? await library.libraryPage(page: page, limit: 100),
                       !batch.isEmpty
                 else { break }
