@@ -16,6 +16,12 @@ struct AccountCard: View {
     let onSave: () async -> Void
     let onCheck: () async -> Void
     let onRemove: () -> Void
+    /// Set when the reader arrived here from onboarding's "Connect an account".
+    /// Dropping them at the top of Settings after they said yes is the version
+    /// that loses them.
+    var focusOnAppear = false
+
+    @FocusState private var isFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,6 +54,13 @@ struct AccountCard: View {
             RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                 .strokeBorder(borderColour, lineWidth: status.isRejection ? 1 : 0.5)
         )
+        .task {
+            guard focusOnAppear else { return }
+            // One run loop: focusing during the sheet's own presentation
+            // animation is dropped, and the keyboard never appears.
+            try? await Task.sleep(for: .milliseconds(350))
+            isFieldFocused = true
+        }
     }
 
     private var header: some View {
@@ -174,6 +187,7 @@ struct AccountCard: View {
     private var field: some View {
         HStack(spacing: 10) {
             SecureField("mb-…", text: $entry)
+                .focused($isFieldFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .typeBody()

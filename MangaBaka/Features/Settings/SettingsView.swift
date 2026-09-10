@@ -11,6 +11,7 @@ struct SettingsView: View {
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
     let catalogue: CatalogueService
+    var focusAccount = false
     let history: HistoryStore
 
     @State private var entry = ""
@@ -56,7 +57,8 @@ struct SettingsView: View {
                     storedTokenExists = false
                     entry = ""
                     status = .idle
-                }
+                },
+                focusOnAppear: focusAccount
             )
         }
     }

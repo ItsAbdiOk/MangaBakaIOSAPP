@@ -35,11 +35,18 @@ enum SourceTree {
     /// For checks that have to look at the whole app rather than one file —
     /// "is this token used anywhere at all" cannot be answered from one.
     static func swiftFiles(under directory: String) throws -> [String] {
+        try files(under: directory).filter { $0.hasSuffix(".swift") }
+    }
+
+    /// Every file under a directory, whatever its extension.
+    ///
+    /// Not only Swift: some rules are about what is *in* the app rather than
+    /// what it does — shipping borrowed artwork, for one.
+    static func files(under directory: String) throws -> [String] {
         let base = "\(root)/\(directory)"
         guard let walker = FileManager.default.enumerator(atPath: base) else { return [] }
         return walker
             .compactMap { $0 as? String }
-            .filter { $0.hasSuffix(".swift") }
             .map { "\(directory)/\($0)" }
     }
 }

@@ -45,15 +45,26 @@ struct RootView: View {
     /// source and destination share. Nil falls back to an ordinary push.
     @State private var zoomSource: String?
     @Namespace private var coverTransition
+    /// Real covers behind the first onboarding screen. Empty until the rising
+    /// feed answers, which is the case the screen is built to survive.
+    @State private var onboardingCovers: [Series] = []
+    /// Whether Settings should open with the token field already focused.
+    @State private var wantsAccountFocus = false
 
     var body: some View {
         tabs
+            .task {
+                guard !onboarding.hasCompleted, onboardingCovers.isEmpty else { return }
+                onboardingCovers = await repository.feed(.rising, forceRefresh: false).series
+            }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(
+                    covers: onboardingCovers,
                     onFinish: { onboarding.complete() },
                     onConnectAccount: {
                         onboarding.complete()
                         selection = .library
+                        wantsAccountFocus = true
                         showsSettings = true
                     }
                 )
@@ -139,6 +150,7 @@ struct RootView: View {
                                 formats: formats,
                                 blockedTags: blockedTags,
                                 catalogue: catalogue,
+                                focusAccount: wantsAccountFocus,
                                 history: history
                             )
                         }
