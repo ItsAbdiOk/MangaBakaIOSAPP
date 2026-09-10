@@ -266,3 +266,68 @@ the manual pass did not catch:
 
 Both are worth a look before the contrast work, because they are small and
 they are certain, where some of the contrast hits need reproducing first.
+
+---
+
+## Part 4 — device performance (iPhone 16 Pro, Release build)
+
+Instruments against a Release build on the real phone, with the real library.
+
+### Cold launch is the one performance finding
+
+| run | launch to foreground | of which "UIKit Initialization" |
+|---|---|---|
+| 1 (cold) | 867 ms | 598 ms |
+| 2 (cold) | 932 ms | 634 ms |
+| 3 (warm) | 217 ms | 89 ms |
+
+Apple's guidance is 400 ms to the first frame. Cold launch is **~900 ms**,
+more than twice that; warm launch is fine.
+
+The time is not in our code. A time profile over the launch window shows our
+own work as a handful of samples — `AppServices.init`, `AppDatabase.onDisk`,
+`Database.setUp` running the migrations, the first `BlurHash.render`, the first
+`CoverStore.fetch`. The 598 ms sits in framework and dynamic-linker work before
+`didFinishLaunchingWithOptions`, which took 0.08 ms.
+
+So the lever is not "make our launch faster", it is "need less at launch":
+fewer frameworks resolved before the first frame, and any work that can happen
+after it moved there.
+
+### Scrolling is genuinely smooth — no finding
+
+45 seconds of hard flicking through 939 series:
+
+- **0 hang risks.** Not one main-thread block long enough to register.
+- **14 hitches**, every one 8.3-16.7 ms — one or two dropped frames at 120 Hz.
+- **71 ms of hitch time in total**, across the whole session.
+- 1,048 frames: median lifetime 25 ms, p95 37.5 ms, worst 121 ms, none near
+  the 250 ms that reads as a stutter.
+
+The off-main-thread image decode and the single shared library walk are doing
+their job on real hardware.
+
+### Energy
+
+Energy impact recorded as **None** for the whole 31.8 s run; thermal state
+**Nominal** throughout.
+
+A first pass flagged "556 network connections in 30 seconds" — discarded. The
+Power Profiler's network table is system-wide, not app-scoped: 326 of those are
+the Instruments link back to the Mac, and most of the rest are Apple and Google
+services. It says nothing about this app. The honest instrument for the app's
+own traffic is the in-app `NetworkLedger` under Settings, Data used.
+
+### Memory and CPU (simulator — the on-device Allocations run did not attach)
+
+`xctrace --template Allocations --launch` recorded no allocation tables; that
+instrument needs Instruments' own launch configuration. These are the existing
+performance suite's numbers, on the simulator, and should be read as such:
+
+- peak physical footprint on the library screen: **99.3 MB** (sd 1.8%)
+- sort the whole library by title: **6 ms**
+- filter change: 8 ms · tag verdicts: 13 ms · reading totals: 2 ms
+- feed decoding: 0.2 ms
+- taste ledger absorb: 43 ms (off the main thread)
+
+Everything except the ledger absorb fits inside a single 120 Hz frame.
