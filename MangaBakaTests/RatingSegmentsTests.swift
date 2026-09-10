@@ -42,7 +42,9 @@ struct RatingSegmentsReachabilityTests {
     func sharedControl() throws {
         for path in [
             "MangaBaka/Features/Search/FilterSheet.swift",
-            "MangaBaka/Features/Mix/MixView.swift"
+            // The filter strip moved to its own file when Mix gained the
+            // save-a-lens control and crossed the body-length ceiling.
+            "MangaBaka/Features/Mix/MixFilterStrip.swift"
         ] {
             #expect(try SourceTree.read(path).contains("RatingSegments(minimum:"))
         }

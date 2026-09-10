@@ -111,7 +111,9 @@ struct RootView: View {
                         // Picking a seed is a search, so send the reader to the
                         // screen that already does that well rather than
                         // building a second, worse picker inside Mix.
-                        onPickSeed: { selection = .search }
+                        onPickSeed: { selection = .search },
+                        catalogue: catalogue,
+                        lenses: lenses
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
                 }

@@ -186,3 +186,39 @@ struct TagBreadthTests {
         #expect(TagBreadth.step(for: tags[0], among: tags) == 1)
     }
 }
+
+/// Mix can save a lens, and can filter by tag before it has ever blended.
+@Suite("Mix filters", .enabled(if: SourceTree.isAvailable))
+struct MixFilterTests {
+    private func source() throws -> String {
+        try SourceTree.read("MangaBaka/Features/Mix/MixFilterStrip.swift")
+    }
+
+    /// "One control, in the sheet that owns filters, so Search and Mix both get
+    /// it" was the reasoning. Mix has a strip rather than a sheet, so for a
+    /// while it was true of Search alone.
+    @Test("Mix has the same save control Search does")
+    func mixCanSaveALens() throws {
+        #expect(try source().contains("SaveLensButton"))
+        #expect(try source().contains("model.filters.isEmpty"), "inert until something is set")
+    }
+
+    /// A reader who wants "these three, but it must have Regression" used to
+    /// have to blend once, discard the answer, and blend again.
+    @Test("Tags can be required before the first blend")
+    func tagsBeforeBlending() throws {
+        let source = try source()
+        #expect(
+            !source.contains("if !model.dna.isEmpty {\n            VStack"),
+            "the tag section must not be gated on a blend having already run"
+        )
+        #expect(source.contains("TagPickerSheet") || source.contains("isPickingTags"))
+    }
+
+    /// A tag picked before the first blend used to vanish the moment a blend
+    /// returned a DNA that did not mention it — while still filtering results.
+    @Test("A picked tag survives a blend that does not mention it")
+    func pickedTagsSurvive() throws {
+        #expect(try source().contains("pickedBeyondDNA"))
+    }
+}

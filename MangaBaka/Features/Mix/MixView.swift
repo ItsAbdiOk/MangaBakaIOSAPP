@@ -7,17 +7,39 @@ import SwiftUI
 /// fill in, so seeds and filters sit above the fold and "Blend" is the only
 /// button that matters.
 struct MixView: View {
-    @State private var model: MixModel
+    // Internal rather than private so the filter strip can reach them. See
+    // MixFilterStrip.swift — the split is the lint's doing, not a widening of
+    // who is meant to touch these.
+    @State var model: MixModel
     @State private var suggestedSeeds: [Series] = []
     @Binding private var path: [Series]
     private let onPickSeed: () -> Void
+    /// The tag catalogue, so tags can be chosen before a blend has ever run.
+    let catalogue: CatalogueService?
+    /// Where a blend's filters are saved. Mix has a filter strip rather than
+    /// the sheet Search uses, so the save control had to come to it — the
+    /// alternative was Search being the only screen that can save a lens, which
+    /// is not what "one control, in the place that owns filters" was supposed
+    /// to mean.
+    let lenses: SearchLensStore?
 
-    private static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
+    @State var isPickingTags = false
+    @State var isNamingLens = false
 
-    init(model: MixModel, path: Binding<[Series]>, onPickSeed: @escaping () -> Void) {
+    static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
+
+    init(
+        model: MixModel,
+        path: Binding<[Series]>,
+        onPickSeed: @escaping () -> Void,
+        catalogue: CatalogueService? = nil,
+        lenses: SearchLensStore? = nil
+    ) {
         _model = State(initialValue: model)
         _path = path
         self.onPickSeed = onPickSeed
+        self.catalogue = catalogue
+        self.lenses = lenses
     }
 
     var body: some View {
@@ -40,6 +62,22 @@ struct MixView: View {
         .background(Palette.ground)
         .task {
             suggestedSeeds = await model.suggestedSeeds()
+        }
+        .sheet(isPresented: $isPickingTags) {
+            if let catalogue {
+                TagPickerSheet(
+                    catalogue: catalogue,
+                    selected: $model.filters.tags,
+                    mode: $model.filters.tagMode
+                )
+            }
+        }
+        .sheet(isPresented: $isNamingLens) {
+            SaveLensSheet(query: model.filters) { name in
+                lenses?.save(name: name, query: model.filters)
+            }
+            .presentationDetents([.height(420)])
+            .presentationCornerRadius(Metrics.radiusSheet)
         }
     }
 
@@ -130,130 +168,6 @@ struct MixView: View {
     }
 
     // MARK: Filters
-
-    private var filterStrip: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            FlowLayout {
-                ForEach(Self.typeOptions, id: \.self) { type in
-                    chip(type.capitalized, isSelected: model.filters.types.contains(type)) {
-                        toggleType(type)
-                    }
-                }
-            }
-            // The same control the search filters use. Mix had its own row of
-            // capsules offering Any/7/8/9 — a different shape and a different
-            // set from the sheet, for the same parameter on the same API.
-            HStack(alignment: .firstTextBaseline) {
-                Eyebrow(text: "Minimum rating")
-                Spacer(minLength: 8)
-                Text(RatingSegments.label(for: model.filters.minimumRating))
-                    .typeChip()
-                    .foregroundStyle(Palette.accent)
-            }
-            .padding(.top, Metrics.gapCovers)
-            RatingSegments(minimum: $model.filters.minimumRating)
-                .padding(.top, 10)
-            tagFilter
-        }
-        .padding(.horizontal, Metrics.gutter)
-    }
-
-    /// Tags to require in the blend, with the mockup's AND/OR mode.
-    ///
-    /// Only offered once a blend has run: before that there is no DNA to pick
-    /// from, and a blank tag field on a screen with no results is a control
-    /// with nothing to control.
-    @ViewBuilder
-    private var tagFilter: some View {
-        if !model.dna.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Eyebrow(text: "Require tags")
-                    Spacer(minLength: 0)
-                    if model.filters.tags.count > 1 {
-                        Button { toggleTagMode() } label: {
-                            Text(model.filters.tagMode == "and" ? "ALL" : "ANY")
-                                .typeTabLabel()
-                                .tracking(0.6)
-                                .foregroundStyle(Palette.textSecondary)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4)
-                                .background(Palette.surfaceChip, in: RoundedRectangle(
-                                    cornerRadius: 7, style: .continuous
-                                ))
-                                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .strokeBorder(Palette.borderPill, lineWidth: 0.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            model.filters.tagMode == "and"
-                                ? "Requiring all tags. Switch to any."
-                                : "Requiring any tag. Switch to all."
-                        )
-                    }
-                }
-
-                // Drawn from the blend's own DNA, so every chip is a tag this
-                // blend actually contains rather than a guess at the taxonomy.
-                FlowLayout {
-                    ForEach(model.dna.strands) { strand in
-                        chip(
-                            strand.name,
-                            isSelected: model.filters.tags.contains(strand.name)
-                        ) {
-                            toggleTag(strand.name)
-                        }
-                    }
-                }
-            }
-            .padding(.top, Metrics.gapCovers)
-        }
-    }
-
-    private func toggleTag(_ name: String) {
-        if let index = model.filters.tags.firstIndex(of: name) {
-            model.filters.tags.remove(at: index)
-        } else {
-            model.filters.tags.append(name)
-        }
-        // Two or more tags need a rule for combining them; one does not.
-        if model.filters.tags.count > 1, model.filters.tagMode == nil {
-            model.filters.tagMode = "and"
-        }
-        Task { await model.run() }
-    }
-
-    private func toggleTagMode() {
-        model.filters.tagMode = model.filters.tagMode == "and" ? "or" : "and"
-        Task { await model.run() }
-    }
-
-    private func toggleType(_ type: String) {
-        if let index = model.filters.types.firstIndex(of: type) {
-            model.filters.types.remove(at: index)
-        } else {
-            model.filters.types.append(type)
-        }
-    }
-
-    private func chip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .typeChip()
-                .foregroundStyle(isSelected ? Palette.onAccent : Palette.textSecondary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 9)
-                .frame(height: Metrics.headerPill)
-                .background(
-                    isSelected ? Palette.accent : Palette.surfaceChip,
-                    in: Capsule()
-                )
-                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: isSelected ? 0 : 0.5))
-        }
-    }
-
-    // MARK: Blend
 
     private var blendButton: some View {
         Button {
