@@ -69,6 +69,22 @@ struct ReadingInsightsTests {
         #expect(rows.isEmpty)
     }
 
+    @Test("A series you never opened is not something you fell behind on")
+    func waitingRequiresAStart() {
+        // The section's own subtitle says "chapters published since you
+        // stopped". You cannot have stopped something you never started. On
+        // the device this made the list a ranking of the longest series in the
+        // library: "The Devil Butler, ch 0 of 889, 889 behind".
+        let rows = ReadingInsights.waiting(in: [
+            entry(1, .reading, read: 0, total: 889),
+            entry(2, .reading, read: nil, total: 232),
+            entry(3, .paused, read: 4, total: 240)
+        ])
+
+        #expect(rows.map(\.entry.seriesId) == [3])
+        #expect(rows.first?.waiting == 236)
+    }
+
     @Test("A series with no chapter count is not guessed about")
     func waitingNeedsATotal() {
         #expect(ReadingInsights.waiting(in: [entry(1, .reading, read: 10, total: nil)]).isEmpty)

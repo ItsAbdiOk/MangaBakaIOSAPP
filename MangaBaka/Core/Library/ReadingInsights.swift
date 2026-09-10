@@ -38,7 +38,11 @@ enum ReadingInsights {
             .filter { $0.state == .reading || $0.state == .rereading || $0.state == .paused }
             .compactMap { entry -> Behind? in
                 guard let total = entry.series?.totalChapters, total > 0 else { return nil }
-                let read = entry.progressChapter ?? 0
+                // You cannot have stopped something you never started. Without
+                // this the list ranks the longest series in the library rather
+                // than the ones the reader drifted away from: on a real 939
+                // series library, five of the eight top rows read "ch 0".
+                guard let read = entry.progressChapter, read > 0 else { return nil }
                 let waiting = Int(total - read)
                 guard waiting >= minimum else { return nil }
                 return Behind(entry: entry, waiting: waiting)
