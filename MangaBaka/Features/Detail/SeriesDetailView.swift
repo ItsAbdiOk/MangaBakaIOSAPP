@@ -21,6 +21,8 @@ struct SeriesDetailView: View {
     @State private var similar: [Series] = []
     @State private var alsoLike: [Series] = []
     @State private var extras = SeriesExtras()
+    @State private var covers: [SeriesImage] = []
+    @State private var openCoversAt: GalleryStart?
     @State private var favouredTags: Set<String> = []
     @State private var cast: [SeriesCharacter] = []
     @State private var isCastLoading = false
@@ -41,7 +43,10 @@ struct SeriesDetailView: View {
                     series: series,
                     schedule: cadence,
                     isScheduleLoading: isCadenceLoading,
-                    onOpenSchedule: onOpenSchedule
+                    onOpenSchedule: onOpenSchedule,
+                    otherCovers: otherCovers,
+                    preferredCover: frontCover,
+                    onOpenCovers: { openCoversAt = GalleryStart(value: $0) }
                 )
                 .padding(.top, 4)
                 actions
@@ -54,9 +59,13 @@ struct SeriesDetailView: View {
                     onOpenTag?(tag)
                 }
                 DetailCredits(series: series)
-                relatedRow
-                onwardRow("Similar", similar)
-                onwardRow("Readers also like", alsoLike)
+                DetailOnwardRows(
+                    relationships: extras.relationships,
+                    similar: similar,
+                    alsoLike: alsoLike,
+                    isLoading: isLoading,
+                    path: $path
+                )
                 TrackerScores(series: series)
                 readElsewhere
                 newsSection
@@ -72,6 +81,14 @@ struct SeriesDetailView: View {
         }
         .navigationTitle(series.displayTitle ?? "Series")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(item: $openCoversAt) { start in
+            CoverGallery(
+                series: series,
+                frontCover: frontCover ?? series.cover,
+                images: otherCovers,
+                startAt: start.value
+            )
+        }
         .task(id: series.id) { await load() }
     }
 
@@ -133,45 +150,6 @@ struct SeriesDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func onwardRow(_ title: String, _ items: [Series]) -> some View {
-        if isLoading || !items.isEmpty {
-            VStack(alignment: .leading, spacing: 11) {
-                Text(title)
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-
-                if items.isEmpty {
-                    HStack(spacing: Metrics.gapCovers) {
-                        ForEach(0..<3, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous)
-                                .fill(Palette.imagePlaceholder)
-                                .frame(
-                                    width: Metrics.coverDetailRowWidth,
-                                    height: Metrics.coverDetailRowWidth / Metrics.coverAspect
-                                )
-                        }
-                    }
-                    .padding(.horizontal, Metrics.gutter)
-                } else {
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                            ForEach(items) { item in
-                                Button { path.append(item) } label: {
-                                    CoverCard(series: item, width: Metrics.coverDetailRowWidth)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, Metrics.gutter)
-                    }
-                    .scrollIndicators(.hidden)
-                }
-            }
-        }
-    }
-
     /// A licence obligation, not a nicety: CC BY-NC-SA requires attribution to
     /// MangaBaka and to the upstream sources the data came from.
     private var provenance: some View {
@@ -185,37 +163,6 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Sections
-
-    /// Sequels, prequels, spin-offs and source novels. The strongest onward
-    /// path there is, because it is an explicit link rather than a guess.
-    @ViewBuilder
-    private var relatedRow: some View {
-        if !extras.relationships.isEmpty {
-            VStack(alignment: .leading, spacing: 11) {
-                Text("Related")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(extras.relationships) { relation in
-                            Button { path.append(relation.series) } label: {
-                                CoverCard(
-                                    series: relation.series,
-                                    width: Metrics.coverDetailRowWidth,
-                                    meta: relation.label
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, Metrics.gutter)
-                }
-                .scrollIndicators(.hidden)
-            }
-        }
-    }
 
     @ViewBuilder
     private var readElsewhere: some View {
@@ -249,14 +196,34 @@ struct SeriesDetailView: View {
             ?? AttributedString(cleaned)
     }
 
+    /// The cover to lead with, and the rest behind it.
+    ///
+    /// An English edition where the series has one — MangaBaka's own pick for a
+    /// Korean manhwa is usually the Korean volume one, which is handsome and
+    /// unreadable to most people looking at this app.
+    private var preferred: SeriesImage? {
+        covers.preferredCover(nativeLanguage: series.nativeLanguage)
+    }
+
+    private var frontCover: Cover? { preferred?.image }
+
+    /// Everything except whichever cover is already on the front, so the fan
+    /// never shows the same image twice.
+    private var otherCovers: [SeriesImage] {
+        guard let preferred else { return covers }
+        return covers.filter { $0.id != preferred.id }
+    }
+
     private func load() async {
         isLoading = true
         async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
         async let extrasResult = repository.extras(for: series.id)
+        async let imagesResult = repository.images(for: series.id)
         similar = await similarResult.series
         alsoLike = await alsoResult.series
         extras = await extrasResult
+        covers = await imagesResult
         isLoading = false
         async let cast: Void = loadCast()
         async let cadence: Void = loadCadence()

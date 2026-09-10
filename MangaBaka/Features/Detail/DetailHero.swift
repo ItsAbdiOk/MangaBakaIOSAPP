@@ -14,6 +14,11 @@ struct DetailHero: View {
     /// Whether MangaUpdates is still being asked.
     let isScheduleLoading: Bool
     let onOpenSchedule: (() -> Void)?
+    /// The series' other covers, for the fan and the gallery.
+    var otherCovers: [SeriesImage] = []
+    /// Overrides the series' own cover — an English edition where one exists.
+    var preferredCover: Cover?
+    var onOpenCovers: ((Int) -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var didCopy = false
@@ -40,12 +45,13 @@ struct DetailHero: View {
     }
 
     private var cover: some View {
-        CoverImage(
-            cover: series.cover,
+        CoverStack(
+            series: series,
+            frontCover: preferredCover ?? series.cover,
+            extraCovers: otherCovers,
             width: Metrics.coverDetailHeroWidth,
-            radius: 14
+            onOpen: { onOpenCovers?($0) }
         )
-        .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
     }
 
     private var wide: some View {

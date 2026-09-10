@@ -162,6 +162,15 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         source?["manga_updates"]?.id
     }
 
+    /// The language the series was originally published in, if its titles say.
+    ///
+    /// Taken from the title marked "native" rather than from a field, because
+    /// there is no field: MangaBaka records the language per title, and the
+    /// native one is the only reliable statement about the work's own language.
+    var nativeLanguage: String? {
+        titles?.first { $0.traits.contains("native") }?.language
+    }
+
     /// Whether this series answers to a name the reader typed.
     ///
     /// Every title the series carries, not just the displayed one. A library

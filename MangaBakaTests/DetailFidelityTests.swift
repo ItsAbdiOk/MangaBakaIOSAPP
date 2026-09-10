@@ -127,8 +127,7 @@ struct DetailOrderTests {
             "DetailSynopsis(",
             "DetailTags(",
             "DetailCredits(",
-            "relatedRow",
-            "onwardRow(\"Similar\"",
+            "DetailOnwardRows(",
             "TrackerScores(",
             "readElsewhere",
             "provenance"

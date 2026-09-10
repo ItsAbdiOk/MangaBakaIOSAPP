@@ -90,6 +90,7 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
     ) async -> MixResult { .empty }
 
     func extras(for seriesId: Int) async -> SeriesExtras { SeriesExtras() }
+    func images(for seriesId: Int) async -> [SeriesImage] { [] }
 
     func updateContentRatings(_ ratings: [String]) async {}
 

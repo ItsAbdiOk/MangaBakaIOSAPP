@@ -44,6 +44,9 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// together so one slow endpoint does not stagger the screen into place.
     func extras(for seriesId: Int) async -> SeriesExtras
 
+    /// Every cover the series has, filtered to what the reader has allowed.
+    func images(for seriesId: Int) async -> [SeriesImage]
+
     /// Replaces the content filter and discards every cached feed.
     ///
     /// The discard is the point: a cached feed was fetched under the previous
@@ -86,62 +89,6 @@ struct SeriesExtras: Sendable, Equatable {
     /// feed's own copy shows neither.
     var tags: [String] = []
     var year: Int?
-}
-
-/// A search or filter request. Only non-nil fields are sent, so an untouched
-/// filter never narrows the results by accident.
-struct SearchQuery: Sendable, Equatable, Codable {
-    var text: String?
-    /// manga, novel, manhwa, manhua, oel, other
-    var types: [String] = []
-    /// releasing, completed, hiatus, cancelled, upcoming, unknown
-    var statuses: [String] = []
-    /// One of the API's 20 sort orders.
-    var sort: String?
-    /// Tag names to require. The API takes repeated `tag` keys plus a
-    /// `tag_mode` saying whether they are ANDed or ORed.
-    var tags: [String] = []
-    /// "and" or "or". Only sent when there is more than one tag to combine.
-    var tagMode: String?
-    /// 0-100 as the API expresses it.
-    var minimumRating: Int?
-    var limit = 30
-    /// 1-based, as the API counts. `/v2/series/search` accepts up to page 100.
-    var page = 1
-
-    /// Whether this query would narrow anything at all.
-    ///
-    /// `sort` counts. It used to be excluded, which is what made "Surprise me"
-    /// do nothing: it sets `sort = "random"` and nothing else, so the query
-    /// still read as empty, `search()` returned before making a request, and
-    /// the view kept rendering its idle state. A sort-only query is a real
-    /// query — random and trending are both browsing, not filtering.
-    var isEmpty: Bool {
-        (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-            && types.isEmpty && statuses.isEmpty && minimumRating == nil
-            && sort == nil && tags.isEmpty
-    }
-
-    /// Repeated keys where the API wants them; a comma-joined list is rejected
-    /// with HTTP 400 for these parameters.
-    var queryItems: [URLQueryItem] {
-        var items = [URLQueryItem(name: "limit", value: String(limit))]
-        if page > 1 { items.append(URLQueryItem(name: "page", value: String(page))) }
-        if let text, !text.trimmingCharacters(in: .whitespaces).isEmpty {
-            items.append(URLQueryItem(name: "q", value: text))
-        }
-        for type in types { items.append(URLQueryItem(name: "type", value: type)) }
-        for status in statuses { items.append(URLQueryItem(name: "status", value: status)) }
-        for tag in tags { items.append(URLQueryItem(name: "tag", value: tag)) }
-        if tags.count > 1, let tagMode {
-            items.append(URLQueryItem(name: "tag_mode", value: tagMode))
-        }
-        if let sort { items.append(URLQueryItem(name: "sort_by", value: sort)) }
-        if let minimumRating {
-            items.append(URLQueryItem(name: "rating_lower", value: String(minimumRating)))
-        }
-        return items
-    }
 }
 
 /// The API's sort keys, and what to call them in front of a reader.
@@ -543,6 +490,18 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             try db.execute(sql: "DELETE FROM feedEntry")
             try db.execute(sql: "DELETE FROM feedMetadata")
         }
+    }
+
+    /// Volume covers and alternate editions.
+    ///
+    /// Filtered by the reader's content ratings like everything else. The
+    /// rating is per image, not per series: a series rated safe can carry a
+    /// suggestive alternate cover, and the filter failing on exactly the thing
+    /// it exists to hide is a bug this app has already shipped once, on
+    /// personalised recommendations.
+    func images(for seriesId: Int) async -> [SeriesImage] {
+        let all: [SeriesImage]? = try? await client.get("/v1/series/\(seriesId)/images")
+        return (all ?? []).presentable(allowedRatings: contentRatings)
     }
 
     func extras(for seriesId: Int) async -> SeriesExtras {
