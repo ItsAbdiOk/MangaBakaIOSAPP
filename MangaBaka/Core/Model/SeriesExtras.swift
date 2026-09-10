@@ -1,7 +1,11 @@
 import Foundation
 
+// Codable rather than Decodable, so a series page's extras can be cached whole.
+// Eight requests a visit is worth writing to disk; the encode side is only ever
+// used by that cache.
+
 /// Somewhere the series can actually be read.
-struct SeriesLink: Decodable, Identifiable, Equatable, Sendable {
+struct SeriesLink: Codable, Identifiable, Equatable, Sendable {
     let id: String
     /// The raw URL as the API gave it. Prefer `safeURL` for anything that
     /// actually opens.
@@ -39,7 +43,7 @@ enum SafeLink {
 }
 
 /// A news item mentioning the series.
-struct NewsItem: Decodable, Identifiable, Equatable, Sendable {
+struct NewsItem: Codable, Identifiable, Equatable, Sendable {
     let id: Int
     let title: String
     /// Raw as received; use `safeURL` to open it.
@@ -57,7 +61,7 @@ struct NewsItem: Decodable, Identifiable, Equatable, Sendable {
 
 /// A formal relationship to another series: a sequel, a spin-off, the novel a
 /// manhwa was adapted from.
-struct SeriesRelationship: Decodable, Identifiable, Equatable, Sendable {
+struct SeriesRelationship: Codable, Identifiable, Equatable, Sendable {
     let id: String
     /// "source", "sequel", "prequel", "spin_off", and similar.
     let relationType: String?

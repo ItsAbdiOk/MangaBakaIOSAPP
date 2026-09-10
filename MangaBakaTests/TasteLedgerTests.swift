@@ -152,3 +152,77 @@ struct TasteLedgerTests {
         )
     }
 }
+
+/// Counting a series the app met somewhere other than the library payload.
+///
+/// The library's own entries may carry no tags — its embedded series arrives
+/// under a capitalised `Series` key and has never been checked against a live
+/// authenticated response, because the only token here is rejected. Every other
+/// payload in the app does carry them, so this is the path that cannot silently
+/// produce nothing.
+@Suite("Taste from series the app opens")
+struct TasteFromSeriesTests {
+    private func tag(_ id: Int, _ name: String) -> SeriesTag {
+        SeriesTag(
+            id: id, name: name, namePath: nil, isGenre: false, isSpoiler: false,
+            isExplicit: false, impliedByTagIds: nil, contentRating: nil,
+            weight: "core", seriesCount: nil
+        )
+    }
+
+    @Test("Opening a series you are reading counts its tags")
+    func countsAnOpenedSeries() async throws {
+        let ledger = TasteLedger(database: try AppDatabase.inMemory(), clock: TestClock())
+        let tags = [tag(1, "Murim"), tag(2, "Male Protagonist")]
+
+        try await ledger.absorb(SeriesFactory.make(id: 10, tagsV2: tags), as: .reading)
+        try await ledger.absorb(SeriesFactory.make(id: 11, tagsV2: tags), as: .completed)
+
+        let names = try await ledger.favoured().map(\.name)
+        #expect(names.contains("Murim"))
+        #expect(names.contains("Male Protagonist"))
+        #expect(try await ledger.knownTags() == 2)
+    }
+
+    @Test("A series with no tags is not counted as a source")
+    func skipsUntaggedSeries() async throws {
+        // Otherwise it is recorded as counted, and the next payload that DOES
+        // carry its tags is skipped as already done.
+        let ledger = TasteLedger(database: try AppDatabase.inMemory(), clock: TestClock())
+        try await ledger.absorb(SeriesFactory.make(id: 10), as: .reading)
+
+        #expect(try await ledger.countedSeries() == 0)
+        #expect(try await ledger.knownTags() == 0)
+    }
+
+    @Test("The same series counted twice does not count twice")
+    func idempotentPerState() async throws {
+        let ledger = TasteLedger(database: try AppDatabase.inMemory(), clock: TestClock())
+        let tags = [tag(1, "Murim"), tag(2, "Regression")]
+        let series = SeriesFactory.make(id: 10, tagsV2: tags)
+        // A second series, because a tag on one is a coincidence and `favoured`
+        // deliberately will not report it.
+        try await ledger.absorb(SeriesFactory.make(id: 11, tagsV2: tags), as: .reading)
+
+        try await ledger.absorb(series, as: .reading)
+        let once = try #require(try await ledger.favoured(limit: 30).first { $0.name == "Murim" })
+        try await ledger.absorb(series, as: .reading)
+        let twice = try #require(try await ledger.favoured(limit: 30).first { $0.name == "Murim" })
+
+        #expect(once.score == twice.score)
+        #expect(once.seriesCount == twice.seriesCount)
+    }
+
+    @Test("Counted series and known tags are both reported")
+    func diagnosticsTellTheTruth() async throws {
+        // Series counted with zero tags known is the signature of a payload
+        // that carries no tags, and it is invisible without both numbers.
+        let ledger = TasteLedger(database: try AppDatabase.inMemory(), clock: TestClock())
+        try await ledger.absorb(
+            SeriesFactory.make(id: 10, tagsV2: [tag(1, "Murim")]), as: .reading
+        )
+
+        #expect(try await ledger.countedSeries() == 1)
+        #expect(try await ledger.knownTags() == 1)
+    }
+}

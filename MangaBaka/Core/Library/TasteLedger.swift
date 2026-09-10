@@ -126,6 +126,42 @@ actor TasteLedger {
         try database.writer.read { db in try TasteSource.fetchCount(db) }
     }
 
+    /// How many distinct tags are known, whatever their score.
+    ///
+    /// Reported in Settings beside the counted series, because the two
+    /// together diagnose the one failure this feature can have quietly: series
+    /// counted but no tags known means the library's own payload carries no
+    /// tags, and nothing on screen would otherwise say so.
+    func knownTags() throws -> Int {
+        try database.writer.read { db in try TagAffinity.fetchCount(db) }
+    }
+
+    /// Counts one series the app has met somewhere else — a feed, a search, a
+    /// series page — at the weight of whatever the reader did with it.
+    ///
+    /// **The library's own payload may not carry tags.** Its embedded series
+    /// arrives under a capitalised `Series` key and has never been checked for
+    /// `tags_v2` against a live authenticated response, because the only token
+    /// available here is rejected. Every other payload in the app definitely
+    /// does carry them — verified on `/v1/series/search` and `/v1/series/{id}`
+    /// — so this is the path that cannot silently produce nothing.
+    func absorb(_ series: Series, as state: LibraryEntry.State) throws {
+        let tags = series.richTags
+        guard !tags.isEmpty else { return }
+        try database.writer.write { db in
+            let previous = try TasteSource.fetchOne(db, key: series.id)
+            if previous?.state == state.rawValue { return }
+            if let previous, let old = LibraryEntry.State(rawValue: previous.state) {
+                try Self.apply(tags, multiplier: -Self.weight(old), to: db)
+            }
+            try Self.apply(tags, multiplier: Self.weight(state), to: db)
+            try TasteSource(
+                seriesId: series.id, countedAt: clock.now, state: state.rawValue
+            ).save(db)
+            try Self.prune(db)
+        }
+    }
+
     /// Forgets everything learned. Paired with clearing the library or signing
     /// out: a taste profile built from someone else's library would be worse
     /// than none.

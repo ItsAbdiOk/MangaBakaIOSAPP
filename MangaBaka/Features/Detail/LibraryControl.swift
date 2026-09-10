@@ -171,6 +171,16 @@ struct LibraryControl: View {
         .disabled(model.isWorking)
     }
 
+    /// "CH 69" — where one tap takes you.
+    ///
+    /// The number rather than the word, because "next chapter" on a control
+    /// this size wraps, and the number is the part that makes the button
+    /// unambiguous.
+    private func nextChapter(_ entry: LibraryEntry) -> String {
+        let current = Int(entry.progressChapter ?? 0)
+        return "CH \(current + 1)"
+    }
+
     private func saved(_ entry: LibraryEntry) -> some View {
         HStack(spacing: Metrics.gapChips) {
             Button { isEditing = true } label: {
@@ -203,14 +213,24 @@ struct LibraryControl: View {
 
             if entry.state.tracksProgress {
                 Button { Task { await model.advanceChapter() } } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
-                        .frame(width: Metrics.ctaPrimary, height: Metrics.ctaPrimary)
-                        .foregroundStyle(Palette.onAccent)
-                        .background(
-                            Palette.accent,
-                            in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
-                        )
+                    // Labelled, not a bare plus. Abdi read it as "add to
+                    // library" on a series that says "Paused · ch 68" right
+                    // beside it — which is fair: it was the loudest control on
+                    // the row and the only one that did not say what it did.
+                    // It says the chapter it will take you to.
+                    VStack(spacing: -1) {
+                        Text("+1")
+                            .font(.system(size: 15, weight: .bold))
+                        Text(nextChapter(entry))
+                            .font(.system(size: 9, weight: .semibold))
+                            .opacity(0.75)
+                    }
+                    .frame(width: Metrics.ctaPrimary, height: Metrics.ctaPrimary)
+                    .foregroundStyle(Palette.onAccent)
+                    .background(
+                        Palette.accent,
+                        in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                    )
                 }
                 .buttonStyle(.plain)
                 .disabled(model.isWorking)

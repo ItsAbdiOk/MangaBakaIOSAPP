@@ -66,6 +66,15 @@ struct TasteSource: Codable, FetchableRecord, PersistableRecord, Sendable {
     var state: String
 }
 
+/// Everything hanging off a series page, cached whole.
+struct CachedDetail: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "seriesDetail"
+
+    var seriesId: Int
+    var payload: Data
+    var cachedAt: Date
+}
+
 /// When a feed was last fetched.
 struct FeedMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "feedMetadata"

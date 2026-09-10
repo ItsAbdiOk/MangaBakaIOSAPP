@@ -9,6 +9,11 @@ import SwiftUI
 /// It is also the only place the API's actual speed is visible. Every previous
 /// answer to "is the API fast?" in this project was about response shapes.
 struct DataUseSection: View {
+    /// Optional so previews and tests can render without one.
+    var taste: TasteProfile?
+
+    @State private var countedSeries = 0
+    @State private var knownTags = 0
     @State private var total = 0
     @State private var requests = 0
     @State private var images = 0
@@ -23,6 +28,16 @@ struct DataUseSection: View {
                         Text(format(total))
                             .typeRowTitle()
                             .foregroundStyle(Palette.accent)
+                    }
+                    SettingsDivider()
+                    // Both numbers, because together they diagnose the one way
+                    // this feature fails quietly: series counted but no tags
+                    // known means the payload those series arrived in carried
+                    // none, and nothing else on screen would say so.
+                    SettingsRow(title: "Taste profile", caption: tasteCaption) {
+                        Text("\(knownTags)")
+                            .typeRowTitle()
+                            .foregroundStyle(knownTags > 0 ? Palette.accent : Palette.textTertiary)
                     }
                 }
 
@@ -60,6 +75,15 @@ struct DataUseSection: View {
         """
     }
 
+    private var tasteCaption: String {
+        guard countedSeries > 0 else {
+            return "Nothing counted yet. Open a series you have read."
+        }
+        return knownTags > 0
+            ? "\(countedSeries) series counted · \(knownTags) tags known"
+            : "\(countedSeries) series counted, but none of them carried tags"
+    }
+
     private var breakdown: String {
         guard requests > 0 else { return "Nothing fetched yet" }
         // Images are named separately because they are almost all of it, and
@@ -94,6 +118,11 @@ struct DataUseSection: View {
     }
 
     private func refresh() async {
+        if let taste {
+            let counts = await taste.diagnostics()
+            countedSeries = counts.series
+            knownTags = counts.tags
+        }
         total = await NetworkLedger.shared.totalBytes
         requests = await NetworkLedger.shared.totalRequests
         images = await NetworkLedger.shared.imageBytes

@@ -13,6 +13,33 @@ import GRDB
 extension SeriesRepository {
     // MARK: - Cache
 
+    /// How long a series page's extras stay good.
+    ///
+    /// Longer than a reading session, shorter than anything on the page
+    /// meaningfully changes. The most volatile thing in there is the news row,
+    /// which is a sidebar rather than the point of the screen.
+    private static let detailFreshness: TimeInterval = 6 * 60 * 60
+
+    func readDetailCache(_ seriesId: Int) throws -> SeriesExtras? {
+        try database.writer.read { db in
+            guard let row = try CachedDetail.fetchOne(db, key: seriesId) else { return nil }
+            let age = clock.now.timeIntervalSince(row.cachedAt)
+            // A negative age means the device clock moved backwards; treat that
+            // as stale rather than trusting it.
+            guard age >= 0, age < Self.detailFreshness else { return nil }
+            return try? JSONDecoder().decode(SeriesExtras.self, from: row.payload)
+        }
+    }
+
+    func writeDetailCache(_ extras: SeriesExtras, for seriesId: Int) throws {
+        let payload = try JSONEncoder().encode(extras)
+        try database.writer.write { db in
+            try CachedDetail(
+                seriesId: seriesId, payload: payload, cachedAt: clock.now
+            ).save(db)
+        }
+    }
+
     func readCache(_ feed: FeedKind, requireFresh: Bool) throws -> [Series] {
         try readCacheWithDate(feed, requireFresh: requireFresh).series
     }

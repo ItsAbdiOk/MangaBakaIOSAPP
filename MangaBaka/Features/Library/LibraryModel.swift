@@ -193,12 +193,38 @@ final class LibraryModel {
         // One walk per session, shared with the taste ledger and the release
         // reminders. Measured on a real account: 939 entries is 24.7 MB, and
         // three separate walks was 74 MB to draw one screen.
+        //
+        // Drawn page by page as it arrives. Thirteen requests at ~270ms each is
+        // three and a half seconds of blank screen if you wait for all of them,
+        // and the first hundred entries land in the first one.
+        await snapshot.observePages { @Sendable [weak self] partial in
+            guard !partial.isEmpty else { return }
+            Task { @MainActor in self?.apply(partial, isComplete: false) }
+        }
         let result = await snapshot.load()
-        entries = result.entries
-        isComplete = result.isComplete
+        apply(result.entries, isComplete: result.isComplete)
         failure = result.failure
-        hasAccount = !result.entries.isEmpty || !result.isComplete
-        shelves = Self.shelves(from: result.entries)
+    }
+
+    /// Shows what has arrived so far.
+    ///
+    /// `isComplete` stays false until the last page lands, so the screen keeps
+    /// saying the counts are a floor rather than a total — a partial library
+    /// presented as the whole one is how "Add to library" got offered for
+    /// something already in it.
+    private func apply(_ rows: [LibraryEntry], isComplete complete: Bool) {
+        // Never guarded on rows being empty. A walk that failed on page one has
+        // no rows and is emphatically not complete, and returning early here
+        // left `isComplete` at its optimistic default — which is the exact bug
+        // this whole partial-data idea exists to prevent. The page observer
+        // skips empty emissions instead.
+        entries = rows
+        isComplete = complete
+        hasAccount = !rows.isEmpty || !complete
+        shelves = Self.shelves(from: rows)
+        // The first page is enough to draw the screen; the spinner should stop
+        // there rather than at the thirteenth.
+        isLoading = false
     }
 
     /// Shelves narrowed by the search box, empty ones dropped.

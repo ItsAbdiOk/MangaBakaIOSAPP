@@ -165,6 +165,23 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// The rich tags, or none. See `tagsV2`.
     var richTags: [SeriesTag] { tagsV2 ?? [] }
 
+    /// The same series carrying tags it did not arrive with.
+    ///
+    /// A feed's copy of a series has no `tags_v2` — v2 omits them entirely —
+    /// and the series page fetches them separately. This puts the two back
+    /// together so the taste profile can count what the reader is actually
+    /// looking at.
+    func withTags(_ tags: [SeriesTag]) -> Series {
+        Series(
+            id: id, state: state, mergedWith: mergedWith, titles: titles,
+            cover: cover, description: description, authors: authors, artists: artists,
+            status: status, rating: rating, type: type, contentRating: contentRating,
+            totalChapters: totalChapters, finalVolume: finalVolume,
+            publishers: publishers, anime: anime, source: source, year: year,
+            ratingCount: ratingCount, tags: self.tags, tagsV2: tags
+        )
+    }
+
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.
     var displayTitle: String? {

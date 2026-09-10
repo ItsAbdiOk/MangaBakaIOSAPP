@@ -13,14 +13,14 @@ import Foundation
 /// What the data actually answers is a better question anyway, and one nothing
 /// else in the app answers: *can I buy this in my language, and how far along
 /// is it?*
-struct SeriesEdition: Decodable, Identifiable, Sendable, Equatable {
-    struct Language: Decodable, Sendable, Equatable {
+struct SeriesEdition: Codable, Identifiable, Sendable, Equatable {
+    struct Language: Codable, Sendable, Equatable {
         let iso: String?
         /// "English (English)" — the API's own doubled form.
         let language: String?
     }
 
-    struct Publisher: Decodable, Sendable, Equatable {
+    struct Publisher: Codable, Sendable, Equatable {
         let id: Int?
         let name: String?
         /// "imprint", "publisher".

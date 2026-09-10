@@ -165,6 +165,21 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v6_seriesDetail") { db in
+            // A series page costs eight requests and cached none of them, so
+            // opening the same series twice cost sixteen. Measured: about
+            // 300 KB a visit.
+            //
+            // Its own table rather than a column on `series`, because that row
+            // is a feed's copy of a series and this is everything hanging off
+            // it — and the two go stale on different clocks.
+            try db.create(table: "seriesDetail") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("payload", .blob).notNull()
+                table.column("cachedAt", .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 }

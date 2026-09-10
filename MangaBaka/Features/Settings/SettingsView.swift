@@ -15,6 +15,7 @@ struct SettingsView: View {
     let reminders: ReleaseReminders
     let onRemindersChanged: () async -> Void
     let history: HistoryStore
+    let taste: TasteProfile
 
     @State private var entry = ""
     @State private var status: TokenStatus = .idle
@@ -34,7 +35,7 @@ struct SettingsView: View {
                 BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)
                 RemindersSection(reminders: reminders, onChange: onRemindersChanged)
                 HistorySection(history: history)
-                DataUseSection()
+                DataUseSection(taste: taste)
                 AttributionSection()
             }
             .padding(.horizontal, Metrics.gutter)

@@ -108,6 +108,30 @@ actor TasteProfile {
         return local.union(genres)
     }
 
+    /// Counts a series the app has just decoded in full, if the reader has it.
+    ///
+    /// The library's own payload may carry no tags — see `TasteLedger.absorb`.
+    /// This is the path that definitely works: every series page and every feed
+    /// row carries `tags_v2`, so the profile fills in as the reader moves
+    /// around rather than depending on one endpoint's shape.
+    func note(_ series: Series) async {
+        guard let ledger, let snapshot, !series.richTags.isEmpty else { return }
+        let entries = await snapshot.all()
+        guard let entry = entries.first(where: { $0.seriesId == series.id }) else { return }
+        try? await ledger.absorb(series, as: entry.state)
+        // The cached answer was computed before this series was counted.
+        cachedIDs = nil
+    }
+
+    /// What the ledger actually knows, for a screen that has to say so.
+    func diagnostics() async -> (series: Int, tags: Int) {
+        guard let ledger else { return (0, 0) }
+        return (
+            (try? await ledger.countedSeries()) ?? 0,
+            (try? await ledger.knownTags()) ?? 0
+        )
+    }
+
     /// Forgets the profile, so a change to the library is reflected.
     func invalidate() {
         cached = nil

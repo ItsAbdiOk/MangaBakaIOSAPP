@@ -79,7 +79,7 @@ protocol SeriesRepositoryProtocol: Sendable {
 /// The onward paths from a series. Every field is independently optional: a
 /// series with no news is ordinary, and one failing endpoint must not empty
 /// the rest of the screen.
-struct SeriesExtras: Sendable, Equatable {
+struct SeriesExtras: Sendable, Equatable, Codable {
     var links: [SeriesLink] = []
     var news: [NewsItem] = []
     var relationships: [SeriesRelationship] = []
@@ -312,6 +312,13 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     private var libraryExclusionUserID: String?
     /// Tags the reader never wants to see, sent as `blocked_tag`.
     var blockedTags: [Int] = []
+
+    /// Volume covers, per series, for as long as the app is running.
+    ///
+    /// In memory rather than on disk: these are only wanted while a series page
+    /// or its gallery is open, and the case worth covering is going back and
+    /// forward between them — which used to refetch 58 KB every time.
+    private var cachedImages: [Int: [SeriesImage]] = [:]
 
     init(
         client: APIClient,
@@ -587,11 +594,38 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// it exists to hide is a bug this app has already shipped once, on
     /// personalised recommendations.
     func images(for seriesId: Int) async -> [SeriesImage] {
+        if let cached = cachedImages[seriesId] { return cached }
         let all: [SeriesImage]? = try? await client.get("/v1/series/\(seriesId)/images")
-        return (all ?? []).presentable(allowedRatings: contentRatings)
+        // Nothing back is not cached: a failed fetch and a series with one
+        // cover look identical from here, and remembering the first would hide
+        // the gallery for the rest of the session.
+        guard let all, !all.isEmpty else { return [] }
+        let presentable = all.presentable(allowedRatings: contentRatings)
+        cachedImages[seriesId] = presentable
+        return presentable
     }
 
+    /// Everything hanging off a series page.
+    ///
+    /// **Cached, because it is eight requests.** Links, news, relationships,
+    /// the v1 payload, editions, images, similar and readers-also-like — about
+    /// 300 KB a visit, and none of it was kept, so going back and opening the
+    /// same series again paid the whole cost twice.
+    ///
+    /// Six hours, which is longer than a reading session and shorter than
+    /// anything on a series page meaningfully changes. News is the most
+    /// volatile thing here and it is a sidebar, not the point of the screen.
     func extras(for seriesId: Int) async -> SeriesExtras {
+        if let cached = try? readDetailCache(seriesId) { return cached }
+        let fresh = await fetchExtras(for: seriesId)
+        // Not cached when it came back empty: that is a failed fetch wearing
+        // the same clothes as a series with nothing to show, and caching it
+        // would make a dropped connection stick for six hours.
+        if fresh != SeriesExtras() { try? writeDetailCache(fresh, for: seriesId) }
+        return fresh
+    }
+
+    private func fetchExtras(for seriesId: Int) async -> SeriesExtras {
         // Concurrent rather than sequential: three independent reads, and the
         // detail screen should not wait for them in series.
         async let links: [SeriesLink]? = try? client.get("/v1/series/\(seriesId)/links")

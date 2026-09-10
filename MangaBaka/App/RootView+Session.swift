@@ -63,7 +63,8 @@ extension RootView {
                                     focusAccount: wantsAccountFocus,
                                     reminders: reminders,
                                     onRemindersChanged: { await refreshReminders() },
-                                    history: history
+                                    history: history,
+                                taste: taste
                                 )
                             }
                     }

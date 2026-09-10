@@ -278,6 +278,12 @@ struct SeriesDetailView: View {
         // Matched by id, never by name. The taste endpoint and the tag list are
         // different endpoints with different spellings, and matching strings
         // found exactly one tag in a series carrying 146.
+        // Count this series into the taste profile before asking what the
+        // profile says, so opening a series you have read makes its tags yours
+        // immediately rather than on the next launch.
+        if !extras.richTags.isEmpty {
+            await taste?.note(series.withTags(extras.richTags))
+        }
         favouredTagIDs = await taste?.favouredTagIDs() ?? []
     }
 
