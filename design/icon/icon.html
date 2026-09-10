@@ -1,0 +1,148 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; }
+  body { width: 1024px; height: 1024px; overflow: hidden; background: #fff; }
+
+  /* Three variants from one drawing, because iOS 26 asks for three and hand-
+     maintaining three files guarantees they drift.
+
+     Dark keeps the glass and swaps the ground: a white tile on a dark home
+     screen is a torch. Tinted is drawn in luminance only — the system supplies
+     the colour, so anything that depends on hue to be legible disappears
+     there. The three cards differ in VALUE, not just in hue, which is what
+     makes the fan survive that. */
+  body.dark  { background: #0d0d10; }
+  body.tinted { background: #000; }
+</style>
+<script>
+  // The hash, not a query string: Chrome's headless renderer does not reliably
+  // expose location.search for a file:// URL, and all three variants came out
+  // byte-identical before this was changed.
+  const variant = location.hash.replace("#", "");
+  if (variant) document.addEventListener("DOMContentLoaded", () => {
+    document.body.classList.add(variant);
+  });
+</script>
+
+<!--
+  MangaBaka's icon: three glass cards, fanned.
+
+  The stack is the app's one original mechanic, and a card is the shape every
+  cover in the app is framed at — 2:3 — so the mark is made of the thing the
+  app is made of. Abdi picked it over the board's own recommendation on
+  2026-09-10, and asked for a white ground and layered glass.
+
+  Everything here is a rounded rectangle or a gradient. No photographs, no
+  typography, nothing that stops being legible when the whole mark is reduced
+  to one channel for the tinted variant.
+
+  The layering is the point: each card is genuinely translucent, so where two
+  overlap the colour deepens. That is what makes them read as panes of glass
+  rather than as three stickers.
+-->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ground" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop class="g1" offset="0" stop-color="#ffffff"/>
+      <stop class="g2" offset="0.55" stop-color="#fbfaf9"/>
+      <stop class="g3" offset="1" stop-color="#efece9"/>
+    </linearGradient>
+
+    <linearGradient id="glass" x1="0.05" y1="0" x2="0.95" y2="1">
+      <stop class="c1" offset="0" stop-color="#fb8f7e"/>
+      <stop class="c2" offset="0.5" stop-color="#f87966"/>
+      <stop class="c3" offset="1" stop-color="#e35f4c"/>
+    </linearGradient>
+
+    <!-- Bright along the top-left edge, gone by the bottom-right. This hairline
+         is the single most load-bearing part of the glass illusion: it is how a
+         lit pane actually catches light. -->
+    <linearGradient id="rim" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+
+    <!-- A soft pool of light on the front pane rather than a hard diagonal.
+         A crisp edge reads as a fold in the card; a feathered one reads as
+         something the light is landing on. -->
+    <radialGradient id="sheen" cx="0.28" cy="0.18" r="0.85">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <clipPath id="cardClip">
+      <rect width="360" height="540" rx="70"/>
+    </clipPath>
+
+    <filter id="cast" x="-40%" y="-40%" width="200%" height="200%">
+      <feDropShadow class="cast" dx="0" dy="22" stdDeviation="26"
+                    flood-color="#8d3a2c" flood-opacity="0.30"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#ground)"/>
+
+  <!-- Shifted off dead centre because the fan is not symmetrical: it opens to
+       the right and down, so centring the front card would leave the mark
+       visibly heavy on that side. These offsets centre what a person sees. -->
+  <!-- Scaled up after seeing it on a real home screen: at 1024 the fan looked
+       correct in isolation and small inside its tile beside Apple's own icons,
+       which fill far more of theirs. -->
+  <!-- Centred on the MARK, not on the mark plus its shadow. The cast shadow
+       falls down and right, so centring the whole rendered image would push the
+       cards up and left of where a person sees the middle. Measured by
+       thresholding the render at the point the shadow drops out. -->
+  <g transform="translate(407 471) scale(1.16)">
+    <!-- Back to front. Each leans further and sits lower, so the fan opens to
+         the right the way a hand of cards does. The rotations are small: enough
+         to read as a stack from across a home screen, little enough that the
+         front card stays upright and the mark keeps a clear silhouette. -->
+    <g transform="rotate(15 -60 240) translate(-100 -270)" opacity="0.55" filter="url(#cast)">
+      <rect width="360" height="540" rx="70" fill="url(#glass)"/>
+      <rect x="2" y="2" width="356" height="536" rx="68"
+            fill="none" stroke="url(#rim)" stroke-width="4"/>
+    </g>
+
+    <g transform="rotate(7.5 -60 240) translate(-140 -270)" opacity="0.75" filter="url(#cast)">
+      <rect width="360" height="540" rx="70" fill="url(#glass)"/>
+      <rect x="2" y="2" width="356" height="536" rx="68"
+            fill="none" stroke="url(#rim)" stroke-width="4"/>
+    </g>
+
+    <g transform="translate(-180 -270)" filter="url(#cast)">
+      <rect width="360" height="540" rx="70" fill="url(#glass)"/>
+      <!-- The light landing on the front pane, clipped to it so it cannot spill
+           past the corner radius. -->
+      <g clip-path="url(#cardClip)">
+        <rect width="360" height="540" fill="url(#sheen)"/>
+      </g>
+      <rect x="2.5" y="2.5" width="355" height="535" rx="67.5"
+            fill="none" stroke="url(#rim)" stroke-width="5"/>
+    </g>
+  </g>
+</svg>
+
+<style>
+  /* Dark: the ground goes to the app's own near-black and the glass brightens,
+     so the mark still reads as lit rather than as a hole. */
+  body.dark .g1 { stop-color: #17171c; }
+  body.dark .g2 { stop-color: #101015; }
+  body.dark .g3 { stop-color: #08080b; }
+  body.dark .c1 { stop-color: #ff9d8d; }
+  body.dark .c2 { stop-color: #f87966; }
+  body.dark .c3 { stop-color: #d4553f; }
+
+  /* Tinted: luminance only. The system paints the colour, so the three cards
+     have to be separable by value alone — which they are, because they were
+     always separated by opacity rather than by hue. */
+  body.tinted .g1, body.tinted .g2, body.tinted .g3 { stop-color: #000000; }
+  body.tinted .c1 { stop-color: #ffffff; }
+  body.tinted .c2 { stop-color: #e6e6e6; }
+  body.tinted .c3 { stop-color: #b4b4b4; }
+  /* The shadow is warm, which is right on colour and wrong here: a coral halo
+     around a mark the system is about to paint its own colour is a smudge. */
+  body.tinted .cast { flood-color: #000000; flood-opacity: 0.55; }
+</style>
