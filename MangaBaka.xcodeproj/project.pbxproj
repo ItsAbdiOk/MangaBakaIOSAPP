@@ -81,6 +81,7 @@
 		56F19DE496ED401E2AD60C56 /* library.json in Resources */ = {isa = PBXBuildFile; fileRef = FAFBD039E636AD1D47EAE31A /* library.json */; };
 		56F4B26781324528791F6891 /* RateLimitGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4CAD5968791AD6892AD695 /* RateLimitGate.swift */; };
 		59B8068276B79D7C21B43A0B /* MixModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B75B41390A4AF825B01438 /* MixModelTests.swift */; };
+		59C1546A4676965CF4B7ED9F /* AccessibilityAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52141A538D90DC090219034F /* AccessibilityAuditTests.swift */; };
 		5C5BB20A74182861CBC281B4 /* SafeLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2635D462C8C5D3EA34FC5AD5 /* SafeLinkTests.swift */; };
 		5C75B278F66132E75167B74D /* ContentPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89342FBAEA6069910C8F6E9 /* ContentPreferences.swift */; };
 		5E3B3ECB565CC26DABEFADDB /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C5E9C70BAC86AC72398C349 /* DiscoverView.swift */; };
@@ -246,6 +247,13 @@
 			remoteGlobalIDString = 9DC498596D253759DE9847E7;
 			remoteInfo = MangaBaka;
 		};
+		CC61AC80E1227C5A08F5F8F8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5BC8B5608F4EF21D2EB7EF42 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9DC498596D253759DE9847E7;
+			remoteInfo = MangaBaka;
+		};
 		D50F610A0C33AE0C9C9964AC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 5BC8B5608F4EF21D2EB7EF42 /* Project object */;
@@ -318,6 +326,7 @@
 		4FA2B5E732EF37AD173FBB7D /* Cadence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cadence.swift; sourceTree = "<group>"; };
 		5056B3D58ABC7793742A330A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		5122FBDB1BF06F41C1792763 /* SeriesTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesTag.swift; sourceTree = "<group>"; };
+		52141A538D90DC090219034F /* AccessibilityAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityAuditTests.swift; sourceTree = "<group>"; };
 		527F25B6E23ED0E420B280DF /* SeriesRepository+Cache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SeriesRepository+Cache.swift"; sourceTree = "<group>"; };
 		52FCCDD33A78D94B0B5F003C /* MangaUpdatesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaUpdatesClient.swift; sourceTree = "<group>"; };
 		530B5C869E932A5DF2238597 /* CoverImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImage.swift; sourceTree = "<group>"; };
@@ -437,6 +446,7 @@
 		C2A8D3BCD8148B31B3704CF4 /* ReleaseReminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseReminders.swift; sourceTree = "<group>"; };
 		C3281DBC76CB8D1200495919 /* RecommendationQualityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationQualityTests.swift; sourceTree = "<group>"; };
 		C454FC722F35C1A939B850F1 /* StackHint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackHint.swift; sourceTree = "<group>"; };
+		C556D566D3191950B0B42D49 /* MangaBakaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MangaBakaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C99014FFFB9D8B7223D1E11C /* CoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverTests.swift; sourceTree = "<group>"; };
 		CCE3CCF279C256CEBA790EBE /* LibraryControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryControl.swift; sourceTree = "<group>"; };
 		CD5B596CA6C11CDC43526FF9 /* LibrarySort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySort.swift; sourceTree = "<group>"; };
@@ -515,6 +525,14 @@
 				97AFD9083E5B5A8EC2D03FA8 /* SessionModels.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		0BD48E92123D4A6B3B974AB9 /* MangaBakaUITests */ = {
+			isa = PBXGroup;
+			children = (
+				52141A538D90DC090219034F /* AccessibilityAuditTests.swift */,
+			);
+			path = MangaBakaUITests;
 			sourceTree = "<group>";
 		};
 		10492E4A891042C67A377C5A /* Schedule */ = {
@@ -758,6 +776,7 @@
 				3A4BF51EE0F27CD7DEC2CA1E /* MangaBaka */,
 				6B32EC54A337F1A1EF6CEED5 /* MangaBakaPerformanceTests */,
 				9601F9FF505DB84191E7A799 /* MangaBakaTests */,
+				0BD48E92123D4A6B3B974AB9 /* MangaBakaUITests */,
 				C5D60635B1D5551B614A5779 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -932,6 +951,7 @@
 				2D8299C7A8EFA18511A4FA97 /* MangaBaka.app */,
 				9165D1F9C7ACEB635AE628F7 /* MangaBakaPerformanceTests.xctest */,
 				89A3F36BE4913A5F397493A2 /* MangaBakaTests.xctest */,
+				C556D566D3191950B0B42D49 /* MangaBakaUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1033,6 +1053,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		01428598B055374540CE20AA /* MangaBakaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A35572BA1A22260942A5FBDC /* Build configuration list for PBXNativeTarget "MangaBakaUITests" */;
+			buildPhases = (
+				7FEC1480966C13B6B4E80796 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CF0877CF5D0A3E041B2786B5 /* PBXTargetDependency */,
+			);
+			name = MangaBakaUITests;
+			packageProductDependencies = (
+			);
+			productName = MangaBakaUITests;
+			productReference = C556D566D3191950B0B42D49 /* MangaBakaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		9DC498596D253759DE9847E7 /* MangaBaka */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 041F1BBE7C5B046C32161332 /* Build configuration list for PBXNativeTarget "MangaBaka" */;
@@ -1099,6 +1137,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					01428598B055374540CE20AA = {
+						TestTargetID = 9DC498596D253759DE9847E7;
+					};
 					9DC498596D253759DE9847E7 = {
 						DevelopmentTeam = 5AF2LBU5A3;
 						ProvisioningStyle = Automatic;
@@ -1125,6 +1166,7 @@
 				9DC498596D253759DE9847E7 /* MangaBaka */,
 				CF721BEAE0525E14F479BBEB /* MangaBakaTests */,
 				CDBB8EE7A01FD043BD5AE55B /* MangaBakaPerformanceTests */,
+				01428598B055374540CE20AA /* MangaBakaUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -1320,6 +1362,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7FEC1480966C13B6B4E80796 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				59C1546A4676965CF4B7ED9F /* AccessibilityAuditTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DA5B7600B22DC99577B66FDB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1408,6 +1458,11 @@
 			isa = PBXTargetDependency;
 			target = 9DC498596D253759DE9847E7 /* MangaBaka */;
 			targetProxy = D50F610A0C33AE0C9C9964AC /* PBXContainerItemProxy */;
+		};
+		CF0877CF5D0A3E041B2786B5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9DC498596D253759DE9847E7 /* MangaBaka */;
+			targetProxy = CC61AC80E1227C5A08F5F8F8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1655,6 +1710,40 @@
 			};
 			name = Release;
 		};
+		CCBA01B476274201A7699ADD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MangaBaka;
+			};
+			name = Release;
+		};
+		D035A180EBE569EC002309AD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MangaBaka;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1672,6 +1761,15 @@
 			buildConfigurations = (
 				34C39D6D78897AAE8244343C /* Debug */,
 				A8A8917C9AF1EF8960F4F793 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A35572BA1A22260942A5FBDC /* Build configuration list for PBXNativeTarget "MangaBakaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D035A180EBE569EC002309AD /* Debug */,
+				CCBA01B476274201A7699ADD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -1,0 +1,86 @@
+Series detail	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Because you read School Life and Age Regression" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Drag the cover aside · tap it to open" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Because you read School Life and Age Regression" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Details" Button
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Saved from the stack" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Nothing saved yet. Skips are remembered too, and stay recoverable in the shelf." StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"saved" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"SKIP" StaticText
+Series detail	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"SAVE" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"mb-…" SecureTextField
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"ACCOUNT" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Save" Button
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"SERIES TITLES" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"FORMATS" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Which publication formats appear in results." StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	unknown element
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	unknown element
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	unknown element
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	unknown element
+Settings	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	unknown element
+Settings	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"FORMATS" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ACCOUNT" StaticText
+Settings	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"SERIES TITLES" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Manga · 8.9" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Manga · 7.0" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Manhwa · 8.7" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 131072)	Text clipped	"Manga · 7.0" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 131072)	Text clipped	"Manhwa · 8.7" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 131072)	Text clipped	"Manga · 8.9" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 131072)	Text clipped	"Let’s Buy the Land and Cultivate It in a Different World" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Manhwa · 8.7" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Manga · 7.0" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Manga · 8.9" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Solo Leveling" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Manhwa · 8.6" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"ONE PIECE" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Manga · 8.9" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Omniscient Reader" StaticText
+Discover	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Manhwa · 8.7" StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	unknown element
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Because you read School Life and Age Regression" StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Details" Button
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Saved from the stack" StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Nothing saved yet. Skips are remembered too, and stay recoverable in the shelf." StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	unknown element
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"SKIP" StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"SAVE" StaticText
+Stack	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Because you read School Life and Age Regression" StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Nothing saved yet. Swipe a few series in the Stack first." StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"MINIMUM RATING" StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"REQUIRE TAGS" StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Saves these filters as a lens, on Search." StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Blend" Button
+Mix	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"MINIMUM RATING" StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"Saves these filters as a lens, on Search." StaticText
+Mix	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"REQUIRE TAGS" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Reading 71, Rereading 1, Paused 171, Completed 134, Plan to read 133, Dropped 429" Other
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Reading, 71 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Rereading, 1 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Paused, 171 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Completed, 134 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Plan to read, 133 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Dropped, 429 series" Button
+Library	XCUIAccessibilityAuditType(rawValue: 4)	Hit area is too small	"Sort by Recently updated" Button
+Library	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ch 3" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ch 53" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ch 182" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ch 120" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 65536)	Dynamic Type font sizes are partially unsupported	"ch 138" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"69 in progress" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"Estimate when each one is due" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"What is waiting, what you finish, what you drop" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"RUNAWAY FAMILY" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"READING" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Ch 1 / 75" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"—" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"Breaking A Romantic Fantasy Villain" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"939" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"71" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"1" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"171" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"ch 120" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"ch 53" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"ch 138" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast failed	"ch 182" StaticText
+Library	XCUIAccessibilityAuditType(rawValue: 1)	Contrast nearly passed	"ch 3" StaticText

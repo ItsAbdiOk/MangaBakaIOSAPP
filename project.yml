@@ -116,6 +116,22 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.performance
         GENERATE_INFOPLIST_FILE: YES
 
+  # Apple's automated accessibility audit. Out of the scheme's test action for
+  # the same reason as the performance tests: it launches a real app per test
+  # and is slow. Run it on purpose:
+  #   xcodebuild test -scheme MangaBaka -only-testing:MangaBakaUITests
+  MangaBakaUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: MangaBakaUITests
+    dependencies:
+      - target: MangaBaka
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.uitests
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   MangaBaka:
     build:
@@ -146,3 +162,18 @@ schemes:
       config: Debug
       targets:
         - MangaBakaPerformanceTests
+
+  # Same reasoning as MangaBakaPerformance: its own scheme, so an audit that
+  # launches the app a dozen times can never be run by accident or slow a push.
+  #
+  #   xcodebuild test -scheme MangaBakaAccessibility -destination '<a simulator>'
+  MangaBakaAccessibility:
+    build:
+      targets:
+        MangaBaka: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MangaBakaUITests
