@@ -182,11 +182,28 @@ all seventeen fixed the wall and rebuilt it taller.
 
 ### Not built from the mockup
 
-- Mix's **Tags** and **Blocked tags** filter sections. The API supports both and
-  `SearchQuery` carries tags; only the UI is missing.
-- Mix's **"Save as a lens"** button. Lenses ship as presets; writing your own
-  needs a design.
-- A **library search** field on the Library screen.
+*All three of these were built on 2026-09-10 and the entries below are kept as a
+record of what they were, not as a list of what is missing.*
+
+- ~~Mix's **Tags** filter section.~~ Built, and available before the first blend
+  rather than only after one.
+- ~~Mix's **"Save as a lens"** button.~~ Built, using the same control the search
+  filter sheet uses.
+- ~~A **library search** field.~~ Built, pinned above the list, local to what has
+  loaded.
+
+Still genuinely absent, and deliberately:
+
+- **Per-search blocked tags.** The list is global and lives in Settings. A
+  second control for one thing is how they drift, and it would need a "blocking
+  is currently off" state nothing else in the app has. A feature to spec, not a
+  toggle to draw.
+- **The degraded lens row** — the amber "one filter no longer exists" state from
+  Brief 05. Checked against the live API: a tag that does not exist returns 200
+  with zero results, exactly like a real filter matching nothing. There is no
+  way to tell them apart from the response, so the state could only be guessed
+  at, and a lens wrongly accused of being broken is worse than one that quietly
+  returns nothing.
 
 ### Deviations added during the pass
 

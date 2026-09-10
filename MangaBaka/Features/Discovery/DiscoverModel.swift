@@ -64,6 +64,12 @@ final class DiscoverModel {
     }
 
     func load(forceRefresh: Bool = false) async {
+        await Signposts.measure("Discover load") {
+            await loadRows(forceRefresh: forceRefresh)
+        }
+    }
+
+    private func loadRows(forceRefresh: Bool) async {
         defer { Task { await refreshCachedCount() } }
         // A successful refresh has to clear this, or the bar outlives the
         // failure it describes.

@@ -60,7 +60,9 @@ final class CoverStore {
         // the work below happens on the cooperative pool. That hop is the whole
         // point — see `fetch`.
         let task = Task<UIImage?, Never> { [session] in
-            await Self.fetch(url, session: session)
+            await Signposts.measure("Cover fetch") {
+                await Self.fetch(url, session: session)
+            }
         }
 
         inFlight[url] = task

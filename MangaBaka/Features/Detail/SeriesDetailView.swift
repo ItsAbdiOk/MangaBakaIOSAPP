@@ -219,6 +219,15 @@ struct SeriesDetailView: View {
     }
 
     private func load() async {
+        // Two intervals, not one. "Readable" is when the page has its own
+        // content and stops looking empty; "complete" is when the rows a reader
+        // scrolls to have filled in. Measuring only the second would report a
+        // page that felt instant as three seconds slow.
+        await Signposts.measure("Detail readable") { await loadCore() }
+        await Signposts.measure("Detail complete") { await loadOnward() }
+    }
+
+    private func loadCore() async {
         isLoading = true
         async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
@@ -229,6 +238,9 @@ struct SeriesDetailView: View {
         extras = await extrasResult
         covers = await imagesResult
         isLoading = false
+    }
+
+    private func loadOnward() async {
         async let cast: Void = loadCast()
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()

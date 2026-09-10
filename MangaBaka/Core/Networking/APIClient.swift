@@ -107,6 +107,9 @@ actor APIClient {
             authorized.setValue(header.value, forHTTPHeaderField: header.field)
         }
 
+        // Measured rather than estimated. Every "is the API fast?" answer this
+        // project has given was about response shapes; this one is about time.
+        let began = ContinuousClock.now
         let data: Data
         let response: URLResponse
         do {
@@ -118,6 +121,16 @@ actor APIClient {
         } catch {
             throw APIError.transport(underlying: error.localizedDescription)
         }
+
+        let elapsed = began.duration(to: .now)
+        await NetworkLedger.shared.record(
+            path: path,
+            bytes: data.count,
+            seconds: Double(elapsed.components.seconds)
+                + Double(elapsed.components.attoseconds) / 1e18,
+            failed: (response as? HTTPURLResponse).map { !(200..<300).contains($0.statusCode) }
+                ?? true
+        )
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.transport(underlying: "Response was not HTTP.")

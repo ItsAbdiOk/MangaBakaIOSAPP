@@ -18,6 +18,7 @@ struct MangaBakaApp: App {
     private let recents = RecentSearches()
     private let session: SessionModels
     private let calendar: ReleaseCalendar
+    private let reminders = ReleaseReminders()
     private let onboarding = OnboardingState()
 
     init() {
@@ -173,6 +174,7 @@ struct MangaBakaApp: App {
                 recents: recents,
                 session: session,
                 calendar: calendar,
+                reminders: reminders,
                 onboarding: onboarding
             )
         }

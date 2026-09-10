@@ -137,18 +137,31 @@ actor TasteLedger {
     }
 
     /// Adds (or subtracts) one series' tags.
+    ///
+    /// **One statement per tag, no read.** This used to fetch each row, add to
+    /// it in Swift, and save it back — two round trips per tag, per series.
+    /// Measured at 517ms for 200 series of 40 tags, which for a real library of
+    /// 939 with up to 146 tags each is several seconds of the first launch
+    /// after signing in. The upsert does the arithmetic in SQLite, inside the
+    /// transaction that was already open.
+    ///
+    /// `MAX(0, ...)` on the count rather than in Swift for the same reason: it
+    /// is the database's job and doing it here would need the read back.
     private static func apply(_ tags: [SeriesTag], multiplier: Double, to db: Database) throws {
         guard multiplier != 0 else { return }
         let step = multiplier > 0 ? 1 : -1
+        let statement = try db.makeStatement(sql: """
+            INSERT INTO tagAffinity (tagId, name, score, seriesCount)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(tagId) DO UPDATE SET
+                score = score + excluded.score,
+                seriesCount = MAX(0, seriesCount + excluded.seriesCount),
+                name = excluded.name
+            """)
         for tag in tags {
-            let contribution = weight(tag.importance) * multiplier
-            let existing = try TagAffinity.fetchOne(db, key: tag.id)
-            try TagAffinity(
-                tagId: tag.id,
-                name: tag.name,
-                score: (existing?.score ?? 0) + contribution,
-                seriesCount: max(0, (existing?.seriesCount ?? 0) + step)
-            ).save(db)
+            try statement.execute(arguments: [
+                tag.id, tag.name, weight(tag.importance) * multiplier, step
+            ])
         }
     }
 

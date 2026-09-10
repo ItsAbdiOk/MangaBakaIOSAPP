@@ -29,6 +29,7 @@ struct RootView: View {
     /// is four things to read where there should be one.
     let session: SessionModels
     let calendar: ReleaseCalendar
+    let reminders: ReleaseReminders
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
@@ -53,16 +54,13 @@ struct RootView: View {
     @Namespace private var coverTransition
     /// Real covers behind the first onboarding screen. Empty until the rising
     /// feed answers, which is the case the screen is built to survive.
-    @State private var onboardingCovers: [Series] = []
+    @State var onboardingCovers: [Series] = []
     /// Whether Settings should open with the token field already focused.
     @State private var wantsAccountFocus = false
 
     var body: some View {
         tabs
-            .task {
-                guard !onboarding.hasCompleted, onboardingCovers.isEmpty else { return }
-                onboardingCovers = await repository.feed(.rising, forceRefresh: false).series
-            }
+            .task { await startSession() }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(
                     covers: onboardingCovers,
@@ -160,6 +158,8 @@ struct RootView: View {
                                 blockedTags: blockedTags,
                                 catalogue: catalogue,
                                 focusAccount: wantsAccountFocus,
+                                reminders: reminders,
+                                onRemindersChanged: { await refreshReminders() },
                                 history: history
                             )
                         }

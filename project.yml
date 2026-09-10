@@ -99,6 +99,23 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.tests
         GENERATE_INFOPLIST_FILE: YES
 
+  # Deliberately NOT in the scheme's test action. These measure rather than
+  # assert: they are slow, they are noisy on a contended machine, and a build
+  # that fails because a laptop was busy teaches people to ignore failures.
+  # Run them on purpose:
+  #   xcodebuild test -scheme MangaBaka -only-testing:MangaBakaPerformanceTests
+  MangaBakaPerformanceTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MangaBakaPerformanceTests
+    dependencies:
+      - target: MangaBaka
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.performance
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   MangaBaka:
     build:
@@ -113,3 +130,19 @@ schemes:
         - MangaBakaTests
     archive:
       config: Release
+
+  # Its own scheme rather than a skipped entry in the main one, so it cannot be
+  # run by accident and cannot slow a push. Measuring is a thing you choose to
+  # do; asserting is a thing that happens to you.
+  #
+  #   xcodebuild test -scheme MangaBakaPerformance -destination '<a simulator>'
+  MangaBakaPerformance:
+    build:
+      targets:
+        MangaBaka: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MangaBakaPerformanceTests

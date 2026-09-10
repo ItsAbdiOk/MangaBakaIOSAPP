@@ -175,6 +175,10 @@ final class LibraryModel {
     private static let pageCap = 30
 
     func load() async {
+        await Signposts.measure("Library load") { await fetchAll() }
+    }
+
+    private func fetchAll() async {
         guard entries.isEmpty else { return }
         isLoading = true
         defer { isLoading = false }

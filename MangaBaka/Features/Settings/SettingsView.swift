@@ -12,6 +12,8 @@ struct SettingsView: View {
     let blockedTags: BlockedTagsStore
     let catalogue: CatalogueService
     var focusAccount = false
+    let reminders: ReleaseReminders
+    let onRemindersChanged: () async -> Void
     let history: HistoryStore
 
     @State private var entry = ""
@@ -30,7 +32,9 @@ struct SettingsView: View {
                 FormatSection(formats: formats)
                 contentSection
                 BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)
+                RemindersSection(reminders: reminders, onChange: onRemindersChanged)
                 HistorySection(history: history)
+                DataUseSection()
                 AttributionSection()
             }
             .padding(.horizontal, Metrics.gutter)
