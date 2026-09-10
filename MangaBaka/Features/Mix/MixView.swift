@@ -13,7 +13,6 @@ struct MixView: View {
     @State var model: MixModel
     @State private var suggestedSeeds: [Series] = []
     @Binding private var path: [Series]
-    private let onPickSeed: () -> Void
     /// The tag catalogue, so tags can be chosen before a blend has ever run.
     let catalogue: CatalogueService?
     /// Where a blend's filters are saved. Mix has a filter strip rather than
@@ -24,6 +23,7 @@ struct MixView: View {
     let lenses: SearchLensStore?
 
     @State var isPickingTags = false
+    @State var isPickingSeed = false
     @State var isNamingLens = false
 
     static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
@@ -31,13 +31,11 @@ struct MixView: View {
     init(
         model: MixModel,
         path: Binding<[Series]>,
-        onPickSeed: @escaping () -> Void,
         catalogue: CatalogueService? = nil,
         lenses: SearchLensStore? = nil
     ) {
         _model = State(initialValue: model)
         _path = path
-        self.onPickSeed = onPickSeed
         self.catalogue = catalogue
         self.lenses = lenses
     }
@@ -71,6 +69,11 @@ struct MixView: View {
                     mode: $model.filters.tagMode
                 )
             }
+        }
+        .sheet(isPresented: $isPickingSeed) {
+            SeedPickerSheet(model: model, repository: model.repository)
+                .presentationDetents([.large])
+                .presentationCornerRadius(Metrics.radiusSheet)
         }
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.filters) { name in
@@ -123,7 +126,7 @@ struct MixView: View {
     }
 
     private var emptySeedSlot: some View {
-        Button(action: onPickSeed) {
+        Button { isPickingSeed = true } label: {
             RoundedRectangle(cornerRadius: Metrics.radiusSeed, style: .continuous)
                 .strokeBorder(Palette.borderDashed, style: StrokeStyle(lineWidth: 0.5, dash: [4]))
                 .frame(width: Metrics.coverSeedWidth, height: Metrics.coverSeedWidth / Metrics.coverAspect)

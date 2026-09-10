@@ -65,6 +65,7 @@ struct CharacterRow: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(width: Self.portrait + 14)
         }
+        .copyableArtwork(character.imageURL, noun: "portrait")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             character.isMain ? "\(character.name), main character" : character.name

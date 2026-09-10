@@ -12,10 +12,6 @@ struct InlineSearchField: View {
     let prompt: String
     @Binding var text: String
 
-    private var isSearching: Bool {
-        !text.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
@@ -26,14 +22,7 @@ struct InlineSearchField: View {
                 .autocorrectionDisabled()
                 .typeBody()
                 .foregroundStyle(Palette.textPrimary)
-            if isSearching {
-                Button { text = "" } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Palette.textQuaternary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
+            SearchClearButton(text: $text)
         }
         .padding(.horizontal, 13)
         .frame(height: Metrics.field)

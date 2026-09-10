@@ -99,6 +99,17 @@ struct SeriesExtras: Sendable, Equatable, Codable {
     /// Published editions — see `SeriesEdition`.
     var editions: [SeriesEdition] = []
     var year: Int?
+    /// The whole v1 series, not just the two fields above.
+    ///
+    /// A series page is built from whatever copy of the series the reader
+    /// arrived with, and those copies are not equal. The swipe stack's queue
+    /// carries v2 payloads, which have no description, no chapter count, no
+    /// status and no `source` — so "More info" from the stack showed a page
+    /// with no synopsis, no length, and no next-chapter estimate, because the
+    /// estimate needs the MangaUpdates id that lives in `source`. The v1 series
+    /// was already being fetched here for its tags; everything else it carried
+    /// was thrown away. Kept now, and merged in by `Series.filling(gapsFrom:)`.
+    var full: Series?
 }
 
 /// The API's sort keys, and what to call them in front of a reader.
@@ -650,7 +661,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
             editions: (await editions ?? []).presentable,
-            year: detail?.year
+            year: detail?.year,
+            full: detail
         )
     }
 

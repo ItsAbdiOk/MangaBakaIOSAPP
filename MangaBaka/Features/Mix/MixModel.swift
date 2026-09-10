@@ -39,7 +39,9 @@ final class MixModel {
     /// never has to guess which one lost.
     static let maxSeeds = 3
 
-    private let repository: any SeriesRepositoryProtocol
+    /// Not private, so the seed picker can run its own search against the same
+    /// repository rather than being handed a second one.
+    let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
 
     init(repository: any SeriesRepositoryProtocol, shelf: ShelfStore) {

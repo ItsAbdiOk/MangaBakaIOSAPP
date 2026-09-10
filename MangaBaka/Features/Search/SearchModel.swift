@@ -31,6 +31,14 @@ final class SearchModel {
     /// the last keystroke in a burst ever reaches the network.
     func queryDidChange() {
         debounceTask?.cancel()
+        // Typing a title means you want that title, not a shuffle. "Surprise
+        // me" sets `sort = "random"` and nothing ever unset it, so every search
+        // after one tap of it was randomised: `q=one piece&sort_by=random`
+        // answers 32 series and ONE PIECE is not among them, while relevance
+        // answers 411 with it first. Measured on 2026-09-10.
+        if query.sort == "random", !(query.text ?? "").isEmpty {
+            query.sort = nil
+        }
         guard !query.isEmpty else {
             results = []
             message = nil
@@ -74,6 +82,16 @@ final class SearchModel {
         results = result.series
         hasMore = result.series.count >= query.limit
         message = result.series.isEmpty ? result.blockingError?.userFacingMessage : nil
+    }
+
+    /// Drops every filter but the typed text, and searches again.
+    ///
+    /// The escape hatch for the case above: a filter set on another screen, or
+    /// restored with a lens, silently zeroes an ordinary title search.
+    func clearFilters() async {
+        query = query.clearingFilters()
+        cancelPendingDebounce()
+        await search()
     }
 
     /// Appends the next page. Driven by scroll position, not a button.

@@ -23,6 +23,7 @@ struct TagPickerSheet: View {
     @State private var tags: [Tag] = []
     @State private var isLoading = true
     @State private var openGroup: Int?
+    @State private var search: TagSearch?
     @Environment(\.dismiss) private var dismiss
 
     /// How many tags a group shows before asking.
@@ -58,10 +59,15 @@ struct TagPickerSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .edgeSwipeToDismiss()
         .task {
+            let search = TagSearch(catalogue: catalogue)
+            self.search = search
             tags = await catalogue.tags(limit: 500).filter(\.isUsable)
+            search.loaded = tags
             isLoading = false
         }
+        .onChange(of: query) { _, new in search?.update(query: new) }
     }
 
     // MARK: - Pieces
@@ -78,6 +84,7 @@ struct TagPickerSheet: View {
                 .autocorrectionDisabled()
                 .typeBody()
                 .foregroundStyle(Palette.textPrimary)
+            SearchClearButton(text: $query)
         }
         .padding(.horizontal, 14)
         .frame(height: Metrics.field)
@@ -140,14 +147,25 @@ struct TagPickerSheet: View {
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
+    /// Asked of the API, not filtered from the 500 loaded here — there are
+    /// 7,127 tags and the popular list does not contain Romance. See `TagSearch`.
+    @ViewBuilder
     private var matches: some View {
-        let found = tags
-            .filter { $0.name.localizedCaseInsensitiveContains(query) }
-            .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
-        return VStack(spacing: 0) {
-            ForEach(Array(found.prefix(40))) { tag in
-                TagPickerRow(tag: tag, breadth: breadth(tag), isOn: selected.contains(tag.name)) {
-                    toggle(tag.name)
+        let found = search?.results ?? []
+        if found.isEmpty, search?.isSearching == false {
+            Text(
+                search?.didFail == true
+                    ? "Could not search tags just now."
+                    : "No tag matches \"\(query)\"."
+            )
+            .typeSmallMeta()
+            .foregroundStyle(Palette.textTertiary)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(found.prefix(40))) { tag in
+                    TagPickerRow(tag: tag, breadth: breadth(tag), isOn: selected.contains(tag.name)) {
+                        toggle(tag.name)
+                    }
                 }
             }
         }

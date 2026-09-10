@@ -103,16 +103,16 @@ struct BlockTagPicker: View {
     @State private var query = ""
     @State private var tags: [Tag] = []
     @State private var isLoading = true
+    @State private var search: TagSearch?
     @Environment(\.dismiss) private var dismiss
 
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     private var matches: [Tag] {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return Array(tags.prefix(40)) }
-        return Array(
-            tags
-                .filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
-                .prefix(40)
-        )
+        guard isSearching else { return Array(tags.prefix(40)) }
+        return Array((search?.results ?? []).prefix(40))
     }
 
     var body: some View {
@@ -120,6 +120,19 @@ struct BlockTagPicker: View {
             List {
                 ForEach(matches) { tag in
                     row(tag)
+                }
+                if isSearching, matches.isEmpty, search?.isSearching == false {
+                    // Never a blank screen. Typing a real tag used to empty the
+                    // list with no explanation, which reads as broken rather
+                    // than as an answer.
+                    Text(
+                        search?.didFail == true
+                            ? "Could not search tags just now."
+                            : "No tag matches \"\(query)\"."
+                    )
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textTertiary)
+                    .listRowBackground(Color.clear)
                 }
                 if isLoading {
                     HStack {
@@ -133,7 +146,8 @@ struct BlockTagPicker: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Palette.ground)
-            .searchable(text: $query, prompt: "Search tags")
+            .searchable(text: $query, prompt: "Search all tags")
+            .onChange(of: query) { _, new in search?.update(query: new) }
             .navigationTitle("Block a tag")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -143,8 +157,12 @@ struct BlockTagPicker: View {
             }
         }
         .preferredColorScheme(.dark)
+        .edgeSwipeToDismiss()
         .task {
+            let search = TagSearch(catalogue: catalogue)
+            self.search = search
             tags = await catalogue.tags(limit: 500)
+            search.loaded = tags
             isLoading = false
         }
     }

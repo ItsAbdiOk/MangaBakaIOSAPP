@@ -118,7 +118,6 @@ struct RootView: View {
                         // Picking a seed is a search, so send the reader to the
                         // screen that already does that well rather than
                         // building a second, worse picker inside Mix.
-                        onPickSeed: { selection = .search },
                         catalogue: catalogue,
                         lenses: lenses
                     )
@@ -175,6 +174,10 @@ struct RootView: View {
         // specular response of real Liquid Glass to what is behind it.
         .tabBarMinimizeBehavior(.onScrollDown)
         .toasts(toasts)
+        // Also in the environment, so a control buried a long way down — the
+        // copy-artwork menu on a character portrait — can confirm itself
+        // without every view between here and it carrying the centre through.
+        .environment(toasts)
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
             // a half-typed query or an assembled set of mix seeds.

@@ -34,6 +34,19 @@ struct SeriesDetailView: View {
     @State private var cadence: Cadence?
     @State private var isCadenceLoading = false
     @State private var isLoading = true
+
+    /// The series as this screen shows it: the copy the reader arrived with,
+    /// with anything it was missing filled in from the full v1 record fetched
+    /// alongside the tags.
+    ///
+    /// The copies are not equal. A feed's v2 payload has no description, no
+    /// chapter count, no status and no `source`, so a page opened from the
+    /// swipe stack had no synopsis, no length and no next-chapter estimate —
+    /// while the same series opened from Search had all three. The reader is
+    /// looking at one series; it should not matter which door they came in by.
+    private var shown: Series {
+        extras.full.map { series.filling(gapsFrom: $0) } ?? series
+    }
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.displayScale) private var displayScale
@@ -45,7 +58,7 @@ struct SeriesDetailView: View {
             // then the words, then everywhere else to go.
             VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
                 DetailHero(
-                    series: series,
+                    series: shown,
                     schedule: cadence,
                     isScheduleLoading: isCadenceLoading,
                     onOpenSchedule: onOpenSchedule,
@@ -55,8 +68,8 @@ struct SeriesDetailView: View {
                 )
                 .padding(.top, 4)
                 actions
-                DetailStatsStrip(series: series, year: extras.year)
-                if let description = series.description, !description.isEmpty {
+                DetailStatsStrip(series: shown, year: extras.year)
+                if let description = shown.description, !description.isEmpty {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
@@ -79,16 +92,16 @@ struct SeriesDetailView: View {
         }
         .scrollIndicators(.hidden)
         .background(alignment: .top) {
-            DetailBackdrop(cover: series.cover)
+            DetailBackdrop(cover: shown.cover)
                 .background(Palette.ground)
                 .ignoresSafeArea()
         }
-        .navigationTitle(series.displayTitle ?? "Series")
+        .navigationTitle(shown.displayTitle ?? "Series")
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $openCoversAt) { start in
             CoverGallery(
-                series: series,
-                frontCover: frontCover ?? series.cover,
+                series: shown,
+                frontCover: frontCover ?? shown.cover,
                 images: otherCovers,
                 startAt: start.value
             )
@@ -123,13 +136,13 @@ struct SeriesDetailView: View {
     }
 
     private var libraryAction: some View {
-        LibraryControl(series: series, library: library, store: libraryStore)
+        LibraryControl(series: shown, library: library, store: libraryStore)
     }
 
     @ViewBuilder
     private var seedAction: some View {
         if onUseAsSeed != nil {
-                Button { onUseAsSeed?(series) } label: {
+                Button { onUseAsSeed?(shown) } label: {
                     Text("Use as seed")
                         .typeChip()
                         .lineLimit(1)
@@ -206,7 +219,7 @@ struct SeriesDetailView: View {
     /// Korean manhwa is usually the Korean volume one, which is handsome and
     /// unreadable to most people looking at this app.
     private var preferred: SeriesImage? {
-        covers.preferredCover(nativeLanguage: series.nativeLanguage)
+        covers.preferredCover(nativeLanguage: shown.nativeLanguage)
     }
 
     private var frontCover: Cover? { preferred?.image }
@@ -282,7 +295,7 @@ struct SeriesDetailView: View {
         // profile says, so opening a series you have read makes its tags yours
         // immediately rather than on the next launch.
         if !extras.richTags.isEmpty {
-            await taste?.note(series.withTags(extras.richTags))
+            await taste?.note(shown.withTags(extras.richTags))
         }
         favouredTagIDs = await taste?.favouredTagIDs() ?? []
     }
@@ -292,13 +305,13 @@ struct SeriesDetailView: View {
     /// and in that case nothing is asked and no row appears.
     private func loadCast() async {
         guard let characters,
-              series.aniListID != nil || series.shikimoriID != nil
+              shown.aniListID != nil || shown.shikimoriID != nil
         else { return }
         isCastLoading = true
         defer { isCastLoading = false }
         cast = await characters.characters(
-            aniListID: series.aniListID,
-            shikimoriID: series.shikimoriID
+            aniListID: shown.aniListID,
+            shikimoriID: shown.shikimoriID
         )
     }
 
@@ -312,12 +325,12 @@ struct SeriesDetailView: View {
         // Nothing is asked, and no spinner shown, for a series that has
         // finished or stopped — see `canPredict`.
         guard let schedule,
-              series.mangaUpdatesID != nil,
-              ReleaseScheduleService.canPredict(status: series.status)
+              shown.mangaUpdatesID != nil,
+              ReleaseScheduleService.canPredict(status: shown.status)
         else { return }
         isCadenceLoading = true
         defer { isCadenceLoading = false }
-        if case let .measured(estimate) = await schedule.cadence(for: series) {
+        if case let .measured(estimate) = await schedule.cadence(for: shown) {
             cadence = estimate
         }
     }

@@ -82,3 +82,56 @@ struct SearchModelTests {
         #expect(model.isSearching == false)
     }
 }
+
+/// Filters that outlive the screen they were set on.
+///
+/// Both of these came out of walking the app as a reader on 2026-09-10, and
+/// both are silent: the results are simply wrong, with nothing on screen
+/// saying why.
+@Suite("Search filters do not follow you around")
+@MainActor
+struct SearchFilterEscapeTests {
+    /// "Surprise me" sets `sort = "random"` and nothing ever unset it, so every
+    /// search afterwards was shuffled. Measured against the live API on
+    /// 2026-09-10: `q=one piece&sort_by=random` answers 32 series without ONE
+    /// PIECE among them; the same query at relevance answers 411 with it first.
+    @Test("Typing a title turns off the random sort")
+    func typingClearsRandom() {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.sort = "random"
+        model.query.text = "one piece"
+
+        model.queryDidChange()
+
+        #expect(model.query.sort == nil)
+        model.cancelPendingDebounce()
+    }
+
+    @Test("Browsing at random is left alone")
+    func randomBrowsingSurvives() {
+        // No text: "Surprise me" is the whole request, and clearing the sort
+        // here would turn the feature off.
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.sort = "random"
+
+        model.queryDidChange()
+
+        #expect(model.query.sort == "random")
+        model.cancelPendingDebounce()
+    }
+
+    @Test("Clearing filters keeps the words the reader typed")
+    func clearKeepsText() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.text = "one piece"
+        model.query.tags = ["Isekai"]
+        model.query.types = ["novel"]
+        model.query.minimumRating = 80
+
+        #expect(model.query.activeFilterCount == 3)
+        await model.clearFilters()
+
+        #expect(model.query.text == "one piece")
+        #expect(model.query.activeFilterCount == 0)
+    }
+}

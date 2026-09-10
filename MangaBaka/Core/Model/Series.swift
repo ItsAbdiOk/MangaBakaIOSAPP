@@ -182,6 +182,40 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         )
     }
 
+    /// This series with its gaps filled from a fuller copy of the same series.
+    ///
+    /// Field by field, and only where this copy has nothing: the copy the
+    /// reader is looking at wins wherever it has an answer, so nothing on
+    /// screen changes under them when the fuller one arrives. Same id only —
+    /// merging two different series would be a silent data corruption, so a
+    /// mismatch returns this one untouched.
+    func filling(gapsFrom other: Series) -> Series {
+        guard other.id == id else { return self }
+        return Series(
+            id: id,
+            state: state,
+            mergedWith: mergedWith ?? other.mergedWith,
+            titles: (titles?.isEmpty == false) ? titles : other.titles,
+            cover: cover.raw == nil && cover.x350 == nil ? other.cover : cover,
+            description: description ?? other.description,
+            authors: (authors?.isEmpty == false) ? authors : other.authors,
+            artists: (artists?.isEmpty == false) ? artists : other.artists,
+            status: status ?? other.status,
+            rating: rating ?? other.rating,
+            type: type ?? other.type,
+            contentRating: contentRating ?? other.contentRating,
+            totalChapters: totalChapters ?? other.totalChapters,
+            finalVolume: finalVolume ?? other.finalVolume,
+            publishers: (publishers?.isEmpty == false) ? publishers : other.publishers,
+            anime: anime ?? other.anime,
+            source: (source?.isEmpty == false) ? source : other.source,
+            year: year ?? other.year,
+            ratingCount: ratingCount ?? other.ratingCount,
+            tags: (tags?.isEmpty == false) ? tags : other.tags,
+            tagsV2: (tagsV2?.isEmpty == false) ? tagsV2 : other.tagsV2
+        )
+    }
+
     /// The title to show, chosen by `DisplayTitle`. `nil` when the series
     /// carries no titles at all, which the schema permits.
     var displayTitle: String? {

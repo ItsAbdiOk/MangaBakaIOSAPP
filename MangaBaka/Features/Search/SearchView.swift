@@ -98,6 +98,16 @@ struct SearchView: View {
                     Task { model.cancelPendingDebounce(); await model.search() }
                 }
                 .onChange(of: model.query.text) { _, _ in model.queryDidChange() }
+
+                SearchClearButton(
+                    text: Binding(
+                        get: { model.query.text ?? "" },
+                        set: { model.query.text = $0 }
+                    ),
+                    // Clearing is a search in its own right: the results for a
+                    // query that no longer exists must not stay on screen.
+                    onClear: { model.queryDidChange() }
+                )
             }
             .padding(.horizontal, 14)
             .frame(height: Metrics.field)
@@ -234,35 +244,6 @@ struct SearchView: View {
         return index >= model.results.count - Self.prefetchDistance
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 0) {
-            Text("Nothing matched \(displayedQuery)")
-                .typeBody()
-                .foregroundStyle(Palette.textPrimary)
-            Text("Try a looser filter, or let the API pick.")
-                .typeInstruction()
-                .foregroundStyle(Palette.textTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 8)
-            Button {
-                model.query.sort = "random"
-                Task { model.cancelPendingDebounce(); await model.search() }
-            } label: {
-                Text("Random with these filters")
-                    .typeRowTitle()
-                    .foregroundStyle(Palette.onAccent)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 11)
-                    .background(Palette.accent, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 16)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 34)
-    }
-
     private func errorState(_ message: String) -> some View {
         VStack(spacing: 14) {
             Text(message)
@@ -275,7 +256,9 @@ struct SearchView: View {
         .padding(.top, 70)
     }
 
-    private var displayedQuery: String {
+    // Internal, not private: the empty state lives in its own file for the
+    // lint's ceiling. See SearchEmptyState.swift.
+    var displayedQuery: String {
         let text = (model.query.text ?? "").trimmingCharacters(in: .whitespaces)
         return text.isEmpty ? "these filters" : "\u{201C}\(text)\u{201D}"
     }

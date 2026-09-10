@@ -119,6 +119,11 @@ struct CoverCard: View {
                 radius: radius,
                 accessibilityText: series.displayTitle ?? "Untitled series"
             )
+            // Hold any cover in a row or a grid and copy the artwork. On the
+            // card rather than on `CoverImage` itself, because `CoverImage` is
+            // also what the swipe stack draws its cards with, and a context
+            // menu there competes with the drag for the same press.
+            .copyableArtwork(series.cover.raw ?? series.cover.x350, noun: "cover")
 
             // A series can legitimately have no titles at all.
             Text(series.displayTitle ?? "Untitled series")

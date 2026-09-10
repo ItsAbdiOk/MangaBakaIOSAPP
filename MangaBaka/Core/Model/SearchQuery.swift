@@ -40,6 +40,27 @@ struct SearchQuery: Sendable, Equatable, Codable {
             && sort == nil && tags.isEmpty && (publisher ?? "").isEmpty
     }
 
+    /// What is narrowing the results besides the typed text.
+    ///
+    /// Written for the empty state, which used to say only "Nothing matched
+    /// 'one piece'" — leaving a reader to work out for themselves that a tag
+    /// they picked twenty minutes ago was still on. Measured against the live
+    /// API on 2026-09-10: `q=one piece` answers 600 series, and the same query
+    /// with one leftover tag answers 0.
+    var activeFilterCount: Int {
+        types.count + statuses.count + tags.count
+            + (minimumRating == nil ? 0 : 1)
+            + ((publisher ?? "").isEmpty ? 0 : 1)
+    }
+
+    /// Everything except the typed text, cleared.
+    func clearingFilters() -> SearchQuery {
+        var cleared = SearchQuery()
+        cleared.text = text
+        cleared.limit = limit
+        return cleared
+    }
+
     /// Repeated keys where the API wants them; a comma-joined list is rejected
     /// with HTTP 400 for these parameters.
     var queryItems: [URLQueryItem] {

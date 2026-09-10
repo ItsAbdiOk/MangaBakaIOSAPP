@@ -172,6 +172,9 @@ private struct ZoomableCover: View {
             )
             card(fitting: available)
                 .frame(width: proxy.size.width, height: proxy.size.height)
+                // The original, not the rendering on screen: someone pasting a
+                // cover into a message wants the artwork at its own size.
+                .copyableArtwork(cover.raw ?? cover.x350, noun: "cover")
         }
         .accessibilityLabel(title.map { "Cover art for \($0)" } ?? "Cover art")
     }
@@ -280,6 +283,7 @@ struct CoverStack: View {
                         .scaleEffect(1 - 0.04 * step)
                 }
                 .buttonStyle(.plain)
+                .copyableArtwork(image.image.raw ?? image.image.x350, noun: "cover")
                 .offset(x: 13 * step, y: 5 * step)
                 .rotationEffect(.degrees(2.2 * Double(step)), anchor: .bottomLeading)
                 .accessibilityLabel("Another cover for this series")
@@ -291,6 +295,7 @@ struct CoverStack: View {
                     .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
             }
             .buttonStyle(.plain)
+            .copyableArtwork(frontCover.raw ?? frontCover.x350, noun: "cover")
             .accessibilityLabel(series.displayTitle.map { "Cover art for \($0)" } ?? "Cover art")
             .accessibilityHint("Opens it full screen")
         }

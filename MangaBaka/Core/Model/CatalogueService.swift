@@ -74,6 +74,32 @@ actor CatalogueService {
         await tags().filter { $0.parentId == parentId }
     }
 
+    /// Tags matching a typed query, asked of the API rather than filtered here.
+    ///
+    /// **There are 7,127 tags.** The screens that let you pick one load 500 and
+    /// filtered that list locally, so searching "romance" — a tag on thousands
+    /// of series — found nothing at all and the screen simply emptied. Measured
+    /// against the live API on 2026-09-10: `/v1/tags?limit=500` does not
+    /// contain Romance, and `?q=romance` returns 35 tags including it.
+    ///
+    /// Returns nil, not an empty array, when the request fails: "no tags match"
+    /// and "the network is down" must not look the same on screen.
+    func searchTags(_ text: String, limit: Int = 60) async -> [Tag]? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let results: [Tag]? = try? await client.get(
+            "/v1/tags",
+            query: [
+                URLQueryItem(name: "q", value: trimmed),
+                URLQueryItem(name: "limit", value: String(limit))
+            ]
+        )
+        guard let results else { return nil }
+        return results
+            .filter(\.isUsable)
+            .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
+    }
+
     func searchPublishers(_ text: String, limit: Int = 30) async -> [PublisherRecord] {
         let results: [PublisherRecord]? = try? await client.get(
             "/v1/publishers/search",
