@@ -18,13 +18,13 @@ extension RootView {
                 Tab(AppTab.library.title, systemImage: AppTab.library.symbol, value: AppTab.library) {
                     NavigationStack(path: $shelfPath) {
                         LibraryView(
-                            model: libraryModel ?? sharedLibraryModel,
+                            model: session.library,
                             path: $shelfPath,
                             scheduleSummary: nil,
                             onOpenSchedule: { showsSchedule = true },
                             onOpenTaste: { showsTaste = true },
                             onOpenShelf: { state in
-                                openShelf = libraryModel?.shelves.first { $0.state == state }
+                                openShelf = session.library.shelves.first { $0.state == state }
                             },
                             onOpenSettings: { showsSettings = true },
                             onOpenStack: { selection = .stack }
@@ -42,7 +42,7 @@ extension RootView {
                                 // screen: the same route, six answers instead
                                 // of one, and none of them from an endpoint.
                                 ReadingInsightsView(
-                                    entries: libraryModel?.entries ?? [],
+                                    entries: session.library.entries,
                                     path: $shelfPath
                                 )
                             }
@@ -72,13 +72,6 @@ extension RootView {
                             }
                     }
                 }
-    }
-
-    /// A stand-in for the Library tab's own model, for screens that need one
-    /// before that tab has been opened. It shares the same snapshot, so it
-    /// costs no extra requests.
-    var sharedLibraryModel: LibraryModel {
-        LibraryModel(library: library, snapshot: librarySnapshot)
     }
 
     /// The work a launch does once the first screen is on the way.

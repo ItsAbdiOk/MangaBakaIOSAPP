@@ -111,6 +111,8 @@ struct AppServices {
         session = SessionModels(
             repository: repository,
             history: history,
+            libraryService: libraryService,
+            snapshot: sharedLibrary,
             allowedRatings: { store.preferences.allowed.map(\.rawValue) }
         )
     }

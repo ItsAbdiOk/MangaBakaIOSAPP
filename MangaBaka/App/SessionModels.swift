@@ -15,13 +15,23 @@ import SwiftUI
 final class SessionModels {
     let recentlyViewed: RecentlyViewedModel
     let counts: LensCounts
+    /// The Library tab's model, held for the session.
+    ///
+    /// **It used to be a computed property**, so every body pass that reached
+    /// for it built a fresh one — and a fresh one loads, registers itself for
+    /// page updates, and replaces whichever model was listening before. The
+    /// series page reaches for it on every redraw.
+    let library: LibraryModel
 
     init(
         repository: any SeriesRepositoryProtocol,
         history: HistoryStore,
+        libraryService: any LibraryProviding,
+        snapshot: LibrarySnapshot,
         allowedRatings: @escaping () -> [String]
     ) {
         recentlyViewed = RecentlyViewedModel(history: history, allowedRatings: allowedRatings)
         counts = LensCounts(repository: repository)
+        library = LibraryModel(library: libraryService, snapshot: snapshot)
     }
 }

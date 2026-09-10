@@ -252,3 +252,88 @@ struct LibraryDiskCacheTests {
         func remove(seriesId: Int) async throws(APIError) {}
     }
 }
+
+/// Derived state is computed when its inputs change, not on every redraw.
+@Suite("Library derived state")
+@MainActor
+struct LibraryDerivedStateTests {
+    private func model(_ count: Int) async -> LibraryModel {
+        let model = LibraryModel(library: Stub(size: count))
+        await model.load()
+        return model
+    }
+
+    @Test("Changing the filter changes the list")
+    func filterRefreshes() async {
+        let model = await model(60)
+        let all = model.listed.count
+
+        model.filter = .completed
+        #expect(model.listed.count < all)
+        #expect(model.listed.allSatisfy { $0.state == .completed })
+
+        model.filter = nil
+        #expect(model.listed.count == all)
+    }
+
+    @Test("Changing the sort reorders the list")
+    func sortRefreshes() async {
+        let model = await model(60)
+        model.sort = .title
+        let byTitle = model.listed.map(\.seriesId)
+
+        model.sort = .rating
+        #expect(model.listed.map(\.seriesId) != byTitle)
+    }
+
+    @Test("Searching narrows the list")
+    func searchRefreshes() async {
+        let model = await model(60)
+        model.searchText = "Series 7"
+        #expect(model.listed.count < 60)
+        #expect(!model.listed.isEmpty)
+    }
+
+    @Test("The jump rail follows the list it indexes")
+    func jumpTargetsFollowTheSort() async {
+        let model = await model(60)
+        model.sort = .title
+        let titled = model.jumpTargets.map(\.letter)
+
+        model.filter = .dropped
+        #expect(model.jumpTargets.count <= titled.count, "fewer rows, no more letters")
+    }
+
+    private final class Stub: LibraryProviding, @unchecked Sendable {
+        let size: Int
+        init(size: Int) { self.size = size }
+
+        func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] {
+            guard page == 1 else { return [] }
+            let states = LibraryEntry.State.allCases
+            return (0..<size).map { index in
+                LibraryEntry(
+                    id: index, seriesId: index, state: states[index % states.count],
+                    progressChapter: nil, progressVolume: nil,
+                    rating: Double(index % 101), note: nil, startDate: nil,
+                    finishDate: nil, numberOfRereads: nil, priority: nil,
+                    isPrivate: nil, readLink: nil,
+                    series: SeriesFactory.make(id: index, title: "Series \(index)")
+                )
+            }
+        }
+
+        func library(page: Int, limit: Int) async -> [LibraryEntry] {
+            (try? await libraryPage(page: page, limit: limit)) ?? []
+        }
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func hiddenTagIDs() async -> Set<Int>? { [] }
+        func topGenres() async -> [TopGenre] { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+}

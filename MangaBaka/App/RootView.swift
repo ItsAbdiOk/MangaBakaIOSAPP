@@ -45,7 +45,6 @@ struct RootView: View {
     @State var showsSchedule = false
     @State var showsTaste = false
     @State var showsSettings = false
-    @State var libraryModel: LibraryModel?
     @State var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
@@ -176,7 +175,6 @@ struct RootView: View {
             // a half-typed query or an assembled set of mix seeds.
             if searchModel == nil { searchModel = SearchModel(repository: repository) }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
-            if libraryModel == nil { libraryModel = sharedLibraryModel }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
         }
         .tint(Palette.accent)
@@ -209,8 +207,8 @@ struct RootView: View {
         } catch {
             return error.userFacingMessage
         }
-        await libraryModel?.reload()
-        openShelf = libraryModel?.shelves.first { $0.state == openShelf?.state }
+        await session.library.reload()
+        openShelf = session.library.shelves.first { $0.state == openShelf?.state }
         return nil
     }
 
@@ -219,7 +217,7 @@ struct RootView: View {
             series: series,
             repository: repository,
             library: library,
-            libraryStore: libraryModel ?? sharedLibraryModel,
+            libraryStore: session.library,
             schedule: schedule,
             characters: characters,
             taste: taste,

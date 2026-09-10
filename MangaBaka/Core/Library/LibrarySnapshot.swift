@@ -119,6 +119,10 @@ actor LibrarySnapshot {
             writeCache(result)
         }
         inFlight = nil
+        // The walk is over, so nobody needs telling about pages any more.
+        // Leaving the handler attached keeps the last screen's closure alive
+        // for the life of the app for no reason.
+        onPage = nil
         return result
     }
 
