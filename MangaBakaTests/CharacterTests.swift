@@ -150,6 +150,35 @@ struct ScheduleScopeTests {
         #expect(ReleaseScheduleService.canRelease(status: status) == expected)
     }
 
+    /// A hiatus is a stop with no announced end, so the past rhythm says
+    /// nothing about the next chapter. Omniscient Reader read "LIKELY · 93 days
+    /// overdue · about every 7 days, very evenly", which describes a schedule
+    /// the series is no longer on.
+    @Test("A series on hiatus is not predicted", arguments: [
+        ("releasing", true), ("hiatus", false), ("on_hiatus", false),
+        ("completed", false), ("cancelled", false)
+    ])
+    func canPredict(_ status: String, _ expected: Bool) {
+        #expect(ReleaseScheduleService.canPredict(status: status) == expected)
+    }
+
+    /// A hiatus series still belongs on the calendar — the reader is partway
+    /// through it and wants to see it there. It just gets no number.
+    @Test("A hiatus series stays on the calendar without an estimate")
+    func hiatusStaysInScope() {
+        #expect(ReleaseScheduleService.isInScope(state: .reading, status: "hiatus"))
+        #expect(!ReleaseScheduleService.canPredict(status: "hiatus"))
+    }
+
+    @Test("Predicting is never broader than releasing", arguments: [
+        "releasing", "hiatus", "on_hiatus", "completed", "cancelled", "unknown"
+    ])
+    func predictImpliesRelease(_ status: String) {
+        if ReleaseScheduleService.canPredict(status: status) {
+            #expect(ReleaseScheduleService.canRelease(status: status))
+        }
+    }
+
     @Test("A missing status is not treated as releasing")
     func missingStatus() {
         #expect(!ReleaseScheduleService.canRelease(status: nil))

@@ -11,7 +11,11 @@ struct CharacterRow: View {
 
     /// Big enough to recognise a face, small enough that four or five fit
     /// across a phone.
-    private static let portrait: CGFloat = 66
+    private static let portrait: CGFloat = 72
+    /// A rounded square, not a circle. A circle takes the corners off a
+    /// portrait, and on this artwork the corners are where the hair, the ears
+    /// and the chin are — every face lost something to it.
+    private static let radius: CGFloat = 16
 
     var body: some View {
         if isLoading {
@@ -43,9 +47,15 @@ struct CharacterRow: View {
             } placeholder: {
                 Palette.imagePlaceholder
             }
-            .frame(width: Self.portrait, height: Self.portrait)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(Palette.border, lineWidth: 0.5))
+            // Top-aligned, because these portraits are taller than they are
+            // wide and the face is at the top of them. Centring the crop —
+            // which is what a plain fill does — trades the head for the torso.
+            .frame(width: Self.portrait, height: Self.portrait, alignment: .top)
+            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                    .strokeBorder(Palette.border, lineWidth: 0.5)
+            )
 
             Text(character.name)
                 .typeGridMeta()
@@ -73,7 +83,7 @@ struct CharacterRow: View {
 
             HStack(spacing: Metrics.gapCovers) {
                 ForEach(0..<4, id: \.self) { _ in
-                    Circle()
+                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
                         .fill(Palette.imagePlaceholder)
                         .frame(width: Self.portrait, height: Self.portrait)
                 }

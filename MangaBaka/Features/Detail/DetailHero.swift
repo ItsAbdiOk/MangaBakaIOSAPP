@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The top of a series page, built to the mockup.
 ///
@@ -15,6 +16,7 @@ struct DetailHero: View {
     let onOpenSchedule: (() -> Void)?
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var didCopy = false
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -72,11 +74,7 @@ struct DetailHero: View {
                         .foregroundStyle(Palette.accent)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(series.displayTitle ?? "Untitled series")
-                    .typeDetailHeroTitle()
-                    .foregroundStyle(Palette.textEmphasis)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
+                title
                 if let byline {
                     Text(byline)
                         .typeSmallMeta()
@@ -87,6 +85,47 @@ struct DetailHero: View {
             }
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Tapping the title copies it.
+    ///
+    /// Reading manga means looking a title up somewhere else constantly — a
+    /// reader, a shop, a search — and retyping a romanised Korean title from a
+    /// phone screen is the worst way to do that. It is a tap on the thing you
+    /// would point at anyway, and it says so rather than copying silently,
+    /// because a clipboard change with no acknowledgement is indistinguishable
+    /// from a tap that missed.
+    private var title: some View {
+        Button {
+            UIPasteboard.general.string = series.displayTitle ?? ""
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.snappy(duration: 0.2)) { didCopy = true }
+            Task {
+                try? await Task.sleep(for: .seconds(1.6))
+                withAnimation(.snappy(duration: 0.25)) { didCopy = false }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(series.displayTitle ?? "Untitled series")
+                    .typeDetailHeroTitle()
+                    .foregroundStyle(Palette.textEmphasis)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                if didCopy {
+                    Text("Copied")
+                        .typeChip()
+                        .foregroundStyle(Palette.accent)
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(series.displayTitle == nil)
+        .padding(.top, 6)
+        .accessibilityLabel(series.displayTitle ?? "Untitled series")
+        .accessibilityHint("Copies the title")
     }
 
     /// "Manhwa · Completed". Either half alone is still worth showing.

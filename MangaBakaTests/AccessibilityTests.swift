@@ -425,12 +425,17 @@ struct DetailAccessibilityLayoutTests {
     /// `lineLimit(1)` the columns compromise by wrapping instead of declaring
     /// a width they cannot meet, and `ViewThatFits` never drops to its
     /// alternative because everything always "fits".
-    @Test("The stats strip's labels cannot wrap")
-    func statLabelsNeverWrap() throws {
+    /// The strip stays one row. Wrapping to a second one — which is what
+    /// ViewThatFits did as soon as five columns stopped fitting, one notch
+    /// above the default text size — turned the design's strip into a card for
+    /// an ordinary reader. Scaling the labels is the lesser evil: they are five
+    /// short words and 70% of small still reads.
+    @Test("The stats strip stays on one row by shrinking, not wrapping")
+    func statStripStaysOneRow() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/DetailStatsStrip.swift")
-        #expect(source.contains("ViewThatFits"))
+        #expect(source.contains("minimumScaleFactor"))
         #expect(source.contains("lineLimit(1)"))
-        #expect(source.contains("fixedSize(horizontal: true"))
+        #expect(!source.contains("ViewThatFits"), "a wrap is not the fix here — shrink instead")
     }
 
     /// A fixed `height` around text that scales is the specific bug: the frame

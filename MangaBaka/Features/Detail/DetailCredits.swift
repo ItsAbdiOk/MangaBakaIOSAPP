@@ -15,10 +15,29 @@ struct DetailCredits: View {
     let series: Series
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// Rows the reader has opened. Publishers is the one that needs it — a
+    /// popular series lists fifteen of them and the row became four lines of
+    /// small print in the middle of the table.
+    @State private var expandedRows: Set<String> = []
 
     struct Row: Identifiable {
         let id: String
         let value: String
+        /// Long, list-shaped values that are worth a tap to see in full. A
+        /// single publisher or a content rating has nothing to expand, and a
+        /// row that responds to a tap by doing nothing is worse than one that
+        /// does not respond at all.
+        var isExpandable = false
+    }
+
+    private func isExpanded(_ row: Row) -> Bool { expandedRows.contains(row.id) }
+
+    private func toggle(_ row: Row) {
+        if expandedRows.contains(row.id) {
+            expandedRows.remove(row.id)
+        } else {
+            expandedRows.insert(row.id)
+        }
     }
 
     var rows: [Row] {
@@ -31,8 +50,11 @@ struct DetailCredits: View {
             out.append(Row(id: "Art", value: artists.joined(separator: ", ")))
         }
         if let publishers = series.publishers, !publishers.isEmpty {
-            out.append(Row(id: publishers.count == 1 ? "Publisher" : "Publishers",
-                           value: publishers.map(\.name).joined(separator: ", ")))
+            out.append(Row(
+                id: publishers.count == 1 ? "Publisher" : "Publishers",
+                value: publishers.map(\.name).joined(separator: ", "),
+                isExpandable: publishers.count > 1
+            ))
         }
         if let contentRating = series.contentRating {
             out.append(Row(id: "Content rating", value: contentRating.capitalized))
@@ -57,6 +79,8 @@ struct DetailCredits: View {
                             Text(row.value)
                                 .typeSmallMeta()
                                 .foregroundStyle(Palette.textPrimary)
+                                .lineLimit(isExpanded(row) ? nil : 1)
+                                .truncationMode(.tail)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,11 +94,18 @@ struct DetailCredits: View {
                                 .typeSmallMeta()
                                 .foregroundStyle(Palette.textPrimary)
                                 .multilineTextAlignment(.trailing)
+                                .lineLimit(isExpanded(row) ? nil : 1)
+                                .truncationMode(.tail)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
                 .padding(.horizontal, 14)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard row.isExpandable else { return }
+                    withAnimation(.snappy(duration: 0.2)) { toggle(row) }
+                }
                 .padding(.vertical, 12)
                 .background(Palette.surface)
                 .overlay(alignment: .bottom) {

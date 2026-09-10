@@ -92,14 +92,25 @@ actor ReleaseScheduleService {
 
     // MARK: - Scope
 
-    /// Whether a series can have a next chapter at all.
+    /// Whether a series is still going, so it belongs on the calendar at all.
     ///
-    /// A completed or cancelled series will never release again, so an estimate
-    /// for one is not a weak answer — it is a wrong one. The detail page showed
-    /// "Completed · 3 years overdue" for Solo Leveling, which is what a median
-    /// gap says about a series that stopped, and it is nonsense.
+    /// A completed or cancelled series will never release again. An estimate
+    /// for one is not a weak answer, it is a wrong one: the page showed
+    /// "Completed · 3 years overdue" for Solo Leveling, which is exactly what a
+    /// median gap says about a series that stopped.
     static func canRelease(status: String?) -> Bool {
         ["releasing", "hiatus", "on_hiatus"].contains(status ?? "")
+    }
+
+    /// Whether a next chapter can honestly be predicted.
+    ///
+    /// Narrower than `canRelease`, and the difference is hiatus. A hiatus is a
+    /// stop with no announced end, so the past rhythm has no bearing on the
+    /// next chapter — the estimate reads "93 days overdue, about every 7 days,
+    /// very evenly", which describes a schedule the series is no longer on. A
+    /// hiatus series still belongs on the calendar; it just gets no number.
+    static func canPredict(status: String?) -> Bool {
+        status == "releasing"
     }
 
     /// Shelf states worth a release estimate: the ones the reader is partway
@@ -301,7 +312,7 @@ actor ReleaseScheduleService {
     /// history": that is a fact about the series, not a failure. A recorded
     /// failure is retried, because it is a fact about the network.
     func cadence(for series: Series) async -> SeriesCadence {
-        guard Self.canRelease(status: series.status) else { return .unavailable }
+        guard Self.canPredict(status: series.status) else { return .unavailable }
         guard let raw = series.mangaUpdatesID,
               let number = MangaUpdatesID.number(from: raw)
         else { return .unavailable }

@@ -292,11 +292,11 @@ struct SeriesDetailView: View {
     /// the others would hold the whole screen on the slowest thing on it; the
     /// hero shows a spinner in its place instead.
     private func loadCadence() async {
-        // Nothing is due for a series that has finished, so nothing is asked
-        // and no spinner is shown.
+        // Nothing is asked, and no spinner shown, for a series that has
+        // finished or stopped — see `canPredict`.
         guard let schedule,
               series.mangaUpdatesID != nil,
-              ReleaseScheduleService.canRelease(status: series.status)
+              ReleaseScheduleService.canPredict(status: series.status)
         else { return }
         isCadenceLoading = true
         defer { isCadenceLoading = false }

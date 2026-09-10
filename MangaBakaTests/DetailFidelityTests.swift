@@ -300,3 +300,71 @@ struct LibraryLookupTests {
         #expect(source.contains("await store.reload()"))
     }
 }
+
+/// Rows that answer with a list, and the title, both had the same problem: a
+/// value too long for the place it sits.
+@Suite("Long values fit where they are")
+@MainActor
+struct DetailRowFittingTests {
+    /// A popular series lists fifteen publishers, which turned one row of the
+    /// credits table into four lines of small print in the middle of it.
+    @Test("A multi-publisher row can be opened")
+    func publishersExpandable() {
+        let many = SeriesFactory.make(id: 1, publishers: [
+            Series.Publisher(name: "3B2S", type: nil, note: nil),
+            Series.Publisher(name: "A.tempo Media", type: nil, note: nil),
+            Series.Publisher(name: "Ize Press", type: nil, note: nil)
+        ])
+        let row = DetailCredits(series: many).rows.first { $0.id == "Publishers" }
+        #expect(row?.isExpandable == true)
+    }
+
+    /// A row that responds to a tap by doing nothing is worse than one that
+    /// does not respond at all.
+    @Test("A single publisher has nothing to open")
+    func singlePublisherNotExpandable() {
+        let one = SeriesFactory.make(id: 1, publishers: [
+            Series.Publisher(name: "Yen Press", type: nil, note: nil)
+        ])
+        let row = DetailCredits(series: one).rows.first { $0.id == "Publisher" }
+        #expect(row?.isExpandable == false)
+    }
+
+    @Test("Short rows are never expandable")
+    func shortRowsFixed() {
+        let series = SeriesFactory.make(id: 1, authors: ["A"], contentRating: "safe")
+        for row in DetailCredits(series: series).rows where row.id != "Publishers" {
+            #expect(!row.isExpandable, "\(row.id) offers a tap that does nothing")
+        }
+    }
+}
+
+/// Looking a title up elsewhere — a reader, a shop, a search — is most of what
+/// happens next, and retyping a romanised Korean title from a phone screen is
+/// the worst way to do it.
+@Suite("The title copies itself", .enabled(if: SourceTree.isAvailable))
+struct TitleCopyTests {
+    @Test("Tapping the title writes it to the pasteboard")
+    func copiesOnTap() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
+        #expect(source.contains("UIPasteboard.general.string = series.displayTitle"))
+    }
+
+    /// A clipboard change with no acknowledgement is indistinguishable from a
+    /// tap that missed.
+    @Test("The copy is acknowledged")
+    func saysSo() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
+        #expect(source.contains("\"Copied\""))
+        #expect(source.contains("impactOccurred()"))
+        #expect(source.contains("accessibilityHint(\"Copies the title\")"))
+    }
+
+    /// There is nothing to copy from a series with no titles, which the schema
+    /// permits, and a button that copies an empty string is a lie.
+    @Test("A series with no title has no copy action")
+    func noTitleNoAction() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
+        #expect(source.contains("disabled(series.displayTitle == nil)"))
+    }
+}

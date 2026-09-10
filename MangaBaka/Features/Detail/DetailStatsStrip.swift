@@ -42,26 +42,25 @@ struct DetailStatsStrip: View {
         return out
     }
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         if !stats.isEmpty {
-            // Five equal columns while they fit, then wrapped segments at their
-            // own widths.
+            // One row, always, until the text is so large that shrinking it
+            // stops being legible.
             //
-            // Not keyed to a text-size threshold, which is what shipped first
-            // and was wrong: at one notch above default — nowhere near an
-            // accessibility size — "CHAPTERS" and "VOLUMES" already wrapped
-            // inside their own columns and rendered as "CHAPTE / RS". The
-            // labels are one word each, so a wrap is always a defect, never a
-            // layout. `lineLimit(1)` makes the columns declare a width they
-            // cannot compromise on, and ViewThatFits drops to the wrapping
-            // arrangement at whatever size that stops fitting.
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 0) { segments(fillsWidth: true) }
-                FlowLayout(spacing: 0) { segments(fillsWidth: false) }
+            // The first attempt wrapped to a second row as soon as five columns
+            // stopped fitting, which was one notch above the default text size
+            // — so an ordinary reader got a two-row card where the design has a
+            // strip. Scaling the labels instead keeps the strip a strip: they
+            // are five short words and 70% of small is still readable.
+            Group {
+                if typeSize.isAccessibilitySize {
+                    FlowLayout(spacing: 0) { segments(fillsWidth: false) }
+                } else {
+                    HStack(spacing: 0) { segments(fillsWidth: true) }
+                }
             }
-            // The wrapped arrangement is only as wide as its content, so
-            // without this the card stopped short of the margin and read as a
-            // different component from the one that fits on one row.
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.surface, in: RoundedRectangle(
                 cornerRadius: Metrics.radiusCard, style: .continuous
@@ -78,16 +77,20 @@ struct DetailStatsStrip: View {
                     .typeRowTitle()
                     .foregroundStyle(Palette.textEmphasis)
                     .lineLimit(1)
+                    .minimumScaleFactor(fillsWidth ? 0.7 : 1)
                 Text(stat.label.uppercased())
                     .typeGridMeta()
                     .tracking(0.4)
                     .foregroundStyle(Palette.textQuaternary)
                     .lineLimit(1)
+                    // A one-word label that wraps is always a defect. Shrinking
+                    // it is the lesser evil, and "CHAPTERS" at 70% still reads.
+                    .minimumScaleFactor(fillsWidth ? 0.7 : 1)
             }
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: !fillsWidth, vertical: false)
             .frame(maxWidth: fillsWidth ? .infinity : nil)
             .padding(.vertical, 12)
-            .padding(.horizontal, fillsWidth ? 6 : 14)
+            .padding(.horizontal, fillsWidth ? 4 : 14)
             .overlay(alignment: .trailing) {
                 if fillsWidth, index < stats.count - 1 {
                     Rectangle().fill(Palette.hairline).frame(width: 0.5)
