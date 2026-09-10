@@ -38,7 +38,24 @@ A free-text list of tags the reader never wants to see. Global — it applies to
 every screen. Add and remove.
 
 ### 5. Attribution
-Where MangaBaka gets credited. **Unsettled — see question 2.**
+**Settled 2026-09-10, and it is a requirement rather than a courtesy.**
+
+MangaBaka's Data License §6.5: *"Applications, websites, or services that display
+data obtained from the MangaBaka API or database downloads must include a visible
+attribution to MangaBaka."* Their API docs accept any of: a link in the footer, a
+link in the About page, or a link next to the specific series.
+
+Two obligations, not one:
+1. **A visible link to MangaBaka**, somewhere a reader can find.
+2. **Credit to the underlying provider** wherever third-party data is shown —
+   AniList, MyAnimeList, MangaUpdates, Anime-Planet and Kitsu all appear in this
+   app's cross-tracker score row, and each has its own attribution rules.
+
+No logo, string or placement is specified, so the design has real latitude — but
+"visible" is the word in the licence, and a link buried three taps down in
+Settings is the interpretation to be able to defend. The series detail screen's
+tracker-score row is arguably the more honest home for the second obligation,
+since that is where the third-party data actually is.
 
 ## Constraints that are not negotiable
 

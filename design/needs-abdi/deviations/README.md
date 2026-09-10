@@ -6,6 +6,18 @@ Screenshots are paired: `NN-mockup.png` is the design, `NN-app.png` is what
 shipped.
 
 Two of these are not "I did it differently". They are **the mockup was wrong**.
+One of them — number 4 — turned out to be **me** being wrong, and is corrected
+below rather than deleted.
+
+**Which shots exist.** 01, 02 and 03 are true pairs, mockup and app. 05, 06 and
+07 are app-only: they are behaviour and spacing, and there is nothing in a static
+mockup to contrast them with. 04 is app-only because there is no disagreement to
+show — see below.
+
+The mockup's series-detail panel only renders once its `detailOpen` state is set,
+which a static render never reaches, so shots 02 and 03 were taken from a scratch
+copy of the mockup with that state flipped. The repo's mockup files were not
+touched.
 
 ---
 
@@ -42,7 +54,8 @@ is a better question and one nothing else in the app answers.
 
 ## 03 — Tags grouped, not listed  *(the mockup was wrong about scale)*
 
-**Mockup:** three tag chips.
+**Mockup:** four tag chips (Murim, Fantasy, Swordsman, Training), with no heading
+above them — they follow the synopsis directly.
 
 **Shipped:** grouped by `tags_v2`'s own taxonomy, weighted by how central each
 tag is, spoilers held back per group as one "4 spoilers" chip, your own
@@ -55,15 +68,28 @@ other thirteen sit behind one control.
 
 ---
 
-## 04 — Covers framed at a fixed 2:3
+## 04 — Covers framed at a fixed 2:3  *(not actually a deviation — correction)*
 
-**Mockup:** each cover sized from its own reported dimensions.
+**I had this wrong, and the correction matters because you are handing these
+notes to a designer.**
 
-**Why:** one 20-item API row returns **14 distinct aspect ratios**, spanning
-0.63 to 0.88. Rows came out visibly ragged with titles on different baselines.
-The full-screen gallery is the exception — it uses each cover's true ratio,
+I recorded on 2026-09-09 that the mockup sized each cover from its own reported
+dimensions and that the app departed from it. It does not. Every cover box in
+every mockup is hardcoded `aspect-ratio:2/3` — 16 occurrences in
+`NewBakaManga.html`, 12 in the older `BakaManga.html`, no other value anywhere.
+The design always framed covers at 2:3 and the app agrees with it.
+
+What is still true is the reason the code does it deliberately: one 20-item API
+row returns **14 distinct aspect ratios**, spanning 0.63 to 0.88. Left to their
+own sizes, rows come out ragged with titles on different baselines. So the
+framing is measured and load-bearing — it is just not a disagreement with the
+design, and the fidelity checklist has been corrected too.
+
+The full-screen gallery is the one place that uses each cover's true ratio,
 because there is one cover on screen and cropping it would show you less of the
 thing you tapped to see.
+
+There is no `04-mockup-covers.png`, because there is nothing to contrast.
 
 ---
 

@@ -1,5 +1,82 @@
 # Questions that need Abdi
 
+**Answered 2026-09-10.** Decisions recorded below; the original briefs follow so
+the reasoning is not lost.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Ask MangaBaka? | **Not yet** — Abdi asks once the app is good enough, and he decides when |
+| 2 | Attribution | **Answered: required.** A visible link to MangaBaka, plus credit to the underlying provider. Full terms in `mangabaka-terms.md` |
+| 3 | Crash reporting | **Apple's built-in only**, on the condition it costs nothing and slows nothing |
+| 4 | AniList | **Keep it.** It will come back; unstable is acceptable |
+| 5 | Recently viewed | **Build it** |
+| 6 | App icon | Still open |
+| 7 | Drawn switch | Abdi will test it — needs the repro steps, see below |
+| 8 | Mix filters / lens / library search | **Design in Claude Design.** Briefs must state only what the app can actually do |
+| 9 | Who designs the six | **Together** — Abdi and Claude write the prompt, Claude Design produces the mockup, Claude builds it |
+
+### On #3, what "Apple's built-in" actually means
+
+No SDK, no code, no runtime cost, no money. TestFlight testers get an iOS-level
+"Share With App Developers" opt-in they either accepted or did not; crash reports
+land in Xcode → Organizer, on your account only. Nothing to build — it is on by
+virtue of shipping through TestFlight. The one thing worth adding later is
+uploading dSYMs so the stack traces are readable rather than hex addresses, which
+Xcode does automatically on an archive.
+
+### On #2, what their terms actually say
+
+Read on 2026-09-10, quoted with URLs in `mangabaka-terms.md`. Three things bear
+on the app directly:
+
+**Attribution is required, and it is not optional politeness.** Data License
+§6.5: *"Applications, websites, or services that display data obtained from the
+MangaBaka API or database downloads must include a visible attribution to
+MangaBaka."* No logo or exact string is specified — a link, in the About page,
+the footer, or next to the series. Where third-party data is shown (AniList,
+MAL, MangaUpdates, Anime-Planet, Kitsu) you must **also** credit that provider
+per their own rules. **This turns Settings' empty attribution row into a
+requirement with a spec**, and the design prompt has been updated.
+
+**A third-party client is not explicitly permitted — it is silence shaped like
+permission.** Nothing forbids it, and the AUP and Data License both regulate
+"applications using OAuth" and applications "that display data obtained from the
+API", which only makes sense if clients are expected. What *is* explicitly
+forbidden: bulk-harvesting the database through the API, mirroring or running a
+competing service, redistributing third-party data, and **commercial use without
+a licence**.
+
+**The commercial clause is the one to raise when you email them.** MangaBaka's
+own data is CC BY-NC-SA 4.0 — non-commercial. A free App Store app with no ads
+and no purchases is very probably fine, but "probably" is doing work there, and
+it is exactly the kind of thing to have in writing before the App Store rather
+than after. Their contact is `legal@mangabaka.org`.
+
+Two things I checked myself rather than taking the agent's word for:
+- It warned that `api.mangabaka.dev` is dead and returns a 500. **The app already
+  points at `api.mangabaka.org`** — one line, `MangaBakaApp.swift:35`. Not a bug.
+- It could find no trace of `blend_user_id` in any of their docs or policies. That
+  strengthens the case for leaving it alone: an undocumented parameter that
+  exposes one user's taste to another, with no published consent story.
+
+### On #7, what the drawn switch is, and how to test it
+
+**Not** the Control Centre / menu bar drag. It is inside the app:
+
+**Settings → Content ratings → the "Suggestive" or "Explicit" row.**
+
+Those rows show a green/grey switch. That switch is a **picture**. The thing that
+actually responds is the whole row behind it. I did it that way because SwiftUI's
+real `Toggle` there would only flip when I dragged across it, never when I tapped
+it — and the drag worked at the exact coordinate the tap had just failed at.
+
+**How to test:** tap directly on the little switch itself, nowhere else. If it
+flips, my workaround is unnecessary and I should put the real control back. If
+you have to drag it, the workaround stays. Either answer is useful.
+
+---
+
+
 Written 2026-09-10. Each one is blocking something, or will be before TestFlight.
 Nothing here is a preference poll — these are decisions I should not make alone.
 

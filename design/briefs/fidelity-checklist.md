@@ -82,10 +82,15 @@ the new mockups rather than assuming either is right.
 These were changed against the mockup deliberately, each after a real failure
 on hardware. Do not silently revert them to match a design.
 
-1. **Covers are framed at a fixed 2:3.** The mockup sized each cover from its
-   own reported dimensions. One 20-item API row returns 14 distinct aspect
-   ratios spanning 0.63 to 0.88, which made rows visibly ragged with titles on
-   different baselines.
+1. **Covers are framed at a fixed 2:3.** *Corrected 2026-09-10: this was listed
+   as a deviation and is not one.* Every cover box in every mockup is hardcoded
+   `aspect-ratio:2/3` — 16 occurrences in `NewBakaManga.html`, 12 in
+   `BakaManga.html`, no other value anywhere. The claim that the mockup sized
+   each cover from its own dimensions was simply wrong. The measurement behind
+   the code stands: one 20-item API row returns 14 distinct aspect ratios
+   spanning 0.63 to 0.88, which made rows visibly ragged with titles on
+   different baselines. The framing is load-bearing; it just agrees with the
+   design rather than departing from it.
 2. **Tab bar clearance is 96pt, not 24.** 24pt cannot clear an 80pt floating
    bar, so the last row of every screen was unreachable.
 3. **The peeking card shows no text.** Its title rendered at half opacity
