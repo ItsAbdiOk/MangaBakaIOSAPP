@@ -47,6 +47,19 @@ actor ShelfStore {
         }
     }
 
+    /// Forgets every save and skip.
+    ///
+    /// Only the local shelf. A save also wrote `plan_to_read` to the reader's
+    /// MangaBaka library, and this deliberately does not touch that: deleting
+    /// entries from someone's real account to undo a swipe would be a much
+    /// larger action than the one they asked for, and the Library tab is where
+    /// account entries are removed.
+    func clear() throws {
+        _ = try database.writer.write { db in
+            try ShelfEntry.deleteAll(db)
+        }
+    }
+
     /// IDs the reader has already reacted to, so the stack stops showing them.
     func reactedIDs() throws -> Set<Int> {
         try database.writer.read { db in

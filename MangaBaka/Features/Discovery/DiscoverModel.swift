@@ -36,7 +36,12 @@ final class DiscoverModel {
     private(set) var rows: [Row] = [
         Row(kind: .rising, title: "Rising this week", more: "7 days"),
         Row(kind: .hiddenGems, title: "Hidden gems", more: "See all"),
-        Row(kind: .trending, title: "Trending", more: "7d · 30d")
+        Row(kind: .trending, title: "Trending", more: "7d · 30d"),
+        // MangaBaka's own homepage carries four rails — Trending, Rising in
+        // libraries, Hidden gems and New releases — and this app had the first
+        // three. There is no "recently viewed" on their site to mirror; that
+        // would have to be built from what this device has opened.
+        Row(kind: .newReleases, title: "New releases", more: "Just added")
     ]
 
     /// How many series are cached, for the subtitle. Zero until it is read.

@@ -36,8 +36,6 @@ struct ChromeReachabilityTests {
     /// reintroduce the stacked-header spacing that was just removed.
     @Test("No second top bar was reintroduced")
     func noTopBar() throws {
-        let chrome = try SourceTree.read("MangaBaka/Features/Chrome/AppTabBar.swift")
-        #expect(!chrome.contains("struct AppTopBar"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(!root.contains("AppTopBar("))
     }

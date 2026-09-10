@@ -173,6 +173,28 @@ final class StackModel {
         queue.append(contentsOf: series.filter { !known.contains($0.id) })
     }
 
+    /// Empties the stack and starts again from nothing.
+    ///
+    /// The stack blends what comes next from what has been saved, so a handful
+    /// of swipes in a direction the reader did not mean sends every subsequent
+    /// card the same way, with no way back — there is no "unswipe". This is the
+    /// way back.
+    ///
+    /// Clears the local shelf, the reacted set and the seed pool, then reloads.
+    /// It does not touch the reader's MangaBaka library: a save also wrote
+    /// `plan_to_read` there, and silently deleting rows from someone's account
+    /// is a bigger action than the one being asked for.
+    func resetStack() async {
+        try? await shelf.clear()
+        reacted = []
+        saved = []
+        queue = []
+        previous = nil
+        seedPool = []
+        saveWarning = nil
+        await loadIfNeeded()
+    }
+
     func react(_ kind: ShelfEntry.Kind) async {
         guard let series = current else { return }
         saveWarning = nil

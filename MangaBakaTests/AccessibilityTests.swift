@@ -178,12 +178,17 @@ struct TabBarClearanceTests {
         "MangaBaka/Features/Settings/SettingsView.swift"
     ]
 
-    /// The floating capsule is roughly 61pt tall and sits `tabBarBottomInset`
-    /// off the bottom edge. The bottom inset every screen reserves has to clear
-    /// that, or its last row is stranded.
-    @Test("The bottom inset exceeds the tab bar's height plus its inset")
+    /// The system tab bar is a floating capsule roughly 61pt tall sitting a
+    /// little off the bottom edge. Content scrolling *under* it is intended —
+    /// that is what the glass is for — but content that can never scroll clear
+    /// of it is stranded, which is the bug this guards.
+    ///
+    /// The number is no longer derived from a metric the app owns, because the
+    /// app no longer draws the bar. 96 is the measured height of the system
+    /// capsule plus its inset on the devices this ships to, with slack.
+    @Test("The bottom inset clears the system tab bar")
     func clearanceIsEnough() {
-        #expect(Metrics.scrollBottomInset >= 61 + Metrics.tabBarBottomInset)
+        #expect(Metrics.scrollBottomInset >= 96)
     }
 
     @Test(
@@ -295,24 +300,24 @@ struct ContentRowTests {
 /// the system one survives.
 @Suite("The tab bar holds its size", .enabled(if: SourceTree.isAvailable))
 struct TabBarSizingTests {
-    /// At the largest accessibility size the labels wrapped to three lines each,
-    /// the capsule ballooned into the middle of the screen, and it covered
-    /// content on every screen — including its own tap targets, which ended up
-    /// 80pt from where they were drawn.
-    @Test("Labels are dropped at accessibility sizes rather than scaled")
-    func dropsLabelsWhenHuge() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Chrome/AppTabBar.swift")
-        #expect(source.contains("isAccessibilitySize"))
-        #expect(source.contains("dynamicTypeSize"))
-    }
-
-    /// Dropping the label must not drop the name: the icons are not labelled by
-    /// anything else.
-    @Test("Every tab keeps an accessibility label")
-    func keepsAccessibilityLabels() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Chrome/AppTabBar.swift")
-        #expect(source.contains("accessibilityLabel(tab.title)"))
-        #expect(source.contains("accessibilityLabel(\"Search\")"))
+    /// Both of the tests that used to live here checked a hand-drawn tab bar:
+    /// that its labels dropped at accessibility sizes, and that every tab kept
+    /// an accessibility label anyway. The bar is the system's now, so Apple
+    /// answers for both — and answers better, since the native bar also resizes
+    /// its selection indicator, slides it under a dragging finger and gets out
+    /// of the way on scroll, none of which the hand-drawn one did.
+    ///
+    /// What is worth asserting is that it stays the system's.
+    @Test("The tab bar is the system's, not a drawing of one")
+    func usesTheSystemTabBar() throws {
+        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        #expect(root.contains("role: .search"), "search should detach itself, not be drawn apart")
+        #expect(root.contains("tabBarMinimizeBehavior"))
+        #expect(
+            !root.contains(".toolbar(.hidden, for: .tabBar)"),
+            "hiding the real bar is what forced a hand-drawn one"
+        )
+        #expect(!SourceTree.exists("MangaBaka/Features/Chrome/AppTabBar.swift"))
     }
 }
 

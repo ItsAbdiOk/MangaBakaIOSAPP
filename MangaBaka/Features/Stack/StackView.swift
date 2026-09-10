@@ -65,6 +65,7 @@ struct StackView: View {
             }
             .padding(.horizontal, Metrics.gutterStack)
             .padding(.bottom, 14)
+            .overlay(alignment: .topTrailing) { resetMenu }
         } else {
             headerRow
         }
@@ -75,9 +76,14 @@ struct StackView: View {
             headerTitle
             Spacer(minLength: 0)
             headerCount
+            resetMenu
         }
         .padding(.horizontal, Metrics.gutterStack)
         .padding(.bottom, 14)
+    }
+
+    private var resetMenu: some View {
+        StackResetMenu { await model.resetStack() }
     }
 
     private var headerTitle: some View {

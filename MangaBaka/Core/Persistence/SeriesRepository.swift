@@ -121,6 +121,9 @@ enum FeedKind: Sendable, Hashable {
     case rising
     case hiddenGems
     case trending
+    /// What MangaBaka's own homepage calls "New releases": the most recently
+    /// added series, `sort_by=latest`.
+    case newReleases
     /// Series similar to another, used on the detail screen.
     case similar(seriesId: Int)
     /// "Readers also like", also on the detail screen.
@@ -138,6 +141,7 @@ enum FeedKind: Sendable, Hashable {
         case .rising: "discover/rising"
         case .hiddenGems: "discover/hidden-gems"
         case .trending: "discover/trending"
+        case .newReleases: "discover/new-releases"
         case let .similar(id): "series/\(id)/similar"
         case let .readersAlsoLike(id): "series/\(id)/readers-also-like"
         case let .mix(seeds): "series/mix/" + seeds.sorted().map(String.init).joined(separator: "-")
@@ -149,7 +153,7 @@ enum FeedKind: Sendable, Hashable {
         switch self {
         case .rising: "/v2/series/discover/rising"
         case .hiddenGems: "/v2/series/discover/hidden-gems"
-        case .trending: "/v2/series/search"
+        case .trending, .newReleases: "/v2/series/search"
         case let .similar(id): "/v2/series/\(id)/similar"
         case let .readersAlsoLike(id): "/v2/series/\(id)/readers-also-like"
         case .mix: "/v1/series/mix"
@@ -163,7 +167,7 @@ enum FeedKind: Sendable, Hashable {
     var isRecommendationShaped: Bool {
         switch self {
         case .similar, .readersAlsoLike, .mix: true
-        case .rising, .hiddenGems, .trending, .surprise: false
+        case .rising, .hiddenGems, .trending, .newReleases, .surprise: false
         }
     }
 
@@ -175,7 +179,7 @@ enum FeedKind: Sendable, Hashable {
     /// search-backed rows page to 100.
     var supportsPaging: Bool {
         switch self {
-        case .trending, .surprise: true
+        case .trending, .newReleases, .surprise: true
         case .rising, .hiddenGems, .similar, .readersAlsoLike, .mix: false
         }
     }
@@ -185,6 +189,8 @@ enum FeedKind: Sendable, Hashable {
         switch self {
         case .trending:
             [URLQueryItem(name: "sort_by", value: "trending_7d")]
+        case .newReleases:
+            [URLQueryItem(name: "sort_by", value: "latest")]
         case let .mix(seeds) where !seeds.isEmpty:
             // Repeated keys, not comma-joined. A comma-joined list is rejected:
             // "Invalid input: expected number, received NaN at series[0]",
@@ -217,7 +223,7 @@ enum FeedKind: Sendable, Hashable {
         case .rising, .hiddenGems: 20
         case .similar, .readersAlsoLike: 24
         case .mix: 50
-        case .trending: 20
+        case .trending, .newReleases: 20
         case .surprise: 50
         }
     }
@@ -235,6 +241,9 @@ enum FeedKind: Sendable, Hashable {
         // Search-backed and blended results are not CDN-pinned to a day; an
         // hour keeps them lively without spending requests on every visit.
         case .trending, .mix: 3_600
+        // New releases changes as fast as the catalogue is edited, and the
+        // whole point of the row is that it is new.
+        case .newReleases: 1_800
         // A surprise queue that returned the same series on every visit would
         // not be a surprise. Never served from cache.
         case .surprise: 0

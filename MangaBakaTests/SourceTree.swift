@@ -22,6 +22,10 @@ enum SourceTree {
         FileManager.default.fileExists(atPath: "\(root)/MangaBaka/App/MangaBakaApp.swift")
     }
 
+    static func exists(_ relativePath: String) -> Bool {
+        FileManager.default.fileExists(atPath: "\(root)/\(relativePath)")
+    }
+
     static func read(_ relativePath: String) throws -> String {
         try String(contentsOfFile: "\(root)/\(relativePath)", encoding: .utf8)
     }

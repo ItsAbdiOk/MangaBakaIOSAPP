@@ -86,20 +86,6 @@ enum Metrics {
 
     // MARK: The floating chrome
 
-    /// One tab inside the capsule.
-    static let tabWidth: CGFloat = 62
-    static let tabIcon: CGFloat = 21
-    /// The capsule's own padding around its tabs.
-    static let tabCapsulePadding: CGFloat = 6
-    /// Between the capsule and the search button beside it.
-    static let tabCapsuleGap: CGFloat = 10
-    /// How far the whole assembly sits off the bottom.
-    ///
-    /// Measured from the SAFE AREA, not the screen edge, so the home indicator
-    /// already lifts it about 34pt. At 30 on top of that the bar floated well
-    /// clear of the bottom and read as sitting in the middle of the screen.
-    static let tabBarBottomInset: CGFloat = 8
-    static let searchButton: CGFloat = 58
     static let coverUpcomingThumb: CGFloat = 52
 
     /// Every cover in the app is 2:3.
@@ -123,11 +109,9 @@ enum Metrics {
     /// it: with only a few points of padding, the last line of the last row
     /// stays permanently behind the glass and cannot be read.
     ///
-    /// Sized to the capsule plus the home indicator rather than guessed: the
-    /// bar is 62pt tall and sits 22pt from the bottom, and a little slack keeps
-    /// a descender off the edge.
-    /// Clearance under the floating tab bar: its height, its inset, and room to
-    /// read the last row rather than have it hug the glass.
+    /// Sized to the system capsule plus the home indicator rather than guessed:
+    /// the bar is about 62pt tall and sits ~22pt from the bottom, and a little
+    /// slack keeps a descender off the glass.
     static let scrollBottomInset: CGFloat = 124
 }
 

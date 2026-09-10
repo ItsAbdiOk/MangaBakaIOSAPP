@@ -179,3 +179,81 @@ struct PartialDataTests {
         #expect(model.failure == nil)
     }
 }
+
+/// The way back out of a run of swipes.
+///
+/// The stack blends what comes next from what has been saved, so a handful of
+/// swipes in a direction the reader did not mean sends every card after them
+/// the same way — and there is no unswipe.
+@Suite("Starting the stack over", .enabled(if: SourceTree.isAvailable))
+struct StackResetTests {
+    @Test("The stack can be emptied and re-dealt")
+    func resetExists() throws {
+        let model = try SourceTree.read("MangaBaka/Features/Stack/StackModel.swift")
+        #expect(model.contains("func resetStack()"))
+        // Every piece of state that decides what comes next has to go, or the
+        // reset deals the same cards again.
+        for cleared in ["reacted = []", "saved = []", "queue = []", "seedPool = []"] {
+            #expect(model.contains(cleared), "resetStack leaves \(cleared) behind")
+        }
+        #expect(model.contains("try? await shelf.clear()"))
+    }
+
+    /// Deleting rows from someone's real account to undo a swipe is a much
+    /// larger action than the one being asked for.
+    @Test("The reset does not touch the reader's MangaBaka library")
+    func resetIsLocal() throws {
+        let shelf = try SourceTree.read("MangaBaka/Features/Shelf/ShelfStore.swift")
+        #expect(shelf.contains("func clear()"))
+        #expect(shelf.contains("ShelfEntry.deleteAll(db)"))
+
+        let model = try SourceTree.read("MangaBaka/Features/Stack/StackModel.swift")
+        // The one thing it must not do.
+        #expect(!model.contains("library.remove("))
+    }
+
+    /// It throws away every save and skip on the device, so it asks first — and
+    /// says what it will and will not touch.
+    @Test("It is confirmed, and the confirmation is honest")
+    func resetIsConfirmed() throws {
+        let menu = try SourceTree.read("MangaBaka/Features/Stack/StackResetMenu.swift")
+        #expect(menu.contains("confirmationDialog"))
+        #expect(menu.contains("MangaBaka library stays there"))
+
+        let view = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
+        #expect(view.contains("resetStack()"))
+    }
+}
+
+/// MangaBaka's own homepage carries four rails; this app had three.
+@Suite("Discover rows")
+struct DiscoverRowTests {
+    /// Their "New releases". `sort_by=latest` is what backs it — checked
+    /// against the live search endpoint, which returns rows for it.
+    @Test("New releases asks for the latest, and can page")
+    func newReleasesFeed() {
+        #expect(FeedKind.newReleases.path == "/v2/series/search")
+        #expect(
+            FeedKind.newReleases.extraQuery
+                .contains { $0.name == "sort_by" && $0.value == "latest" }
+        )
+        #expect(FeedKind.newReleases.supportsPaging)
+    }
+
+    /// Its own cache key, or it would share one with another search-backed row
+    /// and serve that row's results.
+    @Test("Every feed caches under its own key")
+    func distinctCacheKeys() {
+        let keys = [
+            FeedKind.rising, .hiddenGems, .trending, .newReleases, .surprise
+        ].map(\.cacheKey)
+        #expect(Set(keys).count == keys.count)
+    }
+
+    /// The row is only worth having if it is fresher than the rest; a day-long
+    /// cache would make "new releases" a day old.
+    @Test("New releases is cached for less than a day")
+    func freshness() {
+        #expect(FeedKind.newReleases.freshness < FeedKind.rising.freshness)
+    }
+}

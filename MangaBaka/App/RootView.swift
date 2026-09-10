@@ -5,7 +5,7 @@ import SwiftUI
 /// The mockup replaces the system tab bar with a floating capsule of four tabs
 /// and a separate search button. A real `TabView` still runs underneath with
 /// its own bar hidden, so per-tab navigation stacks, lazy loading and state
-/// restoration all keep working; `AppTabBar` only draws over it and drives the
+/// restoration all keep working; the system tab bar draws over it and drives the
 /// selection. Rebuilding tab switching by hand would have traded all of that
 /// away for a visual change.
 struct RootView: View {
@@ -64,7 +64,6 @@ struct RootView: View {
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
             Tab(AppTab.stack.title, systemImage: AppTab.stack.symbol, value: AppTab.stack) {
                 NavigationStack(path: $stackPath) {
@@ -75,7 +74,6 @@ struct RootView: View {
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
             Tab(AppTab.mix.title, systemImage: AppTab.mix.symbol, value: AppTab.mix) {
                 NavigationStack(path: $mixPath) {
@@ -89,7 +87,6 @@ struct RootView: View {
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
             Tab(AppTab.library.title, systemImage: AppTab.library.symbol, value: AppTab.library) {
                 NavigationStack(path: $shelfPath) {
@@ -133,9 +130,16 @@ struct RootView: View {
                             )
                         }
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
-            Tab(AppTab.search.title, systemImage: AppTab.search.symbol, value: AppTab.search) {
+            // `.search` is what renders it as the circle beside the capsule
+            // rather than a fifth item inside it — the mockup's arrangement,
+            // done by the system.
+            Tab(
+                AppTab.search.title,
+                systemImage: AppTab.search.symbol,
+                value: AppTab.search,
+                role: .search
+            ) {
                 NavigationStack(path: $searchPath) {
                     SearchView(
                         model: searchModel ?? SearchModel(repository: repository),
@@ -159,21 +163,19 @@ struct RootView: View {
                         )
                     }
                 }
-                .toolbar(.hidden, for: .tabBar)
             }
         }
-        // Hidden on each tab's CONTENT, not on the TabView. Applied to the
-        // TabView it silently does nothing, which left the system bar mounted
-        // underneath the capsule: two tab bars, both live, and taps near the
-        // search button landing in the gap between them.
-        .overlay(alignment: .bottom) {
-            AppTabBar(
-                selection: $selection,
-                isSearching: selection == .search,
-                onSearch: { selection = .search },
-                onReselect: popToRoot
-            )
-        }
+        // The system tab bar, not a drawing of one.
+        //
+        // This was hand-built to match the mockup's floating capsule plus a
+        // detached search circle, with the real bar hidden underneath. On iOS 26
+        // that is what the system bar already *is* — a floating glass capsule —
+        // and `TabRole.search` is what detaches search from it. Hand-drawing it
+        // cost the things Apple ships with it and nobody can reasonably rebuild:
+        // the selection indicator that resizes to its label and slides between
+        // tabs under a dragging finger, the scroll-away behaviour, and the
+        // specular response of real Liquid Glass to what is behind it.
+        .tabBarMinimizeBehavior(.onScrollDown)
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
             // a half-typed query or an assembled set of mix seeds.

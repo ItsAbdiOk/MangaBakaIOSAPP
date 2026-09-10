@@ -44,7 +44,6 @@
 		36C2DF96E7590664007DA15E /* BlendDNA.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD80FA82C8DB0C1F8B36440D /* BlendDNA.swift */; };
 		36EE0D59969208E71A0896B4 /* rising.json in Resources */ = {isa = PBXBuildFile; fileRef = 71998B36D08E3ED54E1F4FCD /* rising.json */; };
 		3C0209647E5C6258F70805F4 /* AppTabSymbolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AA8554F4F2A288AE0D7046 /* AppTabSymbolTests.swift */; };
-		3C02B891276AE0527B71A0F9 /* AppTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0BD234DA471FEA2438D691E /* AppTabBar.swift */; };
 		3C594BEEA5A916DDCB698FC8 /* SeriesTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5122FBDB1BF06F41C1792763 /* SeriesTag.swift */; };
 		3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */; };
 		3D4A4EC64B6872907B3174C9 /* TagGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0D6462580D13B5583DD893 /* TagGroupingTests.swift */; };
@@ -98,6 +97,7 @@
 		89616BE16C7EB690A1292326 /* LibraryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 657A52EB92EF36BCF2CA0380 /* LibraryModelTests.swift */; };
 		8CACB955CD13B9C38F4C0F1C /* LibraryControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE3CCF279C256CEBA790EBE /* LibraryControl.swift */; };
 		8CD0996F5A07416E481A43CA /* LibraryControlTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC3D895CA9F68D2138AB518 /* LibraryControlTests.swift */; };
+		90E969A30611E9EA5F9ABE2C /* StackResetMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */; };
 		921DBEB63FED7F72BA3AB287 /* BrowseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42EC577D0B00F110637E3C /* BrowseModel.swift */; };
 		94361F7A09FF2CC5602F116A /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 6D13144E0F22A479D2873FDA /* GRDB */; };
 		94B7F6C7E0E887A9DE98D019 /* SeriesCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6D31D55F3CD036F8134FB4F /* SeriesCharacter.swift */; };
@@ -326,6 +326,7 @@
 		D92F559E37D9F787FEAACCA1 /* DetailHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailHero.swift; sourceTree = "<group>"; };
 		D9A8619A97BD3D79D30DB90B /* SeriesExtrasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesExtrasTests.swift; sourceTree = "<group>"; };
 		DA80EE3FE0BAFFD883C3E1CA /* control.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = control.json; sourceTree = "<group>"; };
+		DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackResetMenu.swift; sourceTree = "<group>"; };
 		DC42EC577D0B00F110637E3C /* BrowseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseModel.swift; sourceTree = "<group>"; };
 		DC64BD874EBCE6A7158371CF /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
 		E34EA181BB806A56A047B665 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
@@ -336,7 +337,6 @@
 		ECDC6890749C1997497BEE11 /* SeriesRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesRepositoryTests.swift; sourceTree = "<group>"; };
 		EE257CD51DA39AFFD611379A /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
 		EF224B95D6171608E734DE78 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
-		F0BD234DA471FEA2438D691E /* AppTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTabBar.swift; sourceTree = "<group>"; };
 		F33D33D9B86DA76ACDA606D9 /* BlurHashCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurHashCache.swift; sourceTree = "<group>"; };
 		F3E8D05B8A16F72E1C223EAD /* PickBackUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickBackUp.swift; sourceTree = "<group>"; };
 		F4075AE7919C18D0E0D85BA4 /* CoverStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverStore.swift; sourceTree = "<group>"; };
@@ -457,7 +457,6 @@
 			isa = PBXGroup;
 			children = (
 				99BBBC6613B2F8B2C3DE48AB /* Browse */,
-				8AB74AA80AF3ED6D9E560851 /* Chrome */,
 				190FB6DA5777617E57ED0940 /* Detail */,
 				B43106F58099E6DACB2AC4D8 /* Discovery */,
 				84CFC186EDB4AF191FF028FF /* Library */,
@@ -501,6 +500,7 @@
 			isa = PBXGroup;
 			children = (
 				66AC80B7959AD108FCFD7FFF /* StackModel.swift */,
+				DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */,
 				2AE431E64B0087435EC511EF /* StackSections.swift */,
 				C17FEBF52EDDF5C6DAE7F64B /* StackView.swift */,
 			);
@@ -577,14 +577,6 @@
 				9601F9FF505DB84191E7A799 /* MangaBakaTests */,
 				C5D60635B1D5551B614A5779 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		8AB74AA80AF3ED6D9E560851 /* Chrome */ = {
-			isa = PBXGroup;
-			children = (
-				F0BD234DA471FEA2438D691E /* AppTabBar.swift */,
-			);
-			path = Chrome;
 			sourceTree = "<group>";
 		};
 		9601F9FF505DB84191E7A799 /* MangaBakaTests */ = {
@@ -913,7 +905,6 @@
 				66FD67110F3BE0EA1634ABBF /* AniListClient.swift in Sources */,
 				14C86245A2FFF1449145B702 /* AppDatabase.swift in Sources */,
 				5E5419B9C92EFD15F4A4A0DA /* AppTab.swift in Sources */,
-				3C02B891276AE0527B71A0F9 /* AppTabBar.swift in Sources */,
 				36C2DF96E7590664007DA15E /* BlendDNA.swift in Sources */,
 				5E5CD486900B49F08F6549CD /* BlendDNAView.swift in Sources */,
 				26D87C2933C8B410AF141D71 /* BlockedTags.swift in Sources */,
@@ -999,6 +990,7 @@
 				E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */,
 				2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */,
 				1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */,
+				90E969A30611E9EA5F9ABE2C /* StackResetMenu.swift in Sources */,
 				E13E7297E0BCA823074FC920 /* StackSections.swift in Sources */,
 				B72756445980F083663658AA /* StackView.swift in Sources */,
 				DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */,
