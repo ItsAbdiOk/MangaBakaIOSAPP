@@ -5,20 +5,37 @@ links to the official product, the official reader, or a first-party store,
 and only where the source says the thing exists in the reader's language.
 Weekly limit reset before any of it is built.
 
+## Done 2026-09-11 (easiest first, on the £8 of extra credits)
+
+- **1. Hero compression only when it has to** — `5be4a35`. Measured, not
+  `ViewThatFits` (unbounded height in a ScrollView); full column shown when
+  ≤ the cover's 225pt. One unreproduced first-open compact on ONE PIECE.
+- **2 + "Where to read, in your language"** — `f4de983`. One surface: a
+  "Read in English" chip row under the actions, one chip per platform in the
+  reader's language, opening the title's own link through the system.
+  **Still to check on the phone:** that Webtoons/Tapas open in-app.
+- **iOS search finds your library** — `0e9cbab`, Spotlight half. Verified on
+  the simulator. App Intents half still to do (below).
+- **mangabaka.org links** — `99135b7`, our side. Share button live; opening
+  is dormant until the association file exists. **Ask for MangaBaka** (not
+  sent — draft):
+  > Could mangabaka.org host `/.well-known/apple-app-site-association`
+  > (served as `application/json`, no redirect) with
+  > `{"applinks":{"details":[{"appIDs":["<TEAMID>.dev.abdirahmanmohamed.mangabaka"],"components":[{"/":"/*/*/*"},{"/":"/*/*"}]}]}}`?
+  > Then series links open in the iOS app when it is installed.
+  Our side after that: the Associated Domains entitlement
+  (`applinks:mangabaka.org`) — a provisioning change, do it on a day with a
+  TestFlight build to check.
+- **Four small review findings** — `de7b802`: D-A4 (double search), D-B2
+  (torn row on refresh — the review's suggested guard was wrong, the test
+  caught it), L10, W16. P-F12 was already settled by `2f78286`.
+
 ## From Abdi, in build order
 
-1. **Hero compression only when it has to.** Full hero (byline, cadence
-   sentence, bigger schedule) if it fits the cover's height; the compact forms
-   only when it would not. `ViewThatFits` vertical, full first. Half a day.
-   Two UI snapshots (short title, long title).
+1. ~~Hero compression only when it has to.~~ Done, above.
 
-2. **"Read" opens the exact title in the official app.** Webtoons, Tapas
-   (verify), via universal links: `UIApplication.open` on the READ OFFICIALLY
-   link MangaBaka already gives us — the app opens at that title if installed,
-   Safari if not. Language comes from the link, so the button only appears for
-   a link in the reader's language on a verified platform; otherwise no button.
-   Kakao unverified. Cannot be tested on the simulator — needs the phone with
-   Webtoons installed. Half a day plus that check.
+2. ~~"Read" opens the exact title in the official app.~~ Done as the chip
+   row, above; phone check outstanding.
 
 3. **Glass covers everywhere, cover colour bleeding into the ground.** BlurHash
    already gives a dominant colour per card for free; a per-row ambient tint is
@@ -63,16 +80,13 @@ Weekly limit reset before any of it is built.
 - **Price.** Apple Books' price beside MangaBaka's own listed price on the
   volume sheet, from the same lookup as item 4. No Play Books price: nobody
   here can buy there. Half a day once 4 exists.
-- **iOS search finds your library.** Core Spotlight index of library series
-  (title, cover, state) so Spotlight opens the series page. App Intents for
-  "What's due this week" and "Open <series>". No network, no terms. ~1 day.
-- **mangabaka.org links open in the app.** Universal links for our own domain
-  paths (`/manhwa/3397/…` → series page), and the share sheet sends that link.
-  Needs the association file hosted on mangabaka.org — ask MangaBaka. Half a
-  day our side.
-- **"Where to read, in your language."** A row on the series page listing the
-  official platforms carrying it in the reader's language, from the links we
-  already decode and filter — the surface item 2's button sits on. Half a day.
+- **iOS search finds your library.** Spotlight half done (`0e9cbab`; no cover
+  thumbnails yet — covers are in URLCache, measure before pulling 900 through
+  it per launch). Still to do: App Intents for "What's due this week" and
+  "Open <series>". Half a day.
+- **mangabaka.org links open in the app.** Our side done (`99135b7`); waiting
+  on MangaBaka for the association file, then the entitlement.
+- ~~"Where to read, in your language."~~ Done (`f4de983`).
 - **New from a publisher you follow.** `/v1/publishers/{id}/collections`
   exists; a "coming from Seven Seas" row or a reminder when a followed
   publisher lists a volume. 1 day; needs a design for "follow".
@@ -96,6 +110,5 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
   Bold Text; S-F6 `Motion` and view invalidation; S-F4 the key-window inset.
 - **Tied to the shelf decision** — L3 `shelves` derived for a screen nothing
   presents.
-- **Small and unglamorous** — L10 the 0.6/0.3 thresholds in a view (label
-  them when next in the file); P-F12 three filter functions as one; D-A4;
-  D-B2; W16 a comment naming values the schema lacks.
+- ~~Small and unglamorous~~ — all settled 2026-09-11 (`de7b802`; P-F12 by
+  `2f78286`).
