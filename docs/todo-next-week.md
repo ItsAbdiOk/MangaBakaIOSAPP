@@ -36,17 +36,20 @@ Weekly limit reset before any of it is built.
      rows carry `type: volume`, `index`, `language`, and may hold far more
      than `/works`. *First thing: one request for One Piece to see.*
    - **Fill**: iTunes Search API (`media=ebook`, `country=` — 600px art, Apple
-     Books link, one result per volume sold), then Google Books (ISBN
-     resolver, smaller images, Play Books link, 1,000/day).
+     Books link, one result per volume sold), then Google Books as the ISBN
+     resolver and cover gap-filler only. **Google is data, not a destination**:
+     these are iOS readers, so buy links go to Apple Books, never Play Books
+     (Abdi, 2026-09-11).
    - Strict match: title and volume number must both appear, else "couldn't
      verify" rather than a wrong cover. Lazy per visible spine, cached on disk.
    - Series with no English ebook and no MangaBaka images get "N volumes,
      covers unavailable", not a fake. 2–3 days.
 
 5. **"Preview" beside a volume, only where a preview exists.** Apple: the Books
-   app link, where "Sample" is native. Google: `webReaderLink` in-app when
-   `viewability == PARTIAL`. No page images pulled directly — undocumented,
-   watermarked, against terms. Expect the button to be absent on most licensed
+   app link, where "Sample" is native. Google's web reader only where Apple
+   has no sample and Google reports `viewability == PARTIAL` — a preview is
+   worth a web page, a purchase is not. No page images pulled directly —
+   undocumented, watermarked, against terms. Expect the button to be absent on most licensed
    manga; that is correct. Webtoons' free first episodes are the real preview
    and item 2 lands on them. 1 day on top of item 4.
 
@@ -57,9 +60,9 @@ Weekly limit reset before any of it is built.
   → the series page, with your library state on it ("you're on chapter 53").
   No terms issue; nothing leaves the phone but a title. The single most
   "find it faster" thing on this list. ~1 day.
-- **Price across stores.** Apple Books, Google Play and MangaBaka's own listed
-  price side by side on the volume sheet, from the same lookups as item 4.
-  Read-only store data; fine. Half a day once 4 exists.
+- **Price.** Apple Books' price beside MangaBaka's own listed price on the
+  volume sheet, from the same lookup as item 4. No Play Books price: nobody
+  here can buy there. Half a day once 4 exists.
 - **iOS search finds your library.** Core Spotlight index of library series
   (title, cover, state) so Spotlight opens the series page. App Intents for
   "What's due this week" and "Open <series>". No network, no terms. ~1 day.
