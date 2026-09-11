@@ -232,6 +232,7 @@ struct LibraryFilterRow: View {
             HStack(spacing: 5) {
                 Text(title).typeChip()
                 Text(count.formatted())
+                    .countsNotCuts()
                     .typeChip()
                     .foregroundStyle(isOn ? Palette.onAccent.opacity(0.7) : Palette.textMuted)
             }

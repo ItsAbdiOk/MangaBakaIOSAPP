@@ -59,6 +59,8 @@ struct StackHeader: View {
     private var count: some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text("\(savedCount)")
+                .countsNotCuts()
+                .animation(Motion.reduced(.snappy(duration: 0.25)), value: savedCount)
                 .typeStatNumber()
                 .foregroundStyle(Palette.accent)
             Text("saved")

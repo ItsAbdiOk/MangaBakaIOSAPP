@@ -46,6 +46,7 @@ struct CommunityPulseCard: View {
     private func row(_ figure: CommunityPulse.Figure) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(figure.value)
+                .countsNotCuts()
                 .typeSectionHeader()
                 .foregroundStyle(Palette.textPrimary)
                 .lineLimit(1)

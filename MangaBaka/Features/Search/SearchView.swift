@@ -138,6 +138,8 @@ struct SearchView: View {
         Text(heading)
             .typeSubsectionHeader()
             .foregroundStyle(Palette.textPrimary)
+            .countsNotCuts()
+            .animation(Motion.reduced(.snappy(duration: 0.25)), value: heading)
             .fixedSize(horizontal: false, vertical: true)
     }
 

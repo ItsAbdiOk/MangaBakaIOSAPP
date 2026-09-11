@@ -43,3 +43,28 @@ enum Motion {
         try withAnimation(reduced(animation), body)
     }
 }
+
+extension View {
+    /// A figure that changes morphs digit by digit rather than cutting.
+    ///
+    /// A number that morphs reads as *the same number changing*; one that
+    /// cuts reads as *a different screen*. Applied to every figure that can
+    /// change while it is on screen: counts on chips, "N shown", the pulse,
+    /// the stack's saved counter. Under Reduce Motion the digits cut, which
+    /// is the setting's own request.
+    func countsNotCuts() -> some View {
+        modifier(NumericTransition())
+    }
+}
+
+private struct NumericTransition: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content
+        } else {
+            content.contentTransition(.numericText())
+        }
+    }
+}

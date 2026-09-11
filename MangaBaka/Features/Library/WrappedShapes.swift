@@ -27,6 +27,7 @@ extension WrappedView {
             Text(value)
                 .typeScreenTitle()
                 .foregroundStyle(Palette.textPrimary)
+                .countsNotCuts()
                 .lineLimit(2)
                 .minimumScaleFactor(0.5)
                 .fixedSize(horizontal: false, vertical: true)
