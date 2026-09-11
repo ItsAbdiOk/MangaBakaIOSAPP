@@ -41,7 +41,7 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Siri / Shortcuts intents tried for real | Only the logic is tested; Siri is not on the simulator. Try "What's due this week in MangaBaka" on the phone |
 | Spotlight cover thumbnails | A measurement: covers live in URLCache, 900 through it per launch is a cost to see first |
 | Volumes for series with no English ebook | Rakuten Books / DMM Books as Japanese-edition fillers once Abdi's accounts exist and their terms are read. DMM: `floor=comic` only, never FANZA. Until then such series show MangaBaka's editions or nothing |
-| Volumes: Google Books as ISBN resolver | Not needed yet — Apple's search answers by title. Revisit if a series' store name differs from every MangaBaka title |
+| Volumes: Google Books as second filler | **Keyless is not dependable.** Two keyless requests on 2026-09-11 both got HTTP 429 "Queries per day" exhausted — for Google's shared anonymous project, not this IP, so every keyless reader shares one bucket. Needs a free API key (Google Cloud console → enable Books API → create key; ~5 min, but a signup). With a key: 1,000/day per key, enough at a request per series page cached a week. Parked until Abdi wants the signup; the Japanese-store fallback covers most of the gap |
 | Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
 | Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
 | New from a followed publisher | A design for "follow" |
