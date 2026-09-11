@@ -14,6 +14,9 @@ struct LibraryView: View {
     private let onOpenShelf: (LibraryEntry.State) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenStack: () -> Void
+    /// Saves an edit made from a row; returns a message when it failed.
+    private let onSave: (Int, LibraryChange) async -> String?
+    @State private var editing: LibraryEntry?
 
     init(
         model: LibraryModel,
@@ -24,7 +27,8 @@ struct LibraryView: View {
         onOpenWrapped: @escaping () -> Void,
         onOpenShelf: @escaping (LibraryEntry.State) -> Void,
         onOpenSettings: @escaping () -> Void,
-        onOpenStack: @escaping () -> Void
+        onOpenStack: @escaping () -> Void,
+        onSave: @escaping (Int, LibraryChange) async -> String? = { _, _ in nil }
     ) {
         self.model = model
         _path = path
@@ -35,6 +39,7 @@ struct LibraryView: View {
         self.onOpenShelf = onOpenShelf
         self.onOpenSettings = onOpenSettings
         self.onOpenStack = onOpenStack
+        self.onSave = onSave
     }
 
     var body: some View {
@@ -98,7 +103,7 @@ struct LibraryView: View {
                         PickBackUp(entries: model.inProgress, path: $path)
                     }
 
-                    LibraryList(model: model, path: $path)
+                    LibraryList(model: model, path: $path, onEdit: { editing = $0 })
                         .padding(.top, 22)
                 }
             }
@@ -109,6 +114,13 @@ struct LibraryView: View {
         .background(Palette.ground)
         .scrollEdge()
         .task { await model.load() }
+        .sheet(item: $editing) { entry in
+            if let series = entry.series {
+                LibraryEditSheet(entry: entry, series: series) { change in
+                    await onSave(entry.seriesId, change)
+                }
+            }
+        }
     }
 
     /// Settings sits here rather than in a navigation bar. The bar is empty on

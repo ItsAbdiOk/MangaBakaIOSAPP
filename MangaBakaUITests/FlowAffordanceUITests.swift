@@ -135,4 +135,32 @@ final class FlowAffordanceUITests: XCTestCase {
             "a context menu here competes with the swipe for the same press"
         )
     }
+
+    /// The live library list lost its per-row edit when shelf cards were
+    /// replaced; the only copy survived on a screen nothing presents. Holding
+    /// a row must offer Edit again.
+    func testLibraryRowOffersEdit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Library"].tap()
+        guard app.staticTexts["Library"].waitForExistence(timeout: 15) else {
+            throw XCTSkip("the Library did not open")
+        }
+        // The route cards and the filter pills are buttons too — a pill's label
+        // is "Reading 42" — so rows carry an identifier.
+        let row = app.buttons["library-row"].firstMatch
+        guard row.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no library rows — signed out or offline")
+        }
+        row.press(forDuration: 1.0)
+
+        let edit = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'edit'")).firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "holding a library row offered no way to edit it")
+        // Without a menu the press falls through as a tap and opens the series
+        // page, which has its own Edit button — that would satisfy the line
+        // above and prove nothing. The library title must still be on screen.
+        XCTAssertTrue(
+            app.staticTexts["Library"].exists,
+            "the press opened the series page instead of a menu"
+        )
+    }
 }

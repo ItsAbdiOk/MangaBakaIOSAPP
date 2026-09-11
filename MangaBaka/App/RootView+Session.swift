@@ -28,7 +28,8 @@ extension RootView {
                                 openShelf = session.library.shelves.first { $0.state == state }
                             },
                             onOpenSettings: { showsSettings = true },
-                            onOpenStack: { selection = .stack }
+                            onOpenStack: { selection = .stack },
+                            onSave: saveLibraryChange
                         )
                             .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                             .navigationDestination(item: $openShelf) { shelf in

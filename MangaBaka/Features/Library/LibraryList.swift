@@ -10,6 +10,11 @@ import SwiftUI
 struct LibraryList: View {
     @Bindable var model: LibraryModel
     @Binding var path: [Series]
+    /// Opens the edit sheet for one row. The redesign that replaced shelf
+    /// cards with this list dropped the per-row edit, and the only copy
+    /// survived on a screen nothing presents; marking a chapter read from
+    /// here was three taps and a full detail fetch.
+    var onEdit: (LibraryEntry) -> Void = { _ in }
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
@@ -103,6 +108,13 @@ struct LibraryList: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("library-row")
+        // A row is a link to the series; editing is a separate, deliberate act
+        // rather than something a stray tap can do to real data.
+        .accessibilityAction(named: "Edit") { onEdit(entry) }
+        .contextMenu {
+            Button("Edit", systemImage: "pencil") { onEdit(entry) }
+        }
         // The series, not its letter. Keying rows on the letter gave every row
         // beginning with the same letter the same SwiftUI identity, so the list
         // reused one row's view for another's data — rows showed the wrong
