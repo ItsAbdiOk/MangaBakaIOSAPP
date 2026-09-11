@@ -36,126 +36,57 @@ wave missed, one synthesis. **139 findings.** Reports in `docs/reviews/`:
   — wave two. **Not in SUMMARY.md** — synthesis ran before they landed. Read them
   directly; their top findings are listed below.
 
-## Fixed and committed (7 commits since the last push)
+## Fixed — 2026-09-11, 55 commits since the last push, 777 tests
 
-- `d8df026` — Abdi's layout bug (schedule to one line in the hero column, byline
-  removed); `DetailCredits`/`TrackerScores` reading the unmerged series (S-F1); the
-  `convertFromSnakeCase` scare settled as a false positive with a control test.
-- `2f78286` — every cache declares what invalidates it (`CacheScope` in
-  `SeriesRepository+Cache.swift`); the every-launch cache wipe (P-F1); exclusion id
-  and reminders added to account reset (P-F2, A3); "Remove token" now resets (A1); the
-  credential guard checks the value.
-- `fae9a29` — the credential guard's duplicate in `LibraryTests`, via a shared
-  `Xcconfig` helper.
+Every finding in the "still to fix" list that stood here is done, one commit
+each, test-fails-first where a test could see it. `git log 247eb91..HEAD`
+is the record; each message carries the failure it was proved by. In outline:
 
-## Still to fix — in this order
+- **Rate limit and network** — W6, R6 (via a shared `RequestSpacing`, three
+  clients), D-A1, D-B1, D-A2, IC-F1 (pixel-based cover picker), IC-F4/F5,
+  W9, R10, the taste profile's cache-on-failure, W7/W8 (one `perform()` path
+  for reads and writes).
+- **Failure as emptiness** — L1 (`LibraryModel.screenState`), R8 (schedule
+  and reminders), R7, RS-1, W10, P-F9, W1-W4 (nullable wire fields), W13
+  (endpoint list derived from source), W14, W5, W17, W11, W12.
+- **Reminders** — R1 (nudges keep their date), A4 (trigger never in the
+  past), R25 (local release day).
+- **Statistics** — R12, R13, R19, R4 (card deleted: `ratingCount` is absent
+  on v1, 0 hits in the recorded library), R18, R2, R9, R5 (`Cadence.gaps`),
+  L9, L2, R16, R17, R14, R15, R20.
+- **Computed and discarded** — stack `source` and `saveConfirmation`,
+  `TasteModel` deleted, the library row's Edit (UI test), `popToRoot` wired.
+- **Schedule** — RS-3, Browse header, R11, R21, R22/R23 (schedule reads the
+  shared library walk).
+- **Per body pass** — L4/L5 (measured: 0.86 ms a pass before, 9 µs after),
+  D-B3, D-D1, B4 (models above the `.id`), E1 (watched on the simulator).
+- **Surface** — S-F3, S-F2, S-F8, S-F15, IC-F3, S-F11 (measured: our launch
+  path is 2-10 ms; F1 is a negative result), S-F18, S-F9, S-F13, S-F16,
+  S-F20, S-F22, P-F11, P-F7/P-F8 (caches trimmed).
+- **Tests** — three suites serialised, `mix.json` dated, eight assertions
+  made to assert the thing (3.1-3.4), the secrets / identity / source-read
+  guards closed (2.5-2.7), repository tests off the app's defaults.
 
-Use `SUMMARY.md` §3's table for wave one. Wave two's top items are folded in here.
-"Certain" unless marked.
+Withdrawn as false positives, recorded in code so they are not re-proposed:
+W15 (`preferredCover` nil means the series' own cover stands), P-F6, the
+SKIP/SAVE contrast.
 
-**Rate limit and network (Abdi: "I don't want you getting banned")**
-- W6 — every write bypasses the rate-limit gate, both directions. `APIClient.swift`
-  `send()` never checks `secondsUntilAllowed()` nor records a 429. Function.
-- R6 — `MangaUpdatesClient.swift:141-152` sleeps before writing `nextAllowedRequest`;
-  the `await` releases the actor. Two overlapping callers fire two requests. Line.
-- D-A1 — `StackModel.refill()` no in-flight guard; `loadIfNeeded` has one. Line.
-- D-B1 — `SearchModel.loadMore` no query generation; stale page appended to new
-  search. Function.
-- D-A2 — every DNA chip tap is a blend, no debounce. Function.
-- IC-F1 — **covers fetched at up to 7× the pixels drawn**. `Cover.swift:111-121` picks
-  by point height then applies the @1→@3 swap unconditionally. ~38-66 MB on a 939-row
-  library. Arithmetic, not measured — measure once with `NetworkLedger` before and after.
-- IC-F4/F5 — one cancelled request latches `aniListIsDown` for the session
-  (`CharacterService.swift:58`); `clearOutageMemory()` exists and nothing calls it.
-- W9 — one dropped packet caches empty genres/tags for the process
-  (`CatalogueService.swift:35/39/52/66-67`).
-- R10 — one failed fetch caches an empty release calendar for the process.
+## Deliberately left, with reasons
 
-**Failure rendered as emptiness (X2 — the amplifier)**
-- L1 — `LibraryModel.failure` assigned at `:218`, read by no view. Offline reader with
-  937 series sees "Nothing saved yet". Function + a test.
-- R8 — offline foreground shows "0 IN SCOPE" AND deletes every pending reminder.
-- R7 — a cached cadence that fails to decode is shown as settled "Too few dated
-  releases" and never retried (`ReleaseSchedule.swift:344`, `:193`, `:247`).
-- RS-1 — `ScheduleProgress.failure` written at `ReleaseSchedule.swift:274`, read by
-  nothing. A measurement where every request fails ends silently.
-- W10 — `searchPublishers` failure renders as "no results", eight lines under the
-  comment forbidding it.
-- P-F9 — one bad cached row silently shortens a feed.
-- W1-W4 — **`SeriesWork.Price.value` non-optional** (`SeriesWork.swift:12`); spec says
-  nullable. One unpriced edition throws the whole volumes array and the section
-  vanishes. Also `NewsItem.id`, `SeriesImage.id`, `PublisherRecord.id` nullable on the
-  wire, non-optional in Swift. Check every one against `docs/schemas/mangabaka_openapi.json`
-  — **the spec is in the repo**, I probed the live API for a night without looking.
-- W13/T3 — `APIShapeContractTests` covers 7 of ~17 endpoints, all series-shaped.
-  `/v1/works/upcoming` — where the price bug came from — is in no sweep.
-
-**Reminders (both features never fire)**
-- R1 — `ReleaseReminders.swift:81/146/161` re-adds catch-up nudges at now+24h and
-  now+30d on every foreground. Open the app daily, neither fires.
-- A4 — a release due later today is scheduled at 09:00 today (`:87` admits it, `:211`
-  pins the hour), past trigger, `try?` hides it. Likely — one device check first.
-
-**Statistics that can say something false (reader slice, R-series)**
-- R12 — four Wrapped statistics count series never opened. Line ×4.
-- R19 — `criticGap`/`disagreements` don't guard `rating > 0` the way `verdicts` does.
-- R2 — the honesty line under the tag verdicts counts entries the verdicts excluded.
-- R3 — "that much of your library" divides by the rated subset, not the library.
-- R9 — "Measured 3 minutes ago" is the newest row's time over six-week-old rows.
-- R5 — "From N releases on MangaUpdates" is a count of calendar days.
-- R4 — `obscurity`/`deepestCut` read `ratingCount`, absent on v1. The card never
-  renders. Either source it from v2 or drop the card.
-- L9 — "Nearly half of your library is dropped" is a hardcoded sentence
-  (`ReadingInsightsView.swift:190`).
-- L2 — "All" pill says 937 over a list of ~500 (dropped counted, not listed).
-
-**Computed and discarded (X3)**
-- D — `StackModel.lastSaveWentToLibrary` and `source`, documented "so the screen can
-  say", read by no view.
-- RS-2 — `TasteModel` is unreachable (`Features/Taste/TasteModel.swift`); only its
-  test references it. Delete both.
-- L-edit — the live library list has no edit affordance; the only one is on the
-  unreachable shelf screen.
-
-**The shelf decision — needs Abdi, do not decide it**
-`ShelfDetailView` is unreachable: `LibraryView` stores `onOpenShelf` and never calls
-it. Two sub-agents said "reachable" because the destination exists; the tests agent
-and I both confirmed nothing triggers it. `ShelfCard` has zero call sites. Delete or
-re-wire — product call. Written up in `docs/unknowns-2026-09-11.md`.
-
-**Schedule screen (remaining-screens slice)**
-- RS-3 — leaving mid-measure freezes it (`ScheduleView.swift:57` cancels the poll,
-  nothing restarts it); copy at `:116-119` promises it resumes.
-- Browse header claims "200 most-used tags"; the fetch is not usage-ordered.
-
-**Per body pass (X6)**
-- L4/L5 — `shape` rebuilt per keystroke (~3ms), `inProgress`/`subtitle` read from the
-  body. Same fix as the three already stored.
-- D-B3 — `LensCounts` permanently abandons lenses it was cancelled before reaching.
-
-**Surface**
-- S-F3 — `CoverGallery.swift:85-94` 3D glide ignores `Motion`; C6 named it as fixed.
-- S-F2 — toast is the only write confirmation; VoiceOver never hears it.
-- S-F8 — `SearchClearButton` at 30pt in the 2.52:1 colour, across four fields.
-- S-F15 — Settings says the field stays usable while disabling it.
-- IC-F3 — `CoverImage` `.task(id:)` restarts the fetch but never clears `@State
-  loaded`; a recycled row keeps the old artwork. One line. Stack is the live case.
-- S-F11 — `AppServices.init` does a synchronous SQLite open on the main thread before
-  first frame; the 0.08ms launch number excludes it. Two signposts settle whether F1
-  is worth starting.
-
-**Tests (tests.md)**
-- 44 of 78 catalogued `SourceTree` assertions are stub-satisfiable. Convert the ones
-  guarding behaviour to behavioural tests; keep the negatives (they assert absence).
-- Three suites drive the global `URLProtocolStub` with no `.serialized`.
-- `mix.json` has no provenance comment; the other three fixtures are fine.
-
-**Verdicts:** every slice fix-in-place. Three carve-outs from SUMMARY §4: replace
-`ScrollEdge.swift` with real nav bars on the four tab roots (surface agent says a
-`.principal` toolbar item hosts the custom title, so the type ramp survives — untested,
-~20 min on the branch); derive `APIShapeContractTests`' endpoint list from source;
-`CacheScope` (done). Reader must NOT be rewritten — best negative-result comments in
-the repo.
+- **Decisions for Abdi** — `ShelfDetailView` delete-or-rewire; L12 two rating
+  scales (out of 5 in Library, out of 10 in Wrapped); L7 the A-Z jump index at
+  20×13pt (a redesign); L11/S-F21 the hand-drawn switch (contested in the
+  review itself); S-F12 `AppServices`' nineteen values.
+- **Judgement calls** — R24 series titles on the lock screen; D-A3 tag chips
+  re-blend and type chips do not; P-F10 a client backstop for `tag_not`.
+- **Would need a measurement first** — S-F17 the gallery's two 1000pt blurs;
+  S-F5 `heroTitleTravel` at AX sizes; S-F14 leading vs Dynamic Type; S-F19
+  Bold Text; S-F6 `Motion` and view invalidation; S-F4 the key-window inset.
+- **Tied to the shelf decision** — L3 `shelves` derived for a screen nothing
+  presents.
+- **Small and unglamorous** — L10 the 0.6/0.3 thresholds in a view (label
+  them when next in the file); P-F12 three filter functions as one; D-A4;
+  D-B2; W16 a comment naming values the schema lacks.
 
 ## Then: the feel pass
 
