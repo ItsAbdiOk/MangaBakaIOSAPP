@@ -182,9 +182,7 @@ struct TagPickerSheet: View {
         let found = search?.results ?? []
         if found.isEmpty, search?.isSearching == false {
             Text(
-                search?.didFail == true
-                    ? "Could not search tags just now."
-                    : "No tag matches \"\(query)\"."
+                search?.emptyMessage(for: query) ?? ""
             )
             .typeSmallMeta()
             .foregroundStyle(Palette.textMuted)

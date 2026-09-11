@@ -75,6 +75,16 @@ final class TagSearch {
         }
     }
 
+    /// What to say when a search came back with nothing.
+    ///
+    /// One sentence, in one place. Both tag pickers wrote their own copy of
+    /// this ternary, which is two chances for "could not search" and "no such
+    /// tag" to drift apart — and they are different claims: one is about the
+    /// network, the other is about the tag.
+    func emptyMessage(for query: String) -> String {
+        didFail ? "Could not search tags just now." : "No tag matches \"\(query)\"."
+    }
+
     /// Local hits first — they are the popular tags, and the reader is most
     /// likely to mean one of them — then everything else the API found.
     nonisolated static func merge(local: [Tag], remote: [Tag]) -> [Tag] {

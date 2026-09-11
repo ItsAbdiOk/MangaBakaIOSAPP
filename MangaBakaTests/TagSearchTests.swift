@@ -125,3 +125,30 @@ struct TagSearchTimingTests {
         #expect(!search.isSearching)
     }
 }
+
+/// What the pickers say when a search finds nothing.
+///
+/// Both tag pickers wrote their own copy of this sentence. They are two
+/// different claims — one about the network, one about the tag — and two
+/// copies is two chances for them to drift apart.
+@Suite("Empty tag search copy")
+@MainActor
+struct TagSearchCopyTests {
+    @Test("Finding nothing is about the tag")
+    func nothingFoundNamesTheQuery() async throws {
+        let search = TagSearch { _ in [] }
+        search.update(query: "zzzz")
+        try await Task.sleep(for: TagSearch.debounce * 3)
+        #expect(search.emptyMessage(for: "zzzz") == "No tag matches \"zzzz\".")
+    }
+
+    @Test("Failing is about the network, and does not blame the tag")
+    func failureDoesNotBlameTheTag() async throws {
+        // "No tag matches 'romance'" when the request never arrived is a false
+        // statement about the database.
+        let search = TagSearch { _ in nil }
+        search.update(query: "romance")
+        try await Task.sleep(for: TagSearch.debounce * 3)
+        #expect(search.emptyMessage(for: "romance") == "Could not search tags just now.")
+    }
+}

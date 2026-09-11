@@ -127,11 +127,7 @@ struct BlockTagPicker: View {
                     // Never a blank screen. Typing a real tag used to empty the
                     // list with no explanation, which reads as broken rather
                     // than as an answer.
-                    Text(
-                        search?.didFail == true
-                            ? "Could not search tags just now."
-                            : "No tag matches \"\(query)\"."
-                    )
+                    Text(search?.emptyMessage(for: query) ?? "")
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .listRowBackground(Color.clear)

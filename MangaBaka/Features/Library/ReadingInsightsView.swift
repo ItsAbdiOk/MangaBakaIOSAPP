@@ -37,18 +37,13 @@ struct ReadingInsightsView: View {
         var hours: Double = 0
     }
 
-    private var waiting: [ReadingInsights.Behind] { derived.waiting }
-    private var nearly: [ReadingInsights.Behind] { derived.nearly }
-    private var verdicts: [ReadingInsights.TagVerdict] { derived.verdicts }
-    private var sample: (seen: Int, total: Int) { derived.sample }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 readingTime
-                if !nearly.isEmpty { finishedSection }
-                if !waiting.isEmpty { catchUpSection }
-                if !verdicts.isEmpty { tasteSection }
+                if !derived.nearly.isEmpty { finishedSection }
+                if !derived.waiting.isEmpty { catchUpSection }
+                if !derived.verdicts.isEmpty { tasteSection }
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)
@@ -111,7 +106,7 @@ struct ReadingInsightsView: View {
             "It finished without telling you",
             note: "These have ended, and you are a few chapters short."
         ) {
-            ForEach(nearly.prefix(6)) { item in
+            ForEach(derived.nearly.prefix(6)) { item in
                 row(item, trailing: "\(item.waiting) left")
             }
         }
@@ -125,7 +120,7 @@ struct ReadingInsightsView: View {
             coming; this is what is already here.
             """
         ) {
-            ForEach(waiting.prefix(8)) { item in
+            ForEach(derived.waiting.prefix(8)) { item in
                 row(item, trailing: "\(item.waiting) behind")
             }
         }
@@ -174,10 +169,10 @@ struct ReadingInsightsView: View {
     // MARK: - What you like
 
     private var tasteSection: some View {
-        let finishes = verdicts
+        let finishes = derived.verdicts
             .filter { ($0.completionRate ?? 0) >= 0.6 }
             .prefix(6)
-        let abandons = verdicts
+        let abandons = derived.verdicts
             .filter { ($0.completionRate ?? 1) <= 0.3 }
             .prefix(6)
 
@@ -202,8 +197,8 @@ struct ReadingInsightsView: View {
             // Said plainly rather than buried: a verdict drawn from part of the
             // library is a different claim from one drawn from all of it.
             Text("""
-            From the \(sample.seen.formatted()) of your \
-            \(sample.total.formatted()) series we have tags for.
+            From the \(derived.sample.seen.formatted()) of your \
+            \(derived.sample.total.formatted()) series we have tags for.
             """)
                 .typeFootnote()
                 .foregroundStyle(Palette.textMuted)
