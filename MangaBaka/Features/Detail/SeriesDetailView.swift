@@ -163,7 +163,7 @@ struct SeriesDetailView: View {
                                 .strokeBorder(Palette.border, lineWidth: 0.5)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityHint("Adds this series to the Mix and opens it")
         }
     }

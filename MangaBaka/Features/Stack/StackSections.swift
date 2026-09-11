@@ -154,7 +154,7 @@ struct StackSavedStrip: View {
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("Open the shelf")
     }
 
@@ -208,7 +208,7 @@ struct StackSavedStrip: View {
                                     accessibilityText: series.displayTitle ?? "Untitled series"
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.press)
                         }
                     }
                     .padding(.bottom, 4)

@@ -160,7 +160,7 @@ struct SearchView: View {
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.4), lineWidth: 0.5))
                     .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             Button {
                 model.query.sort = "random"
                 Task { model.cancelPendingDebounce(); await model.search() }
@@ -171,7 +171,7 @@ struct SearchView: View {
                     .frame(minHeight: Metrics.headerPill)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .disabled(model.isSearching)
         }
         .fixedSize()
@@ -242,7 +242,7 @@ struct SearchView: View {
                         meta: DiscoverView.meta(for: series)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 // Two rows from the bottom, so the next page is usually there
                 // before the reader arrives rather than after.
                 .onAppear {

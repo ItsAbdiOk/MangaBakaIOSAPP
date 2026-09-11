@@ -47,7 +47,7 @@ struct SearchIdleView: View {
                 }
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
             }
 
             VStack(spacing: 8) {
@@ -92,7 +92,7 @@ struct SearchIdleView: View {
                 .hairlineBorder(Palette.hairline, radius: 14)
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel(accessibilityLabel(for: lens))
 
             if isEditing {
@@ -104,7 +104,7 @@ struct SearchIdleView: View {
                         .font(.system(size: 20))
                         .foregroundStyle(Palette.accent)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel("Delete \(lens.name)")
                 .transition(.scale.combined(with: .opacity))
             }
@@ -157,7 +157,7 @@ struct SearchIdleView: View {
                 Button("Clear") { recents.clear() }
                     .typeInstruction()
                     .foregroundStyle(Palette.textMuted)
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
             }
 
             FlowLayout(spacing: 8) {
@@ -181,6 +181,6 @@ struct SearchIdleView: View {
                 .contentShape(Capsule())
                 .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
     }
 }

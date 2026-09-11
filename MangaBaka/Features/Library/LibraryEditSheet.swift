@@ -94,7 +94,7 @@ struct LibraryEditSheet: View {
                             )
                             .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .accessibilityAddTraits(state == option ? [.isButton, .isSelected] : .isButton)
                 }
             }
@@ -128,7 +128,7 @@ struct LibraryEditSheet: View {
                             cornerRadius: Metrics.radiusCard, style: .continuous
                         ))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel("Add one chapter")
             }
         }
@@ -157,7 +157,7 @@ struct LibraryEditSheet: View {
                             .frame(width: 38, height: 38)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .accessibilityLabel("\(step) star\(step == 1 ? "" : "s")")
                     .accessibilityAddTraits(step <= rating ? [.isButton, .isSelected] : .isButton)
                 }
@@ -198,7 +198,7 @@ struct LibraryEditSheet: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("Private entry")
         .accessibilityValue(isPrivate ? "On" : "Off")
     }
@@ -222,7 +222,7 @@ struct LibraryEditSheet: View {
                 in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .disabled(changes.isEmpty || isSaving)
     }
 

@@ -72,7 +72,7 @@ struct PublisherBrowser: View {
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("Everything from \(publisher.name)")
     }
 

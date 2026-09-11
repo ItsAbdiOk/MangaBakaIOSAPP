@@ -158,7 +158,7 @@ struct ReadingInsightsView: View {
             .padding(.vertical, 9)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityElement(children: .combine)
     }
 

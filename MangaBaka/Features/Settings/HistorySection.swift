@@ -37,7 +37,7 @@ struct HistorySection: View {
                 ))
                 .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .disabled(held == 0)
         }
         .task { await refresh() }

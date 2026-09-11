@@ -141,7 +141,7 @@ struct SaveLensButton: View {
                         )
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .disabled(!isEnabled)
         .accessibilityLabel("Save these filters as a lens")
         .accessibilityHint(isEnabled ? "" : "Set a filter first")

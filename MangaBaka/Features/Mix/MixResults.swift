@@ -33,7 +33,7 @@ struct MixResults: View {
                             .typeInstruction()
                             .foregroundStyle(Palette.accent)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                 }
                 .padding(.horizontal, 2)
                 .padding(.bottom, 12)
@@ -50,7 +50,7 @@ struct MixResults: View {
                         Button { path.append(recommendation.series) } label: {
                             card(recommendation)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.press)
                     }
                 }
             }

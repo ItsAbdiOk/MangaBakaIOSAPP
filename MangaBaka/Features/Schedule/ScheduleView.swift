@@ -95,7 +95,7 @@ struct ScheduleView: View {
                     .background(Palette.surfacePill, in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.borderPill, lineWidth: 0.5))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .disabled(model.isMeasuring)
         }
         .padding(.top, 16)
@@ -173,7 +173,7 @@ struct ScheduleView: View {
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .padding(.top, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

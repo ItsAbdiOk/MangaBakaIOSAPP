@@ -82,7 +82,7 @@ struct BlendDNAView: View {
             )
             .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("\(strand.name), \(percent(strand.weight)) of the blend")
         .accessibilityValue(isOff ? "Excluded" : "Included")
         .accessibilityHint(isOff ? "Double tap to include" : "Double tap to exclude")
@@ -144,7 +144,7 @@ struct BlendDNAView: View {
                             ))
                             .hairlineBorder(Palette.borderPill, radius: 14)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .padding(.top, 14)
                 }
             }

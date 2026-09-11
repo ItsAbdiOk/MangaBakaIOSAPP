@@ -331,7 +331,7 @@ private struct AccountPage: View {
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
 
             // A full-width button, not grey text. Refusing is a real choice
             // here, and a choice styled as an afterthought reads as one the app
@@ -347,7 +347,7 @@ private struct AccountPage: View {
                             .strokeBorder(Palette.borderPill, lineWidth: 0.5)
                     )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .padding(.top, 10)
         }
         .padding(.horizontal, 28)

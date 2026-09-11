@@ -148,7 +148,7 @@ struct LibraryView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel("Settings")
         }
         .padding(.horizontal, Metrics.gutter)

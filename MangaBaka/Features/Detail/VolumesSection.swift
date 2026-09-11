@@ -37,7 +37,7 @@ struct VolumesSection: View {
                             Button { opened = volume } label: {
                                 spine(volume)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.press)
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -186,7 +186,7 @@ struct VolumeSheet: View {
                     .frame(minHeight: Metrics.tapTarget, alignment: .leading)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .haptic(Haptics.copied, onEach: copies)
                 .accessibilityLabel("ISBN \(isbn)")
                 .accessibilityHint("Copies the ISBN")
@@ -205,7 +205,7 @@ struct VolumeSheet: View {
                     .frame(minHeight: Metrics.tapTarget)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityHint("Opens the publisher's page in the browser")
             }
         }

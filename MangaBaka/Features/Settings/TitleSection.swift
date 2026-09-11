@@ -44,7 +44,7 @@ struct TitleSection: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel(option.title)
         .accessibilityAddTraits(preference == option ? [.isButton, .isSelected] : .isButton)
     }

@@ -40,7 +40,7 @@ extension LibraryView {
             .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 22)
     }
@@ -59,7 +59,7 @@ extension LibraryView {
                 subtitle: "What you finished, and what makes your library yours"
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 10)
     }
@@ -128,7 +128,7 @@ extension LibraryView {
             .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, Metrics.gapCovers)
     }

@@ -46,7 +46,7 @@ struct AlternativeTitlesButton: View {
                 .frame(minHeight: Metrics.tapTarget, alignment: .leading)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel("Also known as, \(rows.count) other titles")
             .accessibilityHint("Opens the full list")
             .sheet(isPresented: $isOpen) {
@@ -129,7 +129,7 @@ struct AlternativeTitlesSheet: View {
             .frame(minHeight: Metrics.tapTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .haptic(Haptics.copied, onEach: copies)
         .accessibilityLabel("\(row.title), \(row.languageLabel)")
         .accessibilityHint("Copies this title")

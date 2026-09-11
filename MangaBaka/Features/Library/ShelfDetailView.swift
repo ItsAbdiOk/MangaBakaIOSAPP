@@ -147,7 +147,7 @@ struct ShelfDetailView: View {
                         )
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
             }
         }
         .padding(.bottom, 14)
@@ -205,7 +205,7 @@ struct LibraryRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityElement(children: .combine)
         // A row is a link to the series; editing is a separate, deliberate act
         // rather than something a stray tap can do to real data.

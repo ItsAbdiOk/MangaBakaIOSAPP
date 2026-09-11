@@ -167,7 +167,7 @@ struct LibraryControl: View {
                     in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .disabled(model.isWorking)
     }
 
@@ -208,7 +208,7 @@ struct LibraryControl: View {
                         .strokeBorder(Palette.border, lineWidth: 0.5)
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel("Edit this entry. \(entry.state.title).")
 
             if entry.state.tracksProgress {
@@ -232,7 +232,7 @@ struct LibraryControl: View {
                         in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .disabled(model.isWorking)
                 .accessibilityLabel("Read one more chapter")
             }

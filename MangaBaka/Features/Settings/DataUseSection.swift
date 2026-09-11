@@ -50,7 +50,7 @@ struct DataUseSection: View {
                             .typeInstruction()
                             .foregroundStyle(Palette.accent)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
 
                     if isExpanded {
                         // Named as a top-eight rather than a breakdown. Read as

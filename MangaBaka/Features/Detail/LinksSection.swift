@@ -70,7 +70,7 @@ struct LinksSection: View {
                             .frame(height: Metrics.ctaSecondary)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                 }
             }
             .background(Palette.surface, in: RoundedRectangle(
@@ -101,7 +101,7 @@ struct LinksSection: View {
             .padding(.horizontal, 14)
             .frame(height: Metrics.ctaSecondary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityHint("Opens \(link.title) in the browser")
     }
 }
@@ -141,7 +141,7 @@ struct NewsSection: View {
                             cornerRadius: Metrics.radiusThumb, style: .continuous
                         ))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                 }
             }
             .padding(.horizontal, Metrics.gutter)

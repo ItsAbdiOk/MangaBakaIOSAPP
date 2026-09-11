@@ -47,7 +47,7 @@ struct StateAction: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
     }
 
     private var foreground: Color {

@@ -308,7 +308,7 @@ struct CoverStack: View {
                         .brightness(-0.12 * step)
                         .scaleEffect(1 - 0.04 * step)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .copyableArtwork(image.image.raw ?? image.image.x350, noun: "cover")
                 .offset(x: 13 * step, y: 5 * step)
                 .rotationEffect(.degrees(2.2 * Double(step)), anchor: .bottomLeading)
@@ -320,7 +320,7 @@ struct CoverStack: View {
                 CoverImage(cover: frontCover, width: width, radius: 14)
                     .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .copyableArtwork(frontCover.raw ?? frontCover.x350, noun: "cover")
             .accessibilityLabel(series.displayTitle.map { "Cover art for \($0)" } ?? "Cover art")
             .accessibilityHint("Opens it full screen")

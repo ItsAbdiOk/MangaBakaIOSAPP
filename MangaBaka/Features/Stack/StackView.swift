@@ -254,7 +254,7 @@ struct StackView: View {
                     .frame(height: Metrics.actionDetails)
                     .background { Glass.floating(Capsule()) }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
 
             Button { Task { await react(.saved) } } label: {
                 Image(systemName: "plus")
@@ -264,7 +264,7 @@ struct StackView: View {
                     .background(Palette.accent, in: Circle())
                     .shadow(color: .black.opacity(0.5), radius: 13, y: 10)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel("Save")
         }
         .padding(.top, 22)
@@ -283,7 +283,7 @@ struct StackView: View {
                 .frame(width: size, height: size)
                 .background { Glass.floating(Circle()) }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel(label)
     }
 

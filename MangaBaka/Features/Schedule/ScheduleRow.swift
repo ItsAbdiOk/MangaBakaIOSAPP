@@ -22,7 +22,7 @@ struct ScheduleRow: View {
                 )
                 .opacity(work.cadence == nil ? 0.55 : 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(work.series.displayTitle ?? "Untitled series")

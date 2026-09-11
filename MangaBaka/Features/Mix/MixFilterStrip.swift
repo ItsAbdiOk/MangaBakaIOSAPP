@@ -80,7 +80,7 @@ extension MixView {
                                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
                                     .strokeBorder(Palette.borderPill, lineWidth: 0.5))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.press)
                         .accessibilityLabel(
                             model.filters.tagMode == "and"
                                 ? "Requiring all tags. Switch to any."
@@ -125,7 +125,7 @@ extension MixView {
                             .contentShape(Capsule())
                             .tapTarget()
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.press)
                     }
                 }
             }

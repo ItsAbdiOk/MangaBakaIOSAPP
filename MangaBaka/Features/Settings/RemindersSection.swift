@@ -27,7 +27,7 @@ struct RemindersSection: View {
                             SwitchIndicator(isOn: reminders.isEnabled)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .accessibilityLabel("Release reminders")
                     .accessibilityValue(reminders.isEnabled ? "On" : "Off")
                 }
@@ -47,7 +47,7 @@ struct RemindersSection: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.leading)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                 }
             }
         }

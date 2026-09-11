@@ -65,7 +65,7 @@ struct BlockedTagsSection: View {
             .contentShape(Capsule())
             .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("Unblock \(tag.name)")
     }
 
@@ -88,7 +88,7 @@ struct BlockedTagsSection: View {
             .contentShape(Capsule())
             .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
     }
 }
 
@@ -183,7 +183,7 @@ struct BlockTagPicker: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .listRowBackground(Color.clear)
         .accessibilityLabel(isBlocked ? "\(tag.name), blocked" : tag.name)
     }

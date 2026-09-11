@@ -140,7 +140,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         // NOT `.disabled(isLocked)`. That was the cause of the dimmed row the
         // design board calls out by name: SwiftUI fades a disabled Button's
         // whole label, so the title went grey along with everything else and a

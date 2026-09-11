@@ -17,7 +17,7 @@ struct DetailScheduleBlock: View {
     var body: some View {
         if let estimate {
             Button { onOpen?() } label: { content(estimate) }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .disabled(onOpen == nil)
                 .accessibilityElement(children: .combine)
                 .accessibilityHint(onOpen == nil ? "" : "Opens the release schedule")

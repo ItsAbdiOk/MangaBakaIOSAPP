@@ -142,7 +142,7 @@ struct TagPickerSheet: View {
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.5), lineWidth: 0.5))
                     .tapTarget()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel("Remove \(name)")
             }
         }
@@ -174,7 +174,7 @@ struct TagPickerSheet: View {
                 ))
                 .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -244,7 +244,7 @@ struct TagPickerSheet: View {
                 .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
 
             if isOpen {
                 ForEach(Array(children.prefix(Self.perGroup))) { tag in
@@ -303,7 +303,7 @@ struct TagPickerRow: View {
             .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel(tag.name)
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)

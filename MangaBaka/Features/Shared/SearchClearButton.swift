@@ -33,7 +33,7 @@ struct SearchClearButton: View {
                     .frame(width: Metrics.tapTarget, height: Metrics.tapTarget)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityLabel("Clear search")
         }
     }

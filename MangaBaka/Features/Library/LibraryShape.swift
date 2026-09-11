@@ -87,7 +87,7 @@ struct LibraryShapeBar: View {
                     .frame(minHeight: Metrics.tapTarget)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel("\(band.state.title), \(band.count) series")
             }
         }

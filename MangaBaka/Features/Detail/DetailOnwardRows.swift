@@ -40,7 +40,7 @@ struct DetailOnwardRows: View {
                                     meta: relation.label
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.press)
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -78,7 +78,7 @@ struct DetailOnwardRows: View {
                                 Button { path.append(item) } label: {
                                     CoverCard(series: item, width: Metrics.coverDetailRowWidth)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.press)
                             }
                         }
                         .padding(.horizontal, Metrics.gutter)

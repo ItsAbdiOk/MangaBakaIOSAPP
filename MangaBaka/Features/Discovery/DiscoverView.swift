@@ -159,7 +159,7 @@ struct DiscoverView: View {
             )) }
             .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 16)
     }
@@ -190,7 +190,7 @@ struct DiscoverView: View {
                             Button { open(series, from: row.id) } label: {
                                 CoverCard(series: series, meta: Self.meta(for: series))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.press)
                             // The detail page grows out of this cover rather
                             // than sliding in over it, which is what makes the
                             // tap read as opening the thing you touched.

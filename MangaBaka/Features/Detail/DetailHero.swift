@@ -143,7 +143,7 @@ struct DetailHero: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .disabled(series.displayTitle == nil)
         .padding(.top, 6)
         .haptic(Haptics.copied, onEach: copies)

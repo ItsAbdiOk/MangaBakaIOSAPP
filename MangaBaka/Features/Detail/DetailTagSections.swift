@@ -78,7 +78,7 @@ struct DetailTagSections: View {
             .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
     }
 
     private func section(_ group: TagGroup) -> some View {
@@ -104,7 +104,7 @@ struct DetailTagSections: View {
                             .typeChip()
                             .foregroundStyle(Palette.accent)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                 }
             }
 
@@ -139,7 +139,7 @@ struct DetailTagSections: View {
             )))
             .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("\(count) spoiler tag\(count == 1 ? "" : "s") in \(group), hidden")
         .accessibilityHint("Reveals them")
     }
@@ -178,7 +178,7 @@ struct DetailTagSections: View {
             // "CORE" that nobody would look up the meaning of.
             .opacity(opacity(for: tag))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel(accessibilityLabel(tag, isMine: isMine))
         .accessibilityHint("Search for this tag")
     }

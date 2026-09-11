@@ -110,7 +110,7 @@ struct SeedPickerSheet: View {
                             .padding(.vertical, 8)
                             .background(Palette.surfaceChip, in: Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.press)
                         .accessibilityLabel("Remove \(series.displayTitle ?? "this seed")")
                     }
                 }
@@ -179,7 +179,7 @@ struct SeedPickerSheet: View {
         // Not disabled when the seeds are full: this row might be one of them,
         // and tapping it is how you take it back out. A disabled row would also
         // fade its own title, which is how the Safe content row lost its label.
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .opacity(isFull && !isSeed ? 0.4 : 1)
         .allowsHitTesting(!(isFull && !isSeed))
     }

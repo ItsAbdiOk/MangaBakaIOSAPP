@@ -106,7 +106,7 @@ struct LibraryList: View {
             .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("library-row")
         // A row is a link to the series; editing is a separate, deliberate act
@@ -190,7 +190,7 @@ struct JumpIndex: View {
                         .frame(width: 20, height: 13)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
             }
         }
         .padding(.vertical, 8)
@@ -240,7 +240,7 @@ struct LibraryFilterRow: View {
             .frame(height: 32)
             .background(isOn ? Palette.accent : Palette.surfaceChip, in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel("\(title), \(count) series")
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }

@@ -69,7 +69,7 @@ struct PickBackUp: View {
             }
             .frame(width: Metrics.coverSavedStripWidth, alignment: .leading)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityLabel(
             "\(series.displayTitle ?? "Untitled series"), \(chapterLabel(entry))"
         )

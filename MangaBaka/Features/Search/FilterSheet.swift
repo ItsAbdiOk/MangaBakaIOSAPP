@@ -157,7 +157,7 @@ struct FilterSheet: View {
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.5), lineWidth: 0.5))
                     .tapTarget()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel("Remove \(tag)")
             }
 
@@ -178,7 +178,7 @@ struct FilterSheet: View {
                 .contentShape(Capsule())
                 .tapTarget()
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
         }
     }
 
@@ -202,7 +202,7 @@ struct FilterSheet: View {
                 .clipShape(Capsule())
                 .tapTarget()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
     }
 
     private func toggle(_ collection: inout [String], _ value: String) {

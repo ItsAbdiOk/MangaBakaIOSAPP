@@ -36,7 +36,7 @@ struct DetailEditions: View {
                                 .typeChip()
                                 .foregroundStyle(Palette.accent)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.press)
                     }
                 }
 

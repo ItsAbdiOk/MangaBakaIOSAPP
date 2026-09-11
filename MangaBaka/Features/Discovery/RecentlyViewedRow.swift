@@ -53,7 +53,7 @@ struct RecentlyViewedRow: View {
                             Button { onOpen(series) } label: {
                                 CoverCard(series: series, meta: DiscoverView.meta(for: series))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.press)
                             .matchedTransitionSource(id: "recent#\(series.id)", in: namespace)
                         }
                     }

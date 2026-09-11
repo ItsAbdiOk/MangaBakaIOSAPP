@@ -187,7 +187,7 @@ struct DetailTags: View {
                                 lineWidth: 0.5
                             ))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .accessibilityLabel(isMine ? "\(tag), one of your interests" : tag)
                     .accessibilityHint("Search for this tag")
                 }
@@ -202,7 +202,7 @@ struct DetailTags: View {
                             .background(Palette.surfaceChip, in: Capsule())
                             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.press)
                     .accessibilityLabel("Show \(hiddenCount) more tags")
                 }
             }

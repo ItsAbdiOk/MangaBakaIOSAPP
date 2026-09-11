@@ -40,7 +40,7 @@ struct RatingSegments: View {
                             in: RoundedRectangle(cornerRadius: 9, style: .continuous)
                         )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .accessibilityLabel(
                     step == nil ? "Any rating" : "Rated \(step.map { $0 / 10 } ?? 0) or higher"
                 )

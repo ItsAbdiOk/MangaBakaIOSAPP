@@ -39,7 +39,7 @@ extension SearchView {
                         .padding(.vertical, 11)
                         .background(Palette.surfaceChip, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 .padding(.top, 16)
             }
             Button {
@@ -53,7 +53,7 @@ extension SearchView {
                     .padding(.vertical, 11)
                     .background(Palette.accent, in: Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .padding(.top, 16)
         }
         .frame(maxWidth: .infinity)

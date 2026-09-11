@@ -91,7 +91,7 @@ struct BrowseView: View {
                         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
             }
         }
         .padding(.top, 20)
@@ -118,7 +118,7 @@ struct BrowseView: View {
                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
                     .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
         }
         .padding(.top, Metrics.sectionGap)
     }
@@ -205,7 +205,7 @@ struct BrowseView: View {
                     }
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.press)
                 // One stop reading "Boxing, 19 series", not three reading
                 // "Boxing", "19" and an unlabelled chevron.
                 .accessibilityElement(children: .ignore)
