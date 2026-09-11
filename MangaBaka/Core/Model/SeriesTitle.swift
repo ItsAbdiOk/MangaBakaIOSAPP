@@ -23,8 +23,9 @@ extension SeriesTitle {
         let title: String
         let languages: [String]
         var id: String { title }
-        /// "EN · TR · PT-BR"
-        var languageLabel: String { languages.map { $0.uppercased() }.joined(separator: " · ") }
+        /// "English · Turkish · Portuguese (Brazil)". It was the codes —
+        /// "EN · TR · PT-BR" — which a reader had to decode themselves.
+        var languageLabel: String { languages.map(LanguageFlag.name(for:)).joined(separator: " · ") }
         /// "🇬🇧 🇹🇷 🇧🇷" — one per language that has one, in the same order.
         var flags: String {
             languages.compactMap(LanguageFlag.emoji(for:)).joined(separator: " ")

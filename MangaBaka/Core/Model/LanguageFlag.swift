@@ -9,6 +9,23 @@ import Foundation
 /// not a country ("es-la", Latin America) falls back to the language's flag.
 /// Unknown tags get no flag rather than a wrong one.
 enum LanguageFlag {
+    /// "Korean", "Korean (Latin)", "Portuguese (Brazil)" — the language's
+    /// name in the reader's own language, from the system, which knows every
+    /// tag this app will ever see. Falls back to the code upper-cased for a
+    /// tag the system does not recognise, so nothing is ever blank.
+    static func name(for tag: String) -> String {
+        let parts = tag.lowercased().split(separator: "-").map(String.init)
+        guard let language = parts.first,
+              let base = Locale.current.localizedString(forLanguageCode: language)
+        else { return tag.uppercased() }
+        guard parts.count > 1 else { return base }
+        let qualifier = parts[1].count == 2
+            ? Locale.current.localizedString(forRegionCode: parts[1])
+            : Locale.current.localizedString(forScriptCode: parts[1])
+        guard let qualifier else { return base }
+        return "\(base) (\(qualifier))"
+    }
+
     static func emoji(for tag: String) -> String? {
         let parts = tag.lowercased().split(separator: "-").map(String.init)
         guard let language = parts.first else { return nil }

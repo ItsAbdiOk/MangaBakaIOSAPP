@@ -23,7 +23,8 @@ extension SeriesDetailView {
     func loadAppleVolumes() async {
         guard let appleBooks else { return }
         let country = Locale.current.region?.identifier ?? "us"
-        let answer = await appleBooks.volumes(for: shown, country: country)
+        let language = Locale.current.language.languageCode?.identifier
+        let answer = await appleBooks.volumes(for: shown, country: country, language: language)
         appleUnreachable = answer == nil
         appleVolumes = answer ?? []
     }

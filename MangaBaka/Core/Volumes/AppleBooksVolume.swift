@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 /// One volume of a series as sold on Apple Books: the cover, the price, and
 /// the link to buy it.
@@ -33,6 +34,9 @@ struct AppleBooksResult: Decodable, Sendable, Equatable {
     /// Who the store credits. The publisher's edition credits the author;
     /// a translated edition often credits the translator instead.
     let artistName: String?
+    /// The blurb. Not shown; its language is what tells a French edition
+    /// from an English one, since nothing else in the result does.
+    let description: String?
     let artworkUrl100: URL?
     let trackViewUrl: URL?
     let price: Double?
@@ -66,7 +70,8 @@ enum AppleBooksMatch {
         in results: [AppleBooksResult],
         titles: [String],
         creators: [String] = [],
-        isNovel: Bool
+        isNovel: Bool,
+        language: String? = nil
     ) -> [AppleBooksVolume] {
         let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
         guard !wanted.isEmpty else { return [] }
@@ -81,6 +86,7 @@ enum AppleBooksMatch {
                 let credit = normalise(result.artistName ?? "")
                 guard surnames.contains(where: { credit.contains($0) }) else { continue }
             }
+            if let language, let blurb = languageOf(result.description), blurb != language { continue }
             guard byNumber[parts.number] == nil else { continue }
             byNumber[parts.number] = AppleBooksVolume(
                 id: result.trackId,
@@ -117,6 +123,24 @@ enum AppleBooksMatch {
     // swiftlint:disable:next large_tuple
     private static var pattern: Regex<(Substring, Substring, Substring, Substring?)> {
         /^(.+?)[,:]?\s+(?:vol\.?|volume|#)\s*(\d+)\s*(?:\(([^)]+)\))?\s*$/.ignoresCase()
+    }
+
+    /// The language a blurb is written in, as a primary subtag ("fr"), or
+    /// nil when there is no blurb or the recogniser is not sure.
+    ///
+    /// On-device, no network. The store's results carry no language field,
+    /// and the Hunter ✖ Hunter listing that reached a UK phone was French
+    /// from its first sentence ("Parmi les mangas shōnen à succès…"). Only a
+    /// confident answer is used: a blurb that is one title and a number is
+    /// not evidence of anything, and must not reject a real volume.
+    static func languageOf(_ text: String?) -> String? {
+        guard let text, text.count >= 40 else { return nil }
+        let recogniser = NLLanguageRecognizer()
+        recogniser.processString(String(text.prefix(400)))
+        guard let (language, confidence) = recogniser.languageHypotheses(withMaximum: 1).first,
+              confidence >= 0.8
+        else { return nil }
+        return language.rawValue.split(separator: "-").first.map(String.init)
     }
 
     /// Case, punctuation and spacing do not make two titles different, and

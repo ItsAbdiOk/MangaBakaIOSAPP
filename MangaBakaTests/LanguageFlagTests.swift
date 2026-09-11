@@ -25,6 +25,16 @@ struct LanguageFlagTests {
         #expect(LanguageFlag.emoji(for: "") == nil)
     }
 
+    /// The system names the language; a reader should not have to decode
+    /// "KO-LATN".
+    @Test("The language's name, qualified by region or script")
+    func names() {
+        #expect(LanguageFlag.name(for: "ko") == "Korean")
+        #expect(LanguageFlag.name(for: "ko-latn") == "Korean (Latin)")
+        #expect(LanguageFlag.name(for: "pt-br") == "Portuguese (Brazil)")
+        #expect(LanguageFlag.name(for: "xx") == "XX")
+    }
+
     @Test("A title row carries one flag per language, in order")
     func rowFlags() {
         let row = SeriesTitle.Alternative(title: "Solo Leveling", languages: ["en", "tr", "pt-br", "xx"])

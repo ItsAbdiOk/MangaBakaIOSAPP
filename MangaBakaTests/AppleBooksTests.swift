@@ -7,10 +7,10 @@ import Testing
 @Suite("Apple Books matching")
 struct AppleBooksMatchTests {
     private func result(
-        _ id: Int, _ name: String, by artist: String? = nil, price: Double? = 6.99
+        _ id: Int, _ name: String, by artist: String? = nil, blurb: String? = nil, price: Double? = 6.99
     ) -> AppleBooksResult {
         AppleBooksResult(
-            trackId: id, trackName: name, artistName: artist,
+            trackId: id, trackName: name, artistName: artist, description: blurb,
             artworkUrl100: URL(string: "https://is1-ssl.mzstatic.com/x/\(id).jpg/100x100bb.jpg"),
             trackViewUrl: URL(string: "https://books.apple.com/gb/book/id\(id)"),
             price: price, formattedPrice: price.map { "£\($0)" }, releaseDate: nil
@@ -60,6 +60,28 @@ struct AppleBooksMatchTests {
         // No creators known: nothing to check against, so the title decides.
         let unknown = AppleBooksMatch.volumes(in: results, titles: ["HUNTER×HUNTER"], isNovel: false)
         #expect(unknown.map(\.id) == [1, 2])
+    }
+
+    /// The Hunter ✖ Hunter listing's first sentence, and VIZ's English one.
+    /// A blurb too short to judge rejects nothing.
+    @Test("A blurb confidently in another language is another edition")
+    func blurbLanguage() {
+        let french = "Parmi les mangas shōnen à succès, tels que One Piece, Naruto ou Spy x Family, " +
+            "une série se démarque particulièrement par son intelligence et sa noirceur."
+        let english = "Gon Freecss wants to become a Hunter, an elite member of humanity " +
+            "who tracks down rare treasures, exotic animals and dangerous criminals."
+        let results = [
+            result(1, "Hunter x Hunter, Vol. 1", blurb: french),
+            result(2, "Hunter x Hunter, Vol. 2", blurb: english),
+            result(3, "Hunter x Hunter, Vol. 3", blurb: "Vol. 3"),
+            result(4, "Hunter x Hunter, Vol. 4")
+        ]
+        let mine = AppleBooksMatch.volumes(
+            in: results, titles: ["Hunter x Hunter"], isNovel: false, language: "en"
+        )
+        #expect(mine.map(\.id) == [2, 3, 4])
+        #expect(AppleBooksMatch.languageOf(french) == "fr")
+        #expect(AppleBooksMatch.languageOf("Vol. 3") == nil)
     }
 
     @Test("A novel series takes the novels and leaves the comics")

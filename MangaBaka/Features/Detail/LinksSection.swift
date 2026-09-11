@@ -95,7 +95,7 @@ struct LinksSection: View {
                             .typeGridMeta()
                             .accessibilityHidden(true)
                     }
-                    Text(language.uppercased())
+                    Text(LanguageFlag.name(for: language))
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
