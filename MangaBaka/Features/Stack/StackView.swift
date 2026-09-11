@@ -59,6 +59,9 @@ struct StackView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .task { await model.loadIfNeeded() }
+        // The queue advanced: whatever offset the thrown card had belongs to
+        // the card that has gone, not the one now on top.
+        .onChange(of: model.current?.id) { _, _ in resetThrow() }
     }
 
     // MARK: - Header
@@ -207,7 +210,6 @@ struct StackView: View {
                 }
                 Task {
                     await react(kind)
-                    drag = .zero
                 }
             }
     }
@@ -219,6 +221,16 @@ struct StackView: View {
     private func react(_ kind: ShelfEntry.Kind) async {
         await model.react(kind)
         if kind == .saved { onConfirm(model.saveConfirmation) }
+    }
+
+    /// The card's offset is reset the moment the queue advances, not when
+    /// the write behind it finishes. `react` removes the card first and then
+    /// awaits the shelf write, a library POST and possibly a refill — and
+    /// throughout, the 700pt throw was still applied to `card(current)`,
+    /// which by then was the next card: on a slow save the stack looked empty
+    /// until the POST returned.
+    private func resetThrow() {
+        drag = .zero
     }
 
     // MARK: - Caption, actions, saved

@@ -53,6 +53,13 @@ struct RootView: View {
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
     @State private var mixModel: MixModel?
+    /// Held here for the same reason as the three above, and for one more:
+    /// the `.id(titleRevision)` on the tab tree rebuilds it when the title
+    /// preference changes, and a model built inline in the body went with it
+    /// — the stack's queue and its "seen this run" counts were reset by a
+    /// display setting. Models above the `.id` survive it.
+    @State private var discoverModel: DiscoverModel?
+    @State private var stackModel: StackModel?
     /// The cover the detail page should grow out of, and the namespace the
     /// source and destination share. Nil falls back to an ordinary push.
     @State private var zoomSource: String?
@@ -105,7 +112,7 @@ struct RootView: View {
             Tab(AppTab.discover.title, systemImage: AppTab.discover.symbol, value: AppTab.discover) {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
-                        model: DiscoverModel(repository: repository),
+                        model: discoverModel ?? DiscoverModel(repository: repository),
                         recentlyViewed: session.recentlyViewed,
                         path: $discoverPath,
                         zoomSource: $zoomSource,
@@ -120,7 +127,8 @@ struct RootView: View {
             Tab(AppTab.stack.title, systemImage: AppTab.stack.symbol, value: AppTab.stack) {
                 NavigationStack(path: $stackPath) {
                     StackView(
-                        model: StackModel(repository: repository, shelf: shelf, library: library),
+                        model: stackModel
+                            ?? StackModel(repository: repository, shelf: shelf, library: library),
                         path: $stackPath,
                         onOpenShelf: { selection = .library },
                         onConfirm: { toasts.show($0) }
@@ -202,6 +210,10 @@ struct RootView: View {
             if searchModel == nil { searchModel = SearchModel(repository: repository) }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
+            if discoverModel == nil { discoverModel = DiscoverModel(repository: repository) }
+            if stackModel == nil {
+                stackModel = StackModel(repository: repository, shelf: shelf, library: library)
+            }
         }
         .tint(Palette.accent)
         .preferredColorScheme(.dark)
