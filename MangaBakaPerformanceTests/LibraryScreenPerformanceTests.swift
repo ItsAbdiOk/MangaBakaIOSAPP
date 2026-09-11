@@ -115,6 +115,23 @@ final class RedrawPerformanceTests: XCTestCase {
         }
     }
 
+    /// The two body-read properties the first audit missed: `inProgress` (a
+    /// filter and a sort) and `subtitle` (a full walk), read by LibraryView
+    /// on every pass alongside the three above. Measured 2026-09-11 before
+    /// they were stored: 0.043 s for fifty reads against 0.000017 s for the
+    /// three stored ones — 0.86 ms per body pass on a 1,000-entry library.
+    @MainActor
+    func testFormerlyUnstoredBodyReads() async {
+        let model = LibraryModel(library: BigLibrary(size: 1_000))
+        await model.load()
+        measure {
+            for _ in 0..<50 {
+                _ = model.inProgress.count
+                _ = model.subtitle.count
+            }
+        }
+    }
+
     @MainActor
     func testFilterChange() async {
         let model = LibraryModel(library: BigLibrary(size: 1_000))
@@ -168,7 +185,7 @@ final class RedrawPerformanceTests: XCTestCase {
             limit: Int, page: Int, excluding: [Int]
         ) async -> [PersonalRecommendation] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
-        func topGenres() async -> [TopGenre] { [] }
+        func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
         func remove(seriesId: Int) async throws(APIError) {}

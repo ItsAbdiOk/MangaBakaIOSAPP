@@ -95,6 +95,8 @@ final class LibraryModel {
     private func refreshDerived() {
         shape = Self.shape(of: entries)
         allCount = entries.count { $0.state != .dropped }
+        subtitle = Self.subtitle(of: entries)
+        inProgress = Self.inProgress(in: entries)
         listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
         jumpTargets = Self.jumpTargets(in: listed)
     }
@@ -174,10 +176,17 @@ final class LibraryModel {
     /// Rated rather than shelved. The shape bar below says how the library is
     /// divided far better than a count of shelves ever did, and how much of it
     /// you have actually formed an opinion on is a thing nothing else answers.
-    var subtitle: String {
-        guard total > 0 else { return "Nothing here yet" }
+    ///
+    /// Stored, like `shape`: the two properties the first audit missed. On a
+    /// 1,000-entry library, fifty reads of `inProgress` and `subtitle` cost
+    /// 43 ms against 17 µs for the three already stored — 0.86 ms per body
+    /// pass, measured 2026-09-11 in `RedrawPerformanceTests`.
+    private(set) var subtitle = "Nothing here yet"
+
+    private static func subtitle(of entries: [LibraryEntry]) -> String {
+        guard !entries.isEmpty else { return "Nothing here yet" }
         let rated = entries.count { ($0.rating ?? 0) > 0 }
-        return "\(total.formatted()) series · \(rated.formatted()) rated"
+        return "\(entries.count.formatted()) series · \(rated.formatted()) rated"
     }
 
     /// Mid-way through something, and still on it.
@@ -186,7 +195,9 @@ final class LibraryModel {
     /// put 226 series in "pick back up" on a real library — paused is a
     /// deliberate act of setting something down, not a thing to be nudged
     /// about.
-    var inProgress: [LibraryEntry] {
+    private(set) var inProgress: [LibraryEntry] = []
+
+    private static func inProgress(in entries: [LibraryEntry]) -> [LibraryEntry] {
         entries
             .filter {
                 ($0.state == .reading || $0.state == .rereading)
