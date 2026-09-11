@@ -165,12 +165,13 @@ struct WrappedView: View {
     }
 
     private func criticCard(_ critic: (gap: Double, sample: Int)) -> some View {
-        let scaled = abs(critic.gap / 10)
+        // Stars, the reader's own scale — see Disagreement.displayGap.
+        let scaled = abs(critic.gap / 20)
         return card(critic.gap < 0 ? "A tough crowd of one" : "A generous reader") {
-            headline(String(format: "%.1f", scaled), critic.gap < 0 ? "below" : "above")
+            headline(String(format: "%.1f★", scaled), critic.gap < 0 ? "below" : "above")
             detail("""
             On the \(critic.sample.formatted()) series you have rated, you sit \
-            \(String(format: "%.1f", scaled)) points \
+            \(String(format: "%.1f", scaled)) stars \
             \(critic.gap < 0 ? "under" : "over") everyone else on average.
             """)
             if let loved = facts.loved.first, let title = loved.series?.displayTitle {

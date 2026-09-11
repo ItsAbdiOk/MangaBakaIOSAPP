@@ -90,13 +90,15 @@ struct ReadingWrappedTests: WrappedFixtures {
         #expect(result.sample == 12)
     }
 
-    @Test("The gap is shown on the scale the app shows ratings in")
-    func disagreementDisplaysOnTheTenScale() throws {
-        // Ratings are 0-100 in the API and 0-10 on screen. A "+24" would be
-        // nonsense next to an 8.6.
+    @Test("The gap is shown in the reader's own stars")
+    func disagreementDisplaysInStars() throws {
+        // Ratings are 0-100 in the API; the reader rates in five stars. The
+        // gap is about their rating, so it is in their units — a "+24" would
+        // be nonsense, and so would a "+2.4" to someone who has only ever
+        // seen a 5.
         let entries = [libraryEntry(1, rating: 94, crowdRating: 70)]
         let liked = try #require(ReadingWrapped.disagreements(in: entries, liked: true).first)
-        #expect(liked.displayGap == "+2.4")
+        #expect(liked.displayGap == "+1.2 stars")
     }
 
     @Test("Overrated and underrated are separate questions")

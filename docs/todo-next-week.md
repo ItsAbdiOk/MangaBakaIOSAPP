@@ -121,8 +121,9 @@ but the title; Crunchyroll for the anime (no per-title link in the data).
 
 From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
 
-- **Decisions for Abdi** — `ShelfDetailView` delete-or-rewire; L12 two rating
-  scales (out of 5 in Library, out of 10 in Wrapped); L7 the A-Z jump index at
+- **Decisions for Abdi** — ~~`ShelfDetailView` delete-or-rewire~~ (re-wired,
+  2026-09-11); ~~L12 two rating scales~~ (the reader's own is stars, Wrapped
+  now says so); L7 the A-Z jump index at
   20×13pt (a redesign); L11/S-F21 the hand-drawn switch (contested in the
   review itself); S-F12 `AppServices`' nineteen values.
 - **Judgement calls** — R24 series titles on the lock screen; D-A3 tag chips

@@ -137,9 +137,17 @@ enum ReadingWrapped {
 
         var id: Int { entry.seriesId }
         var series: Series? { entry.series }
-        /// "+2.4" — the gap on the 0-10 scale the app shows ratings in.
+        /// "+1.2 stars" — the gap on the reader's own scale.
+        ///
+        /// The reader rates in five stars (the edit sheet, the library rows,
+        /// the shelf pips), and this is a statement about *their* rating
+        /// against the crowd's, so it is in their units. It was on the 0-10
+        /// scale the crowd's ratings are shown in — "+2.4" beside an 8.6 —
+        /// and a reader who rates everything four stars was told they sat
+        /// "1.2 points under" without ever having seen a 10 (review L12;
+        /// Abdi picked one scale for the reader, 2026-09-11).
         var displayGap: String {
-            String(format: "%+.1f", gap / 10)
+            String(format: "%+.1f stars", gap / 20)
         }
     }
 
