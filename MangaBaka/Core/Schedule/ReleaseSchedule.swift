@@ -74,7 +74,12 @@ struct ScheduleProgress: Equatable, Sendable {
 /// Hiatus works stay in scope but never get a date. Pausing the estimate is
 /// more useful than guessing one, and dropping them would hide them entirely.
 actor ReleaseScheduleService {
-    private let library: any LibraryProviding
+    /// The shared library walk. This service used to page the library itself
+    /// — ten pages of 100, a second full walk per foreground beside the
+    /// snapshot's, and a 1,000 cap against a reference library of 937 that
+    /// the taste profile had already recorded hitting. The snapshot caches to
+    /// disk, caps at 3,000 and says when it was cut short.
+    private let library: LibrarySnapshot
     private let mangaUpdates: MangaUpdatesClient
     private let database: AppDatabase
     private let clock: any Clock
@@ -87,7 +92,7 @@ actor ReleaseScheduleService {
     private var buildTask: Task<Void, Never>?
 
     init(
-        library: any LibraryProviding,
+        library: LibrarySnapshot,
         mangaUpdates: MangaUpdatesClient = MangaUpdatesClient(),
         database: AppDatabase,
         clock: any Clock = SystemClock()
@@ -146,27 +151,12 @@ actor ReleaseScheduleService {
     }
 
     func worksInScope() async -> Scope {
-        var all: [LibraryEntry] = []
-        var failure: APIError?
-        // The library pages at 100; ten pages covers a very large library and
-        // caps the cost of a caller that would otherwise loop forever.
-        for page in 1...10 {
-            let batch: [LibraryEntry]
-            do {
-                batch = try await library.libraryPage(page: page, limit: 100)
-            } catch {
-                failure = error
-                break
-            }
-            if batch.isEmpty { break }
-            all.append(contentsOf: batch)
-            if batch.count < 100 { break }
-        }
-        let inScope = all.filter { entry in
+        let walk = await library.load()
+        let inScope = walk.entries.filter { entry in
             guard let series = entry.series else { return false }
             return Self.isInScope(state: entry.state, status: series.status)
         }
-        return Scope(entries: inScope, failure: failure)
+        return Scope(entries: inScope, failure: walk.failure)
     }
 
     // MARK: - Reading

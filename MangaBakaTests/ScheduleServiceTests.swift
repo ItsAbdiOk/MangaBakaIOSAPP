@@ -9,7 +9,9 @@ import Testing
 struct ScheduleServiceTests {
     @Test("The service reports a failed library walk instead of an empty scope")
     func serviceReportsFailure() async throws {
-        let service = ReleaseScheduleService(library: OfflineLibrary(), database: try AppDatabase.inMemory())
+        let service = ReleaseScheduleService(
+            library: LibrarySnapshot(library: OfflineLibrary()), database: try AppDatabase.inMemory()
+        )
         let snapshot = await service.snapshot()
         #expect(snapshot.libraryFailure == .offline)
         #expect(snapshot.inScope == 0)
@@ -41,7 +43,9 @@ struct ScheduleServiceTests {
                 arguments: [1, Data("not json".utf8), Date()]
             )
         }
-        let service = ReleaseScheduleService(library: OneEntryLibrary(entry: entry), database: database)
+        let service = ReleaseScheduleService(
+            library: LibrarySnapshot(library: OneEntryLibrary(entry: entry)), database: database
+        )
         let snapshot = await service.snapshot()
 
         #expect(snapshot.pending == 1, "Unreadable is 'still to do', not an answer")
@@ -74,7 +78,7 @@ struct ScheduleServiceTests {
         // Two series, three seconds apart by the MangaUpdates spacing rule: a
         // build that is still running when the reader comes back.
         let service = ReleaseScheduleService(
-            library: OneEntryLibrary(entries: entries),
+            library: LibrarySnapshot(library: OneEntryLibrary(entries: entries)),
             mangaUpdates: MangaUpdatesClient(
                 baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
                 session: URLProtocolStub.makeSession()

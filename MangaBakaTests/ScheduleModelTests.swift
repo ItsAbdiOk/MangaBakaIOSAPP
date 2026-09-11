@@ -10,7 +10,9 @@ struct ScheduleGroupingTests {
     private let calendar = Calendar(identifier: .gregorian)
 
     private func makeService() throws -> ReleaseScheduleService {
-        ReleaseScheduleService(library: SilentLibrary(), database: try AppDatabase.inMemory())
+        ReleaseScheduleService(
+            library: LibrarySnapshot(library: SilentLibrary()), database: try AppDatabase.inMemory()
+        )
     }
 
     private final class SilentLibrary: LibraryProviding, @unchecked Sendable {

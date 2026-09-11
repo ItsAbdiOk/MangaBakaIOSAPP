@@ -70,7 +70,7 @@ struct AppServices {
         let sharedLibrary = LibrarySnapshot(library: libraryService, database: database)
         librarySnapshot = sharedLibrary
 
-        schedule = ReleaseScheduleService(library: libraryService, database: database)
+        schedule = ReleaseScheduleService(library: sharedLibrary, database: database)
         taste = TasteProfile(
             library: libraryService,
             ledger: TasteLedger(database: database),
