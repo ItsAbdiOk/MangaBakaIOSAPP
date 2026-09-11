@@ -64,7 +64,11 @@ struct StackView: View {
     // MARK: - Header
 
     private var header: some View {
-        StackHeader(savedCount: model.savedCount, showsInstruction: !hint.hasDragged) {
+        StackHeader(
+            savedCount: model.savedCount,
+            provenance: model.source.caption,
+            showsInstruction: !hint.hasDragged
+        ) {
             await model.resetStack()
             onConfirm("The stack has been reset")
         }
@@ -104,8 +108,8 @@ struct StackView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(current.displayTitle ?? "Untitled series")
                     .accessibilityHint("Double tap for details")
-                    .accessibilityAction(named: "Save") { Task { await model.react(.saved) } }
-                    .accessibilityAction(named: "Skip") { Task { await model.react(.skipped) } }
+                    .accessibilityAction(named: "Save") { Task { await react(.saved) } }
+                    .accessibilityAction(named: "Skip") { Task { await react(.skipped) } }
             } else if model.isLoading {
                 ProgressView().tint(Palette.textTertiary)
             } else {
@@ -202,10 +206,19 @@ struct StackView: View {
                     Motion.run(.easeOut(duration: 0.22)) { drag.width = dx > 0 ? 700 : -700 }
                 }
                 Task {
-                    await model.react(kind)
+                    await react(kind)
                     drag = .zero
                 }
             }
+    }
+
+    /// The one path for a reaction from any of its three triggers — the drag,
+    /// the buttons, the VoiceOver actions — so the confirmation cannot be
+    /// missed by one of them. Said after the save has landed, because only
+    /// then does the model know whether it reached the library.
+    private func react(_ kind: ShelfEntry.Kind) async {
+        await model.react(kind)
+        if kind == .saved { onConfirm(model.saveConfirmation) }
     }
 
     // MARK: - Caption, actions, saved
@@ -213,7 +226,7 @@ struct StackView: View {
     private var actions: some View {
         HStack(spacing: Metrics.actionGap) {
             circleAction("xmark", size: Metrics.actionSkip, label: "Skip") {
-                Task { await model.react(.skipped) }
+                Task { await react(.skipped) }
             }
 
             Button { if let current = model.current { path.append(current) } } label: {
@@ -226,7 +239,7 @@ struct StackView: View {
             }
             .buttonStyle(.plain)
 
-            Button { Task { await model.react(.saved) } } label: {
+            Button { Task { await react(.saved) } } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(Palette.onAccent)

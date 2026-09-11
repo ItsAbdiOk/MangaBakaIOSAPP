@@ -21,6 +21,25 @@ final class StackModel {
         /// A random sample. Nothing to personalise from yet.
         case random
 
+        /// One line under the title saying where the cards came from. This
+        /// was stored "so the screen can say" and the screen never said it —
+        /// a random queue and a personalised one looked identical.
+        var caption: String {
+            switch self {
+            case .yourProfile: "Picked from your MangaBaka library"
+            case .yourSaves: "Blended from what you have saved here"
+            case .yourLibrary: "Blended from your MangaBaka library"
+            case .random: "A random sample — save a few to make it yours"
+            }
+        }
+    }
+
+    /// What to tell the reader after a save, once the model knows where it
+    /// went. A save that reached the MangaBaka library and one that only the
+    /// local shelf holds are different outcomes, and the toast used to say
+    /// nothing for either.
+    var saveConfirmation: String {
+        lastSaveWentToLibrary ? "Saved to your library" : "Saved here"
     }
 
     private(set) var queue: [Series] = []

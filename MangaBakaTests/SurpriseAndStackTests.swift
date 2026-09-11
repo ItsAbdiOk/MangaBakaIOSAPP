@@ -115,6 +115,16 @@ struct StackPersonalisationTests {
         #expect(repository.feeds == 1, "The second refill must join the first, not repeat it")
     }
 
+    /// `source` was stored "so the screen can say" and the screen never
+    /// said it. The caption is what the header now shows.
+    @Test("Every source has a caption that names it")
+    func sourcesHaveCaptions() {
+        let sources: [StackModel.Source] = [.yourProfile, .yourSaves, .yourLibrary, .random]
+        let captions = Set(sources.map(\.caption))
+        #expect(captions.count == sources.count, "Two sources reading the same is the bug")
+        #expect(StackModel.Source.random.caption.contains("random"))
+    }
+
     /// With nothing saved and no account, the queue is a random sample. The
     /// screen has to say so — calling a random queue "picked for you" is the
     /// kind of claim that makes every later recommendation untrustworthy.

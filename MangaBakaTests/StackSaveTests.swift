@@ -52,6 +52,7 @@ struct StackSaveWritesThroughTests {
 
         #expect(library.added.map(\.id) == [1])
         #expect(library.added.first?.state == .planToRead)
+        #expect(model.saveConfirmation == "Saved to your library", "The toast says where it went")
     }
 
     /// MangaBaka has no "not for me". Writing "dropped" for something never
@@ -81,6 +82,7 @@ struct StackSaveWritesThroughTests {
 
         #expect(model.saveWarning != nil)
         #expect(try await shelf.entries(.saved).map(\.id) == [1], "the local save survives")
+        #expect(model.saveConfirmation == "Saved here", "and the toast does not claim more")
     }
 
     /// Signed out there is no library to write to, and that is the ordinary

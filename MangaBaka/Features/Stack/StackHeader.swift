@@ -7,6 +7,8 @@ import SwiftUI
 /// the counter broke into "4" over "saved".
 struct StackHeader: View {
     let savedCount: Int
+    /// Where the cards came from, said under the title.
+    let provenance: String
     /// False once the reader has dragged a card. See `StackHint`.
     let showsInstruction: Bool
     let onReset: () async -> Void
@@ -40,6 +42,11 @@ struct StackHeader: View {
                 .typeStackTitle()
                 .foregroundStyle(Palette.textEmphasis)
                 .fixedSize(horizontal: false, vertical: true)
+            Text(provenance)
+                .typeInstruction()
+                .foregroundStyle(Palette.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.opacity)
             if showsInstruction {
                 Text("Drag the cover aside · tap it to open")
                     .typeInstruction()
