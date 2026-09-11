@@ -74,7 +74,7 @@ struct SeriesDetailView: View {
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
-                DetailCredits(series: series)
+                DetailCredits(series: shown)
                 VolumesSection(volumes: extras.volumes)
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
@@ -84,7 +84,7 @@ struct SeriesDetailView: View {
                     isLoading: isLoading,
                     path: $path
                 )
-                TrackerScores(series: series)
+                TrackerScores(series: shown)
                 readElsewhere
                 newsSection
                 provenance

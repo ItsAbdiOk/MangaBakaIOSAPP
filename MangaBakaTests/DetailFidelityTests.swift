@@ -386,3 +386,38 @@ struct TitleCopyTests {
         #expect(source.contains("disabled(series.displayTitle == nil)"))
     }
 }
+
+/// Every section of the series page reads the MERGED series.
+///
+/// `shown` is `series.filling(gapsFrom: extras.full)` — the copy the reader
+/// arrived with, topped up from the v1 payload. A feed's v2 copy has no
+/// description, no chapter count, no status and no `source`, so a section
+/// handed the raw `series` is blank for anyone who opened the page from
+/// Discover, the Stack or Mix, and full for anyone who opened it from Search.
+///
+/// That bug was found and fixed on 2026-09-10, and two sections were
+/// reintroduced with it two lines below the comment explaining it —
+/// `DetailCredits` and `TrackerScores`, which between them read exactly the
+/// six fields the merge fills. This test is the thing that was missing:
+/// nothing asserted that the sections are wired to `shown` rather than that
+/// `shown` exists.
+@Suite("The detail page reads the merged series", .enabled(if: SourceTree.isAvailable))
+struct DetailMergedSeriesTests {
+    /// Sections that read a field `filling(gapsFrom:)` can supply.
+    ///
+    /// Kept as source inspection because the alternative is constructing a
+    /// `SeriesDetailView`, which needs a database, a client and six services.
+    /// The weakness of a grep is real — see `FlowAffordanceTests` — so this
+    /// one asserts the ABSENCE of the wrong wiring as well as the presence of
+    /// the right one, which a stub cannot satisfy.
+    @Test("No section is handed the unmerged copy", arguments: [
+        "DetailCredits", "TrackerScores", "DetailHero", "DetailStatsStrip"
+    ])
+    func sectionsUseShown(section: String) throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
+        #expect(
+            !source.contains("\(section)(series: series)"),
+            "\(section) reads the copy the reader arrived with, which may be a feed's v2 payload"
+        )
+    }
+}

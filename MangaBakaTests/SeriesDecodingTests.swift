@@ -70,3 +70,32 @@ struct RealResponseDecodingTests {
         _ = try Fixture.decoder().decode(APIEnvelope<[Series]>.self, from: raw)
     }
 }
+
+/// Does `convertFromSnakeCase` rewrite DICTIONARY keys, or only property names?
+///
+/// The question decides whether `Series.mangaUpdatesID` — which looks up
+/// `source?["manga_updates"]` — can ever find anything on a real payload, and
+/// the release schedule is gated entirely on that id. Every test that touches
+/// it builds the dictionary by hand in snake_case, so no test has ever asked.
+///
+/// Read against the real `rising.json` fixture, whose `source` object carries
+/// `manga_updates`, `anime_planet`, `my_anime_list` and four others.
+@Suite("Source dictionary keys survive the decoder")
+struct SourceKeyStrategyTests {
+    @Test("A real payload's source keys are reachable by the name the code uses")
+    func sourceKeysAreNotCamelCased() throws {
+        let data = try Fixture.data("rising")
+        let envelope = try Fixture.decoder().decode(APIEnvelope<[Series]>.self, from: data)
+        let series = try #require(envelope.data?.first { $0.source?.isEmpty == false })
+
+        let keys = Set(series.source?.keys ?? [:].keys)
+        #expect(
+            keys.contains("manga_updates"),
+            """
+            the decoder rewrote the dictionary key, so every mangaUpdatesID \
+            lookup returns nil. Keys were: \(keys.sorted())
+            """
+        )
+        #expect(series.mangaUpdatesID != nil, "the schedule is gated on this")
+    }
+}

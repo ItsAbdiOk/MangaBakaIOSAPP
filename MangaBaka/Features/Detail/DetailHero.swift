@@ -56,9 +56,16 @@ struct DetailHero: View {
 
     private var wide: some View {
         // Top-aligned, not bottom. Bottom-aligning a 126pt cover against a
-        // column carrying the schedule block, a kicker, a three-line title and
-        // a byline pushed the artwork half way down the screen, so the page
-        // opened on a gap.
+        // taller column pushed the artwork half way down the screen, so the
+        // page opened on a gap.
+        //
+        // The column is deliberately short now: a kicker, the title, and one
+        // line for the other names. The schedule block and the byline both
+        // used to live here and both wrapped badly at this width — the column
+        // is about 230pt once the cover has taken its share — so a long title
+        // left over 160pt of empty space beside it, between the artwork and
+        // "Add to library". Reported on "Repeated Vice: I Refuse to Be
+        // Important Enough to Die", which is a five-line title.
         HStack(alignment: .top, spacing: Metrics.gapHero) {
             cover
             text
@@ -76,7 +83,7 @@ struct DetailHero: View {
                         isLoading: isScheduleLoading,
                         onOpen: onOpenSchedule
                     )
-                    .padding(.bottom, 13)
+                    .padding(.bottom, 9)
                 }
                 if let kicker {
                     Text(kicker)
@@ -85,13 +92,6 @@ struct DetailHero: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 title
-                if let byline {
-                    Text(byline)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 7)
-                }
                 // Directly under the name, because "is this the same book I
                 // know as X?" is a question asked on arrival rather than two
                 // screens down. A line and a count; the list itself is a
@@ -157,17 +157,4 @@ struct DetailHero: View {
     /// The mockup writes "native title · author". A series with no native title
     /// distinct from the displayed one shows the author alone rather than a
     /// separator with nothing before it.
-    private var byline: String? {
-        let parts = [nativeTitle, series.authors?.joined(separator: ", ")]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    private var nativeTitle: String? {
-        guard let displayed = series.displayTitle else { return nil }
-        return series.titles?
-            .first { $0.traits.contains("native") && $0.title != displayed }?
-            .title
-    }
 }

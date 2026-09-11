@@ -30,60 +30,72 @@ struct DetailScheduleBlock: View {
     /// genuinely be waiting. An empty space would read as "this series has no
     /// schedule", which is a different and possibly wrong answer.
     private var waiting: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Estimated next")
-                .typeEyebrow()
-                .foregroundStyle(Palette.textMuted)
+        HStack(spacing: 7) {
             ProgressView()
                 .controlSize(.small)
-                .tint(Palette.textQuaternary)
+                .tint(Palette.textMuted)
+            Text("Estimating")
+                .typeSmallMeta()
+                .foregroundStyle(Palette.textMuted)
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel("Working out when the next chapter is due")
     }
 
+    /// One line, inside the hero's text column.
+    ///
+    /// **It used to be four stacked rows there**: an "Estimated next" eyebrow,
+    /// the pill and the lateness, and a cadence sentence. The column is about
+    /// 230pt wide once the cover has taken its share, so the lateness wrapped
+    /// to two lines and the cadence sentence to two more — six rows tall. The
+    /// hero is an HStack of a fixed-height cover beside a column that grows,
+    /// so every one of those rows became empty space under the artwork: on a
+    /// long title, over 160pt of it between the cover and "Add to library".
+    /// Reported on "Repeated Vice: I Refuse to Be Important Enough to Die",
+    /// which is a five-line title.
+    ///
+    /// Now: the pill and the lateness, on one line. The confidence and the
+    /// lateness stay separate because a very regular series can still be late,
+    /// and that pairing is the most informative thing this block says —
+    /// collapsing them once produced "LIKELY — expected 6 days ago", a healthy
+    /// pill on a late chapter. The cadence sentence moves to the schedule
+    /// screen the chevron opens, which is where a reader who wants the rhythm
+    /// rather than the date is going anyway.
     private func content(_ estimate: Cadence) -> some View {
         let now = Date()
         let isLate = estimate.state(asOf: now) == .late
 
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 5) {
-                Text("Estimated next")
-                    .typeEyebrow()
-                    .foregroundStyle(Palette.textMuted)
-                if onOpen != nil {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Palette.textQuaternary)
-                }
-            }
+        return HStack(spacing: 6) {
+            Text(estimate.confidence.rawValue.uppercased())
+                .typeTabLabel()
+                .tracking(0.7)
+                .foregroundStyle(
+                    estimate.confidence == .likely ? Palette.onAccent : Palette.textSecondary
+                )
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    estimate.confidence == .likely ? Palette.accent : Palette.surfaceChip,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .layoutPriority(1)
 
-            HStack(spacing: 7) {
-                Text(estimate.confidence.rawValue.uppercased())
-                    .typeTabLabel()
-                    .tracking(0.7)
-                    .foregroundStyle(
-                        estimate.confidence == .likely ? Palette.onAccent : Palette.textSecondary
-                    )
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        estimate.confidence == .likely ? Palette.accent : Palette.surfaceChip,
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    )
-
-                Text(ScheduleRow.stateText(estimate, isLate: isLate, now: now))
-                    .typeRowTitle()
-                    .foregroundStyle(isLate ? Palette.accent : Palette.textPrimary)
-            }
-            .padding(.top, 8)
-
-            Text(ScheduleRow.cadenceLine(estimate))
+            Text(ScheduleRow.stateText(estimate, isLate: isLate, now: now))
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 6)
+                .foregroundStyle(isLate ? Palette.accent : Palette.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            if onOpen != nil {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Palette.textMuted)
+            }
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
