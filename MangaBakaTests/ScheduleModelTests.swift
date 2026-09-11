@@ -52,6 +52,39 @@ struct ScheduleGroupingTests {
         return model
     }
 
+    @Test("Before the first measurement the screen says what it is about to do")
+    func firstRunExplainsItself() throws {
+        // The device showed "Not measured yet", a Measure button, and a panel
+        // reading "0 ESTIMATED OF 0 IN SCOPE" over two thirds of an empty
+        // screen. "0 of 0" is not a number a reader can act on, and nothing
+        // said the measurement takes minutes.
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.measuredAt = nil
+        let model = try model(with: snapshot)
+
+        #expect(model.hasNeverMeasured)
+        // 55 series, one MangaUpdates request every three seconds.
+        #expect(model.firstRunEstimate == "about 3 minutes")
+        #expect(model.firstRunExplanation.contains("55 series"))
+        #expect(model.firstRunExplanation.contains("progress is kept"))
+    }
+
+    @Test("A measured schedule is past its first run")
+    func measuredIsNotFirstRun() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.measuredAt = Date()
+        #expect(try !model(with: snapshot).hasNeverMeasured)
+    }
+
+    @Test("A tiny library is not told to wait minutes")
+    func shortEstimateReadsHonestly() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 4
+        #expect(try model(with: snapshot).firstRunEstimate == "under a minute")
+    }
+
     @Test("Due within a week, later, and past due are separated")
     func splitsByWhen() throws {
         var snapshot = ScheduleSnapshot()

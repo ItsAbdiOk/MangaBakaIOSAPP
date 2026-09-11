@@ -33,9 +33,17 @@ struct ScheduleView: View {
                     controls
                     if model.isMeasuring { measuringCard }
                     if model.isStale { staleCard }
-                    scopeCard
-                    ForEach(model.groups) { group in
-                        groupSection(group)
+                    // The scope card counts estimates. Before the first
+                    // measurement there are none, and "0 estimated of 0 in
+                    // scope" over two thirds of an empty screen is what the
+                    // device review found. Say what Measure will do instead.
+                    if model.hasNeverMeasured {
+                        firstRunCard
+                    } else {
+                        scopeCard
+                        ForEach(model.groups) { group in
+                            groupSection(group)
+                        }
                     }
                 }
             }
@@ -137,6 +145,37 @@ struct ScheduleView: View {
         .background(Palette.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         .hairlineBorder(Palette.border, radius: 15)
         .padding(.top, 14)
+    }
+
+    /// What the first measurement is about to do, and how long it will take.
+    private var firstRunCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Eyebrow(text: "Nothing measured yet")
+            Text(model.firstRunExplanation)
+                .typeFootnote()
+                .foregroundStyle(Palette.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 13)
+            Button {
+                Task { await model.measure(refresh: false) }
+            } label: {
+                Text("Measure now")
+                    .typeCTA()
+                    .foregroundStyle(Palette.onAccent)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Metrics.ctaSecondary)
+                    .background(Palette.accent, in: RoundedRectangle(
+                        cornerRadius: Metrics.radiusCard, style: .continuous
+                    ))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(15)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .hairlineBorder(Palette.border, radius: 18)
+        .padding(.top, 20)
     }
 
     /// The count, and the reason confidence and lateness are shown separately.

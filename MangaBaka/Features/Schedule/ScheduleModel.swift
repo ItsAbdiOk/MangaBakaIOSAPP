@@ -83,6 +83,38 @@ final class ScheduleModel {
     }
 
     var remeasureLabel: String { snapshot.measuredAt == nil ? "Measure" : "Re-measure" }
+
+    /// Nothing has ever been measured, and nothing is being measured now.
+    ///
+    /// The first run showed a "Measure" button, a panel reading "0 ESTIMATED
+    /// OF 0 IN SCOPE", and two thirds of an empty screen. "0 of 0" is not a
+    /// number anyone can act on, and nothing said what pressing Measure would
+    /// do or that it takes minutes.
+    var hasNeverMeasured: Bool { snapshot.measuredAt == nil && !isMeasuring && !isLoading }
+
+    /// Roughly how long a first measurement will take, in words.
+    ///
+    /// Derived, not guessed: MangaUpdates is asked for one series at a time
+    /// and the client holds requests to one every
+    /// `MangaUpdatesClient.minimumInterval` seconds, so the wait is the number
+    /// of series in scope times that interval. Rounded up to whole minutes —
+    /// "about 3 minutes" is honest where "2 minutes 47 seconds" pretends to a
+    /// precision the network does not have.
+    var firstRunEstimate: String {
+        let seconds = Double(snapshot.inScope) * MangaUpdatesClient.minimumInterval
+        guard seconds >= 60 else { return "under a minute" }
+        let minutes = Int((seconds / 60).rounded(.up))
+        return "about \(minutes) minute\(minutes == 1 ? "" : "s")"
+    }
+
+    /// What the first run is about to do, said plainly.
+    var firstRunExplanation: String {
+        """
+        \(snapshot.inScope) series are in scope. MangaUpdates is asked about \
+        one at a time, three seconds apart, so this takes \(firstRunEstimate). \
+        You can leave the screen — progress is kept.
+        """
+    }
     var measuringLine: String { "Reading \(progress.done) of \(progress.total)" }
 
     /// Groups, in the order the screen shows them.
