@@ -30,6 +30,7 @@ struct CadenceTests {
         #expect(cadence.isRegular)
         #expect(cadence.confidence == .likely)
         #expect(cadence.samples == 5)
+        #expect(cadence.gaps == 4, "Five days have four gaps between them; the median is over those")
     }
 
     /// A day either side of weekly is still weekly. The tolerance is a quarter

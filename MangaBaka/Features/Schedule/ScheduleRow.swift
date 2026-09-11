@@ -109,8 +109,15 @@ struct ScheduleRow: View {
 
     /// Where the number came from. An estimate that will not say what it was
     /// built from is asking to be trusted rather than checked.
+    ///
+    /// The number is the one the median was taken over. It used to say
+    /// "From 14 releases" for a series with 40 releases on 14 days and 13 gaps
+    /// between them — wrong in both directions depending on which question
+    /// the reader thought they were asking.
     static func provenance(_ cadence: Cadence) -> String {
         let last = cadence.lastRelease.formatted(.dateTime.day().month(.abbreviated).year())
-        return "From \(cadence.samples) releases on MangaUpdates · last \(last)"
+        let evidence = cadence.gaps.map { "\($0) gaps between releases" }
+            ?? "\(cadence.samples) release days"
+        return "From \(evidence) on MangaUpdates · last \(last)"
     }
 }

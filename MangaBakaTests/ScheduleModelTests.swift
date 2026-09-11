@@ -34,6 +34,7 @@ struct ScheduleGroupingTests {
             lastRelease: Date(),
             due: Date().addingTimeInterval(Double(days) * 86_400),
             samples: 20,
+            gaps: 19,
             isRegular: regular
         )
     }

@@ -84,6 +84,7 @@ struct PresentationTests {
             lastRelease: Date(timeIntervalSince1970: 1_756_000_000),
             due: Date().addingTimeInterval(Double(days) * 86_400),
             samples: 25,
+            gaps: 24,
             isRegular: spread == 0
         )
     }
@@ -122,9 +123,20 @@ struct PresentationTests {
     @Test("Every estimate states its own provenance")
     func provenance() {
         let text = ScheduleRow.provenance(cadence(dueDaysFromNow: 1))
-        #expect(text.contains("25 releases"))
+        #expect(text.contains("24 gaps between releases"), "The number the median was taken over")
+        #expect(!text.contains("25 releases"), "25 is the count of days, and was never the count of releases")
         #expect(text.contains("MangaUpdates"))
         #expect(text.contains("last"))
+    }
+
+    /// A row cached before `gaps` existed decodes without it and says what it
+    /// can: days, named as days.
+    @Test("An older cached estimate names its evidence as days, not releases")
+    func provenanceWithoutGaps() throws {
+        let decoded = try JSONDecoder().decode(Cadence.self, from: Data("""
+        {"medianGapDays": 7, "spreadDays": 0, "lastRelease": 0, "due": 0, "samples": 5, "isRegular": true}
+        """.utf8))
+        #expect(ScheduleRow.provenance(decoded).contains("5 release days"))
     }
 
     // MARK: - Discover

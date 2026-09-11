@@ -16,8 +16,13 @@ struct Cadence: Equatable, Sendable, Codable {
     let lastRelease: Date
     /// `lastRelease` plus the median gap.
     let due: Date
-    /// How many distinct release dates the estimate was built from.
+    /// How many distinct release *days* were seen. Not releases: three
+    /// chapters on one Saturday are one day here. Not what the median was
+    /// taken over either — that is `gaps`.
     let samples: Int
+    /// How many gaps the median was actually taken over. Nil on a row cached
+    /// by a build before this existed; the screen then says "release days".
+    var gaps: Int?
 
     /// Which season the series is currently releasing, where it has seasons.
     ///
@@ -136,6 +141,7 @@ struct Cadence: Equatable, Sendable, Codable {
             lastRelease: last,
             due: due,
             samples: days.count,
+            gaps: gaps.count,
             isRegular: isRegular
         )
     }
