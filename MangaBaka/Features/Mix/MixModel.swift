@@ -37,6 +37,15 @@ final class MixModel {
     /// never has to guess which one lost.
     static let maxSeeds = 3
 
+    /// How long a strand edit waits for the next one before re-blending. Long
+    /// enough to absorb a run of taps, short enough that a single tap still
+    /// feels immediate. A guess; nobody has measured tap cadence on the chips.
+    static let strandDebounce: Duration = .milliseconds(350)
+    private var pendingBlend: Task<Void, Never>?
+    /// Bumped by every run. A blend that returns for an older generation was
+    /// overtaken by a later edit and must not replace the newer answer.
+    private var generation = 0
+
     /// Not private, so the seed picker can run its own search against the same
     /// repository rather than being handed a second one.
     let repository: any SeriesRepositoryProtocol
@@ -76,11 +85,14 @@ final class MixModel {
         message = nil
 
         let previous = dna
+        generation += 1
+        let mine = generation
         let blended = await repository.mix(
             seeds: seeds.map(\.id),
             filters: filters,
             excludedTags: Array(excludedTags)
         )
+        guard mine == generation else { return }
         results = blended.recommendations
         dna = blended.dna
         // Only meaningful against a previous blend; the first run has nothing
@@ -106,7 +118,21 @@ final class MixModel {
             }
             excludedTags.insert(tagId)
         }
-        await run()
+        await blendAfterEdits()
+    }
+
+    /// Re-blends once the taps stop. Every strand tap used to be its own
+    /// request, and the requests raced: the screen showed whichever blend
+    /// answered last, not the one for the strands actually switched off.
+    private func blendAfterEdits() async {
+        pendingBlend?.cancel()
+        let task = Task {
+            try? await Task.sleep(for: Self.strandDebounce)
+            guard !Task.isCancelled else { return }
+            await run()
+        }
+        pendingBlend = task
+        await task.value
     }
 
     /// Back to what the seeds alone produce.
