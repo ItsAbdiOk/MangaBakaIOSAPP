@@ -38,7 +38,21 @@ final class AccessibilityAuditTests: XCTestCase {
     /// issue is written out with the screen it was found on.
     private static let logURL = URL(fileURLWithPath: "/tmp/mb-a11y-audit.txt")
 
+    /// The screen as the audit saw it, saved beside the report.
+    ///
+    /// Without this the frames in the report cannot be checked: the audit
+    /// launches its own app, so a screenshot taken afterwards by hand shows a
+    /// different feed at a different scroll position, and sampling it answers
+    /// a question nobody asked. Learned by doing exactly that.
+    private func capture(_ screen: String) {
+        let image = XCUIScreen.main.screenshot().image
+        guard let data = image.pngData() else { return }
+        let safe = screen.replacingOccurrences(of: " ", with: "-").lowercased()
+        try? data.write(to: URL(fileURLWithPath: "/tmp/mb-a11y-\(safe).png"))
+    }
+
     private func audit(_ app: XCUIApplication, screen: String) throws {
+        capture(screen)
         var lines: [String] = []
         try app.performAccessibilityAudit(for: Self.audits) { issue in
             let element = issue.element?.description ?? "unknown element"
