@@ -71,7 +71,8 @@ enum AppleBooksMatch {
         titles: [String],
         creators: [String] = [],
         isNovel: Bool,
-        language: String? = nil
+        language: String? = nil,
+        numbering: Numbering = .marker
     ) -> [AppleBooksVolume] {
         let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
         guard !wanted.isEmpty else { return [] }
@@ -79,7 +80,8 @@ enum AppleBooksMatch {
             .filter { $0.count >= 3 }
         var byNumber: [Int: AppleBooksVolume] = [:]
         for result in results {
-            guard let parts = split(result.trackName), wanted.contains(normalise(parts.title))
+            guard let parts = split(result.trackName, numbering: numbering),
+                  wanted.contains(normalise(parts.title))
             else { continue }
             if let tag = parts.tag, tag.contains("novel") != isNovel { continue }
             if !surnames.isEmpty {
@@ -109,13 +111,38 @@ enum AppleBooksMatch {
         let tag: String?
     }
 
+    /// How a store writes a volume number.
+    enum Numbering {
+        /// "Solo Leveling, Vol. 8 (comic)": a marker before the number. The
+        /// English-language stores.
+        case marker
+        /// "ONE PIECE モノクロ版 115": the title, an edition word, and the
+        /// bare number. The Japanese store (verified 2026-09-11 on 377).
+        /// Looser, so only used there, and only for the Japanese edition.
+        case bare
+    }
+
     /// "Solo Leveling, Vol. 8 (comic)" → ("Solo Leveling", 8, "comic").
     /// The marker may be "Vol.", "Vol", "Volume" or "#".
-    static func split(_ name: String) -> Parts? {
-        guard let match = name.wholeMatch(of: pattern) else { return nil }
-        guard let number = Int(match.output.2) else { return nil }
-        let tag = match.output.3.map { $0.lowercased() }
-        return Parts(title: String(match.output.1), number: number, tag: tag)
+    static func split(_ name: String, numbering: Numbering = .marker) -> Parts? {
+        switch numbering {
+        case .marker:
+            guard let match = name.wholeMatch(of: pattern) else { return nil }
+            guard let number = Int(match.output.2) else { return nil }
+            let tag = match.output.3.map { $0.lowercased() }
+            return Parts(title: String(match.output.1), number: number, tag: tag)
+        case .bare:
+            guard let match = name.wholeMatch(of: barePattern) else { return nil }
+            guard let number = Int(match.output.3) else { return nil }
+            return Parts(title: String(match.output.1), number: number, tag: match.output.2.map(String.init))
+        }
+    }
+
+    // swiftlint:disable:next large_tuple
+    private static var barePattern: Regex<(Substring, Substring, Substring?, Substring)> {
+        // Title, an optional edition word (モノクロ版 monochrome, カラー版
+        // colour, 新装版 new edition, 完全版 complete), then the number.
+        /^(.+?)\s+(?:(モノクロ版|カラー版|新装版|完全版)\s*)?(\d+)\s*$/
     }
 
     // Built per call: a Regex is not Sendable, so it cannot be a static

@@ -34,6 +34,8 @@ struct SeriesDetailView: View {
     /// The store was asked and did not answer — distinct from "asked, and it
     /// has none", which shows MangaBaka's editions with no note.
     @State var appleUnreachable = false
+    /// Which store's edition the shelf shows, when not the reader's own.
+    @State var appleEdition: AppleVolumesRow.Edition?
     @State private var alsoLike: [Series] = []
     @State var extras = SeriesExtras()
     @State private var covers: [SeriesImage] = []

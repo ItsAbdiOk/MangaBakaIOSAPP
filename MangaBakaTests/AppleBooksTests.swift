@@ -84,6 +84,25 @@ struct AppleBooksMatchTests {
         #expect(AppleBooksMatch.languageOf("Vol. 3") == nil)
     }
 
+    /// The Japanese store writes "ONE PIECE モノクロ版 115": no marker, an
+    /// edition word, the bare number. Only that store, only that edition.
+    @Test("The Japanese store's bare numbering, one per number")
+    func bareNumbering() {
+        let results = [
+            result(1, "ONE PIECE モノクロ版 115"), result(2, "ONE PIECE カラー版 1"),
+            result(3, "ONE PIECE モノクロ版 1"), result(4, "ONE PIECE of Paper"),
+            result(5, "ONE PIECE 2")
+        ]
+        let bare = AppleBooksMatch.volumes(
+            in: results, titles: ["ONE PIECE", "ワンピース"], isNovel: false, numbering: .bare
+        )
+        #expect(bare.map(\.number) == [1, 2, 115])
+        #expect(bare.map(\.id) == [2, 5, 1], "The first listing of a number, whichever edition")
+        // The marker rule still rejects every one of these.
+        let marker = AppleBooksMatch.volumes(in: results, titles: ["ONE PIECE"], isNovel: false)
+        #expect(marker.isEmpty)
+    }
+
     @Test("A novel series takes the novels and leaves the comics")
     func novels() {
         let results = [result(1, "Solo Leveling, Vol. 1 (comic)"), result(2, "Solo Leveling, Vol. 1 (novel)")]
@@ -195,6 +214,17 @@ struct AppleVolumesRowTests {
     /// The phone showed MangaBaka's seven One Piece editions with no hint
     /// of the store, and it was not possible to tell a failed request from
     /// a build without the feature. Now a failure says so.
+    /// A series the reader's store does not sell falls back to the Japanese
+    /// store's edition — covers and a count, no price, and it says so.
+    @Test("Nothing at home, so the Japanese edition, labelled")
+    func japaneseFallback() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
+        #expect(source.contains("if answer?.isEmpty == true, country.lowercased() != \"jp\""))
+        #expect(source.contains("answer = await appleBooks.japaneseVolumes(for: shown)"))
+        let row = try SourceTree.read("MangaBaka/Features/Detail/AppleVolumesRow.swift")
+        #expect(row.contains("if edition == nil, let price = volume.formattedPrice"))
+    }
+
     @Test("A store that could not be reached is said, not silent")
     func failureIsSaid() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")

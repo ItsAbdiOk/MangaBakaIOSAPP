@@ -55,6 +55,25 @@ actor AppleBooksClient {
         return matched
     }
 
+    /// The Japanese edition, from the Japanese store, when the reader's own
+    /// store has nothing: covers and a count for a series with no English
+    /// ebook. No creator check — the store credits "尾田栄一郎" and MangaBaka
+    /// says "Eiichirou Oda" — but the blurb must be Japanese and the name
+    /// must be the title with a bare number, the way that store writes it.
+    func japaneseVolumes(for series: Series) async -> [AppleBooksVolume]? {
+        guard let query = series.displayTitle, !query.isEmpty else { return [] }
+        let key = "v3-\(series.id)-jp-ja-bare"
+        if let cached = readCache(key) { return cached }
+
+        guard let results = await search(query, country: "jp") else { return nil }
+        let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
+        let matched = AppleBooksMatch.volumes(
+            in: results, titles: titles, isNovel: false, language: "ja", numbering: .bare
+        )
+        writeCache(key, matched)
+        return matched
+    }
+
     private struct Envelope: Decodable {
         let results: [AppleBooksResult]
     }

@@ -13,6 +13,14 @@ struct AppleVolumesRow: View {
     let volumes: [AppleBooksVolume]
     /// The series' final volume number, when it has ended.
     let expected: Int?
+    /// Set when the shelf is another store's edition; nil for the reader's own.
+    var edition: Edition?
+
+    enum Edition {
+        /// From the Japanese store, because the reader's has nothing. Covers
+        /// and a count; no price, since the reader cannot buy there.
+        case japanese
+    }
 
     @Environment(\.openURL) private var openURL
 
@@ -27,11 +35,17 @@ struct AppleVolumesRow: View {
                         .typeChip()
                         .foregroundStyle(Palette.textMuted)
                     Spacer(minLength: 0)
-                    Text("Apple Books")
+                    Text(edition == .japanese ? "Japanese edition · Apple Books" : "Apple Books")
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
                 .padding(.horizontal, Metrics.gutter)
+                if edition == .japanese {
+                    Text("Not sold in your store. Covers and volume count only.")
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textMuted)
+                        .padding(.horizontal, Metrics.gutter)
+                }
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
@@ -76,7 +90,7 @@ struct AppleVolumesRow: View {
                 .foregroundStyle(Palette.textPrimary)
             // Apple's price beside the cover: what it costs is the first
             // thing a reader deciding whether to buy wants to know.
-            if let price = volume.formattedPrice {
+            if edition == nil, let price = volume.formattedPrice {
                 Text(price)
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
@@ -85,7 +99,8 @@ struct AppleVolumesRow: View {
         .frame(width: Metrics.coverSeedWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            ["Volume \(volume.number)", volume.formattedPrice].compactMap { $0 }.joined(separator: ", ")
+            ["Volume \(volume.number)", edition == nil ? volume.formattedPrice : nil]
+                .compactMap { $0 }.joined(separator: ", ")
         )
         .accessibilityHint("Opens it in Apple Books")
         .accessibilityAddTraits(.isButton)
