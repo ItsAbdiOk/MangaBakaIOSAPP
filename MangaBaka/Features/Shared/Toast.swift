@@ -22,6 +22,10 @@ final class ToastCentre {
     func show(_ message: String, for duration: Duration = .seconds(2)) {
         dismissal?.cancel()
         self.message = message
+        // The only confirmation the app gives for a write. The overlay does
+        // not take focus, so without this a VoiceOver reader who saved a
+        // series got a haptic and no words.
+        AccessibilityNotification.Announcement(message).post()
         dismissal = Task { [weak self] in
             try? await Task.sleep(for: duration)
             guard !Task.isCancelled else { return }

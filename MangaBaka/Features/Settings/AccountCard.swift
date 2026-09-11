@@ -124,7 +124,7 @@ struct AccountCard: View {
             Discovery, search and the stack keep working without it.
             """
         case .checking:
-            "The field and buttons stay put and stay usable — this is not a modal wait."
+            "Checking the token with MangaBaka."
         case let .unverified(reason):
             "Saved on this phone but not checked yet: \(reason)"
         case .idle:

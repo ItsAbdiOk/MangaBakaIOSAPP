@@ -23,10 +23,14 @@ struct SearchClearButton: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundStyle(Palette.textQuaternary)
+                    // textMuted, not textQuaternary: the latter measured 2.52:1
+                    // and this is the control a reader reaches for when a long
+                    // query is wrong.
+                    .foregroundStyle(Palette.textMuted)
                     // A 16pt glyph is a 16pt target. The tap area is widened to
-                    // something a thumb can hit without the icon growing.
-                    .frame(width: 30, height: 30)
+                    // the platform minimum without the icon growing; it was
+                    // 30pt, fourteen under, beside the file that sets 44.
+                    .frame(width: Metrics.tapTarget, height: Metrics.tapTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
