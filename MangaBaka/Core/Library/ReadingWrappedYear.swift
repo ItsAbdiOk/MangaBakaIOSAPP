@@ -40,7 +40,10 @@ extension ReadingWrapped {
         calendar: Calendar = .current
     ) -> Year {
         let dated = entries.filter { $0.finishDate != nil }
+        // Not "has a finish date in the year": a dropped series may carry one
+        // on some trackers, and the card says *finished*.
         let finished = dated
+            .filter { $0.state != .dropped }
             .filter { calendar.component(.year, from: $0.finishDate ?? .distantPast) == year }
             .sorted { ($0.finishDate ?? .distantPast) > ($1.finishDate ?? .distantPast) }
         return Year(
@@ -155,12 +158,12 @@ extension ReadingWrapped {
 
     /// The formats the reader actually reads, largest first.
     static func formats(in entries: [LibraryEntry]) -> [Slice] {
-        tally(entries.compactMap { $0.series?.type?.capitalized })
+        tally(readAtAll(entries).compactMap { $0.series?.type?.capitalized })
     }
 
     /// The decades the reader's library comes from, largest first.
     static func decades(in entries: [LibraryEntry]) -> [Slice] {
-        tally(entries.compactMap { entry -> String? in
+        tally(readAtAll(entries).compactMap { entry -> String? in
             guard let year = entry.series?.year, year > 1900 else { return nil }
             return "\(year / 10 * 10)s"
         })
@@ -173,7 +176,7 @@ extension ReadingWrapped {
     /// different people and a reader following an artist is following them
     /// just as much.
     static func creators(in entries: [LibraryEntry], limit: Int = 5) -> [Slice] {
-        let names = entries.flatMap { entry -> [String] in
+        let names = readAtAll(entries).flatMap { entry -> [String] in
             let series = entry.series
             return Array(Set((series?.authors ?? []) + (series?.artists ?? [])))
         }

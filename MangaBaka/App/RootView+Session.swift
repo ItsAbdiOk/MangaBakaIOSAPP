@@ -43,11 +43,14 @@ extension RootView {
                                     entries: session.library.entries,
                                     // The baseline the signature statistic is
                                     // measured against. From the live pulse
-                                    // where it has arrived, and a recent
-                                    // reading otherwise — it moves by a few
-                                    // hundred a week, and a stale denominator
-                                    // shifts a lift by less than a percent.
-                                    catalogueSize: session.pulse.pulse?.activeSeriesCount ?? 304_108,
+                                    // where it has arrived, and otherwise the
+                                    // pulse's own reading on 2026-09-11. It
+                                    // moves by a few hundred a week, so a
+                                    // year's staleness shifts a lift by about
+                                    // 5% — enough to move a tag sitting on the
+                                    // 2.0 gate, not enough to invent one.
+                                    catalogueSize: session.pulse.pulse?.activeSeriesCount
+                                        ?? ReadingWrapped.catalogueSizeOn20260911,
                                     path: $shelfPath
                                 )
                             }

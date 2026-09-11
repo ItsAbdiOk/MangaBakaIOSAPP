@@ -9,57 +9,7 @@ import Foundation
 /// manga, not about the reader. These tests exist mostly to pin the places
 /// where that rule is easy to break.
 @Suite("Wrapped")
-struct ReadingWrappedTests {
-    private func tag(_ id: Int, _ name: String, world: Int, spoiler: Bool = false) -> SeriesTag {
-        SeriesTag(
-            id: id, name: name, namePath: nil, isGenre: false, isSpoiler: spoiler,
-            isExplicit: false, impliedByTagIds: nil, contentRating: nil,
-            weight: "core", seriesCount: world
-        )
-    }
-
-    private func libraryEntry(
-        _ id: Int,
-        state: LibraryEntry.State = .completed,
-        read: Double? = nil,
-        total: Double? = nil,
-        rating: Double? = nil,
-        crowdRating: Double? = nil,
-        ratingCount: Int? = nil,
-        start: Date? = nil,
-        finish: Date? = nil,
-        type: String = "manhwa",
-        year: Int? = nil,
-        authors: [String]? = nil,
-        tags: [SeriesTag] = []
-    ) -> LibraryEntry {
-        LibraryEntry(
-            id: id, seriesId: id, state: state, progressChapter: read,
-            progressVolume: nil, rating: rating, note: nil,
-            startDate: start, finishDate: finish,
-            numberOfRereads: nil, priority: nil, isPrivate: nil, readLink: nil,
-            series: SeriesFactory.make(
-                id: id, title: "S\(id)", authors: authors, rating: crowdRating,
-                type: type, totalChapters: total, year: year,
-                ratingCount: ratingCount, tagsV2: tags.isEmpty ? nil : tags
-            )
-        )
-    }
-
-    private func day(_ iso: String) -> Date {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: iso) ?? .distantPast
-    }
-
-    private var utc: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        return calendar
-    }
-
+struct ReadingWrappedTests: WrappedFixtures {
     // MARK: - Signatures
 
     @Test("A tag everyone reads is not a fact about you")
@@ -159,139 +109,38 @@ struct ReadingWrappedTests {
         #expect(ReadingWrapped.disagreements(in: entries, liked: false).map(\.id) == [2])
     }
 
-    // MARK: - Obscurity
+    // MARK: - Only what was read counts
 
-    @Test("The deepest cut is something you actually read")
-    func deepestCutMustBeStarted() throws {
-        // The most obscure thing on a plan-to-read shelf is something the
-        // reader has not read, which is not a fact about them.
-        let entries = [
-            libraryEntry(1, state: .planToRead, ratingCount: 3),
-            libraryEntry(2, state: .completed, ratingCount: 40),
-            libraryEntry(3, state: .completed, ratingCount: 9_000)
+    /// A 400-entry plan-to-read shelf is ambition, not habit. Every statistic
+    /// whose caption says "read" has to leave it out — `verdicts` and the
+    /// taste ledger already do, and four of these did not.
+    @Test("Series never opened count for nothing")
+    func unreadSeriesAreExcluded() {
+        let rare = tag(1, "Kuudere", world: 100)
+        let unread = (1...6).map {
+            libraryEntry(
+                $0, state: .planToRead, type: "novel", year: 1995, authors: ["Backlog"], tags: [rare]
+            )
+        }
+        let read = [
+            libraryEntry(10, state: .completed, type: "manhwa", year: 2021, authors: ["Chugong"]),
+            libraryEntry(11, state: .reading, type: "manhwa", year: 2022, authors: ["Chugong"])
         ]
-        #expect(try #require(ReadingWrapped.deepestCut(in: entries)).seriesId == 2)
+        let entries = unread + read
+
+        #expect(ReadingWrapped.signatures(in: entries, catalogueSize: 300_000).isEmpty)
+        #expect(ReadingWrapped.formats(in: entries).map(\.label) == ["Manhwa"])
+        #expect(ReadingWrapped.decades(in: entries).map(\.label) == ["2020s"])
+        #expect(ReadingWrapped.creators(in: entries).map(\.label) == ["Chugong"])
     }
 
-    // MARK: - The year
-
-    @Test("A year is what you finished in it")
-    func yearFiltersByFinishDate() {
-        let entries = [
-            libraryEntry(1, total: 100, finish: day("2026-03-04")),
-            libraryEntry(2, total: 50, finish: day("2026-11-20")),
-            libraryEntry(3, total: 999, finish: day("2025-12-31")),
-            libraryEntry(4)
-        ]
-        let year = ReadingWrapped.year(2026, in: entries, calendar: utc)
-
-        #expect(year.finished.map(\.seriesId) == [2, 1], "newest first")
-        #expect(year.chapters == 150, "the 2025 finish is not in this year")
-        #expect(year.dated == 3)
-        #expect(year.total == 4)
-    }
-
-    @Test("A year says how much of the library it could see")
-    func yearReportsItsCoverage() {
-        // Finish dates are set by the site when a series is completed there,
-        // and not otherwise. A year built from four of nine hundred entries is
-        // a different claim from one built from all of them.
-        let entries = (1...10).map { libraryEntry($0, finish: $0 <= 2 ? day("2026-05-05") : nil) }
-        let year = ReadingWrapped.year(2026, in: entries, calendar: utc)
-        #expect(year.coverage == 0.2)
-        #expect(!year.isWorthShowing, "two finishes is a list, not a year")
-    }
-
-    @Test("A tied busiest month is not reported")
-    func tiedMonthsAreSilent() {
-        // "Your busiest month was March, or possibly July" is not a fact worth
-        // printing, and picking one at random is worse.
-        let entries = [
-            libraryEntry(1, finish: day("2026-03-01")),
-            libraryEntry(2, finish: day("2026-07-01"))
-        ]
-        let year = ReadingWrapped.year(2026, in: entries, calendar: utc)
-        #expect(ReadingWrapped.busiestMonth(in: year, calendar: utc) == nil)
-    }
-
-    @Test("A clear busiest month is")
-    func busiestMonthIsFound() throws {
-        let entries = [
-            libraryEntry(1, finish: day("2026-03-01")),
-            libraryEntry(2, finish: day("2026-03-14")),
-            libraryEntry(3, finish: day("2026-07-01"))
-        ]
-        let year = ReadingWrapped.year(2026, in: entries, calendar: utc)
-        let month = try #require(ReadingWrapped.busiestMonth(in: year, calendar: utc))
-        #expect(month.month == 3)
-        #expect(month.count == 2)
-    }
-
-    @Test("A oneshot is not the fastest read of your life")
-    func sprintsNeedARealRun() {
-        // One chapter finished the day it was started is technically the
-        // fastest reading anybody has ever done.
-        let entries = [
-            libraryEntry(1, read: 1, total: 1, start: day("2026-01-01"), finish: day("2026-01-01"))
-        ]
-        #expect(ReadingWrapped.fastestFinish(in: entries, calendar: utc) == nil)
-    }
-
-    @Test("A binge is")
-    func sprintIsFound() throws {
-        let entries = [
-            libraryEntry(1, total: 200, start: day("2026-01-01"), finish: day("2026-01-05")),
-            libraryEntry(2, total: 200, start: day("2026-01-01"), finish: day("2026-06-01"))
-        ]
-        let sprint = try #require(ReadingWrapped.fastestFinish(in: entries, calendar: utc))
-        #expect(sprint.entry.seriesId == 1)
-        #expect(sprint.perDay == 50)
-    }
-
-    @Test("Same-day finishes count as one day, not none")
-    func sameDayIsOneDay() throws {
-        let entries = [
-            libraryEntry(1, total: 60, start: day("2026-02-02"), finish: day("2026-02-02"))
-        ]
-        let sprint = try #require(ReadingWrapped.fastestFinish(in: entries, calendar: utc))
-        #expect(sprint.perDay == 60)
-    }
-
-    @Test("A whole series logged on one day is a backfill, not a binge")
-    func backfillsAreRejected() {
-        // Found on a real 939-entry library: the screen announced "700
-        // chapters a day — NARUTO, 700 chapters in 1 day". Nobody read Naruto
-        // in a day. A series marked completed with both dates set to that
-        // moment is what every importer and most bulk edits produce.
-        let entries = [
-            libraryEntry(1, total: 700, start: day("2026-01-01"),
-                         finish: day("2026-01-01"), type: "manga"),
-            libraryEntry(2, total: 120, start: day("2026-02-01"),
-                         finish: day("2026-02-03"), type: "manhwa")
-        ]
-        let sprint = ReadingWrapped.fastestFinish(in: entries, calendar: utc)
-        #expect(sprint?.entry.seriesId == 2, "the real binge, not the import")
-    }
-
-    @Test("A genuine binge is not rejected with the backfills")
-    func realBingesSurvive() {
-        // 40 manhwa chapters in a day is four hours. Extraordinary, possible,
-        // and exactly the kind of thing this card exists to celebrate.
-        let entries = [
-            libraryEntry(1, total: 40, start: day("2026-03-01"),
-                         finish: day("2026-03-01"), type: "manhwa")
-        ]
-        #expect(ReadingWrapped.fastestFinish(in: entries, calendar: utc)?.perDay == 40)
-    }
-
-    @Test("The thing you have been reading longest is still unfinished")
-    func longestRunningIsUnfinished() throws {
-        let entries = [
-            libraryEntry(1, state: .reading, start: day("2019-04-01")),
-            libraryEntry(2, state: .completed, start: day("2015-01-01"), finish: day("2016-01-01")),
-            libraryEntry(3, state: .reading, start: day("2024-01-01"))
-        ]
-        #expect(try #require(ReadingWrapped.longestRunning(in: entries)).seriesId == 1)
+    /// An importer that writes 0 for "unrated" would otherwise make the reader
+    /// a savage critic of ten series they never rated. `verdicts` guards this.
+    @Test("A zero rating is not a rating")
+    func zeroRatingIsUnrated() {
+        let entries = (1...12).map { libraryEntry($0, rating: 0, crowdRating: 75) }
+        #expect(ReadingWrapped.criticGap(in: entries) == nil)
+        #expect(ReadingWrapped.disagreements(in: entries, liked: false).isEmpty)
     }
 
     // MARK: - Composition

@@ -17,6 +17,25 @@ import Foundation
 /// verdict on 9 rated series and a verdict on 400 are different claims and the
 /// screen has to be able to say which it is making.
 enum ReadingWrapped {
+    /// The entries the reader has actually opened. Plan-to-read and
+    /// considering are ambition, not habit — `verdicts` and the taste ledger
+    /// leave them out for the same reason, and every statistic here whose
+    /// caption says "read" has to as well. Four of them did not, so a reader
+    /// with a 400-entry backlog was told "the people you read most" were
+    /// authors they had never read.
+    static func readAtAll(_ entries: [LibraryEntry]) -> [LibraryEntry] {
+        entries.filter { $0.state != .planToRead && $0.state != .considering }
+    }
+
+    /// A rating of exactly zero is "unrated" to at least one client that
+    /// writes 0 rather than null. `verdicts` guards the same field the same
+    /// way; without it ten such entries made the reader a savage critic of
+    /// series they had never rated.
+    static func rating(of entry: LibraryEntry) -> Double? {
+        guard let rating = entry.rating, rating > 0 else { return nil }
+        return rating
+    }
+
     // MARK: - Signature tags
 
     /// A tag the reader reads far more than the database would predict.
@@ -54,6 +73,11 @@ enum ReadingWrapped {
     /// claim as being about them. Nothing derived it.
     static let minimumLift = 2.0
 
+    /// `activeSeriesCount` as the community pulse reported it on 2026-09-11.
+    /// The fallback denominator when the live pulse has not arrived; dated so
+    /// the next reader knows how stale it is.
+    static let catalogueSizeOn20260911 = 304_108
+
     /// Tags the reader reads disproportionately, strongest first.
     ///
     /// - Parameter catalogueSize: how many series the database holds, for the
@@ -64,7 +88,7 @@ enum ReadingWrapped {
         catalogueSize: Int,
         limit: Int = 6
     ) -> [Signature] {
-        let tagged = entries.filter { !($0.series?.richTags.isEmpty ?? true) }
+        let tagged = readAtAll(entries).filter { !($0.series?.richTags.isEmpty ?? true) }
         guard tagged.count >= minimumForSignature, catalogueSize > 0 else { return [] }
 
         var mine: [String: Int] = [:]
@@ -133,7 +157,7 @@ enum ReadingWrapped {
     /// zero.
     static func criticGap(in entries: [LibraryEntry]) -> (gap: Double, sample: Int)? {
         let gaps = entries.compactMap { entry -> Double? in
-            guard let mine = entry.rating, let crowd = entry.series?.rating else { return nil }
+            guard let mine = rating(of: entry), let crowd = entry.series?.rating else { return nil }
             return mine - crowd
         }
         guard gaps.count >= minimumForCriticGap else { return nil }
@@ -151,7 +175,7 @@ enum ReadingWrapped {
     ) -> [Disagreement] {
         entries
             .compactMap { entry -> Disagreement? in
-                guard let mine = entry.rating, let crowd = entry.series?.rating else { return nil }
+                guard let mine = rating(of: entry), let crowd = entry.series?.rating else { return nil }
                 let gap = mine - crowd
                 guard liked ? gap > 0 : gap < 0 else { return nil }
                 return Disagreement(entry: entry, gap: gap)
@@ -159,35 +183,5 @@ enum ReadingWrapped {
             .sorted { liked ? $0.gap > $1.gap : $0.gap < $1.gap }
             .prefix(limit)
             .reduce(into: []) { $0.append($1) }
-    }
-
-    // MARK: - How far off the beaten track
-
-    /// How obscure the reader's library is.
-    ///
-    /// Measured by how many people rated each series on MangaBaka, which is
-    /// the only popularity signal the payload carries. The threshold is a
-    /// guess: 500 ratings is roughly where a series stops being something
-    /// everyone has heard of, judged by eye against the trending feeds rather
-    /// than derived.
-    static let obscurityThreshold = 500
-
-    static func obscurity(in entries: [LibraryEntry]) -> (share: Double, sample: Int)? {
-        let counts = entries.compactMap { $0.series?.ratingCount }
-        guard counts.count >= minimumForCriticGap else { return nil }
-        let obscure = counts.filter { $0 < obscurityThreshold }.count
-        return (Double(obscure) / Double(counts.count), counts.count)
-    }
-
-    /// The least-known series the reader has actually read.
-    ///
-    /// Deliberately restricted to started series: the most obscure thing on a
-    /// plan-to-read shelf is something they have not read, which is not a
-    /// fact about them.
-    static func deepestCut(in entries: [LibraryEntry]) -> LibraryEntry? {
-        entries
-            .filter { $0.state == .completed || $0.state == .reading || $0.state == .rereading }
-            .filter { ($0.series?.ratingCount ?? 0) > 0 }
-            .min { ($0.series?.ratingCount ?? 0) < ($1.series?.ratingCount ?? 0) }
     }
 }

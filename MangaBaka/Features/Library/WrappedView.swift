@@ -25,8 +25,6 @@ struct WrappedView: View {
         var signatures: [ReadingWrapped.Signature] = []
         var critic: (gap: Double, sample: Int)?
         var loved: [ReadingWrapped.Disagreement] = []
-        var obscurity: (share: Double, sample: Int)?
-        var deepest: LibraryEntry?
         var busiest: (month: Int, count: Int)?
         var sprint: ReadingWrapped.Sprint?
         var longest: LibraryEntry?
@@ -47,7 +45,6 @@ struct WrappedView: View {
                 if let sprint = facts.sprint { sprintCard(sprint) }
                 if !facts.signatures.isEmpty { signatureCard }
                 if let critic = facts.critic { criticCard(critic) }
-                if let obscurity = facts.obscurity { obscurityCard(obscurity) }
                 if let longest = facts.longest { longestCard(longest) }
                 if !facts.creators.isEmpty { creatorsCard }
                 if !facts.formats.isEmpty { formatsCard }
@@ -78,8 +75,6 @@ struct WrappedView: View {
             facts.signatures = ReadingWrapped.signatures(in: entries, catalogueSize: size)
             facts.critic = ReadingWrapped.criticGap(in: entries)
             facts.loved = ReadingWrapped.disagreements(in: entries, liked: true)
-            facts.obscurity = ReadingWrapped.obscurity(in: entries)
-            facts.deepest = ReadingWrapped.deepestCut(in: entries)
             facts.sprint = ReadingWrapped.fastestFinish(in: entries)
             facts.longest = ReadingWrapped.longestRunning(in: entries)
             facts.formats = ReadingWrapped.formats(in: entries)
@@ -180,21 +175,6 @@ struct WrappedView: View {
             """)
             if let loved = facts.loved.first, let title = loved.series?.displayTitle {
                 caveat("Furthest apart on \(title) — \(loved.displayGap) against the crowd.")
-            }
-        }
-    }
-
-    private func obscurityCard(_ obscurity: (share: Double, sample: Int)) -> some View {
-        card("Off the beaten track") {
-            headline("\(Int((obscurity.share * 100).rounded()))%", "barely rated")
-            detail("""
-            That much of your library has fewer than \
-            \(ReadingWrapped.obscurityThreshold) ratings on MangaBaka.
-            """)
-            if let deepest = facts.deepest,
-               let title = deepest.series?.displayTitle,
-               let count = deepest.series?.ratingCount {
-                caveat("Deepest cut: \(title), rated by \(count.formatted()).")
             }
         }
     }
