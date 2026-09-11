@@ -9,17 +9,20 @@ import SwiftUI
 /// "나 혼자만 레벨업" has no way to confirm from this page that they are
 /// looking at the same book.
 ///
-/// Folded by default. This is a reference list, not something to read on the
-/// way past.
-struct AlternativeTitles: View {
+/// It lives in the hero, under the byline, because that is where a reader
+/// looking for a name they recognise will look — the question "is this the
+/// same book?" is asked on arrival, not two screens down. One line with a
+/// count, opening a sheet: the list is a reference, not something to read on
+/// the way past, and inlining twenty-five names would push the synopsis off
+/// the screen.
+/// The line in the hero. One tap, one sheet.
+struct AlternativeTitlesButton: View {
     let titles: [SeriesTitle]
-    /// The one already on screen, which should not be repeated.
+    /// The one already on screen, which should not be counted or repeated.
     let shown: String?
 
-    @State private var isExpanded = false
+    @State private var isOpen = false
 
-    /// Everything except the title the page is already showing.
-    /// The gathering lives on `SeriesTitle` so it can be tested.
     private var others: [SeriesTitle.Alternative] {
         SeriesTitle.alternatives(in: titles, excluding: shown)
     }
@@ -27,55 +30,79 @@ struct AlternativeTitles: View {
     var body: some View {
         let rows = others
         if !rows.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    Motion.run(.snappy(duration: 0.22)) { isExpanded.toggle() }
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Also known as")
-                            .typeDetailSectionHeader()
-                            .foregroundStyle(Palette.textPrimary)
-                        Text("\(rows.count)")
-                            .typeChip()
-                            .foregroundStyle(Palette.textMuted)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Palette.textMuted)
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    }
-                    .frame(minHeight: Metrics.tapTarget)
-                    .contentShape(Rectangle())
+            Button { isOpen = true } label: {
+                HStack(spacing: 5) {
+                    Text("Also known as")
+                        .typeSmallMeta()
+                    Text("\(rows.count)")
+                        .typeGridMeta()
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Palette.surfaceChip, in: Capsule())
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Also known as, \(rows.count) other titles")
-                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+                .foregroundStyle(Palette.textMuted)
+                .frame(minHeight: Metrics.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Also known as, \(rows.count) other titles")
+            .accessibilityHint("Opens the full list")
+            .sheet(isPresented: $isOpen) {
+                AlternativeTitlesSheet(rows: rows)
+                    .presentationDetents([.medium, .large])
+                    .presentationCornerRadius(Metrics.radiusSheet)
+            }
+        }
+    }
+}
 
-                if isExpanded {
-                    VStack(spacing: 0) {
-                        ForEach(rows) { row in
-                            titleRow(row)
-                            if row.id != rows.last?.id {
-                                Rectangle()
-                                    .fill(Palette.hairline)
-                                    .frame(height: 0.5)
-                                    .padding(.leading, 14)
-                            }
+/// Every other name, in the API's own order.
+struct AlternativeTitlesSheet: View {
+    let rows: [SeriesTitle.Alternative]
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(rows) { row in
+                        titleRow(row)
+                        if row.id != rows.last?.id {
+                            Rectangle()
+                                .fill(Palette.hairline)
+                                .frame(height: 0.5)
+                                .padding(.leading, 14)
                         }
                     }
-                    .background(Palette.surface, in: RoundedRectangle(
-                        cornerRadius: Metrics.radiusCard, style: .continuous
-                    ))
-                    .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
+                }
+                .background(Palette.surface, in: RoundedRectangle(
+                    cornerRadius: Metrics.radiusCard, style: .continuous
+                ))
+                .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
+                .padding(.horizontal, Metrics.gutter)
+                .padding(.top, 12)
+                .padding(.bottom, 40)
+            }
+            .scrollIndicators(.hidden)
+            .background(Palette.ground)
+            .navigationTitle("Also known as")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }.foregroundStyle(Palette.accent)
                 }
             }
-            .padding(.horizontal, Metrics.gutter)
         }
+        .preferredColorScheme(.dark)
+        .edgeSwipeToDismiss()
     }
 
     /// Each row copies its own title on tap.
     ///
-    /// The reason to look at this list at all is usually to take one of these
+    /// The reason to open this list at all is usually to take one of these
     /// somewhere else — a search, a message, a reading site — and holding a
     /// line of text to select it inside a scroll view is a fight.
     private func titleRow(_ row: SeriesTitle.Alternative) -> some View {

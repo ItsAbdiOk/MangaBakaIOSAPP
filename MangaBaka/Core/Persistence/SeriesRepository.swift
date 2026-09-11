@@ -98,6 +98,9 @@ struct SeriesExtras: Sendable, Equatable, Codable {
     var richTags: [SeriesTag] = []
     /// Published editions — see `SeriesEdition`.
     var editions: [SeriesEdition] = []
+    /// Published volumes, with every edition of each gathered onto one — see
+    /// `SeriesWork.Volume`.
+    var volumes: [SeriesWork.Volume] = []
     var year: Int?
     /// The whole v1 series, not just the two fields above.
     ///
@@ -652,6 +655,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         async let editions: [SeriesEdition]? = try? client.get(
             "/v1/series/\(seriesId)/collections"
         )
+        // Published volumes: dates, prices, page counts, ISBNs and per-volume
+        // cover art. A sixth concurrent read rather than a lazy one, because
+        // the section sits above the fold on a short series and a spinner that
+        // appears after the page has settled reads as a second page load.
+        async let works: [SeriesWork]? = try? client.get("/v1/series/\(seriesId)/works")
 
         let detail = await full
         return await SeriesExtras(
@@ -661,6 +669,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
             editions: (await editions ?? []).presentable,
+            volumes: SeriesWork.volumes(from: await works ?? []),
             year: detail?.year,
             full: detail
         )

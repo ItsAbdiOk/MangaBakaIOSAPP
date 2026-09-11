@@ -92,6 +92,15 @@ struct DetailHero: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 7)
                 }
+                // Directly under the name, because "is this the same book I
+                // know as X?" is a question asked on arrival rather than two
+                // screens down. A line and a count; the list itself is a
+                // sheet, since twenty-five names inline would push the
+                // synopsis off the screen.
+                AlternativeTitlesButton(
+                    titles: series.titles ?? [],
+                    shown: series.displayTitle
+                )
             }
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)

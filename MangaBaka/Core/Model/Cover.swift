@@ -121,3 +121,15 @@ struct Cover: Codable, Equatable, Sendable, Hashable {
         return URL(string: swapped) ?? base
     }
 }
+
+extension Cover {
+    /// A cover with no artwork behind it.
+    ///
+    /// For a volume whose edition carries no image — which happens, and is not
+    /// an error. `CoverImage` already draws its own placeholder for a nil URL,
+    /// so the row keeps its shape instead of collapsing.
+    static let empty = Cover(
+        raw: nil, x150: nil, x250: nil, x350: nil,
+        blurhash: nil, width: nil, height: nil
+    )
+}
