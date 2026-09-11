@@ -9,6 +9,7 @@ struct ScheduleView: View {
     @State private var model: ScheduleModel
     @Binding private var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(model: ScheduleModel, path: Binding<[Series]>) {
         _model = State(initialValue: model)
@@ -88,13 +89,21 @@ struct ScheduleView: View {
             Button {
                 Task { await model.measure(refresh: model.snapshot.measuredAt != nil) }
             } label: {
-                Text(model.remeasureLabel)
-                    .typeSmallMeta()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Palette.surfacePill, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Palette.borderPill, lineWidth: 0.5))
+                HStack(spacing: 5) {
+                    // Turns while a measurement runs: the button is disabled
+                    // then, and a disabled button with no motion reads as
+                    // broken rather than busy.
+                    Image(systemName: "arrow.trianglehead.2.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                        .symbolEffect(.rotate, isActive: model.isMeasuring && !reduceMotion)
+                    Text(model.remeasureLabel)
+                        .typeSmallMeta()
+                }
+                .foregroundStyle(Palette.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Palette.surfacePill, in: Capsule())
+                .overlay(Capsule().strokeBorder(Palette.borderPill, lineWidth: 0.5))
             }
             .buttonStyle(.press)
             .disabled(model.isMeasuring)

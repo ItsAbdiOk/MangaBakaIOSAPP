@@ -18,6 +18,16 @@ struct AppTabSymbolTests {
         )
     }
 
+    /// The same silent failure as the tab that shipped without a glyph: a
+    /// symbol name that is not an SF Symbol renders as nothing. Every name
+    /// the feel pass added is checked here.
+    @Test("Every animated symbol is a real SF Symbol", arguments: [
+        "arrow.trianglehead.2.clockwise", "magnifyingglass", "plus", "xmark"
+    ])
+    func feelSymbolsResolve(_ name: String) {
+        #expect(UIImage(systemName: name) != nil, "'\(name)' is not an SF Symbol")
+    }
+
     @Test("Every tab has a label, so a missing glyph is never the whole control")
     func labelsExist() {
         for tab in AppTab.allCases {

@@ -5,6 +5,7 @@ struct SearchView: View {
     @Bindable var model: SearchModel
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Opens the genre and tag browser.
     ///
     /// Lives in the screen's own header rather than the navigation bar: the
@@ -92,6 +93,9 @@ struct SearchView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(Palette.textTertiary)
+                    // Breathes while a request is out, so the field itself
+                    // says "working" without a spinner beside it.
+                    .symbolEffect(.pulse, isActive: model.isSearching && !reduceMotion)
                 TextField("Title, author, or tag", text: Binding(
                     get: { model.query.text ?? "" },
                     set: { model.query.text = $0 }

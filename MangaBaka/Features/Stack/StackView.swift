@@ -20,6 +20,9 @@ struct StackView: View {
     /// Bumped when a drag falls short and the card settles back. A cancelled
     /// swipe should feel cancelled; see `Haptics`.
     @State private var settles = 0
+    /// Commit counts, for the symbol bounces on the two circles.
+    @State private var saves = 0
+    @State private var skips = 0
     private let onOpenShelf: () -> Void
     /// Says a thing happened. A reset otherwise succeeds in silence, which is
     /// indistinguishable from a tap that missed.
@@ -232,6 +235,7 @@ struct StackView: View {
     /// missed by one of them. Said after the save has landed, because only
     /// then does the model know whether it reached the library.
     private func react(_ kind: ShelfEntry.Kind) async {
+        if kind == .saved { saves += 1 } else { skips += 1 }
         await model.react(kind)
         if kind == .saved { onConfirm(model.saveConfirmation) }
     }
@@ -250,7 +254,7 @@ struct StackView: View {
 
     private var actions: some View {
         HStack(spacing: Metrics.actionGap) {
-            circleAction("xmark", size: Metrics.actionSkip, label: "Skip") {
+            StackCircleAction(symbol: "xmark", size: Metrics.actionSkip, label: "Skip", bounces: skips) {
                 Task { await react(.skipped) }
             }
 
@@ -268,6 +272,9 @@ struct StackView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(Palette.onAccent)
+                    // The glyph answers the commit it stands for, whichever
+                    // way the card went.
+                    .symbolEffect(.bounce, value: reduceMotion ? 0 : saves)
                     .frame(width: Metrics.actionSave, height: Metrics.actionSave)
                     .background(Palette.accent, in: Circle())
                     .shadow(color: .black.opacity(0.5), radius: 13, y: 10)
@@ -276,23 +283,6 @@ struct StackView: View {
             .accessibilityLabel("Save")
         }
         .padding(.top, 22)
-    }
-
-    private func circleAction(
-        _ symbol: String,
-        size: CGFloat,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(Palette.textSecondary)
-                .frame(width: size, height: size)
-                .background { Glass.floating(Circle()) }
-        }
-        .buttonStyle(.press)
-        .accessibilityLabel(label)
     }
 
     /// Run out, or failed to load. Two different things, said differently.

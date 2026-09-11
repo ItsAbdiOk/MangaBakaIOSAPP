@@ -228,3 +228,28 @@ struct StackSavedStrip: View {
         .padding(.top, 26)
     }
 }
+
+/// A round glass button under the stack: skip, and the like.
+struct StackCircleAction: View {
+    let symbol: String
+    let size: CGFloat
+    let label: String
+    /// Bumped per commit; the glyph bounces once per bump.
+    var bounces: Int = 0
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Palette.textSecondary)
+                .symbolEffect(.bounce, value: reduceMotion ? 0 : bounces)
+                .frame(width: size, height: size)
+                .background { Glass.floating(Circle()) }
+        }
+        .buttonStyle(.press)
+        .accessibilityLabel(label)
+    }
+}
