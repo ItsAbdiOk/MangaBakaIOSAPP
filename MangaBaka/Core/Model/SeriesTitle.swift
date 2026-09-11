@@ -25,6 +25,10 @@ extension SeriesTitle {
         var id: String { title }
         /// "EN · TR · PT-BR"
         var languageLabel: String { languages.map { $0.uppercased() }.joined(separator: " · ") }
+        /// "🇬🇧 🇹🇷 🇧🇷" — one per language that has one, in the same order.
+        var flags: String {
+            languages.compactMap(LanguageFlag.emoji(for:)).joined(separator: " ")
+        }
     }
 
     /// Every title except the one already on screen, de-duplicated.

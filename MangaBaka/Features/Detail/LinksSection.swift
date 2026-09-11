@@ -90,6 +90,11 @@ struct LinksSection: View {
                     .foregroundStyle(Palette.textPrimary)
                 Spacer()
                 if let language = link.language {
+                    if let flag = LanguageFlag.emoji(for: language) {
+                        Text(flag)
+                            .typeGridMeta()
+                            .accessibilityHidden(true)
+                    }
                     Text(language.uppercased())
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)

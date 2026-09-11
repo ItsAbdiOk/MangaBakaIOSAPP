@@ -62,6 +62,7 @@
 		337490BE92432ACE592901B4 /* DetailHeroFormTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A035A9B8B80039A8881574C5 /* DetailHeroFormTests.swift */; };
 		34AF9A11440F2EB9E9A7A971 /* CoverGalleryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C673007BFE53E9F8B2A0B2 /* CoverGalleryTests.swift */; };
 		34C2E1D9E343AB66E88D6AF5 /* LibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD9AF71ABDE6B2D1C23C30A4 /* LibraryService.swift */; };
+		35DF81028CBBC3B09FC3A68E /* LanguageFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32F84C313BA533ECDDBCDCAC /* LanguageFlag.swift */; };
 		36B5E92EF048998AE6C4A9ED /* mix.json in Resources */ = {isa = PBXBuildFile; fileRef = 7F8D61B24CD0D96F100A6584 /* mix.json */; };
 		36C2DF96E7590664007DA15E /* BlendDNA.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD80FA82C8DB0C1F8B36440D /* BlendDNA.swift */; };
 		36EE0D59969208E71A0896B4 /* rising.json in Resources */ = {isa = PBXBuildFile; fileRef = 71998B36D08E3ED54E1F4FCD /* rising.json */; };
@@ -284,6 +285,7 @@
 		F832A9705F574283636CF853 /* TitlePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C5996D60E22BB91618A4E20 /* TitlePreference.swift */; };
 		FC3C5740CFB67CA11EC5C763 /* ShelfCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5832DB5979A2F371B282B39D /* ShelfCard.swift */; };
 		FD819D9FE71D3AF74EDA877E /* BlockedTagsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0314F382E8E346F4F99B36 /* BlockedTagsSection.swift */; };
+		FE1A092E2DC64554EA7E59BC /* LanguageFlagTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD708D74663B2BB5FB04DCF5 /* LanguageFlagTests.swift */; };
 		FE45C64EFE4949E7F85108CC /* WireNullabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB31715F3498511F3FA97399 /* WireNullabilityTests.swift */; };
 		FE9D48BF6F8F6C94A61BB78F /* MixModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EB62C466EA9D205CAF1E43 /* MixModel.swift */; };
 		FED4BE9B85B862E4DD39B937 /* DetailSynopsis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B0478C5E79631F422DE74E /* DetailSynopsis.swift */; };
@@ -364,6 +366,7 @@
 		2D8299C7A8EFA18511A4FA97 /* MangaBaka.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MangaBaka.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E023571EE66E5639E011F2E /* DesignTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokenTests.swift; sourceTree = "<group>"; };
 		2EF18F3A268222AE0C0BE45E /* CatalogueService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogueService.swift; sourceTree = "<group>"; };
+		32F84C313BA533ECDDBCDCAC /* LanguageFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageFlag.swift; sourceTree = "<group>"; };
 		33EDF577085CF7325953B0DC /* ScheduleServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleServiceTests.swift; sourceTree = "<group>"; };
 		3440196B7B97089F879464B5 /* Cover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cover.swift; sourceTree = "<group>"; };
 		348BC7CC93DADC34954F6DC2 /* ExclusionInvalidationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionInvalidationTests.swift; sourceTree = "<group>"; };
@@ -544,6 +547,7 @@
 		CAC7CDE4C9BEC98A59ED0E85 /* RowAmbientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RowAmbientTests.swift; sourceTree = "<group>"; };
 		CCE3CCF279C256CEBA790EBE /* LibraryControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryControl.swift; sourceTree = "<group>"; };
 		CD5B596CA6C11CDC43526FF9 /* LibrarySort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySort.swift; sourceTree = "<group>"; };
+		CD708D74663B2BB5FB04DCF5 /* LanguageFlagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageFlagTests.swift; sourceTree = "<group>"; };
 		CD79FCDE0E63D601EECC5691 /* AlternativeTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlternativeTitleTests.swift; sourceTree = "<group>"; };
 		CDCBF5D620B264CE3642E9F9 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
 		CDFFB9E721816F5264DE75E8 /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
@@ -825,6 +829,7 @@
 				A208AC81A50F84E25DB96AAF /* CommunityPulseService.swift */,
 				3440196B7B97089F879464B5 /* Cover.swift */,
 				4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */,
+				32F84C313BA533ECDDBCDCAC /* LanguageFlag.swift */,
 				D7C6BF62D4109C171EC07945 /* Recommendation.swift */,
 				AB5D2D80FCE2142ABEACE07C /* SearchQuery.swift */,
 				4206810500D4CA99B1B9CC9E /* Series.swift */,
@@ -944,6 +949,7 @@
 				BF595AE01077A9CDAA601BB7 /* FormatPreferencesTests.swift */,
 				805C9CD7D044A270A450DE59 /* HistoryTests.swift */,
 				533409A4F8D0EB72D1B0A569 /* InlineSearchTests.swift */,
+				CD708D74663B2BB5FB04DCF5 /* LanguageFlagTests.swift */,
 				3CBD83BDCD64BB6F70FBC4F4 /* LensTests.swift */,
 				4AC3D895CA9F68D2138AB518 /* LibraryControlTests.swift */,
 				0EB111B7058059988CEB401B /* LibraryDecodingTests.swift */,
@@ -1430,6 +1436,7 @@
 				95217E8EA2ABD704FE2F5952 /* HistoryStore.swift in Sources */,
 				6F38316E308E2FE9AB7F2CC3 /* InlineSearchField.swift in Sources */,
 				E58166DB60F60A89D4F51C6E /* IntentBridge.swift in Sources */,
+				35DF81028CBBC3B09FC3A68E /* LanguageFlag.swift in Sources */,
 				ED9061C123211A518B48E859 /* LensCounts.swift in Sources */,
 				8CACB955CD13B9C38F4C0F1C /* LibraryControl.swift in Sources */,
 				BAC32B0B0B210DFCC4D6574E /* LibraryEditSheet.swift in Sources */,
@@ -1600,6 +1607,7 @@
 				1FAF9328BFF73ADDFA7163DA /* FormatPreferencesTests.swift in Sources */,
 				CE87595B0CB217A512F3A6F1 /* HistoryTests.swift in Sources */,
 				2D9486A31DC173C395B75D3F /* InlineSearchTests.swift in Sources */,
+				FE1A092E2DC64554EA7E59BC /* LanguageFlagTests.swift in Sources */,
 				86CC206DD8209877BC52C493 /* LensTests.swift in Sources */,
 				8CD0996F5A07416E481A43CA /* LibraryControlTests.swift in Sources */,
 				AFF60E09E5ADF1BEAED2BC2B /* LibraryDecodingTests.swift in Sources */,

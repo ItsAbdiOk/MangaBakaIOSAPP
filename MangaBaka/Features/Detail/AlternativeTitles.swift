@@ -119,6 +119,11 @@ struct AlternativeTitlesSheet: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
+                if !row.flags.isEmpty {
+                    Text(row.flags)
+                        .typeGridMeta()
+                        .accessibilityHidden(true)
+                }
                 Text(row.languageLabel)
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
