@@ -63,6 +63,8 @@ struct AlternativeTitlesSheet: View {
     let rows: [SeriesTitle.Alternative]
 
     @Environment(\.dismiss) private var dismiss
+    /// Bumped per copy, for the haptic; see `Haptics`.
+    @State private var copies = 0
 
     var body: some View {
         NavigationStack {
@@ -108,7 +110,7 @@ struct AlternativeTitlesSheet: View {
     private func titleRow(_ row: SeriesTitle.Alternative) -> some View {
         Button {
             UIPasteboard.general.string = row.title
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            copies += 1
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(row.title)
@@ -128,6 +130,7 @@ struct AlternativeTitlesSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .haptic(Haptics.copied, onEach: copies)
         .accessibilityLabel("\(row.title), \(row.languageLabel)")
         .accessibilityHint("Copies this title")
     }

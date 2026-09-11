@@ -138,6 +138,9 @@ struct SwitchIndicator: View {
         }
         .frame(width: Self.trackWidth, height: Self.trackHeight)
         .animation(Motion.reduced(.snappy(duration: 0.2)), value: isOn)
+        // Every switch in Settings is this view, so every switch confirms
+        // its move here. Fires on a change, not on appearance.
+        .sensoryFeedback(Haptics.selection, trigger: isOn)
         .accessibilityHidden(true)
     }
 }

@@ -3,6 +3,8 @@ import SwiftUI
 /// The Discover screen: several horizontal cover rows under a large title.
 struct DiscoverView: View {
     @State private var model: DiscoverModel
+    /// Bumped when a pull-to-refresh lands, for the haptic; see `Haptics`.
+    @State private var refreshes = 0
     private let recentlyViewed: RecentlyViewedModel?
     @Binding private var path: [Series]
     /// Which cover the reader tapped, so the detail page can grow out of that
@@ -91,7 +93,12 @@ struct DiscoverView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .scrollEdge()
-        .refreshable { await model.load(forceRefresh: true) }
+        .refreshable {
+            await model.load(forceRefresh: true)
+            refreshes += 1
+        }
+        // The rows are new; say so without a toast.
+        .haptic(Haptics.refreshed, onEach: refreshes)
         .task { await model.load() }
         .task { await recentlyViewed?.load() }
         .task { await pulse?.load() }

@@ -16,6 +16,9 @@ struct StackView: View {
     /// The count is what makes the trigger fire twice for two saves in a row —
     /// the kind alone would not change, so the second save would be silent.
     @State private var lastCommit: (kind: ShelfEntry.Kind, count: Int)?
+    /// Bumped when a drag falls short and the card settles back. A cancelled
+    /// swipe should feel cancelled; see `Haptics`.
+    @State private var settles = 0
     private let onOpenShelf: () -> Void
     /// Says a thing happened. A reset otherwise succeeds in silence, which is
     /// indistinguishable from a tap that missed.
@@ -99,11 +102,12 @@ struct StackView: View {
                     // is the decision worth feeling.
                     .sensoryFeedback(trigger: lastCommit?.count ?? 0) { _, _ in
                         switch lastCommit?.kind {
-                        case .saved: .impact(weight: .medium)
+                        case .saved: Haptics.committed
                         case .skipped: .impact(flexibility: .soft, intensity: 0.6)
                         case nil: nil
                         }
                     }
+                    .haptic(Haptics.settled, onEach: settles)
                     .onTapGesture { path.append(current) }
                     // VoiceOver cannot perform a drag, so saving and skipping
                     // are exposed as actions too. The buttons below are the
@@ -196,6 +200,7 @@ struct StackView: View {
                 guard drag != .zero else { return }
                 guard abs(dx) > commitThreshold else {
                     Motion.run(.spring(response: 0.36, dampingFraction: 0.78)) { drag = .zero }
+                    settles += 1
                     return
                 }
                 let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped

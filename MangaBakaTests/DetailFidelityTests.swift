@@ -376,7 +376,10 @@ struct TitleCopyTests {
     func saysSo() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
         #expect(source.contains("\"Copied\""))
-        #expect(source.contains("impactOccurred()"))
+        // Declarative, tied to a counter, so it cannot fire twice for one
+        // tap or during a body pass. It was an imperative impactOccurred().
+        #expect(source.contains(".haptic(Haptics.copied, onEach: copies)"))
+        #expect(!source.contains("impactOccurred()"), "Haptics go through .sensoryFeedback; see Haptics")
         #expect(source.contains("accessibilityHint(\"Copies the title\")"))
     }
 

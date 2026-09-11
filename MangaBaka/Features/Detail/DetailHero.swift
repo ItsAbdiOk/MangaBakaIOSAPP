@@ -22,6 +22,8 @@ struct DetailHero: View {
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var didCopy = false
+    /// Bumped per copy, for the haptic; see `Haptics`.
+    @State private var copies = 0
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -118,7 +120,7 @@ struct DetailHero: View {
     private var title: some View {
         Button {
             UIPasteboard.general.string = series.displayTitle ?? ""
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            copies += 1
             Motion.run(.snappy(duration: 0.2)) { didCopy = true }
             Task {
                 try? await Task.sleep(for: .seconds(1.6))
@@ -144,6 +146,7 @@ struct DetailHero: View {
         .buttonStyle(.plain)
         .disabled(series.displayTitle == nil)
         .padding(.top, 6)
+        .haptic(Haptics.copied, onEach: copies)
         .accessibilityLabel(series.displayTitle ?? "Untitled series")
         .accessibilityHint("Copies the title")
     }

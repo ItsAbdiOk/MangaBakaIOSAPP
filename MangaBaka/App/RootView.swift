@@ -77,6 +77,9 @@ struct RootView: View {
     var body: some View {
         tabs
             .id(titleRevision)
+            // The one everybody expects. A re-tap pops to root and changes
+            // nothing here, so it stays silent.
+            .sensoryFeedback(Haptics.selection, trigger: selection)
             .task { await startSession() }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(

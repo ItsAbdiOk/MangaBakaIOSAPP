@@ -410,6 +410,19 @@ struct NewScreenAccessibilityTests {
         #expect(source.contains("accessibilityIgnoresInvertColors()"), "\(path) shows artwork inverted")
     }
 
+    /// Every haptic goes through `.sensoryFeedback`, which is tied to a value
+    /// change and honours the system setting. An imperative generator fired
+    /// from a button action can fire twice for one tap.
+    @Test("No haptic is fired imperatively")
+    func noImperativeHaptics() throws {
+        let files = try SourceTree.swiftFiles(under: "MangaBaka")
+        #expect(!files.isEmpty)
+        for file in files {
+            let source = try SourceTree.read(file)
+            #expect(!source.contains("FeedbackGenerator("), "\(file) fires a haptic imperatively")
+        }
+    }
+
     /// It is drawn in the accent colour with a chevron. It has to do something.
     @Test("The shelf link on the stack is a real control")
     func shelfLinkIsAButton() throws {

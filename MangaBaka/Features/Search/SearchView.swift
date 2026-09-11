@@ -60,6 +60,11 @@ struct SearchView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .scrollEdge()
+        // The end of the results, felt: "no more" is different from "still
+        // loading", and nothing on screen says which until now.
+        .sensoryFeedback(Haptics.settled, trigger: model.hasMore) { old, new in
+            old && !new && !model.results.isEmpty
+        }
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.query) { name in
                 lenses.save(name: name, query: model.query)

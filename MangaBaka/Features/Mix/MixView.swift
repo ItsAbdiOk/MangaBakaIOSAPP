@@ -59,6 +59,9 @@ struct MixView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .scrollEdge()
+        // A seed added or removed, and a strand switched off or back on.
+        .sensoryFeedback(Haptics.selection, trigger: model.seeds.count)
+        .sensoryFeedback(Haptics.selection, trigger: model.excludedTags.count)
         .task {
             suggestedSeeds = await model.suggestedSeeds()
         }

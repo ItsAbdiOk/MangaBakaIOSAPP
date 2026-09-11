@@ -93,6 +93,8 @@ struct VolumeSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    /// Bumped per ISBN copy, for the haptic; see `Haptics`.
+    @State private var copies = 0
 
     var body: some View {
         NavigationStack {
@@ -171,7 +173,7 @@ struct VolumeSheet: View {
             if let isbn = edition.isbn {
                 Button {
                     UIPasteboard.general.string = isbn
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    copies += 1
                 } label: {
                     HStack(spacing: 6) {
                         Text("ISBN \(isbn)")
@@ -185,6 +187,7 @@ struct VolumeSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .haptic(Haptics.copied, onEach: copies)
                 .accessibilityLabel("ISBN \(isbn)")
                 .accessibilityHint("Copies the ISBN")
             }

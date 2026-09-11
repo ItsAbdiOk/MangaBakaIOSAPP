@@ -114,6 +114,10 @@ struct LibraryView: View {
         .background(Palette.ground)
         .scrollEdge()
         .task { await model.load() }
+        // The list beneath changed. Chips, the shape bar and the sort menu all
+        // write these two, so this covers all three controls.
+        .sensoryFeedback(Haptics.selection, trigger: model.filter)
+        .sensoryFeedback(Haptics.selection, trigger: model.sort)
         .sheet(item: $editing) { entry in
             if let series = entry.series {
                 LibraryEditSheet(entry: entry, series: series) { change in

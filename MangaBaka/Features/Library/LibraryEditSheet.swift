@@ -162,6 +162,8 @@ struct LibraryEditSheet: View {
                     .accessibilityAddTraits(step <= rating ? [.isButton, .isSelected] : .isButton)
                 }
             }
+            // A rating is set by feel as much as by looking.
+            .sensoryFeedback(Haptics.selection, trigger: rating)
         }
     }
 
