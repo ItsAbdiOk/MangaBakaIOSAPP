@@ -11,6 +11,24 @@ struct MangaBakaApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // THE APPLE-IDIOMATIC BRANCH.
+            //
+            // The shipping root is below and untouched; this line is the only
+            // thing that differs at the top level. Swap them to compare, or
+            // check out `main` to see the real app.
+            AppleRootView(
+                repository: services.repository,
+                session: services.session,
+                content: services.content,
+                formats: services.formats
+            )
+        }
+    }
+
+    /// The shipping app's root, kept here on this branch so the comparison is
+    /// one line rather than a merge.
+    var shippingBody: some Scene {
+        WindowGroup {
             RootView(
                 repository: services.repository,
                 shelf: services.shelf,
