@@ -72,24 +72,44 @@ struct APIShapeContractTests {
         #expect(envelope.data?.count == 2)
     }
 
-    /// The sweep is only useful if it stays runnable. This asserts it is still
-    /// there and still lists every endpoint the app decodes, so an endpoint
-    /// added later without being swept is caught here.
-    @Test("The shape sweep covers every endpoint the app decodes",
+    /// The sweep's job is the series-shaped endpoints: the ones whose payload
+    /// carries a `Series`, which is where the v1/v2 type split lives. The list
+    /// is read out of the app's own source rather than typed here, so a new
+    /// series endpoint fails this test until the sweep knows about it. It used
+    /// to be seven names typed by hand, which is how the claim "covers every
+    /// endpoint" stayed true while the app grew to twenty-six.
+    ///
+    /// The other endpoints decode other shapes and are covered by their own
+    /// decode tests: works and upcoming (SeriesWorkTests, ReleaseCalendarTests),
+    /// links/news/relationships (SeriesExtrasTests), images
+    /// (CoverGalleryTests), genres/tags/publishers (CatalogueTests),
+    /// top-genres and recommendations (LibraryTests), and the nullable fields
+    /// of each (WireNullabilityTests).
+    @Test("The shape sweep covers every series-shaped endpoint in the source",
           .enabled(if: SourceTree.isAvailable))
-    func sweepCoversEveryEndpoint() throws {
+    func sweepCoversEverySeriesEndpoint() throws {
         let script = try SourceTree.read("Scripts/api-shape-sweep.py")
-        let endpoints = [
-            "/v2/series/discover/rising",
-            "/v2/series/discover/hidden-gems",
-            "/v2/series/search",
-            "/v2/series/2/similar",
-            "/v2/series/2/readers-also-like",
-            "/v1/series/mix",
-            "/v1/my/library"
-        ]
-        for endpoint in endpoints {
-            #expect(script.contains(endpoint), "\(endpoint) is not in the sweep")
+        let inSource = try Self.seriesEndpoints(in: SourceTree.swiftFiles(under: "MangaBaka"))
+        #expect(inSource.count >= 7, "Fewer endpoints found than the old hand-typed list had")
+        for endpoint in inSource {
+            #expect(script.contains(endpoint), "\(endpoint) is decoded by the app and not in the sweep")
         }
+    }
+
+    /// Every `"/vN/..."` literal in the given files whose response carries a
+    /// `Series`, with interpolated ids replaced by the sweep's sample id.
+    static func seriesEndpoints(in files: [String]) throws -> Set<String> {
+        var found: Set<String> = []
+        for file in files {
+            let text = try SourceTree.read(file)
+            for match in text.matches(of: /"(\/v[0-9]\/[^"]*)"/) {
+                let path = String(match.1).replacing(/\\\([a-zA-Z]+\)/, with: "2")
+                let isSeriesShaped = path.hasPrefix("/v2/series/")
+                    || path == "/v1/series/mix"
+                    || path == "/v1/my/library"
+                if isSeriesShaped { found.insert(path) }
+            }
+        }
+        return found
     }
 }
