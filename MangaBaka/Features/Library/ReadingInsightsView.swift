@@ -33,6 +33,7 @@ struct ReadingInsightsView: View {
         var nearly: [ReadingInsights.Behind] = []
         var verdicts: [ReadingInsights.TagVerdict] = []
         var sample: (seen: Int, total: Int) = (0, 0)
+        var droppedLine: String?
         var chapters = 0
         var hours: Double = 0
     }
@@ -70,6 +71,7 @@ struct ReadingInsightsView: View {
                 nearly: ReadingInsights.nearlyFinished(in: rows),
                 verdicts: ReadingInsights.verdicts(in: rows),
                 sample: ReadingInsights.sampleSize(in: rows),
+                droppedLine: ReadingInsights.droppedLine(in: rows),
                 chapters: ReadingInsights.chaptersRead(in: rows),
                 hours: ReadingInsights.hoursRead(in: rows)
             )
@@ -185,10 +187,7 @@ struct ReadingInsightsView: View {
                 }
             }
             if !abandons.isEmpty {
-                section(
-                    "What you give up on",
-                    note: "Nearly half of your library is dropped. This is what it has in common."
-                ) {
+                section("What you give up on", note: derived.droppedLine) {
                     ForEach(Array(abandons)) { verdict in
                         verdictRow(verdict)
                     }

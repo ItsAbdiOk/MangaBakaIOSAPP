@@ -17,14 +17,13 @@ import Foundation
 /// verdict on 9 rated series and a verdict on 400 are different claims and the
 /// screen has to be able to say which it is making.
 enum ReadingWrapped {
-    /// The entries the reader has actually opened. Plan-to-read and
-    /// considering are ambition, not habit — `verdicts` and the taste ledger
-    /// leave them out for the same reason, and every statistic here whose
-    /// caption says "read" has to as well. Four of them did not, so a reader
-    /// with a 400-entry backlog was told "the people you read most" were
-    /// authors they had never read.
+    /// The entries the reader has actually opened — `ReadingInsights.readAtAll`.
+    /// Plan-to-read and considering are ambition, not habit, and every
+    /// statistic here whose caption says "read" leaves them out. Four of them
+    /// did not, so a reader with a 400-entry backlog was told "the people you
+    /// read most" were authors they had never read.
     static func readAtAll(_ entries: [LibraryEntry]) -> [LibraryEntry] {
-        entries.filter { $0.state != .planToRead && $0.state != .considering }
+        ReadingInsights.readAtAll(entries)
     }
 
     /// A rating of exactly zero is "unrated" to at least one client that

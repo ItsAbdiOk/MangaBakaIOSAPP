@@ -209,6 +209,24 @@ enum ReadingInsights {
             .sorted { $0.read > $1.read }
     }
 
+    /// The sentence over "what you give up on", with this reader's number in
+    /// it. It used to be the literal "Nearly half of your library is dropped"
+    /// — the reference account's 46%, promoted to a claim about whoever was
+    /// holding the phone. Nil when the reader has not dropped anything worth
+    /// a sentence.
+    static func droppedLine(in entries: [LibraryEntry]) -> String? {
+        let started = readAtAll(entries)
+        let dropped = started.filter { $0.state == .dropped }.count
+        guard started.count >= 10, dropped > 0 else { return nil }
+        let share = Int((Double(dropped) * 100 / Double(started.count)).rounded())
+        return "\(share)% of what you have started is dropped. This is what it has in common."
+    }
+
+    /// Everything the reader has opened: the library minus its backlog.
+    static func readAtAll(_ entries: [LibraryEntry]) -> [LibraryEntry] {
+        entries.filter { $0.state != .planToRead && $0.state != .considering }
+    }
+
     /// How many of the reader's series the verdicts could actually see.
     ///
     /// Reported next to them, because a verdict drawn from 87 of 939 series is

@@ -206,6 +206,22 @@ struct ReadingInsightsTests {
         #expect(rows.first?.completionRate == nil)
     }
 
+    /// "Nearly half of your library is dropped" was a literal string — the
+    /// reference account's 46%, shown to a reader who drops 5% of what they
+    /// start.
+    @Test("The dropped sentence carries this reader's number")
+    func droppedLineIsCounted() {
+        let entries = (1...18).map { entry($0, .completed) } + (19...20).map { entry($0, .dropped) }
+            + [entry(21, .planToRead), entry(22, .planToRead)]
+        #expect(ReadingInsights.droppedLine(in: entries)?.hasPrefix("10% of what you have started") == true)
+    }
+
+    @Test("A reader who drops nothing gets no sentence about dropping")
+    func droppedLineNeedsDrops() {
+        let entries = (1...20).map { entry($0, .completed) }
+        #expect(ReadingInsights.droppedLine(in: entries) == nil)
+    }
+
     @Test("The sample size is reported, not hidden")
     func sampleSizeIsHonest() {
         // A verdict drawn from 2 of 5 series is a different claim from one
