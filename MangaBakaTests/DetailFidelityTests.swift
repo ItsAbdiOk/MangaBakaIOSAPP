@@ -29,6 +29,17 @@ struct DetailFidelityTests {
         #expect(labels == ["Rating", "Ratings", "Chapters", "Volumes", "Started"])
     }
 
+    /// Manhwa are published in episodes, and a third season numbers them
+    /// from one again — "Season 3 · 212" says what "212 chapters" does not.
+    @Test("A manhwa counts episodes, with its season when the schedule knows it")
+    func episodesAndSeason() {
+        let manhwa = SeriesFactory.make(id: 1, type: "manhwa", totalChapters: 212)
+        #expect(DetailStatsStrip(series: manhwa, season: 3).stats.map(\.label) == ["Season", "Episodes"])
+        #expect(DetailStatsStrip(series: manhwa).stats.map(\.label) == ["Episodes"])
+        let manga = SeriesFactory.make(id: 2, type: "manga", totalChapters: 212)
+        #expect(DetailStatsStrip(series: manga, season: 3).stats.map(\.label) == ["Chapters"])
+    }
+
     /// "—" in a box is not information, and a series with no volumes is
     /// ordinary rather than broken.
     @Test("Segments the API did not answer are dropped, not shown empty")

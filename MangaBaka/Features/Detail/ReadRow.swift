@@ -64,6 +64,12 @@ struct ReadRow: View {
                 Text(link.title)
                     .typeChip()
                     .lineLimit(1)
+                if let cost = link.costNote {
+                    Text(cost)
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.textMuted)
+                        .lineLimit(1)
+                }
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Palette.textMuted)
@@ -76,6 +82,7 @@ struct ReadRow: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.press)
+        .accessibilityLabel([link.title, link.costNote].compactMap { $0 }.joined(separator: ", "))
         .accessibilityHint("Opens \(link.title), in its app if installed")
     }
 }

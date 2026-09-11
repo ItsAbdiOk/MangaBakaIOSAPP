@@ -181,3 +181,23 @@ extension SeriesLink {
             .map(String.init) ?? ""
     }
 }
+
+extension SeriesLink {
+    /// What reading here costs, for the platforms where that is a settled
+    /// fact. Only those: a webtoon with no print release has the platform as
+    /// its only shelf, and "free" is the thing a reader most wants to know
+    /// about it — but a wrong "free" is worse than no label, so platforms
+    /// whose model varies by title (Kakao, Tappytoon, Lezhin) get none.
+    ///
+    /// As of 2026-09-11: Webtoons is free to read with ads (Fast Pass is
+    /// optional and per-episode); Tapas is free to start with later episodes
+    /// behind ink; Manta is a subscription.
+    var costNote: String? {
+        switch (name ?? "").lowercased() {
+        case "webtoons.com", "www.webtoons.com": "Free"
+        case "tapas.io": "Free to start"
+        case "manta.net": "Subscription"
+        default: nil
+        }
+    }
+}

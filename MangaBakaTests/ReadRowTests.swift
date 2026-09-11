@@ -53,6 +53,17 @@ struct ReadRowTests {
         #expect(readable.first?.url?.absoluteString.hasSuffix("100020") == true)
     }
 
+    /// A webtoon with no print release has the platform as its only shelf,
+    /// and "free" is what a reader wants to know about it. Only settled
+    /// facts get a label.
+    @Test("Cost is noted only where it is a settled fact")
+    func costNotes() {
+        #expect(link("Webtoons", url: "https://www.webtoons.com/en/x").withName("www.webtoons.com").costNote == "Free")
+        #expect(link("Tapas").withName("tapas.io").costNote == "Free to start")
+        #expect(link("Manta").withName("manta.net").costNote == "Subscription")
+        #expect(link("KakaoPage").withName("page.kakao.com").costNote == nil)
+    }
+
     /// These URLs come from other people. A `kakao://` scheme would open
     /// another app with none of the deliberation a web link implies.
     @Test("A link with no web URL is not offered, whatever its language")
@@ -87,5 +98,11 @@ struct ReadRowSourceTests {
         let row = try #require(source.range(of: "ReadRow(links: extras.links)"))
         let strip = try #require(source.range(of: "DetailStatsStrip(series: shown"))
         #expect(actions.upperBound < row.lowerBound && row.upperBound < strip.lowerBound)
+    }
+}
+
+private extension SeriesLink {
+    func withName(_ name: String) -> SeriesLink {
+        SeriesLink(id: id, url: url, name: name, nameDisplay: nameDisplay, type: type, language: language)
     }
 }

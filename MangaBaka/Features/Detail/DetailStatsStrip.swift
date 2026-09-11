@@ -15,6 +15,18 @@ struct DetailStatsStrip: View {
     /// From `/v1/series/{id}`, because v2 has no `year` field at all — checked
     /// against the live API, on both the feeds and `/v2/series/{id}`.
     var year: Int?
+    /// The schedule's current season, when it has read one. A webtoon on its
+    /// third season numbers its episodes from one each time, so "212
+    /// episodes" alone says less than "Season 3 · 212".
+    var season: Int?
+
+    /// Manhwa, manhua and webtoons are published in episodes on a platform,
+    /// not chapters in a magazine, and readers of them say "episode". The
+    /// number is MangaBaka's chapter count either way.
+    var isEpisodic: Bool {
+        guard let type = series.type?.lowercased() else { return false }
+        return ["manhwa", "manhua", "webtoon", "webcomic"].contains(type)
+    }
 
     struct Stat: Identifiable {
         let id: String
@@ -34,8 +46,11 @@ struct DetailStatsStrip: View {
         if let count = series.ratingCount, count > 0 {
             out.append(Stat(id: "Ratings", value: Self.compact(count)))
         }
+        if isEpisodic, let season, season > 0 {
+            out.append(Stat(id: "Season", value: String(season)))
+        }
         if let chapters = series.totalChapters, chapters > 0 {
-            out.append(Stat(id: "Chapters", value: String(Int(chapters))))
+            out.append(Stat(id: isEpisodic ? "Episodes" : "Chapters", value: String(Int(chapters))))
         }
         if let volumes = series.finalVolume, volumes > 0 {
             out.append(Stat(id: "Volumes", value: String(Int(volumes))))

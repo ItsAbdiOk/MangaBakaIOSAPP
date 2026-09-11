@@ -45,7 +45,9 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
 | Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
 | New from a followed publisher | A design for "follow" |
+| Webtoon episode lists or thumbnails from the platforms | Declined: no public APIs, and scraping is the terms line. The page shows Season · Episodes from MangaBaka + the schedule, and the read chips carry "Free" / "Free to start" / "Subscription" where that is settled (Webtoons, Tapas, Manta; 2026-09-11) |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
+| Flaky test: `ScheduleServiceTests` "Coming back to a running build follows it again" | Failed once in the full pre-push run (826 tests, parallel), passed 3/3 alone. Time-based: sleeps 200ms and expects the build still running. Needs a clock or a gate on the stub instead of a sleep |
 
 ## From Abdi, in build order
 

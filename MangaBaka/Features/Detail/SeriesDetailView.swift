@@ -81,7 +81,7 @@ struct SeriesDetailView: View {
                 // the other thing to do about a series, and the full list of
                 // links is a screen and a half further down.
                 ReadRow(links: extras.links)
-                DetailStatsStrip(series: shown, year: extras.year)
+                DetailStatsStrip(series: shown, year: extras.year, season: cadence?.season)
                 if let description = shown.description, !description.isEmpty {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
