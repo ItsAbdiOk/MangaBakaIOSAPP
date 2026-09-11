@@ -92,6 +92,28 @@ struct LibraryView: View {
                         partialLoad
                     }
 
+                    // The shelf on its own page, once a state is picked.
+                    // The shelf screen has the filters the list does not —
+                    // "has a note", "never rated", "left before chapter
+                    // 10" — and until now nothing opened it.
+                    if let state = model.filter {
+                        Button { onOpenShelf(state) } label: {
+                            HStack(spacing: 4) {
+                                Text("Open the \(state.title) shelf")
+                                    .typeInstruction()
+                                    .foregroundStyle(Palette.accent)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Palette.accent)
+                            }
+                            .frame(minHeight: Metrics.headerPill)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.press)
+                        .padding(.horizontal, Metrics.gutter)
+                        .accessibilityHint("Opens this shelf on its own page, with more filters")
+                    }
+
                     // Kept above the list even though the board does not draw
                     // them: they are the only route to the schedule and the
                     // taste screen, and the board was not told those screens

@@ -285,4 +285,17 @@ struct ReleaseTokenTests {
         let values = example.matches(of: /mb-[A-Za-z0-9-]+/).map { String($0.output) }
         #expect(values == ["mb-your-personal-access-token-here"], "The example holds something token-shaped")
     }
+
+}
+
+/// The shelf screen has filters the list does not, and for a while nothing
+/// in the app opened it: `onOpenShelf` was passed in and never called.
+@Suite("The shelf screen is reachable", .enabled(if: SourceTree.isAvailable))
+struct ShelfReachabilityTests {
+    @Test("A picked state offers to open its shelf")
+    func shelfIsReachable() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Library/LibraryView.swift")
+        let offer = "if let state = model.filter {\n                        Button { onOpenShelf(state) }"
+        #expect(source.contains(offer))
+    }
 }
