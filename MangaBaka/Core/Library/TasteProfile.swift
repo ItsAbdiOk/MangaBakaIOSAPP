@@ -126,11 +126,20 @@ actor TasteProfile {
     }
 
     /// What the ledger actually knows, for a screen that has to say so.
-    func diagnostics() async -> (series: Int, tags: Int) {
-        guard let ledger else { return (0, 0) }
-        return (
-            (try? await ledger.countedSeries()) ?? 0,
-            (try? await ledger.knownTags()) ?? 0
+    struct Diagnostics: Equatable, Sendable {
+        /// Offered to the ledger at all, tagged or not.
+        var seen = 0
+        /// Counted into the affinities — seen, and tagged.
+        var series = 0
+        var tags = 0
+    }
+
+    func diagnostics() async -> Diagnostics {
+        guard let ledger else { return Diagnostics() }
+        return Diagnostics(
+            seen: (try? await ledger.seenSeries()) ?? 0,
+            series: (try? await ledger.countedSeries()) ?? 0,
+            tags: (try? await ledger.knownTags()) ?? 0
         )
     }
 

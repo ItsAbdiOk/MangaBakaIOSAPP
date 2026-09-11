@@ -107,6 +107,18 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
         return URL(string: raw)
     }
 
+    /// The release day as a day in the reader's own calendar: local midnight
+    /// of the printed date. For scheduling, where `date` — midnight UTC — is
+    /// already in the past for a release dated today once UTC midnight has
+    /// gone by, which is how "out today" was dropped on the only day it could
+    /// fire.
+    func localDay(calendar: Calendar = .current) -> Date? {
+        guard let releaseDate else { return nil }
+        let parts = releaseDate.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
     /// Dates only, no times, and fixed to UTC.
     ///
     /// A release date is a calendar day rather than an instant: parsing

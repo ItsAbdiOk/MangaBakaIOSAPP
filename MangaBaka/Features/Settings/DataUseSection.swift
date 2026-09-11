@@ -12,6 +12,7 @@ struct DataUseSection: View {
     /// Optional so previews and tests can render without one.
     var taste: TasteProfile?
 
+    @State private var seenSeries = 0
     @State private var countedSeries = 0
     @State private var knownTags = 0
     @State private var total = 0
@@ -76,12 +77,18 @@ struct DataUseSection: View {
     }
 
     private var tasteCaption: String {
-        guard countedSeries > 0 else {
+        guard seenSeries > 0 else {
             return "Nothing counted yet. Open a series you have read."
         }
-        return knownTags > 0
-            ? "\(countedSeries) series counted · \(knownTags) tags known"
-            : "\(countedSeries) series counted, but none of them carried tags"
+        // Seen but not counted is the one quiet failure this feature has: the
+        // series arrived without tags. Said in numbers, so it can be seen.
+        let untagged = seenSeries - countedSeries
+        guard countedSeries > 0 else {
+            return "\(seenSeries) series seen, and none of them carried tags"
+        }
+        return untagged > 0
+            ? "\(countedSeries) series counted · \(knownTags) tags known · \(untagged) had no tags"
+            : "\(countedSeries) series counted · \(knownTags) tags known"
     }
 
     private var breakdown: String {
@@ -120,6 +127,7 @@ struct DataUseSection: View {
     private func refresh() async {
         if let taste {
             let counts = await taste.diagnostics()
+            seenSeries = counts.seen
             countedSeries = counts.series
             knownTags = counts.tags
         }

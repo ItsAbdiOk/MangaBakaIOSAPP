@@ -107,8 +107,12 @@ final class ReleaseReminders {
         var requests: [ReminderRequest] = []
 
         let now = now()
+        let today = Calendar.current.startOfDay(for: now)
         for work in announced {
-            guard let date = work.date, date > now else { continue }
+            // The release day in the reader's calendar, and today counts:
+            // comparing the UTC instant against now dropped "out today" for
+            // anyone once UTC midnight had passed.
+            guard let date = work.localDay(), date >= today else { continue }
             requests.append(ReminderRequest(
                 id: "announced-\(work.id)",
                 title: work.title ?? "A release you are waiting for",

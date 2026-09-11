@@ -66,6 +66,12 @@ struct TasteSource: Codable, FetchableRecord, PersistableRecord, Sendable {
     var state: String
 }
 
+/// A series the taste ledger was offered, whether or not it carried tags.
+struct TasteSeen: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "tasteSeen"
+    var seriesId: Int
+}
+
 /// Everything hanging off a series page, cached whole.
 struct CachedDetail: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "seriesDetail"

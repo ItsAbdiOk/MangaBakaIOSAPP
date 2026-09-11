@@ -64,6 +64,20 @@ struct ReminderTests {
         )
     }
 
+    /// The release date is parsed as midnight UTC. Compared against now, a
+    /// release dated today was already "past" for every reader once UTC
+    /// midnight had gone — the "out today" reminder was dropped on the only
+    /// day it could fire.
+    @Test("A release dated today is scheduled, whatever the hour")
+    func todayIsNotPast() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+
+        await reminders.reschedule(announced: [try work("today", series: 1, daysFromNow: 0)], predicted: [])
+        #expect(centre.added.map(\.id) == ["announced-today"])
+    }
+
     @Test("A date already past is not scheduled")
     func skipsThePast() async throws {
         let centre = FakeCentre()

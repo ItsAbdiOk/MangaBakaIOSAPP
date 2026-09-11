@@ -86,6 +86,20 @@ struct TasteLedgerTests {
         #expect(try await ledger.favoured().isEmpty)
     }
 
+    /// The Settings diagnostic "counted but no tags" exists to catch a library
+    /// payload without tags. A tagless series was skipped before it was
+    /// counted, so the diagnostic could never fire.
+    @Test("A series without tags is seen, so the diagnostic can say so")
+    func taglessSeriesIsSeen() async throws {
+        let ledger = try ledger()
+        try await ledger.absorb([
+            entry(1, .completed, tags: []),
+            entry(2, .completed, tags: [tag(1, "Murim", weight: "core")])
+        ])
+        #expect(try await ledger.seenSeries() == 2)
+        #expect(try await ledger.countedSeries() == 1)
+    }
+
     @Test("Absorbing the same library twice does not count it twice")
     func isIdempotent() async throws {
         let ledger = try ledger()

@@ -200,6 +200,17 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v8_tasteSeen") { db in
+            // Every series the ledger was offered, tagged or not. The
+            // "counted but no tags known" diagnostic in Settings was built to
+            // catch a library payload with no tags — and a series with no tags
+            // was never counted, so the diagnostic could not fire. This is the
+            // count it needs: offered, as against counted.
+            try db.create(table: "tasteSeen") { table in
+                table.primaryKey("seriesId", .integer)
+            }
+        }
+
         return migrator
     }
 }

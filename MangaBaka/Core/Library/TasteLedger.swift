@@ -74,6 +74,7 @@ actor TasteLedger {
         try database.writer.write { db in
             for entry in entries {
                 guard let series = entry.series else { continue }
+                try TasteSeen(seriesId: entry.seriesId).save(db)
                 let tags = series.richTags
                 guard !tags.isEmpty else { continue }
 
@@ -126,6 +127,16 @@ actor TasteLedger {
         try database.writer.read { db in try TasteSource.fetchCount(db) }
     }
 
+    /// How many series the ledger was offered at all, tagged or not.
+    ///
+    /// The diagnostic below compares this against `countedSeries`: series
+    /// seen but not counted carried no tags. Before this existed the failure
+    /// it was built to catch was unreachable — a tagless series was skipped
+    /// before it was counted, so "counted but no tags" could never happen.
+    func seenSeries() throws -> Int {
+        try database.writer.read { db in try TasteSeen.fetchCount(db) }
+    }
+
     /// How many distinct tags are known, whatever their score.
     ///
     /// Reported in Settings beside the counted series, because the two
@@ -147,8 +158,9 @@ actor TasteLedger {
     /// — so this is the path that cannot silently produce nothing.
     func absorb(_ series: Series, as state: LibraryEntry.State) throws {
         let tags = series.richTags
-        guard !tags.isEmpty else { return }
         try database.writer.write { db in
+            try TasteSeen(seriesId: series.id).save(db)
+            guard !tags.isEmpty else { return }
             let previous = try TasteSource.fetchOne(db, key: series.id)
             if previous?.state == state.rawValue { return }
             if let previous, let old = LibraryEntry.State(rawValue: previous.state) {
