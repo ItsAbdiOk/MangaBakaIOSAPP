@@ -229,6 +229,13 @@ actor APIClient {
         path: String,
         body: [String: any Sendable]?
     ) async throws(APIError) {
+        // Same per-IP window as every read. A save fired during a backoff
+        // is refused just as surely, and costs the strangers sharing the
+        // address one more failed request each.
+        if let wait = await limiter.secondsUntilAllowed() {
+            throw APIError.rateLimited(retryAfter: wait)
+        }
+
         var request = try makeRequest(path: path, query: [])
         request.httpMethod = method
         if let body {
@@ -258,6 +265,7 @@ actor APIClient {
         }
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            await limiter.recordRateLimit(retryAfter: retryAfter)
             throw APIError.rateLimited(retryAfter: retryAfter)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -270,6 +278,7 @@ actor APIClient {
             throw APIError.server(status: http.statusCode, message: message)
         }
         _ = data
+        await limiter.recordSuccess()
     }
 
     /// Decodes a response that has no envelope at all.

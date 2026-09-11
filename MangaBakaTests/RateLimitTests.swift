@@ -205,3 +205,74 @@ struct RateLimitClearingTests {
         )
     }
 }
+
+/// Writes go through the same per-IP limit as reads. The gate used to cover
+/// only `get`, so a reader whose feed had just been refused could still fire a
+/// burst of library saves straight into the same window — and a 429 earned by a
+/// save was never remembered, so the next feed load went out anyway.
+@Suite("Rate limit covers writes as well as reads", .serialized)
+struct RateLimitWriteTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeClient() -> APIClient {
+        APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
+    }
+
+    private func rateLimited() -> URLProtocolStub.Response {
+        .init(
+            statusCode: 429,
+            body: Data(#"{"status":429,"message":"Slow down"}"#.utf8),
+            headers: ["Retry-After": "60"]
+        )
+    }
+
+    @Test("A write after a 429 is refused locally without a network call")
+    func writeIsRefusedDuringBackoff() async {
+        URLProtocolStub.setHandler { _ in .respond(rateLimited()) }
+        defer { URLProtocolStub.reset() }
+
+        let client = makeClient()
+        await #expect(throws: APIError.self) {
+            let _: [Int] = try await client.get("/things")
+        }
+        let afterRead = URLProtocolStub.requests.count
+
+        await #expect(throws: APIError.self) {
+            try await client.post("/things", body: ["id": 1])
+        }
+        await #expect(throws: APIError.self) {
+            try await client.patch("/things/1", body: ["state": "reading"])
+        }
+        await #expect(throws: APIError.self) {
+            try await client.delete("/things/1")
+        }
+        #expect(
+            URLProtocolStub.requests.count == afterRead,
+            "No write may reach the network while the window is closed"
+        )
+    }
+
+    @Test("A 429 on a write blocks the next read")
+    func writeRateLimitIsRemembered() async {
+        URLProtocolStub.setHandler { _ in .respond(rateLimited()) }
+        defer { URLProtocolStub.reset() }
+
+        let client = makeClient()
+        await #expect(throws: APIError.self) {
+            try await client.post("/things", body: ["id": 1])
+        }
+        let afterWrite = URLProtocolStub.requests.count
+
+        await #expect(throws: APIError.self) {
+            let _: [Int] = try await client.get("/things")
+        }
+        #expect(
+            URLProtocolStub.requests.count == afterWrite,
+            "The refusal earned by the write must be remembered for the read"
+        )
+    }
+}
