@@ -20,7 +20,6 @@ struct RootView: View {
     let schedule: ReleaseScheduleService
     let characters: CharacterService
     let appleBooks: AppleBooksClient
-    let platformCover: PlatformCoverClient
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -292,7 +291,6 @@ struct RootView: View {
             characters: characters,
             taste: taste,
             appleBooks: appleBooks,
-            platformCover: platformCover,
             contentRatings: content.preferences.allowed.map(\.rawValue),
             path: path,
             onUseAsSeed: { series in

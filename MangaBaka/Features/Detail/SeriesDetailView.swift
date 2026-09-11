@@ -16,8 +16,6 @@ struct SeriesDetailView: View {
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
-    /// The platform's own cover, for the fan; see PlatformCoverClient.
-    var platformCover: PlatformCoverClient?
     /// The reader's content filter, so an explicit tag name is not shown to
     /// someone who filtered explicit content — a tag is rated independently of
     /// its series.
@@ -32,7 +30,6 @@ struct SeriesDetailView: View {
     @State private var similar: [Series] = []
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
-    @State var platformCoverURL: URL?
     @State var appleVolumes: [AppleBooksVolume] = []
     /// The store was asked and did not answer — distinct from "asked, and it
     /// has none", which shows MangaBaka's editions with no note.
@@ -272,8 +269,7 @@ struct SeriesDetailView: View {
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()
         async let store: Void = loadAppleVolumes()
-        async let platform: Void = loadPlatformCover()
-        _ = await (cast, cadence, taste, store, platform)
+        _ = await (cast, cadence, taste, store)
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it

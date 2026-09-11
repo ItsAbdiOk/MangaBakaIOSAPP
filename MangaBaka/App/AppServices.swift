@@ -21,7 +21,6 @@ struct AppServices {
     let schedule: ReleaseScheduleService
     let characters = CharacterService()
     let appleBooks = AppleBooksClient()
-    let platformCover = PlatformCoverClient()
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore

@@ -41,11 +41,3 @@ extension SeriesDetailView {
         appleVolumes = answer ?? []
     }
 }
-
-extension SeriesDetailView {
-    /// One page read, after the page is readable. See PlatformCoverClient.
-    func loadPlatformCover() async {
-        guard let platformCover else { return }
-        platformCoverURL = await platformCover.cover(from: extras.links)
-    }
-}

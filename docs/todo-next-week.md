@@ -45,7 +45,7 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
 | Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
 | New from a followed publisher | A design for "follow" |
-| Webtoon episode lists or thumbnails from the platforms | Declined twice (Abdi asked again 2026-09-11 with a Gemini recipe: og:image scrape + spoofed Referer). og:image is one image per series — the cover MangaBaka already has — so it adds nothing; the Referer spoof is circumventing the CDN's block and App Store guideline 5.2.2 territory. Original reason: no public APIs, and scraping is the terms line. The page shows Season · Episodes from MangaBaka + the schedule, and the read chips carry "Free" / "Free to start" / "Subscription" where that is settled (Webtoons, Tapas, Manta; 2026-09-11) |
+| Anything read from Webtoons / Tapas pages | **Removed 2026-09-11 evening** (was `d54dcd7`, one afternoon). Abdi: no visible benefit — og:image is the cover MangaBaka already has — and the first App Store submission should be beyond reproach. Do not rebuild without a partner API from the platform |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
 
 ## Accessibility audit, 2026-09-11 evening

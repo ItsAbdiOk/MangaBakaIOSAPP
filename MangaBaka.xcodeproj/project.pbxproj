@@ -36,7 +36,6 @@
 		14C86245A2FFF1449145B702 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8EDE9358BE6F5C26EE4A290 /* AppDatabase.swift */; };
 		1621038E6C35ED1642B2F900 /* LinksSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8655E5F70D5BC83C78BFB1B6 /* LinksSection.swift */; };
 		1642B2513288615DFB465B86 /* ReadRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF845FE7CF7003BA8231DABE /* ReadRow.swift */; };
-		167025E4233F1753EE0FD126 /* PlatformCoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6BC0EF20643FA7144D53EFD /* PlatformCoverTests.swift */; };
 		17423DB0B7630B34E45FF791 /* DisplayTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4639E00D4BFDA90A2F23616B /* DisplayTitle.swift */; };
 		180493DBB033BAD16DD1E432 /* SourceTestGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */; };
 		1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66AC80B7959AD108FCFD7FFF /* StackModel.swift */; };
@@ -137,7 +136,6 @@
 		773DF186686FA3A5A3125E72 /* TagSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF86279E0C72E98A96DB15A /* TagSearch.swift */; };
 		780D0911BF0BFFA0978D2149 /* SearchQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5D2D80FCE2142ABEACE07C /* SearchQuery.swift */; };
 		7947CAE0277ECA105C9F00D4 /* CachedSeries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 602EA6151855A477E1E7766B /* CachedSeries.swift */; };
-		79840EACAA56CC161B18EC83 /* PlatformCover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D5EFD95CB9EE6581844461C /* PlatformCover.swift */; };
 		7A987A3AF44B426997FA5891 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A568F72990CB4BDB3E9056 /* APIClientTests.swift */; };
 		7C05E0604F1B06BF214C5091 /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 769D9A89D3C731CD7C3C756E /* SettingsRow.swift */; };
 		7C57A22D6C3165B034A9541C /* APIError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8062597275E0B6DC97413D /* APIError.swift */; };
@@ -488,7 +486,6 @@
 		8A1AB8BDD50F66D46DAFB81E /* AccountCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountCard.swift; sourceTree = "<group>"; };
 		8B99E7C1250F25B41530682F /* FlowAffordanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowAffordanceTests.swift; sourceTree = "<group>"; };
 		8D512F11D2A90E45F33CFE53 /* EdgeSwipeToDismiss.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeSwipeToDismiss.swift; sourceTree = "<group>"; };
-		8D5EFD95CB9EE6581844461C /* PlatformCover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformCover.swift; sourceTree = "<group>"; };
 		8D7593963422F18CB134D317 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		8DABEF481B90078120854DE1 /* ShelfDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfDetailView.swift; sourceTree = "<group>"; };
 		8E9097F42ABA9FEE8097956C /* ShelfStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfStore.swift; sourceTree = "<group>"; };
@@ -537,7 +534,6 @@
 		B3C87ABF44B1865390945EC3 /* DueThisWeekTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DueThisWeekTests.swift; sourceTree = "<group>"; };
 		B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceTestGuardTests.swift; sourceTree = "<group>"; };
 		B6B651B119131E572907BC7F /* WhatsNewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewTests.swift; sourceTree = "<group>"; };
-		B6BC0EF20643FA7144D53EFD /* PlatformCoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformCoverTests.swift; sourceTree = "<group>"; };
 		B7DBE3E420D937FD31EBA3D4 /* SeriesImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesImage.swift; sourceTree = "<group>"; };
 		BB59EF6E9F6BAFBB79F5BC68 /* ResultsEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsEnvelope.swift; sourceTree = "<group>"; };
 		BD80FA82C8DB0C1F8B36440D /* BlendDNA.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendDNA.swift; sourceTree = "<group>"; };
@@ -982,7 +978,6 @@
 				192355E1466D48ADE1969CEA /* NonsenseGuardTests.swift */,
 				820BFEEE577A74175EF5D73C /* OnboardingTests.swift */,
 				53AA072C03A0C7369887770B /* PaginationTests.swift */,
-				B6BC0EF20643FA7144D53EFD /* PlatformCoverTests.swift */,
 				819CBCA7CC77592406630D74 /* PresentationTests.swift */,
 				1A5A08CACD99BE47F79B29A3 /* PrivacyManifestTests.swift */,
 				D33D23182CCFB7A9D323BE3F /* PublisherBrowseTests.swift */,
@@ -1207,7 +1202,6 @@
 				2D648EE726DC62C9A5E1C80E /* BlurHash.swift */,
 				F33D33D9B86DA76ACDA606D9 /* BlurHashCache.swift */,
 				F4075AE7919C18D0E0D85BA4 /* CoverStore.swift */,
-				8D5EFD95CB9EE6581844461C /* PlatformCover.swift */,
 			);
 			path = Images;
 			sourceTree = "<group>";
@@ -1485,7 +1479,6 @@
 				857FDF00D38D5D985AC8CBB9 /* OnboardingView.swift in Sources */,
 				C39302C14E489C7F5CF4C78D /* Palette.swift in Sources */,
 				40FB972BB92664AEAE56BE30 /* PickBackUp.swift in Sources */,
-				79840EACAA56CC161B18EC83 /* PlatformCover.swift in Sources */,
 				72D446AC691DE767BB217CB7 /* PressStyle.swift in Sources */,
 				AC45DC2BE230ED03993C3064 /* Profile.swift in Sources */,
 				39FE2D09CB4BD9DD6284610D /* PublisherBrowser.swift in Sources */,
@@ -1649,7 +1642,6 @@
 				403C8681077D3BEAF6180A05 /* NonsenseGuardTests.swift in Sources */,
 				D3C2E39C16EBC0D5D98D207C /* OnboardingTests.swift in Sources */,
 				666166C2691BA68805DF8078 /* PaginationTests.swift in Sources */,
-				167025E4233F1753EE0FD126 /* PlatformCoverTests.swift in Sources */,
 				8467A73E5536C434ED9FF802 /* PresentationTests.swift in Sources */,
 				C20F3D328229382B487B6508 /* PrivacyManifestTests.swift in Sources */,
 				DD3D5E8B24757372CA053249 /* PublisherBrowseTests.swift in Sources */,
