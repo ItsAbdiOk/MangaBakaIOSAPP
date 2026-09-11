@@ -30,6 +30,9 @@ struct AppleBooksVolume: Codable, Identifiable, Sendable, Equatable {
 struct AppleBooksResult: Decodable, Sendable, Equatable {
     let trackId: Int
     let trackName: String
+    /// Who the store credits. The publisher's edition credits the author;
+    /// a translated edition often credits the translator instead.
+    let artistName: String?
     let artworkUrl100: URL?
     let trackViewUrl: URL?
     let price: Double?
@@ -51,18 +54,33 @@ struct AppleBooksResult: Decodable, Sendable, Equatable {
 enum AppleBooksMatch {
     /// One volume per number — the first result for it, which the store
     /// ranks by relevance — sorted by number.
+    ///
+    /// The store's credit must name one of the series' creators, when the
+    /// series has any. HUNTER×HUNTER's GB store answer is "Hunter ✖ Hunter -
+    /// Volume 1" credited to Baptiste Peyron — the French edition, sold in
+    /// every store, and the search results carry no language field to say
+    /// so. VIZ credits "Eiichiro Oda", Yen Press "Chugong, …"; the French
+    /// edition credits its translator. A surname is enough: MangaBaka spells
+    /// it "Eiichirou Oda", the store "Eiichiro Oda".
     static func volumes(
         in results: [AppleBooksResult],
         titles: [String],
+        creators: [String] = [],
         isNovel: Bool
     ) -> [AppleBooksVolume] {
         let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
         guard !wanted.isEmpty else { return [] }
+        let surnames = creators.compactMap { $0.split(separator: " ").last.map { normalise(String($0)) } }
+            .filter { $0.count >= 3 }
         var byNumber: [Int: AppleBooksVolume] = [:]
         for result in results {
             guard let parts = split(result.trackName), wanted.contains(normalise(parts.title))
             else { continue }
             if let tag = parts.tag, tag.contains("novel") != isNovel { continue }
+            if !surnames.isEmpty {
+                let credit = normalise(result.artistName ?? "")
+                guard surnames.contains(where: { credit.contains($0) }) else { continue }
+            }
             guard byNumber[parts.number] == nil else { continue }
             byNumber[parts.number] = AppleBooksVolume(
                 id: result.trackId,
@@ -101,9 +119,13 @@ enum AppleBooksMatch {
         /^(.+?)[,:]?\s+(?:vol\.?|volume|#)\s*(\d+)\s*(?:\(([^)]+)\))?\s*$/.ignoresCase()
     }
 
-    /// Case, punctuation and spacing do not make two titles different.
+    /// Case, punctuation and spacing do not make two titles different, and
+    /// neither does the cross: MangaBaka writes HUNTER×HUNTER, the store
+    /// "Hunter ✖ Hunter" or "Hunter x Hunter".
     static func normalise(_ title: String) -> String {
-        title.lowercased().filter { $0.isLetter || $0.isNumber }
+        title.lowercased()
+            .replacing(/[×✖✕✗]/, with: "x")
+            .filter { $0.isLetter || $0.isNumber }
     }
 
     /// The API hands back 100×100 art; the same path serves 600×600.

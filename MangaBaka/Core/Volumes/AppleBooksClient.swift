@@ -35,13 +35,18 @@ actor AppleBooksClient {
     /// asked. Empty means asked and none: a series with no English ebook.
     func volumes(for series: Series, country: String) async -> [AppleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
-        let key = "\(series.id)-\(country.lowercased())"
+        // Versioned: a match rule that tightens must not be outlived by a
+        // week of cached answers made under the looser one.
+        let key = "v2-\(series.id)-\(country.lowercased())"
         if let cached = readCache(key) { return cached }
 
         guard let results = await search(query, country: country) else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
         let isNovel = series.type?.lowercased().contains("novel") ?? false
-        let matched = AppleBooksMatch.volumes(in: results, titles: titles, isNovel: isNovel)
+        let creators = (series.authors ?? []) + (series.artists ?? [])
+        let matched = AppleBooksMatch.volumes(
+            in: results, titles: titles, creators: creators, isNovel: isNovel
+        )
         writeCache(key, matched)
         return matched
     }

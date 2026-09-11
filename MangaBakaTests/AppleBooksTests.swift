@@ -6,9 +6,11 @@ import Testing
 /// wrong cover under "Volume 3" is worse than an empty spine.
 @Suite("Apple Books matching")
 struct AppleBooksMatchTests {
-    private func result(_ id: Int, _ name: String, price: Double? = 6.99) -> AppleBooksResult {
+    private func result(
+        _ id: Int, _ name: String, by artist: String? = nil, price: Double? = 6.99
+    ) -> AppleBooksResult {
         AppleBooksResult(
-            trackId: id, trackName: name,
+            trackId: id, trackName: name, artistName: artist,
             artworkUrl100: URL(string: "https://is1-ssl.mzstatic.com/x/\(id).jpg/100x100bb.jpg"),
             trackViewUrl: URL(string: "https://books.apple.com/gb/book/id\(id)"),
             price: price, formattedPrice: price.map { "£\($0)" }, releaseDate: nil
@@ -33,6 +35,31 @@ struct AppleBooksMatchTests {
         #expect(volumes.map(\.number) == [1, 2, 3, 8])
         #expect(volumes.map(\.id) == [1, 5, 7, 3], "The first listing of a number wins")
         #expect(volumes[0].artworkURL?.absoluteString.hasSuffix("600x600bb.jpg") == true)
+    }
+
+    /// The GB store's answer for HUNTER×HUNTER is the French edition,
+    /// "Hunter ✖ Hunter - Volume 1" credited to its translator; the results
+    /// carry no language, so the credit is the tell (Abdi's phone,
+    /// 2026-09-11).
+    @Test("A volume credited to none of the series' creators is another edition")
+    func creatorCredit() {
+        let results = [
+            result(1, "Hunter ✖ Hunter - Volume 1", by: "Baptiste Peyron"),
+            result(2, "Hunter x Hunter, Vol. 2", by: "Yoshihiro Togashi"),
+            result(3, "One Piece, Vol. 1", by: "Eiichiro Oda")
+        ]
+        let hunter = AppleBooksMatch.volumes(
+            in: results, titles: ["HUNTER×HUNTER"], creators: ["Yoshihiro Togashi"], isNovel: false
+        )
+        #expect(hunter.map(\.id) == [2])
+        // MangaBaka spells it "Eiichirou Oda"; the surname carries it.
+        let onePiece = AppleBooksMatch.volumes(
+            in: results, titles: ["ONE PIECE"], creators: ["Eiichirou Oda"], isNovel: false
+        )
+        #expect(onePiece.map(\.id) == [3])
+        // No creators known: nothing to check against, so the title decides.
+        let unknown = AppleBooksMatch.volumes(in: results, titles: ["HUNTER×HUNTER"], isNovel: false)
+        #expect(unknown.map(\.id) == [1, 2])
     }
 
     @Test("A novel series takes the novels and leaves the comics")
@@ -70,6 +97,7 @@ struct AppleBooksClientTests {
     private let answer = Data(#"""
     {"resultCount":2,"results":[
       {"trackId":1,"trackName":"Solo Leveling, Vol. 1 (comic)","artworkUrl100":"https://a/1/100x100bb.jpg",
+       "artistName":"Chugong, Abigail Blackman, J. Torres",
        "trackViewUrl":"https://books.apple.com/gb/book/id1","price":6.99,"formattedPrice":"£6.99",
        "releaseDate":"2021-02-16T08:00:00Z"},
       {"trackId":2,"trackName":"Solo Leveling: Ragnarok, Vol. 1 (comic)"}
@@ -82,7 +110,7 @@ struct AppleBooksClientTests {
         defer { URLProtocolStub.reset() }
         let client = makeClient(clock: TestClock())
 
-        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling")
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
         let volumes = await client.volumes(for: series, country: "GB")
 
         #expect(volumes?.map(\.number) == [1])
@@ -100,7 +128,7 @@ struct AppleBooksClientTests {
         defer { URLProtocolStub.reset() }
         let clock = TestClock()
         let client = makeClient(clock: clock)
-        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling")
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
 
         _ = await client.volumes(for: series, country: "gb")
         _ = await client.volumes(for: series, country: "gb")
@@ -118,7 +146,7 @@ struct AppleBooksClientTests {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 500)) }
         defer { URLProtocolStub.reset() }
         let client = makeClient(clock: TestClock())
-        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling")
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
 
         let first = await client.volumes(for: series, country: "gb")
         #expect(first == nil)
