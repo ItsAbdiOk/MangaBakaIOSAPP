@@ -113,6 +113,7 @@ struct AppServices {
             history: history,
             libraryService: libraryService,
             snapshot: sharedLibrary,
+            client: client,
             allowedRatings: { store.preferences.allowed.map(\.rawValue) }
         )
     }

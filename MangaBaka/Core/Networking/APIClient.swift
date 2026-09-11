@@ -69,6 +69,25 @@ actor APIClient {
         return payload
     }
 
+    /// A response with no envelope around it.
+    ///
+    /// Two envelope shapes were already known — `data` for most endpoints,
+    /// `results` for recommendations. `/v0/frontpage/community-pulse` is a
+    /// third: the object itself, with no wrapper at all. Verified live on
+    /// 2026-09-11. Decoding it as either of the others fails outright.
+    func getBare<Payload: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        as _: Payload.Type = Payload.self
+    ) async throws(APIError) -> Payload {
+        let data = try await rawData(path: path, query: query)
+        do {
+            return try decoder.decode(Payload.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+    }
+
     /// How many results a query has, without downloading them.
     ///
     /// The API reports the total in its pagination block, so a count costs one

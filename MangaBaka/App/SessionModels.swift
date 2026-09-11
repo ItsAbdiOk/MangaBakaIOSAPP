@@ -22,16 +22,20 @@ final class SessionModels {
     /// page updates, and replaces whichever model was listening before. The
     /// series page reaches for it on every redraw.
     let library: LibraryModel
+    /// The database's own pulse, fetched once per launch.
+    let pulse: CommunityPulseService
 
     init(
         repository: any SeriesRepositoryProtocol,
         history: HistoryStore,
         libraryService: any LibraryProviding,
         snapshot: LibrarySnapshot,
+        client: APIClient,
         allowedRatings: @escaping () -> [String]
     ) {
         recentlyViewed = RecentlyViewedModel(history: history, allowedRatings: allowedRatings)
         counts = LensCounts(repository: repository)
         library = LibraryModel(library: libraryService, snapshot: snapshot)
+        pulse = CommunityPulseService(client: client)
     }
 }

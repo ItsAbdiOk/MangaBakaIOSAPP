@@ -94,6 +94,8 @@ struct RootView: View {
                         path: $discoverPath,
                         zoomSource: $zoomSource,
                         namespace: coverTransition,
+                        pulse: session.pulse,
+                        chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries),
                         onOpenStack: { selection = .stack }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }

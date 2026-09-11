@@ -10,6 +10,9 @@ struct DiscoverView: View {
     @Binding private var zoomSource: String?
     private let namespace: Namespace.ID
     private let onOpenStack: () -> Void
+    /// The database's pulse, and the reader's own place in it.
+    private let pulse: CommunityPulseService?
+    private let chaptersRead: Int
     @Environment(\.displayScale) private var displayScale
 
     init(
@@ -18,6 +21,8 @@ struct DiscoverView: View {
         path: Binding<[Series]>,
         zoomSource: Binding<String?>,
         namespace: Namespace.ID,
+        pulse: CommunityPulseService? = nil,
+        chaptersRead: Int = 0,
         onOpenStack: @escaping () -> Void
     ) {
         _model = State(initialValue: model)
@@ -25,6 +30,8 @@ struct DiscoverView: View {
         _path = path
         _zoomSource = zoomSource
         self.namespace = namespace
+        self.pulse = pulse
+        self.chaptersRead = chaptersRead
         self.onOpenStack = onOpenStack
     }
 
@@ -71,6 +78,11 @@ struct DiscoverView: View {
                     ForEach(model.rows) { row in
                         rowView(row)
                     }
+                    // Last, under the feeds. It is a grace note about the
+                    // place, not a reason anyone opened the app.
+                    if let figures = pulse?.pulse {
+                        CommunityPulseCard(pulse: figures, chaptersRead: chaptersRead)
+                    }
                 }
             }
             .padding(.top, Metrics.scrollTopInset)
@@ -82,6 +94,7 @@ struct DiscoverView: View {
         .refreshable { await model.load(forceRefresh: true) }
         .task { await model.load() }
         .task { await recentlyViewed?.load() }
+        .task { await pulse?.load() }
     }
 
     private var header: some View {
