@@ -37,6 +37,9 @@ struct ScheduleSnapshot: Equatable, Sendable {
     /// Estimated, but from release history old enough to have missed one.
     var stale: Int = 0
     var inScope: Int = 0
+    /// Why the library could not be read, when it could not. `inScope` is 0
+    /// then, and must not be shown as "nothing in scope".
+    var libraryFailure: APIError?
     var measuredAt: Date?
 
     var isEmpty: Bool { dated.isEmpty && undated.isEmpty }
@@ -129,21 +132,36 @@ actor ReleaseScheduleService {
         ["hiatus", "on_hiatus"].contains(status ?? "")
     }
 
-    /// The in-scope entries from the reader's library.
-    func worksInScope() async -> [LibraryEntry] {
+    /// The in-scope entries from the reader's library, or why they could not
+    /// be read. A failed walk used to come back as no entries, and "no entries"
+    /// is what an offline reader with 900 series was then shown.
+    struct Scope: Sendable {
+        var entries: [LibraryEntry] = []
+        var failure: APIError?
+    }
+
+    func worksInScope() async -> Scope {
         var all: [LibraryEntry] = []
+        var failure: APIError?
         // The library pages at 100; ten pages covers a very large library and
         // caps the cost of a caller that would otherwise loop forever.
         for page in 1...10 {
-            let batch = await library.library(page: page, limit: 100)
+            let batch: [LibraryEntry]
+            do {
+                batch = try await library.libraryPage(page: page, limit: 100)
+            } catch {
+                failure = error
+                break
+            }
             if batch.isEmpty { break }
             all.append(contentsOf: batch)
             if batch.count < 100 { break }
         }
-        return all.filter { entry in
+        let inScope = all.filter { entry in
             guard let series = entry.series else { return false }
             return Self.isInScope(state: entry.state, status: series.status)
         }
+        return Scope(entries: inScope, failure: failure)
     }
 
     // MARK: - Reading
@@ -153,12 +171,14 @@ actor ReleaseScheduleService {
     /// A three-minute build must never hold a screen. A half-built calendar is
     /// useful in a way a spinner is not.
     func snapshot() async -> ScheduleSnapshot {
-        let entries = await worksInScope()
+        let scope = await worksInScope()
+        let entries = scope.entries
         let cached = (try? readCache()) ?? [:]
         let now = clock.now
 
         var snapshot = ScheduleSnapshot()
         snapshot.inScope = entries.count
+        snapshot.libraryFailure = scope.failure
 
         var newest: Date?
         for entry in entries {
@@ -233,7 +253,14 @@ actor ReleaseScheduleService {
     }
 
     private func run(refresh: Bool) async {
-        let entries = await worksInScope()
+        let scope = await worksInScope()
+        // A build over a library that could not be read would measure nothing
+        // and report itself finished. Leave it for the next attempt.
+        guard scope.failure == nil else {
+            progress.failure = scope.failure?.userFacingMessage
+            return
+        }
+        let entries = scope.entries
         let cached = (try? readCache()) ?? [:]
 
         let todo = entries.filter { entry in

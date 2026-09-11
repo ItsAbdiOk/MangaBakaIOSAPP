@@ -93,6 +93,23 @@ struct ReminderTests {
         #expect(centre.added.first?.id == "announced-w1", "soonest first")
     }
 
+    /// Coming back to the app offline used to wipe every pending reminder: the
+    /// library read as empty, so there was "nothing" to remind about. A
+    /// reminder set from a library that was there yesterday is still right.
+    @Test("An unreadable library leaves the pending reminders alone")
+    func unreadableLibraryKeepsPending() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
+        #expect(centre.added.map(\.id) == ["announced-a"])
+
+        await reminders.reschedule(announced: [], predicted: [], libraryFailure: .offline)
+
+        #expect(centre.removeAllCount == 1, "Nothing may be removed on the strength of a failed read")
+        #expect(centre.added.map(\.id) == ["announced-a"])
+    }
+
     @Test("Turning it off clears what was pending")
     func disableClears() async throws {
         let centre = FakeCentre()

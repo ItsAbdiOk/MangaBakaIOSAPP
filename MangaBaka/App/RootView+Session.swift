@@ -157,10 +157,12 @@ extension RootView {
         let announcedIDs = Set(announced.compactMap(\.seriesId))
         let predicted = scheduled.dated.filter { !announcedIDs.contains($0.series.id) }
 
+        let walk = await librarySnapshot.load()
         await reminders.reschedule(
             announced: announced,
             predicted: predicted,
-            library: await librarySnapshot.all()
+            library: walk.entries,
+            libraryFailure: scheduled.libraryFailure ?? walk.failure
         )
     }
 }

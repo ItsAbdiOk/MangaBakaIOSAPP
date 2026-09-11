@@ -25,7 +25,12 @@ struct ScheduleView: View {
                 AnnouncedSection(works: model.announced)
                     .padding(.bottom, model.announced.isEmpty ? 0 : 26)
 
-                if model.isEmpty && model.announced.isEmpty {
+                if let failure = model.libraryFailure, model.announced.isEmpty {
+                    FailureState(error: failure, retry: { await model.load() })
+                        .padding(.top, 60)
+                } else if model.libraryFailure != nil {
+                    EmptyView()
+                } else if model.isEmpty && model.announced.isEmpty {
                     emptyState
                 } else if model.isEmpty {
                     EmptyView()

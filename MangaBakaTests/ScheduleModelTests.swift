@@ -133,6 +133,39 @@ struct ScheduleGroupingTests {
         #expect(try model(with: ScheduleSnapshot()).isEmpty)
     }
 
+    /// Offline, the library walk fails and nothing is in scope — which used to
+    /// read as "0 in scope", the empty state, for a reader with 900 series.
+    @Test("A library that could not be read is a failure, not an empty scope")
+    func unreadableLibraryIsNotEmpty() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.libraryFailure = .offline
+        let model = try model(with: snapshot)
+        #expect(!model.isEmpty)
+        #expect(model.libraryFailure == .offline)
+    }
+
+    @Test("The service reports a failed library walk instead of an empty scope")
+    func serviceReportsFailure() async throws {
+        let service = ReleaseScheduleService(library: OfflineLibrary(), database: try AppDatabase.inMemory())
+        let snapshot = await service.snapshot()
+        #expect(snapshot.libraryFailure == .offline)
+        #expect(snapshot.inScope == 0)
+    }
+
+    private final class OfflineLibrary: LibraryProviding, @unchecked Sendable {
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
+        func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] { throw .offline }
+        func hiddenTagIDs() async -> Set<Int>? { nil }
+        func topGenres() async -> [TopGenre]? { nil }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+
     @Test("The scope line counts what was estimated against what is in scope")
     func scopeLine() throws {
         var snapshot = ScheduleSnapshot()

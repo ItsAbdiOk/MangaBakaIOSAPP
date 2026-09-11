@@ -83,11 +83,18 @@ final class ReleaseReminders {
     /// library, a reader changes their mind. Adding to what is already there
     /// accumulates notifications for things that are no longer true, and there
     /// is no way for the reader to tell which is which.
+    ///
+    /// - Parameter libraryFailure: why the library could not be read this
+    ///   time, if it could not. Nothing is replaced then: a reminder set from
+    ///   the library as it was yesterday is still right, and coming back to
+    ///   the app offline used to wipe every one of them.
     func reschedule(
         announced: [UpcomingWork],
         predicted: [ScheduledWork],
-        library: [LibraryEntry] = []
+        library: [LibraryEntry] = [],
+        libraryFailure: APIError? = nil
     ) async {
+        guard libraryFailure == nil else { return }
         await centre.removeAll()
         guard isEnabled else { return }
 

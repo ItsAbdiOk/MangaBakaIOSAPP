@@ -57,7 +57,10 @@ final class ScheduleModel {
     }
 
     /// Nothing in scope: no account, or nothing being read is still publishing.
-    var isEmpty: Bool { snapshot.inScope == 0 && !isLoading }
+    /// Not "the library could not be read" — that is `libraryFailure`.
+    var isEmpty: Bool { snapshot.inScope == 0 && snapshot.libraryFailure == nil && !isLoading }
+    /// Why the scope is unknown, when it is. Shown in place of the empty state.
+    var libraryFailure: APIError? { isLoading ? nil : snapshot.libraryFailure }
     var isMeasuring: Bool { progress.isRunning }
     var isStale: Bool { snapshot.stale > 0 }
 
