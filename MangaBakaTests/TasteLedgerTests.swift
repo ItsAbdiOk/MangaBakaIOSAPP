@@ -184,6 +184,27 @@ struct TasteFromSeriesTests {
         #expect(try await ledger.knownTags() == 2)
     }
 
+    @Test("Signing in as someone else forgets what the last account taught it")
+    func forgettingClearsTheLedger() async throws {
+        // A taste profile built from one person's library, still on disk after
+        // a different token is entered, is worse than no profile: every
+        // recommendation is then about somebody else's reading. `clear()`
+        // existed for this and nothing called it — found by Periphery, and it
+        // is a behavioural gap, not dead code.
+        let ledger = TasteLedger(database: try AppDatabase.inMemory(), clock: TestClock())
+        let tags = [tag(1, "Murim"), tag(2, "Male Protagonist")]
+        try await ledger.absorb(SeriesFactory.make(id: 10, tagsV2: tags), as: .reading)
+        try await ledger.absorb(SeriesFactory.make(id: 11, tagsV2: tags), as: .completed)
+        #expect(try await ledger.countedSeries() == 2)
+
+        let profile = TasteProfile(library: NoLibrary(), ledger: ledger)
+        await profile.forgetEverything()
+
+        #expect(try await ledger.countedSeries() == 0)
+        #expect(try await ledger.knownTags() == 0)
+        #expect(try await ledger.favoured().isEmpty)
+    }
+
     @Test("A series with no tags is not counted as a source")
     func skipsUntaggedSeries() async throws {
         // Otherwise it is recorded as counted, and the next payload that DOES
@@ -225,4 +246,17 @@ struct TasteFromSeriesTests {
         #expect(try await ledger.countedSeries() == 1)
         #expect(try await ledger.knownTags() == 1)
     }
+}
+
+/// A library that answers nothing. `TasteProfile` needs one to exist; the
+/// forgetting test is about the ledger on disk, not about the API.
+private final class NoLibrary: LibraryProviding, @unchecked Sendable {
+    func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
+    func recommendationStatus() async -> RecommendationStatus? { nil }
+    func recommendations(limit: Int, page: Int, excluding: [Int]) async -> [PersonalRecommendation] { [] }
+    func hiddenTagIDs() async -> Set<Int>? { [] }
+    func topGenres() async -> [TopGenre] { [] }
+    func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+    func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+    func remove(seriesId: Int) async throws(APIError) {}
 }

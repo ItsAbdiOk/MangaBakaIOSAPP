@@ -68,11 +68,25 @@ extension RootView {
                                     onRemindersChanged: { await refreshReminders() },
                                     history: history,
                                     taste: taste,
+                                    onAccountChanged: { await forgetPreviousAccount() },
                                     titleRevision: $titleRevision
                                 )
                             }
                     }
                 }
+    }
+
+    /// Forgets everything the app learned from whoever was signed in before.
+    ///
+    /// A cached profile id would let a second account inherit the first's
+    /// library, and a taste ledger built from someone else's reading makes
+    /// every recommendation quietly about the wrong person. Both existed with
+    /// a way to clear them and nothing calling it — found by Periphery, which
+    /// reported them as dead code; they were a behavioural gap instead.
+    func forgetPreviousAccount() async {
+        await library.forgetProfile()
+        await taste.forgetEverything()
+        await librarySnapshot.invalidate()
     }
 
     /// The work a launch does once the first screen is on the way.

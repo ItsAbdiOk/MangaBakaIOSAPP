@@ -132,6 +132,17 @@ actor TasteProfile {
         )
     }
 
+    /// Forgets everything learned from the account that was signed in.
+    ///
+    /// For a token change, which is a change of person. The in-memory caches
+    /// alone are not enough: the ledger is on disk and survives a relaunch, so
+    /// without this a new reader inherits the last one's taste and every
+    /// recommendation is quietly about somebody else's library.
+    func forgetEverything() async {
+        try? await ledger?.clear()
+        invalidate()
+    }
+
     /// Forgets the profile, so a change to the library is reflected.
     func invalidate() {
         cached = nil

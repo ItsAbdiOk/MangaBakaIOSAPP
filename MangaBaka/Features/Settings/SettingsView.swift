@@ -16,6 +16,9 @@ struct SettingsView: View {
     let onRemindersChanged: () async -> Void
     let history: HistoryStore
     let taste: TasteProfile
+    /// Called when the signed-in account changes, so data learned from the
+    /// previous one is forgotten. A token is a person, not a setting.
+    let onAccountChanged: () async -> Void
     @Binding var titleRevision: Int
 
     @State private var entry = ""
@@ -141,6 +144,10 @@ struct SettingsView: View {
             return
         }
         storedTokenExists = true
+        // Before validating, not after: the token on disk has already changed,
+        // so anything still cached from the previous account is already about
+        // the wrong person.
+        await onAccountChanged()
         await check()
         if case .failed = status {
             // A token MangaBaka rejected is worse than none: it would make
@@ -150,6 +157,7 @@ struct SettingsView: View {
             // someone's account access for them.
             store.clear()
             storedTokenExists = false
+            await onAccountChanged()
         }
     }
 
