@@ -26,7 +26,9 @@ struct LibraryEditSheet: View {
         self.series = series
         self.onSave = onSave
         _state = State(initialValue: entry.state)
-        _chapter = State(initialValue: entry.progressChapter.map { String(Int($0)) } ?? "")
+        // Formatted without going through Int: a reader at 12.5 who edited
+        // only the rating used to have 12 written back, unasked.
+        _chapter = State(initialValue: entry.progressChapter.map(Self.chapterText) ?? "")
         // Stored 0-100, chosen as five steps.
         _rating = State(initialValue: entry.rating.map { Int(($0 / 20).rounded()) } ?? 0)
         _note = State(initialValue: entry.note ?? "")
@@ -115,7 +117,7 @@ struct LibraryEditSheet: View {
                     .accessibilityLabel("Chapters read")
 
                 Button {
-                    chapter = String((Int(chapter) ?? 0) + 1)
+                    chapter = Self.chapterText((Double(chapter) ?? 0).rounded(.down) + 1)
                 } label: {
                     Text("+1")
                         .typeRowTitle()
@@ -225,6 +227,11 @@ struct LibraryEditSheet: View {
     /// Only what actually differs from what was loaded.
     ///
     /// Sending every field would overwrite values the reader never touched with
+    /// "12" for a whole chapter, "12.5" for a half one.
+    static func chapterText(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(value)
+    }
+
     /// whatever this sheet happened to be holding.
     var changes: LibraryChange {
         var change = LibraryChange()

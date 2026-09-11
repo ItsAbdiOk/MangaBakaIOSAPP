@@ -207,6 +207,16 @@ struct LibraryEditSheetTests {
         #expect(sheet(bare).changes.isEmpty)
     }
 
+    /// Half chapters exist — the API models progress as a Double and readers
+    /// log 12.5. The sheet read the value through Int, so opening it on 12.5
+    /// and saving an unrelated field sent progress_chapter: 12 to the
+    /// reader's real account, against its own promise that only touched
+    /// fields are sent.
+    @Test("A fractional chapter survives an unrelated edit")
+    func fractionalChapterIsNotTruncated() throws {
+        #expect(sheet(try entry(chapter: 12.5)).changes.isEmpty)
+    }
+
     /// The rating is five steps in the UI and 0-100 on the wire.
     @Test("A rating converts between five steps and the API's scale")
     func ratingScale() throws {
