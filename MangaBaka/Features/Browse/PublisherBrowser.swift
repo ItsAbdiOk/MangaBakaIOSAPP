@@ -18,6 +18,7 @@ struct PublisherBrowser: View {
     @State private var results: [PublisherRecord] = []
     @State private var isSearching = false
     @State private var hasSearched = false
+    @State private var didFail = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,6 +33,11 @@ struct PublisherBrowser: View {
                     .tint(Palette.textTertiary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
+            } else if didFail {
+                Text("Could not search publishers just now.")
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .padding(.horizontal, Metrics.gutter)
             } else if hasSearched && results.isEmpty {
                 Text("No publisher by that name.")
                     .typeSmallMeta()
@@ -92,15 +98,19 @@ struct PublisherBrowser: View {
         guard text.count > 1 else {
             results = []
             hasSearched = false
+            didFail = false
             return
         }
         pending = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             isSearching = true
-            results = await catalogue.searchPublishers(text)
+            let found = await catalogue.searchPublishers(text)
             isSearching = false
             hasSearched = true
+            // A failure is said, not shown as "no publisher by that name".
+            didFail = found == nil
+            results = found ?? []
         }
     }
 }

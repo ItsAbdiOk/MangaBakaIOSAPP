@@ -121,9 +121,9 @@ struct CatalogueTests {
         defer { URLProtocolStub.reset() }
 
         let publishers = await makeService().searchPublishers("a-1")
-        #expect(publishers.first?.name == "A-1 Pictures (English)")
-        #expect(publishers.first?.countryOfOrigin == "JP")
-        #expect(publishers.first?.closed == false)
+        #expect(publishers?.first?.name == "A-1 Pictures (English)")
+        #expect(publishers?.first?.countryOfOrigin == "JP")
+        #expect(publishers?.first?.closed == false)
     }
 
     @Test("A failed catalogue fetch degrades to empty rather than throwing")
@@ -133,5 +133,52 @@ struct CatalogueTests {
 
         #expect(await makeService().genres().isEmpty)
         #expect(await makeService().tags().isEmpty)
+    }
+
+    /// A failed search is nil, not empty: the screen says so instead of
+    /// claiming no publisher has that name.
+    @Test("A failed publisher search is distinguishable from no matches")
+    func publisherFailureIsNil() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.networkConnectionLost)) }
+        defer { URLProtocolStub.reset() }
+        #expect(await makeService().searchPublishers("seven") == nil)
+    }
+
+    /// One dropped packet at launch used to cache an empty vocabulary for the
+    /// whole process: every Browse screen after it showed no genres and no
+    /// tags, and the only way back was to relaunch.
+    @Test("A failed fetch is not cached; the next ask tries again")
+    func failureIsRetried() async {
+        let queue = ResponseQueue()
+        URLProtocolStub.setHandler { _ in queue.next() }
+        defer { URLProtocolStub.reset() }
+
+        let service = makeService()
+        queue.fail = true
+        #expect(await service.genres().isEmpty)
+        #expect(await service.tags().isEmpty)
+
+        queue.fail = false
+        #expect(await service.genres().count == 1, "The retry must reach the network")
+        #expect(await service.tags().count == 1)
+    }
+
+    /// Switchable between failing and answering, from inside the stub's
+    /// `@Sendable` handler.
+    private final class ResponseQueue: @unchecked Sendable {
+        private let lock = NSLock()
+        private var failing = false
+        var fail: Bool {
+            get { lock.lock(); defer { lock.unlock() }; return failing }
+            set { lock.lock(); defer { lock.unlock() }; failing = newValue }
+        }
+
+        func next() -> URLProtocolStub.Outcome {
+            if fail { return .fail(URLError(.networkConnectionLost)) }
+            return .respond(.init(body: Data(#"""
+            {"status":200,"data":[{"id":1,"name":"Action","label":"Action","value":"action",
+             "full_name":"Action","level":0,"parent_id":null,"series_count":10,"merged_into":null}]}
+            """#.utf8)))
+        }
     }
 }

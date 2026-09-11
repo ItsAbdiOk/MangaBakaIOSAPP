@@ -19,8 +19,12 @@ actor CatalogueService {
     /// searching all of them. A cache keyed on nothing is a cache that answers
     /// a different question than the one asked.
     private var cachedTagLimit = 0
-    private var tagsInFlight: Task<[Tag], Never>?
-    private var genresInFlight: Task<[Genre], Never>?
+    /// The limit of the fetch in progress, so a second caller can join it.
+    /// This used to compare against `cachedTagLimit`, which is only set once
+    /// the fetch lands — so two screens opening together never joined.
+    private var inFlightTagLimit = 0
+    private var tagsInFlight: Task<[Tag]?, Never>?
+    private var genresInFlight: Task<[Genre]?, Never>?
 
     init(client: APIClient) {
         self.client = client
@@ -29,16 +33,18 @@ actor CatalogueService {
     func genres() async -> [Genre] {
         if let cachedGenres { return cachedGenres }
         // Two screens opening at once are one request, not two.
-        if let genresInFlight { return await genresInFlight.value }
+        if let genresInFlight { return await genresInFlight.value ?? [] }
 
-        let task = Task<[Genre], Never> { [client] in
-            (try? await client.get("/v1/genres")) ?? []
+        let task = Task<[Genre]?, Never> { [client] in
+            try? await client.get("/v1/genres")
         }
         genresInFlight = task
         let fetched = await task.value
-        cachedGenres = fetched
+        // Only an answer is cached. A dropped packet used to cache an empty
+        // vocabulary for the whole process; the next ask now tries again.
+        if let fetched { cachedGenres = fetched }
         genresInFlight = nil
-        return fetched
+        return fetched ?? []
     }
 
     /// - Parameter limit: the API paginates; a browsing screen wants the
@@ -46,9 +52,9 @@ actor CatalogueService {
     func tags(limit: Int = 200) async -> [Tag] {
         // Serves a smaller ask from a bigger cache, refetches for a bigger one.
         if let cachedTags, cachedTagLimit >= limit { return cachedTags }
-        if let tagsInFlight, cachedTagLimit >= limit { return await tagsInFlight.value }
+        if let tagsInFlight, inFlightTagLimit >= limit { return await tagsInFlight.value ?? [] }
 
-        let task = Task<[Tag], Never> { [client] in
+        let task = Task<[Tag]?, Never> { [client] in
             let fetched: [Tag]? = try? await client.get(
                 "/v1/tags",
                 query: [URLQueryItem(name: "limit", value: String(limit))]
@@ -57,16 +63,19 @@ actor CatalogueService {
             // linked to. Ordered by how many series carry them, because a tag
             // on three series does not deserve the same row as one on nine
             // thousand.
-            return (fetched ?? [])
+            return fetched?
                 .filter(\.isUsable)
                 .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
         }
         tagsInFlight = task
+        inFlightTagLimit = limit
         let fetched = await task.value
-        cachedTags = fetched
-        cachedTagLimit = limit
+        if let fetched {
+            cachedTags = fetched
+            cachedTagLimit = limit
+        }
         tagsInFlight = nil
-        return fetched
+        return fetched ?? []
     }
 
     /// Tags that sit directly under a parent, for walking the tree.
@@ -100,14 +109,17 @@ actor CatalogueService {
             .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
     }
 
-    func searchPublishers(_ text: String, limit: Int = 30) async -> [PublisherRecord] {
-        let results: [PublisherRecord]? = try? await client.get(
+    /// Nil on failure, for the same reason as `searchTags`: "no publisher by
+    /// that name" and "the request failed" must not look the same on screen.
+    /// It used to return `[]` for both, eight lines under the comment saying
+    /// not to.
+    func searchPublishers(_ text: String, limit: Int = 30) async -> [PublisherRecord]? {
+        try? await client.get(
             "/v1/publishers/search",
             query: [
                 URLQueryItem(name: "q", value: text),
                 URLQueryItem(name: "limit", value: String(limit))
             ]
         )
-        return results ?? []
     }
 }
