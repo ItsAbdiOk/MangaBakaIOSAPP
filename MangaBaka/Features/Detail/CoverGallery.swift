@@ -3,7 +3,7 @@ import SwiftUI
 /// A series' covers, full screen, one swipe apart.
 ///
 /// Cover art is the reason half of these series get picked up, and the page
-/// shows it at 126pt. This is the same artwork at the size it was drawn for.
+/// shows it at 150pt. This is the same artwork at the size it was drawn for.
 struct CoverGallery: View {
     let series: Series
     let images: [SeriesImage]
@@ -231,6 +231,9 @@ private struct ZoomableCover: View {
             switch phase {
             case let .success(image):
                 image.resizable().scaledToFit()
+                    // Cover art is a photograph, not UI: Smart Invert must
+                    // leave it alone rather than show a negative.
+                    .accessibilityIgnoresInvertColors()
             case .failure:
                 Image(systemName: "photo")
                     .font(.system(size: 40))

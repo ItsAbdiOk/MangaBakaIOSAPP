@@ -59,11 +59,6 @@ actor LibrarySnapshot {
         self.clock = clock
     }
 
-    /// Everything, fetched once.
-    ///
-    /// Concurrent callers share one request rather than starting several — on
-    /// launch all three callers arrive at once, and without this they would
-    /// each begin their own walk before any of them had finished.
     /// Called as each page lands, so a screen can draw what has arrived rather
     /// than waiting for all of it.
     ///
@@ -76,6 +71,11 @@ actor LibrarySnapshot {
         onPage = handler
     }
 
+    /// Everything, fetched once.
+    ///
+    /// Concurrent callers share one request rather than starting several — on
+    /// launch all three callers arrive at once, and without this they would
+    /// each begin their own walk before any of them had finished.
     func load() async -> Result {
         if let cached { return cached }
         if let inFlight { return await inFlight.value }
@@ -134,11 +134,6 @@ actor LibrarySnapshot {
         Set(await all().map(\.seriesId))
     }
 
-    /// Forgets it, so the next ask refetches.
-    ///
-    /// Called after a write: adding a series or changing its state makes the
-    /// copy in memory wrong, and a stale library is how the app once offered
-    /// "Add to library" for something already in it.
     /// The library as it was last written, if that was recently enough.
     private func readCache() -> Result? {
         guard let database else { return nil }
@@ -185,6 +180,11 @@ actor LibrarySnapshot {
         }
     }
 
+    /// Forgets it, so the next ask refetches.
+    ///
+    /// Called after a write: adding a series or changing its state makes the
+    /// copy in memory wrong, and a stale library is how the app once offered
+    /// "Add to library" for something already in it.
     func invalidate() {
         // The copy on disk is wrong too. A write is exactly when a stale
         // library is most visible — the reader just changed the thing they are

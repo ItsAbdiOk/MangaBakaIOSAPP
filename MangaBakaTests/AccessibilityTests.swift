@@ -398,6 +398,18 @@ struct NewScreenAccessibilityTests {
         #expect(exercised > 0, "No empty-labelled cover found anywhere; the rule was never exercised")
     }
 
+    /// Smart Invert inverts the UI and leaves photographs alone, if they opt
+    /// out. Nothing opted out, so every cover was a negative.
+    @Test("Cover art opts out of Smart Invert", arguments: [
+        "MangaBaka/Features/Shared/CoverImage.swift",
+        "MangaBaka/Features/Detail/CoverGallery.swift",
+        "MangaBaka/Features/Detail/DetailBackdrop.swift"
+    ])
+    func artworkIgnoresInvert(_ path: String) throws {
+        let source = try SourceTree.read(path)
+        #expect(source.contains("accessibilityIgnoresInvertColors()"), "\(path) shows artwork inverted")
+    }
+
     /// It is drawn in the accent colour with a chevron. It has to do something.
     @Test("The shelf link on the stack is a real control")
     func shelfLinkIsAButton() throws {

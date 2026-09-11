@@ -85,8 +85,23 @@ struct RootView: View {
             }
     }
 
+    /// The tab selection, with a re-tap of the current tab popping it to its
+    /// root. `TabView` reports a change of selection and nothing on a re-tap,
+    /// so the binding's setter is where the re-tap is seen: same value in,
+    /// pop. `popToRoot` had sat under a comment describing this behaviour
+    /// with no caller for it.
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { selection },
+            set: { tab in
+                if tab == selection { popToRoot(tab) }
+                selection = tab
+            }
+        )
+    }
+
     private var tabs: some View {
-        TabView(selection: $selection) {
+        TabView(selection: tabSelection) {
             Tab(AppTab.discover.title, systemImage: AppTab.discover.symbol, value: AppTab.discover) {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
@@ -264,8 +279,11 @@ struct RootView: View {
     /// back proves the token works.
     ///
     /// The client resolves credentials per request, and Settings writes to the
-    /// Keychain before calling this, so the token under test is the one used.
-    func validateToken(_ token: String) async -> TokenCheck {
+    /// Keychain before calling this, so the token under test is the stored
+    /// one. This used to take a token parameter it never read, which made the
+    /// call read as "validate what is in the field" — the reordering of save
+    /// and check that would break it.
+    func validateStoredToken() async -> TokenCheck {
         do {
             return .accepted(try await client.verifiedProfile().displayName)
         } catch {

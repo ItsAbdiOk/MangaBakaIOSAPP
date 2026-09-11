@@ -38,15 +38,3 @@ struct MangaBakaApp: App {
         }
     }
 }
-
-private extension Optional where Wrapped == URL {
-    /// The literal above is a compile-time constant known to parse. This exists
-    /// so the call site reads honestly instead of using `!`, which CLAUDE.md
-    /// forbids on anything reachable from real input.
-    var unsafelyUnwrappedFallback: URL {
-        guard let self else {
-            preconditionFailure("Hard-coded base URL literal failed to parse.")
-        }
-        return self
-    }
-}

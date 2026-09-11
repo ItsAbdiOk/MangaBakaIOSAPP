@@ -28,6 +28,7 @@ struct DetailBackdrop: View {
             let url = cover.url(forHeight: proxy.size.height, scale: displayScale)
             AsyncImage(url: url) { image in
                 image.resizable().scaledToFill()
+                    .accessibilityIgnoresInvertColors()
             } placeholder: {
                 Color.clear
             }

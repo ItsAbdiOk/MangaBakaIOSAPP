@@ -6,7 +6,9 @@ import SwiftUI
 /// scoped, so this screen says that plainly rather than presenting it as the
 /// normal way to sign in.
 struct SettingsView: View {
-    let validate: (String) async -> TokenCheck
+    /// Checks the token already in the Keychain, not the field: `save()`
+    /// writes first, then calls this.
+    let validate: () async -> TokenCheck
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
@@ -169,7 +171,7 @@ struct SettingsView: View {
 
     private func check() async {
         status = .checking
-        switch await validate(entry) {
+        switch await validate() {
         case let .accepted(name):
             status = .signedIn(name)
             entry = ""

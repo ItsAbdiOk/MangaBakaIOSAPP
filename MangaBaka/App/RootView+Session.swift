@@ -76,7 +76,7 @@ extension RootView {
                             }
                             .navigationDestination(isPresented: $showsSettings) {
                                 SettingsView(
-                                    validate: validateToken,
+                                    validate: validateStoredToken,
                                     content: content,
                                     formats: formats,
                                     blockedTags: blockedTags,

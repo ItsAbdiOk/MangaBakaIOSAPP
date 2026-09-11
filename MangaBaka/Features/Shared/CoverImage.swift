@@ -69,6 +69,10 @@ struct CoverImage: View {
                 .resizable()
                 .scaledToFill()
                 .modifier(CoverFrame(width: width, height: height, radius: radius))
+                // Cover art is a photograph, not UI: Smart Invert must leave
+                // it alone. Nothing in the app opted out before, so a reader
+                // using it saw every cover as a negative.
+                .accessibilityIgnoresInvertColors()
         } else if let blur = blurPlaceholder {
             // The API ships a BlurHash with every cover, so the placeholder can
             // carry the artwork's real colours. A loading grid then looks like
@@ -76,6 +80,7 @@ struct CoverImage: View {
             Image(uiImage: blur)
                 .resizable()
                 .modifier(CoverFrame(width: width, height: height, radius: radius))
+                .accessibilityIgnoresInvertColors()
         } else {
             Palette.imagePlaceholder
                 .modifier(CoverFrame(width: width, height: height, radius: radius))

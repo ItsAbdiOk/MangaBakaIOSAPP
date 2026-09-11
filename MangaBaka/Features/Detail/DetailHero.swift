@@ -25,8 +25,9 @@ struct DetailHero: View {
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
-    /// The cover is a fixed 126pt, so the title gets whatever is left — about
-    /// 200pt on a phone. At AX5 that is narrower than the word "Regressed",
+    /// The cover is a fixed 150pt (`Metrics.coverDetailHeroWidth`; it was
+    /// 126 when this was measured), so the title gets whatever is left —
+    /// about 175pt on a phone. At AX5 that is narrower than the word "Regressed",
     /// and the title broke mid-word across four lines. Stacking gives the
     /// title the full width, which is the only thing that fixes it: shrinking
     /// the cover far enough would leave a thumbnail.
@@ -55,7 +56,7 @@ struct DetailHero: View {
     }
 
     private var wide: some View {
-        // Top-aligned, not bottom. Bottom-aligning a 126pt cover against a
+        // Top-aligned, not bottom. Bottom-aligning a 150pt cover against a
         // taller column pushed the artwork half way down the screen, so the
         // page opened on a gap.
         //
