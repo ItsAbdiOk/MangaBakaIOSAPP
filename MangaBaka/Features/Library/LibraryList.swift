@@ -191,6 +191,7 @@ struct JumpIndex: View {
 /// The state filter, and the count beside each state.
 struct LibraryFilterRow: View {
     let shape: [(state: LibraryEntry.State, count: Int)]
+    /// What "All" lists — not the whole library, which includes dropped.
     let total: Int
     @Binding var selected: LibraryEntry.State?
 

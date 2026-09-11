@@ -71,6 +71,9 @@ final class LibraryModel {
     }
 
     var total: Int { entries.count }
+    /// What the "All" filter actually lists: everything but dropped. The pill
+    /// used to show `total`, 937 over a list of about 500.
+    private(set) var allCount = 0
 
     /// Every state that has anything in it, in reading order.
     ///
@@ -91,6 +94,7 @@ final class LibraryModel {
     /// box and the sort.
     private func refreshDerived() {
         shape = Self.shape(of: entries)
+        allCount = entries.count { $0.state != .dropped }
         listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
         jumpTargets = Self.jumpTargets(in: listed)
     }

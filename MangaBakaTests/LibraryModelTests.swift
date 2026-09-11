@@ -107,6 +107,20 @@ struct LibraryModelTests {
         #expect(line.contains("Reading is 1 of 10"))
     }
 
+    /// The "All" pill said 937 over a list of about 500, because the list
+    /// leaves dropped out and the pill's count did not. A count on a filter
+    /// is a promise about the list under it.
+    @Test("The All pill counts what All lists")
+    func allPillCountsWhatIsListed() async throws {
+        let model = LibraryModel(library: StubLibrary(entries:
+            (try (1...9).map { try entry($0, .dropped) }) + [try entry(10, .reading)]
+        ))
+        await model.load()
+        #expect(model.listed.count == 1)
+        #expect(model.allCount == 1, "Nine dropped entries are not in the All list")
+        #expect(model.total == 10, "The whole-library count is still the whole library")
+    }
+
     @Test("No entries reads as no account rather than an empty library")
     func noAccount() async throws {
         let model = LibraryModel(library: StubLibrary(entries: []))

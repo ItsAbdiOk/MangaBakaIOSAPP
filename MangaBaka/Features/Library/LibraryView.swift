@@ -74,7 +74,7 @@ struct LibraryView: View {
                 case .list:
                     LibraryFilterRow(
                         shape: model.shape,
-                        total: model.total,
+                        total: model.allCount,
                         selected: $model.filter
                     )
                     .padding(.top, 14)
