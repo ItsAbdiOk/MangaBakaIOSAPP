@@ -13,6 +13,10 @@ import SwiftUI
 /// and "None listed" is a claim, not a shrug.
 struct DetailCredits: View {
     let series: Series
+    /// Opens a publisher's or studio's page. The row is tappable when set;
+    /// with several names, a sheet asks which.
+    var onOpenPublisher: ((String) -> Void)?
+    @State private var isChoosingPublisher = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// Rows the reader has opened. Publishers is the one that needs it — a
@@ -111,9 +115,21 @@ struct DetailCredits: View {
                 .padding(.horizontal, 14)
                 .contentShape(Rectangle())
                 .onTapGesture {
+                    if row.id.hasPrefix("Publisher"), let onOpenPublisher,
+                       let publishers = series.publishers, !publishers.isEmpty {
+                        // One name opens straight away; several ask which.
+                        if publishers.count == 1 {
+                            onOpenPublisher(publishers[0].name)
+                        } else {
+                            isChoosingPublisher = true
+                        }
+                        return
+                    }
                     guard row.isExpandable else { return }
                     Motion.run(.snappy(duration: 0.2)) { toggle(row) }
                 }
+                .accessibilityAddTraits(opensPublisher(row) ? .isButton : [])
+                .accessibilityHint(opensPublisher(row) ? "Opens the publisher's page" : "")
                 .padding(.vertical, 12)
                 .background(Palette.surface)
                 .overlay(alignment: .bottom) {
@@ -126,6 +142,22 @@ struct DetailCredits: View {
         .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         .hairlineBorder(Palette.hairline, radius: Metrics.radiusCard)
         .padding(.horizontal, Metrics.gutter)
+        .confirmationDialog(
+            "Which publisher?", isPresented: $isChoosingPublisher, titleVisibility: .visible
+        ) {
+            ForEach(series.publishers ?? [], id: \.name) { publisher in
+                Button(Self.choiceLabel(publisher)) { onOpenPublisher?(publisher.name) }
+            }
+        }
+    }
+
+    private func opensPublisher(_ row: Row) -> Bool {
+        row.id.hasPrefix("Publisher") && onOpenPublisher != nil
+    }
+
+    /// "Ize Press (Yen Press) · English", "REDICE STUDIO · Original".
+    nonisolated static func choiceLabel(_ publisher: Series.Publisher) -> String {
+        [publisher.name, publisher.type].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 

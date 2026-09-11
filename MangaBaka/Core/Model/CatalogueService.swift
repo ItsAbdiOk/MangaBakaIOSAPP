@@ -113,6 +113,19 @@ actor CatalogueService {
     /// that name" and "the request failed" must not look the same on screen.
     /// It used to return `[]` for both, eight lines under the comment saying
     /// not to.
+    /// The publisher a series names, by that name. The series carries names
+    /// only, not ids, so this is a search — exact name first, else the first
+    /// hit, else nil. Nil also on failure.
+    func findPublisher(named name: String) async -> PublisherRecord? {
+        guard let hits = await searchPublishers(name, limit: 10) else { return nil }
+        let wanted = name.lowercased()
+        return hits.first { $0.name.lowercased() == wanted } ?? hits.first
+    }
+
+    func publisher(id: Int) async -> PublisherDetail? {
+        try? await client.get("/v1/publishers/\(id)/full")
+    }
+
     func searchPublishers(_ text: String, limit: Int = 30) async -> [PublisherRecord]? {
         try? await client.get(
             "/v1/publishers/search",

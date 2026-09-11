@@ -37,6 +37,9 @@ struct RootView: View {
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
     @State private var whatsNew = WhatsNewState()
+    /// A publisher or studio page, pushed from any series page. See
+    /// `PublisherRoute`: the paths are [Series], so this rides beside them.
+    @State var openPublisher: PublisherRoute?
     private let bridge = IntentBridge.shared
     let onboarding: OnboardingState
 
@@ -291,6 +294,7 @@ struct RootView: View {
             characters: characters,
             taste: taste,
             appleBooks: appleBooks,
+            onOpenPublisher: { openPublisher = PublisherRoute(name: $0) },
             contentRatings: content.preferences.allowed.map(\.rawValue),
             path: path,
             onUseAsSeed: { series in
@@ -312,6 +316,13 @@ struct RootView: View {
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
         .task { await session.recentlyViewed.record(series) }
+        // The publisher page, pushed on whichever stack this page is in. A
+        // series it lists pushes back onto the same path.
+        .navigationDestination(item: $openPublisher) { route in
+            PublisherView(
+                name: route.name, catalogue: catalogue, repository: repository, path: path
+            )
+        }
         // Grows out of the cover that was tapped. Every screen that pushes a
         // series marks its covers with `.zoomSource`; a route that did not
         // falls through to the ordinary push, which is what an unmatched id
@@ -337,4 +348,10 @@ struct RootView: View {
             return error.needsAccount ? .rejected : .unknown(error.userFacingMessage)
         }
     }
+}
+
+/// A publisher or studio to open, by the name a series gives it.
+struct PublisherRoute: Hashable, Identifiable {
+    let name: String
+    var id: String { name }
 }

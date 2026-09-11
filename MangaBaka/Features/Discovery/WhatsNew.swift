@@ -32,6 +32,7 @@ enum ReleaseNotes {
             "Share a series as its mangabaka.org link",
             "Open a shelf on its own page from the Library filter",
             "Editions on the volume sheet told apart; a drag-along A–Z index in the Library",
+            "Tap a publisher or studio on a series page to see everything they make",
             "This card, once per update"
         ]
     )

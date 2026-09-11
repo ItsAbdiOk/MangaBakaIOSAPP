@@ -44,7 +44,7 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Volumes: Google Books as second filler | **Keyless is not dependable.** Two keyless requests on 2026-09-11 both got HTTP 429 "Queries per day" exhausted — for Google's shared anonymous project, not this IP, so every keyless reader shares one bucket. Needs a free API key (Google Cloud console → enable Books API → create key; ~5 min, but a signup). With a key: 1,000/day per key, enough at a request per series page cached a week. Parked until Abdi wants the signup; the Japanese-store fallback covers most of the gap |
 | Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
 | Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
-| New from a followed publisher | A design for "follow" |
+| Follow a publisher, with reminders | A design for "follow"; the page exists now |
 | Anything read from Webtoons / Tapas pages | **Removed 2026-09-11 evening** (was `d54dcd7`, one afternoon). Abdi: no visible benefit — og:image is the cover MangaBaka already has — and the first App Store submission should be beyond reproach. Do not rebuild without a partner API from the platform |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
 
@@ -118,9 +118,11 @@ AX sizes, the hero title's Dynamic Type, the library search field's height.
 - **mangabaka.org links open in the app.** Our side done (`99135b7`); waiting
   on MangaBaka for the association file, then the entitlement.
 - ~~"Where to read, in your language."~~ Done (`f4de983`).
-- **New from a publisher you follow.** `/v1/publishers/{id}/collections`
-  exists; a "coming from Seven Seas" row or a reminder when a followed
-  publisher lists a volume. 1 day; needs a design for "follow".
+- ~~New from a publisher you follow.~~ Built as a page instead of a follow
+  (Abdi, 2026-09-11): tap a publisher or studio on a series page → their
+  page, everything MangaBaka attributes to them, most popular first, with
+  the directory record where one exists. Studios (REDICE) are only in the
+  series search, not the directory. A "follow" with reminders is still open.
 
 Declined, with the reason: Amazon links without an Associates account; pulling
 preview pages as images; a generic "open Webtoons" button that lands anywhere

@@ -16,6 +16,8 @@ struct SeriesDetailView: View {
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
+    /// Opens a publisher's or studio's page from the credits.
+    var onOpenPublisher: ((String) -> Void)?
     /// The reader's content filter, so an explicit tag name is not shown to
     /// someone who filtered explicit content — a tag is rated independently of
     /// its series.
@@ -89,7 +91,7 @@ struct SeriesDetailView: View {
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
-                DetailCredits(series: shown)
+                DetailCredits(series: shown, onOpenPublisher: onOpenPublisher)
                 volumesShelf
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
