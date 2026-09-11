@@ -80,6 +80,8 @@ extension ReadingWrapped {
         let entry: LibraryEntry
         let chapters: Int
         let days: Int
+        /// Start and finish on one calendar day — a binge, or an import.
+        var isSameDay = false
 
         /// Chapters a day, rounded. Never zero: a series finished the day it
         /// was started took one day, not none.
@@ -93,6 +95,20 @@ extension ReadingWrapped {
     /// set high on purpose so that a genuine binge survives and only an
     /// impossible one is rejected.
     static let plausibleHoursPerDay: Double = 16
+
+    /// The same ceiling for a sprint whose start and finish are one day.
+    ///
+    /// **A guess.** A same-day pair is also exactly what an importer stamps
+    /// on a whole series, and at sixteen hours an 80-chapter manga logged that
+    /// way (14.7 hours at 11 minutes) walked through as a binge. Eight hours
+    /// is a long reading day; a genuine 40-chapter manhwa afternoon (4 hours)
+    /// still survives, and a stamped 80-chapter manga does not.
+    static let plausibleHoursInOneDay: Double = 8
+
+    /// Fewer chapters than this is not a sprint worth naming. **A guess**:
+    /// enough that a one-shot or a short series finished in a sitting does
+    /// not become "the fastest read of your life".
+    static let minimumSprintChapters = 20
 
     /// The fastest thing the reader got through, of those with both dates.
     ///
@@ -113,7 +129,7 @@ extension ReadingWrapped {
     static func fastestFinish(
         in entries: [LibraryEntry],
         calendar: Calendar = .current,
-        minimumChapters: Int = 20
+        minimumChapters: Int = minimumSprintChapters
     ) -> Sprint? {
         entries
             .compactMap { entry -> Sprint? in
@@ -122,7 +138,9 @@ extension ReadingWrapped {
                 let chapters = Int(ReadingInsights.chaptersCounted(for: entry))
                 guard chapters >= minimumChapters else { return nil }
                 let days = calendar.dateComponents([.day], from: start, to: finish).day ?? 0
-                let sprint = Sprint(entry: entry, chapters: chapters, days: max(days, 1))
+                let sprint = Sprint(
+                    entry: entry, chapters: chapters, days: max(days, 1), isSameDay: days == 0
+                )
                 guard isPlausible(sprint) else { return nil }
                 return sprint
             }
@@ -133,6 +151,8 @@ extension ReadingWrapped {
     static func isPlausible(_ sprint: Sprint) -> Bool {
         let minutes = ReadingInsights.minutesPerChapter(sprint.entry.series?.type)
         let hoursPerDay = Double(sprint.perDay) * minutes / 60
+        // A one-day sprint and an import are told apart by nothing but size.
+        if sprint.isSameDay { return hoursPerDay <= plausibleHoursInOneDay }
         return hoursPerDay <= plausibleHoursPerDay
     }
 

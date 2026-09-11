@@ -71,9 +71,25 @@ struct Cadence: Equatable, Sendable, Codable {
     // MARK: - The estimate
 
     /// Minimum distinct release dates before an estimate is attempted.
+    ///
+    /// **A guess.** Three gaps is the fewest a median says anything about —
+    /// two is a mean with a vote — and four dates make three gaps. Nothing
+    /// derived it against the release histories cached on the device, which
+    /// is where a derivation would come from.
     static let minimumDates = 4
-    /// Minimum positive gaps between those dates.
+    /// Minimum positive gaps between those dates. **A guess**, paired with the
+    /// one above.
     static let minimumGaps = 3
+
+    /// How much the gaps may wander, as a share of the median, before the
+    /// card stops saying "likely" and says "loose".
+    ///
+    /// **A guess, and the one that reaches the reader as a confidence claim.**
+    /// A quarter felt right against the three series checked on 2026-09-09
+    /// (weekly with a day's slop either way is still "likely"); it was not
+    /// fitted to anything wider. It interacts with the session grouping in
+    /// `estimate`: tightening one moves the other.
+    static let regularityTolerance = 0.25
 
     /// Builds a cadence from release dates, or returns nil when there is not
     /// enough history to say anything honest.
@@ -141,9 +157,9 @@ struct Cadence: Equatable, Sendable, Codable {
         let median = Self.median(of: gaps.map(Double.init))
         let spread = Self.median(of: gaps.map { abs(Double($0) - median) })
 
-        // A quarter of the median, floored at a day so a daily series is not
+        // A share of the median, floored at a day so a daily series is not
         // held to an impossible standard.
-        let isRegular = spread <= max(1.0, median * 0.25)
+        let isRegular = spread <= max(1.0, median * regularityTolerance)
 
         guard let due = calendar.date(byAdding: .day, value: Int(median.rounded()), to: last)
         else { return nil }

@@ -130,6 +130,18 @@ struct ReadingWrappedYearTests: WrappedFixtures {
         #expect(ReadingWrapped.fastestFinish(in: entries, calendar: utc)?.perDay == 40)
     }
 
+    /// An 80-chapter manga stamped with one day is 14.7 hours at 11 minutes:
+    /// under the sixteen-hour ceiling, so it used to pass as a binge. Same-day
+    /// is also exactly what an importer writes, and size is the only tell.
+    @Test("A large same-day sprint is an import, not a binge")
+    func largeSameDayIsRejected() {
+        let entries = [
+            libraryEntry(1, total: 80, start: day("2026-03-01"),
+                         finish: day("2026-03-01"), type: "manga")
+        ]
+        #expect(ReadingWrapped.fastestFinish(in: entries, calendar: utc) == nil)
+    }
+
     @Test("The thing you have been reading longest is still unfinished")
     func longestRunningIsUnfinished() throws {
         let entries = [
