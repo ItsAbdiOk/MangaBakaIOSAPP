@@ -50,6 +50,7 @@ struct SeriesDetailView: View {
         extras.full.map { series.filling(gapsFrom: $0) } ?? series
     }
     @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         ScrollView {
             // The mockup's order, which is an argument about what a reader
@@ -96,8 +97,7 @@ struct SeriesDetailView: View {
                 .ignoresSafeArea()
         }
         .scrollEdgeEffectStyle(.hard, for: .top)
-        .navigationTitle(shown.displayTitle ?? "Series")
-        .navigationBarTitleDisplayMode(.inline)
+        .detailBarTitle(shown.displayTitle ?? "Series")
         .fullScreenCover(item: $openCoversAt) { start in
             CoverGallery(
                 series: shown,
