@@ -1,4 +1,4 @@
-# Next week — "help people find the work faster"
+# Roadmap — "help people find the work faster"
 
 Abdi, 2026-09-11: nothing here reproduces copyrighted material. Every item
 links to the official product, the official reader, or a first-party store,
@@ -43,7 +43,7 @@ Weekly limit reset before any of it is built.
    manga; that is correct. Webtoons' free first episodes are the real preview
    and item 2 lands on them. 1 day on top of item 4.
 
-## Same theme, my suggestions — take or leave
+## Same theme — accepted by Abdi 2026-09-11, part of the roadmap
 
 - **Scan the barcode in a shop.** VisionKit's on-device scanner reads the ISBN
   off a physical volume → Google Books resolves the title → MangaBaka search
