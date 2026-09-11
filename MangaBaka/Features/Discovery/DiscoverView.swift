@@ -190,6 +190,7 @@ struct DiscoverView: View {
                             // than sliding in over it, which is what makes the
                             // tap read as opening the thing you touched.
                             .zoomSource(row.id, series.id)
+                            .arrives()
                             // Fetch when the reader reaches the run-up to the
                             // end, not the end itself: by the time the last
                             // card is visible it is already too late to load
@@ -211,8 +212,11 @@ struct DiscoverView: View {
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                // A row settles on a card, not between two.
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }

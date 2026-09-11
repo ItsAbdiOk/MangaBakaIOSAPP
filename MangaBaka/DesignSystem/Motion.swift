@@ -68,3 +68,28 @@ private struct NumericTransition: ViewModifier {
         }
     }
 }
+
+extension View {
+    /// A card in a horizontal row arrives rather than appears: entering from
+    /// the edge it comes up from a little smaller and a little faded, and
+    /// leaves the same way. The gallery already did this; the cover rows on
+    /// Discover, the library and the series page did not, and the difference
+    /// is most of what makes a shelf feel like the App Store's rather than a
+    /// list. Identity under Reduce Motion.
+    func arrives() -> some View {
+        modifier(ArrivalTransition())
+    }
+}
+
+private struct ArrivalTransition: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.scrollTransition(.interactive, axis: .horizontal) { [reduceMotion] view, phase in
+            let distance = reduceMotion ? 0 : abs(phase.value)
+            return view
+                .scaleEffect(1 - distance * 0.06)
+                .opacity(1 - distance * 0.4)
+        }
+    }
+}

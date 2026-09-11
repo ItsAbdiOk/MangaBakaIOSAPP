@@ -46,11 +46,14 @@ struct DetailOnwardRows: View {
                             }
                             .zoomSource("related", relation.series.id)
                             .buttonStyle(.press)
+                            .arrives()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }
@@ -88,11 +91,14 @@ struct DetailOnwardRows: View {
                                 }
                                 .buttonStyle(.press)
                                 .zoomSource(title, item.id)
+                                .arrives()
                             }
                         }
                         .padding(.horizontal, Metrics.gutter)
+                        .scrollTargetLayout()
                     }
                     .scrollIndicators(.hidden)
+                    .scrollTargetBehavior(.viewAligned)
                 }
             }
         }

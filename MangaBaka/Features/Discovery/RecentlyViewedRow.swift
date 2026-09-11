@@ -54,11 +54,14 @@ struct RecentlyViewedRow: View {
                             }
                             .buttonStyle(.press)
                             .zoomSource("recent", series.id)
+                            .arrives()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }

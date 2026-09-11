@@ -214,11 +214,14 @@ struct StackSavedStrip: View {
                             }
                             .buttonStyle(.press)
                             .zoomSource("saved", series.id)
+                            .arrives()
                         }
                     }
                     .padding(.bottom, 4)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
             }
         }
         .padding(.horizontal, Metrics.gutterStack)

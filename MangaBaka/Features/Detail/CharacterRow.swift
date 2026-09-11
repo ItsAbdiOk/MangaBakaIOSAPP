@@ -31,11 +31,14 @@ struct CharacterRow: View {
                     HStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(characters) { character in
                             portraitCell(character)
+                                .arrives()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }

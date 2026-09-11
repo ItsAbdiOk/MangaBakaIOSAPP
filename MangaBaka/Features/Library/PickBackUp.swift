@@ -28,13 +28,16 @@ struct PickBackUp: View {
                         ForEach(entries) { entry in
                             if let series = entry.series {
                                 card(entry, series: series)
+                                    .arrives()
                             }
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
                     .padding(.vertical, 2)
+                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
             }
             .padding(.top, Metrics.sectionGap)
         }
