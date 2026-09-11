@@ -42,16 +42,24 @@ final class LensCounts {
     }
 
     /// Fetches counts for lenses not yet counted this session.
+    ///
+    /// A lens is "asked" once an answer lands, not once the walk starts.
+    /// Marking all of them up front meant a walk cancelled by leaving the
+    /// screen abandoned the lenses it had not reached for the session, and a
+    /// count that did not come back was never asked for again — a
+    /// cancellation and a failure both treated as answers.
     func load(_ lenses: [SearchLens]) {
         let pending = lenses.filter { !asked.contains($0.id) }
         guard !pending.isEmpty, running == nil else { return }
-        pending.forEach { asked.insert($0.id) }
 
         running = Task { [repository] in
             for lens in pending {
                 if Task.isCancelled { return }
                 let total = await repository.count(lens.query)
-                if let total { counts[lens.id] = total }
+                if let total {
+                    counts[lens.id] = total
+                    asked.insert(lens.id)
+                }
                 try? await Task.sleep(for: Self.spacing)
             }
             running = nil

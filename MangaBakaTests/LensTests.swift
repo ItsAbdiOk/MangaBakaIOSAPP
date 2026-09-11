@@ -78,6 +78,59 @@ struct LensTests {
         #expect(repository.calls == 2, "the idle screen is returned to constantly")
     }
 
+    /// Leaving Search cancels the walk. The lenses it had not reached were
+    /// already marked as asked, so they were never counted for the rest of
+    /// the session — a cancellation treated as an answer.
+    @Test("Lenses a cancelled walk never reached are counted next time")
+    func cancelledWalkIsResumed() async throws {
+        let repository = CountingRepository()
+        let counts = LensCounts(repository: repository)
+        let lenses = Array(SearchLens.presets.prefix(3))
+
+        counts.load(lenses)
+        try await Task.sleep(for: .milliseconds(100))
+        counts.cancel()
+        let reached = repository.calls
+        #expect(reached < lenses.count, "The walk must still have had lenses left")
+
+        counts.load(lenses)
+        try await Task.sleep(for: .milliseconds(900))
+        #expect(repository.calls == lenses.count, "Every lens counted exactly once across the two walks")
+    }
+
+    /// A count that did not come back — offline, rate limited — is not an
+    /// answer either, and was likewise marked as asked for the session.
+    @Test("An unanswered count is asked again next time")
+    func unansweredCountIsRetried() async throws {
+        let repository = FlakyRepository()
+        let counts = LensCounts(repository: repository)
+        let lens = try #require(SearchLens.presets.first)
+
+        counts.load([lens])
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(counts.counts[lens.id] == nil)
+
+        counts.load([lens])
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(counts.counts[lens.id] == 12, "The second ask must reach the network")
+    }
+
+    /// Fails the first ask, answers the rest.
+    private final class FlakyRepository: StubRepositoryBase, @unchecked Sendable {
+        private let lock = NSLock()
+        private var asks = 0
+
+        override func count(_ query: SearchQuery) async -> Int? {
+            first() ? nil : 12
+        }
+
+        private func first() -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            asks += 1
+            return asks == 1
+        }
+    }
+
     @Test("A lens saved from a filter keeps the filter, not the page")
     func savingResetsThePage() throws {
         let store = SearchLensStore(defaults: try defaults())
