@@ -184,23 +184,68 @@ struct JumpIndex: View {
     let targets: [(letter: String, id: Int)]
     let onJump: (Int) -> Void
 
+    // The whole capsule is one hit area (Contacts' pattern), not 26 separate
+    // 20x13pt buttons — those were far under the 44pt minimum and undiscoverable.
+    // A zero-distance drag still fires once, so a tap keeps working.
+    @State private var activeIndex = 0
+    @State private var railHeight: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 1) {
-            ForEach(targets, id: \.letter) { target in
-                Button { onJump(target.id) } label: {
-                    Text(target.letter)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Palette.textTertiary)
-                        .frame(width: 20, height: 13)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.press)
+            ForEach(Array(targets.enumerated()), id: \.element.letter) { index, target in
+                Text(target.letter)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(index == activeIndex ? Palette.accent : Palette.textTertiary)
+                    .frame(width: 20, height: 13)
             }
         }
         .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: Capsule())
+        .contentShape(Rectangle())
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { railHeight = $0 }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in update(atY: value.location.y) }
+        )
         .padding(.trailing, 3)
+        .sensoryFeedback(Haptics.selection, trigger: activeIndex)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Jump to a letter")
+        .accessibilityValue(currentLetter)
+        .accessibilityAdjustableAction { direction in adjust(direction) }
+    }
+
+    private var currentLetter: String {
+        targets.indices.contains(activeIndex) ? targets[activeIndex].letter : ""
+    }
+
+    private func update(atY y: CGFloat) {
+        guard !targets.isEmpty else { return }
+        let index = Self.letterIndex(atY: y, height: railHeight, count: targets.count)
+        guard index != activeIndex else { return }
+        activeIndex = index
+        onJump(targets[index].id)
+    }
+
+    private func adjust(_ direction: AccessibilityAdjustmentDirection) {
+        guard !targets.isEmpty else { return }
+        let delta = direction == .increment ? 1 : -1
+        let index = min(max(activeIndex + delta, 0), targets.count - 1)
+        guard index != activeIndex else { return }
+        activeIndex = index
+        onJump(targets[index].id)
+    }
+
+    /// Pure so the drag maths is testable without a live gesture or view
+    /// hierarchy. Divides the rail evenly across `count` letters; clamps
+    /// past either edge so a finger sliding off the top or bottom still
+    /// lands on the first or last letter instead of losing the gesture.
+    nonisolated static func letterIndex(atY y: CGFloat, height: CGFloat, count: Int) -> Int {
+        guard count > 0, height > 0 else { return 0 }
+        let clampedY = min(max(y, 0), height)
+        let fraction = clampedY / height
+        let raw = Int(fraction * CGFloat(count))
+        return min(max(raw, 0), count - 1)
     }
 }
 
