@@ -205,7 +205,6 @@ struct AccountCard: View {
                 Task { await onSave() }
             }
             .disabled(!TokenStore.looksValid(entry))
-            .opacity(TokenStore.looksValid(entry) ? 1 : 0.5)
         }
     }
 }

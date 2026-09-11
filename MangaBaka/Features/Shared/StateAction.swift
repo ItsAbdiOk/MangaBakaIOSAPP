@@ -22,6 +22,15 @@ struct StateAction: View {
     var weight: Weight = .wayOut
     let action: () -> Void
 
+    /// A disabled control is a different control, not a faded live one.
+    ///
+    /// Call sites used to reach for `.opacity(0.5)`, which halves the
+    /// foreground AND the background together and leaves dim text on a dim
+    /// fill: Apple's audit measured the Settings "Save" button at 2.27:1 that
+    /// way. Reading it here means every `StateAction` gets the right
+    /// treatment instead of each caller remembering to.
+    @Environment(\.isEnabled) private var isEnabled
+
     var body: some View {
         Button(action: action) {
             Text(title)
@@ -42,7 +51,8 @@ struct StateAction: View {
     }
 
     private var foreground: Color {
-        switch weight {
+        guard isEnabled else { return Palette.textMuted }
+        return switch weight {
         case .fixes: Palette.onAccent
         case .wayOut: Palette.textPrimary
         case .aside: Palette.textSecondary
@@ -50,10 +60,11 @@ struct StateAction: View {
     }
 
     private var background: Color {
-        switch weight {
+        guard isEnabled else { return Palette.surfaceInset }
+        return switch weight {
         case .fixes: Palette.accent
         case .wayOut: Palette.surfaceChip
-        case .aside: .clear
+        case .aside: Color.clear
         }
     }
 }
