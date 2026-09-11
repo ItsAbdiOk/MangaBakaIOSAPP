@@ -149,10 +149,15 @@ extension SeriesRepository {
             // was written under whatever the format setting was at the time,
             // and turning a format off should empty it from what is already on
             // the phone rather than only from the next fetch.
-            let series = entries
+            //
+            // A row that fails to decode makes the whole read a miss. It used
+            // to be dropped with `try?`, and a twenty-row feed came back as
+            // fourteen, served as a hit, with nothing to say why — the format
+            // filter on the next line makes a short feed look expected.
+            let series = try entries
                 .compactMap { entry -> Series? in
                     guard let row = byID[entry.seriesId] else { return nil }
-                    return try? decoder.decode(Series.self, from: row.payload)
+                    return try decoder.decode(Series.self, from: row.payload)
                 }
                 .filter(allowsFormat)
             return (series, metadata?.cachedAt)

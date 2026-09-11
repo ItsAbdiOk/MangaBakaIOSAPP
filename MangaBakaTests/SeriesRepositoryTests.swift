@@ -50,6 +50,35 @@ struct SeriesRepositoryTests {
         #expect(URLProtocolStub.requests.count == 1)
     }
 
+    /// A cached row that no longer decodes — a field the model has since
+    /// made required, a payload an older build wrote — was dropped one row at
+    /// a time, and the short feed served as a cache hit. Twenty became
+    /// fourteen with nothing logged and a filter left to take the blame.
+    @Test("A cached row that fails to decode makes the feed a miss, not a shorter hit")
+    func undecodableRowIsAMiss() async throws {
+        URLProtocolStub.setHandler { [data = payload(ids: [1, 2, 3])] _ in .respond(.init(body: data)) }
+        defer { URLProtocolStub.reset() }
+
+        let database = try AppDatabase.inMemory()
+        let repository = SeriesRepository(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            database: database,
+            clock: TestClock()
+        )
+        _ = await repository.feed(.rising, forceRefresh: false)
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE series SET payload = ? WHERE id = 2", arguments: [Data("{".utf8)])
+        }
+
+        let result = await repository.feed(.rising, forceRefresh: false)
+        #expect(result.series.map(\.id) == [1, 2, 3], "The feed must not come back short")
+        #expect(result.origin == .network, "One bad row is a miss; the feed is refetched")
+    }
+
     /// The point of the cache: a second visit costs nothing.
     @Test("A second read inside the freshness window issues no request")
     func secondReadIsFree() async throws {
