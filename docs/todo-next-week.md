@@ -38,20 +38,19 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 |---|---|
 | Webtoons / Tapas opening in-app from the "Read in English" chips | Abdi's phone with Webtoons installed; the simulator has no such app, so it opens Safari there |
 | mangabaka.org links opening in the app | MangaBaka hosting `/.well-known/apple-app-site-association` (draft ask above); then our Associated Domains entitlement, on a TestFlight day |
-| App Intents ("What's due this week", "Open <series>") | Nothing — next cheapest, ~half a day |
+| Siri / Shortcuts intents tried for real | Only the logic is tested; Siri is not on the simulator. Try "What's due this week in MangaBaka" on the phone |
 | Spotlight cover thumbnails | A measurement: covers live in URLCache, 900 through it per launch is a cost to see first |
-| Colour bleed behind rows (item 3, second half) | Nothing hard: BlurHash gives the colour; a per-row ambient tint is a gradient too. The gloss itself shipped (`glossy covers` commit) |
-| All the volumes (item 4) | 2–3 days; first request is One Piece `/v1/series/377/images` to count volume covers. Data-source accounts: **Rakuten Books API** (App ID, free, no sales quota — Japanese covers, volume numbers, ISBNs, dates) and **DMM Books affiliate API** (account; `floor=comic`) — Abdi is making both accounts. Both are data sources like Google Books, not buy destinations for iOS readers; DMM's FANZA side is adult and must never be queried. Terms of each to be read before a request is written |
-| Preview beside a volume (item 5) | Item 4 |
-| Apple Books price line | Item 4's iTunes lookup |
-| Barcode scan | Camera: cannot be verified on the simulator. Needs Google Books ISBN resolve + VisionKit, ~1 day, then a phone check |
+| Volumes for series with no English ebook | Rakuten Books / DMM Books as Japanese-edition fillers once Abdi's accounts exist and their terms are read. DMM: `floor=comic` only, never FANZA. Until then such series show MangaBaka's editions or nothing |
+| Volumes: Google Books as ISBN resolver | Not needed yet — Apple's search answers by title. Revisit if a series' store name differs from every MangaBaka title |
+| Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
+| Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
 | New from a followed publisher | A design for "follow" |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
-| Volume covers unavailable for series with no English ebook | Rakuten/DMM above may close this gap for Japanese editions |
 
 ## From Abdi, in build order
 
 1. ~~Hero compression only when it has to.~~ Done, above.
+   (3: gloss done; colour bleed done `d1e7554`.)
 
 2. ~~"Read" opens the exact title in the official app.~~ Done as the chip
    row, above; phone check outstanding.
@@ -66,7 +65,10 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
    performance target *before* it defaults on. If it drops frames, detail page
    only. 1–2 days.
 
-4. **All the volumes, with official covers and buy links.** MangaBaka's
+4. **All the volumes, with official covers and buy links.** Done 2026-09-11
+   via the iTunes Search API (Apple Books shelf on the series page, official
+   covers, price, buy link; strict title+volume match). Japanese-only series
+   still wait on Rakuten/DMM. Original plan: MangaBaka's
    `/works` is editions for sale and is sparse (One Piece: 8 of 113). The
    order of sources, cheapest first — Amazon is not on it, for covers or
    anything else:
@@ -99,13 +101,10 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
   → the series page, with your library state on it ("you're on chapter 53").
   No terms issue; nothing leaves the phone but a title. The single most
   "find it faster" thing on this list. ~1 day.
-- **Price.** Apple Books' price beside MangaBaka's own listed price on the
-  volume sheet, from the same lookup as item 4. No Play Books price: nobody
-  here can buy there. Half a day once 4 exists.
-- **iOS search finds your library.** Spotlight half done (`0e9cbab`; no cover
-  thumbnails yet — covers are in URLCache, measure before pulling 900 through
-  it per launch). Still to do: App Intents for "What's due this week" and
-  "Open <series>". Half a day.
+- ~~Price.~~ Done with the Apple Books shelf (item 4 commit): the store's
+  price under each spine.
+- ~~iOS search finds your library.~~ Spotlight `0e9cbab`, App Intents
+  `114a43b`. Thumbnails outstanding (see the table).
 - **mangabaka.org links open in the app.** Our side done (`99135b7`); waiting
   on MangaBaka for the association file, then the entitlement.
 - ~~"Where to read, in your language."~~ Done (`f4de983`).
