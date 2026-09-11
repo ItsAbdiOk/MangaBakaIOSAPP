@@ -15,6 +15,9 @@ struct DiscoverView: View {
     private let pulse: CommunityPulseService?
     private let chaptersRead: Int
     @Environment(\.displayScale) private var displayScale
+    /// The card that says what this build added; see `ReleaseNotes`.
+    private let whatsNew: WhatsNewState?
+    private let hasCompletedOnboarding: Bool
 
     init(
         model: DiscoverModel,
@@ -22,8 +25,12 @@ struct DiscoverView: View {
         path: Binding<[Series]>,
         pulse: CommunityPulseService? = nil,
         chaptersRead: Int = 0,
+        whatsNew: WhatsNewState? = nil,
+        hasCompletedOnboarding: Bool = true,
         onOpenStack: @escaping () -> Void
     ) {
+        self.whatsNew = whatsNew
+        self.hasCompletedOnboarding = hasCompletedOnboarding
         _model = State(initialValue: model)
         self.recentlyViewed = recentlyViewed
         _path = path
@@ -57,6 +64,16 @@ struct DiscoverView: View {
                     StaleBar(headline: "Showing what you had", detail: detail) {
                         await model.load(forceRefresh: true)
                     }
+                }
+
+                // Above the stack shortcut, once, after an update. Not
+                // pinned and not a sheet: it is a note, and the screen it
+                // sits on is the point.
+                if let whatsNew, whatsNew.isDue(hasCompletedOnboarding: hasCompletedOnboarding) {
+                    WhatsNewCard(release: ReleaseNotes.current) {
+                        Motion.run(.snappy(duration: 0.25)) { whatsNew.dismiss() }
+                    }
+                    .padding(.top, 16)
                 }
 
                 openTheStack

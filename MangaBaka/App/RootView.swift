@@ -36,6 +36,7 @@ struct RootView: View {
     /// The library in iOS search. A struct with no state, so it is built here
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
+    @State private var whatsNew = WhatsNewState()
     private let bridge = IntentBridge.shared
     let onboarding: OnboardingState
 
@@ -146,6 +147,8 @@ struct RootView: View {
                         path: $discoverPath,
                         pulse: session.pulse,
                         chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries),
+                        whatsNew: whatsNew,
+                        hasCompletedOnboarding: onboarding.hasCompleted,
                         onOpenStack: { selection = .stack }
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
