@@ -102,7 +102,7 @@ struct SeriesDetailView: View {
                 .ignoresSafeArea()
         }
         .scrollEdgeEffectStyle(.hard, for: .top)
-        .detailBarTitle(shown.displayTitle ?? "Series")
+        .detailBarTitle(shown.displayTitle ?? "Series", shareURL: SeriesWebLink.url(for: shown))
         .fullScreenCover(item: $openCoversAt) { start in
             CoverGallery(
                 series: shown,

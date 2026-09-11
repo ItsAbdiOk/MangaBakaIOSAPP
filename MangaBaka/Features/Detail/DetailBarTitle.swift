@@ -15,6 +15,8 @@ import SwiftUI
 /// name, and the visible copy is a principal item that fades.
 struct DetailBarTitle: ViewModifier {
     let title: String
+    /// The page's link for the share sheet; nothing shown when nil.
+    var shareURL: URL?
     /// How far the hero has to travel before its own title is gone. Measured
     /// against the hero on an iPhone 16 Pro rather than picked: the title sits
     /// beside the cover, and the bar's copy should arrive as it leaves.
@@ -35,6 +37,22 @@ struct DetailBarTitle: ViewModifier {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The series' page on mangabaka.org, which is the link that
+                // will open in the app once the site hosts the association
+                // file. Until then it opens the site, which is still the
+                // right page.
+                if let shareURL {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShareLink(item: shareURL, subject: Text(title)) {
+                            Image(systemName: "square.and.arrow.up")
+                                // The back button beside it is white; an
+                                // accent glyph there read as a different
+                                // kind of control.
+                                .foregroundStyle(Palette.textPrimary)
+                        }
+                        .accessibilityLabel("Share \(title)")
+                    }
+                }
                 ToolbarItem(placement: .principal) {
                     Text(title)
                         .typeRowTitle()
@@ -50,7 +68,7 @@ struct DetailBarTitle: ViewModifier {
 }
 
 extension View {
-    func detailBarTitle(_ title: String) -> some View {
-        modifier(DetailBarTitle(title: title))
+    func detailBarTitle(_ title: String, shareURL: URL? = nil) -> some View {
+        modifier(DetailBarTitle(title: title, shareURL: shareURL))
     }
 }

@@ -43,7 +43,7 @@ struct RootView: View {
     // that one tab carries five destinations and was more than half this
     // type's body.
     @State var selection: AppTab = .discover
-    @State private var discoverPath: [Series] = []
+    @State var discoverPath: [Series] = []
     @State private var stackPath: [Series] = []
     @State var shelfPath: [Series] = []
     @State var showsSchedule = false
@@ -89,6 +89,12 @@ struct RootView: View {
             .task { await startSession() }
             // A library series tapped in Spotlight. The page opens in the
             // Library tab, which is where the reader's state on it lives.
+            // A mangabaka.org series link. Dormant until the site hosts the
+            // association file; see SeriesWebLink.
+            .onOpenURL { url in
+                guard let id = SeriesWebLink.seriesID(from: url) else { return }
+                Task { await openSeries(id: id) }
+            }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 guard let id = SpotlightIndex.seriesID(from: activity) else { return }
                 Task { await openFromSpotlight(seriesID: id) }

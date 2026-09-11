@@ -152,6 +152,21 @@ extension RootView {
     /// series it holds is the one the reader's state is attached to. A series
     /// that has since left the library is simply not opened — the index is
     /// rebuilt on the next launch.
+    /// Opens any series by id, from a link. The library first — no request,
+    /// and the reader's own copy — then the series record, which is the
+    /// request the page would make on arrival anyway. Discover, because a
+    /// link is a door into the app rather than into the reader's shelf.
+    func openSeries(id: Int) async {
+        if let mine = await librarySnapshot.all().first(where: { $0.seriesId == id })?.series {
+            selection = .library
+            shelfPath = [mine]
+            return
+        }
+        guard let series = await repository.extras(for: id).full else { return }
+        selection = .discover
+        discoverPath = [series]
+    }
+
     func openFromSpotlight(seriesID: Int) async {
         let entries = await librarySnapshot.all()
         guard let series = entries.first(where: { $0.seriesId == seriesID })?.series else { return }
