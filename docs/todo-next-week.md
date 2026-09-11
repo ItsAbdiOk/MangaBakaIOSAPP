@@ -27,14 +27,21 @@ Weekly limit reset before any of it is built.
    performance target *before* it defaults on. If it drops frames, detail page
    only. 1–2 days.
 
-4. **All the volumes, with official covers and buy links.** MangaBaka's `/works`
-   is sparse (One Piece: 8 of 113). Fill from the iTunes Search API
-   (`media=ebook`, `country=` for the storefront — free, no key, cover + Apple
-   Books link) and Google Books (ISBNs, Play Books link, 1,000/day). Strict
-   match: title and volume number must both appear in the result, else the row
-   says "couldn't verify" rather than showing a wrong cover. Lazy per visible
-   spine, cached on disk. No Amazon: PA-API needs an Associates account —
-   Abdi's signup, not mine. 2–3 days.
+4. **All the volumes, with official covers and buy links.** MangaBaka's
+   `/works` is editions for sale and is sparse (One Piece: 8 of 113). The
+   order of sources, cheapest first — Amazon is not on it, for covers or
+   anything else:
+   - **Count**: MangaBaka `final_volume`; Wikidata for the big series.
+   - **Covers**: MangaBaka `/v1/series/{id}/images` first — already decoded,
+     rows carry `type: volume`, `index`, `language`, and may hold far more
+     than `/works`. *First thing: one request for One Piece to see.*
+   - **Fill**: iTunes Search API (`media=ebook`, `country=` — 600px art, Apple
+     Books link, one result per volume sold), then Google Books (ISBN
+     resolver, smaller images, Play Books link, 1,000/day).
+   - Strict match: title and volume number must both appear, else "couldn't
+     verify" rather than a wrong cover. Lazy per visible spine, cached on disk.
+   - Series with no English ebook and no MangaBaka images get "N volumes,
+     covers unavailable", not a fake. 2–3 days.
 
 5. **"Preview" beside a volume, only where a preview exists.** Apple: the Books
    app link, where "Sample" is native. Google: `webReaderLink` in-app when
