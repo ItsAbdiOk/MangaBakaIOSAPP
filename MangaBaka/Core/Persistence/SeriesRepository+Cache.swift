@@ -37,6 +37,7 @@ extension SeriesRepository {
             try CachedDetail(
                 seriesId: seriesId, payload: payload, cachedAt: clock.now
             ).save(db)
+            try Self.trimDetail(db)
         }
     }
 
@@ -186,6 +187,31 @@ extension SeriesRepository {
                     .insert(db)
             }
             try FeedMetadata(feedKey: feed.cacheKey, cachedAt: now).save(db)
+            try Self.trimOrphans(db)
         }
+    }
+
+    /// Deletes series rows no feed points at any more.
+    ///
+    /// Replacing a feed deleted its index rows and left the series rows they
+    /// pointed at, so the table grew on every fetch, forever — and the count
+    /// Discover shows as "series cached" was counting the orphans. Called
+    /// after every feed write and every feed discard; the detail cache is
+    /// bounded by its own age check and trimmed the same way below.
+    static func trimOrphans(_ db: Database) throws {
+        try db.execute(sql: "DELETE FROM series WHERE id NOT IN (SELECT seriesId FROM feedEntry)")
+    }
+
+    /// The detail cache keeps the newest rows only. A series page is about
+    /// 300 KB, and nothing else bounds the table.
+    static let detailRowLimit = 200
+
+    static func trimDetail(_ db: Database) throws {
+        try db.execute(sql: """
+            DELETE FROM seriesDetail WHERE seriesId NOT IN (
+                SELECT seriesId FROM seriesDetail
+                ORDER BY cachedAt DESC, seriesId DESC LIMIT \(detailRowLimit)
+            )
+            """)
     }
 }

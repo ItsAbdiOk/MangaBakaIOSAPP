@@ -10,7 +10,11 @@ import GRDB
 ///
 /// Series are stored as an encoded JSON blob rather than as columns, so that
 /// adding a field to `Series` needs no schema migration — the cache is derived
-/// data with a one-day lifetime, and anything missing is simply refetched.
+/// data and anything missing is simply refetched. (This once claimed a
+/// one-day lifetime. There was none: feed rows turn over when their feed is
+/// refetched, on freshness windows from zero to six hours per feed, and
+/// orphaned rows are trimmed on every write; the detail cache is aged at six
+/// hours and capped by row count.)
 ///
 /// To be precise about what this does NOT do: the blob is a re-encoding of the
 /// decoded `Series`, so fields the app does not model are dropped, not

@@ -79,6 +79,23 @@ struct SeriesRepositoryTests {
         #expect(result.origin == .network, "One bad row is a miss; the feed is refetched")
     }
 
+    /// Replacing a feed deleted its index and left the series rows it pointed
+    /// at. The table grew on every fetch, and the "series cached" count on
+    /// Discover counted the orphans nothing could reach.
+    @Test("Refetching a feed does not leave its old rows behind")
+    func refetchTrimsOrphans() async throws {
+        URLProtocolStub.setHandler { [data = payload(ids: [1, 2, 3])] _ in .respond(.init(body: data)) }
+        let repository = try makeRepository(clock: TestClock())
+        _ = await repository.feed(.rising, forceRefresh: false)
+        URLProtocolStub.reset()
+
+        URLProtocolStub.setHandler { [data = payload(ids: [9])] _ in .respond(.init(body: data)) }
+        defer { URLProtocolStub.reset() }
+        _ = await repository.feed(.rising, forceRefresh: true)
+
+        #expect(await repository.cachedSeriesCount() == 1, "Three orphans were still counted as cached")
+    }
+
     /// The point of the cache: a second visit costs nothing.
     @Test("A second read inside the freshness window issues no request")
     func secondReadIsFree() async throws {

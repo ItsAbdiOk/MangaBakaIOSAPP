@@ -618,6 +618,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // saves and is not derived from the filter.
             try db.execute(sql: "DELETE FROM feedEntry")
             try db.execute(sql: "DELETE FROM feedMetadata")
+            try Self.trimOrphans(db)
         }
     }
 
