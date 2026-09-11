@@ -57,6 +57,28 @@ extension View {
     //
     // Named by role rather than by size, so a change to the spec happens here
     // once rather than at every call site.
+    //
+    // **Every style under 14pt is anchored to `.subheadline`, not to the text
+    // style nearest its size.** Apple's accessibility audit reported "Dynamic
+    // Type font sizes are partially unsupported" on fifteen elements, all of
+    // them small type, and the reason was measured rather than guessed at
+    // (`DynamicTypeRampTests`): `UIFontMetrics` returns the SAME value for
+    // `.caption2` at extraSmall, small, medium and large, so a caption2-anchored
+    // style does not change at all across the bottom third of the range.
+    //
+    //   caption2     stalls=3   10.7 10.7 10.7 10.7 14.7 16.0 ... 38.7
+    //   caption1     stalls=2    8.7  8.7  8.7 10.7 12.3 13.7 ... 33.3
+    //   footnote     stalls=2    9.3  9.3  9.3 10.7 11.7 13.0 ... 30.3
+    //   subheadline  stalls=0    8.3  9.3 10.0 10.7 11.7 12.7 ... 30.3
+    //
+    // (base size 10.5, every content size category, smallest first)
+    //
+    // `.subheadline` is the smallest anchor that moves at every step, and it
+    // renders identically at the default size — large is the reference
+    // category, so every anchor returns the base size there. The cost is at
+    // the very top: a 10.5pt meta line reaches 30pt rather than 39pt at the
+    // largest accessibility size. Still nearly triple, and it grows the whole
+    // way rather than standing still for four steps.
 
     func typeScreenTitle() -> some View {
         scaledFont(size: 36, weight: .bold, relativeTo: .largeTitle, tracking: -1.2, lineHeight: 1.05)
@@ -79,7 +101,7 @@ extension View {
     }
     /// SKIP and SAVE on the stack card.
     func typeBadge() -> some View {
-        scaledFont(size: 12, weight: .bold, relativeTo: .caption, tracking: 1)
+        scaledFont(size: 12, weight: .bold, relativeTo: .subheadline, tracking: 1)
     }
     func typeDetailHeroTitle() -> some View {
         scaledFont(size: 24, weight: .bold, relativeTo: .title2, tracking: -0.7, lineHeight: 1.15)
@@ -106,30 +128,27 @@ extension View {
         scaledFont(size: 13.5, weight: .semibold, relativeTo: .subheadline)
     }
     func typeSubtitle() -> some View {
-        scaledFont(size: 13, weight: .regular, relativeTo: .footnote, lineHeight: 1.45)
+        scaledFont(size: 13, weight: .regular, relativeTo: .subheadline, lineHeight: 1.45)
     }
     func typeChip() -> some View {
-        scaledFont(size: 12.5, weight: .medium, relativeTo: .footnote)
+        scaledFont(size: 12.5, weight: .medium, relativeTo: .subheadline)
     }
     func typeCardTitle() -> some View {
-        scaledFont(size: 12, weight: .semibold, relativeTo: .caption, lineHeight: 1.25)
-    }
-    func typeWordmark() -> some View {
-        scaledFont(size: 12, weight: .bold, relativeTo: .caption, tracking: 2.2)
+        scaledFont(size: 12, weight: .semibold, relativeTo: .subheadline, lineHeight: 1.25)
     }
     func typeSmallMeta() -> some View {
-        scaledFont(size: 11.5, weight: .regular, relativeTo: .caption)
+        scaledFont(size: 11.5, weight: .regular, relativeTo: .subheadline)
     }
     func typeEyebrow() -> some View {
-        scaledFont(size: 11, weight: .semibold, relativeTo: .caption2, tracking: 0.7)
+        scaledFont(size: 11, weight: .semibold, relativeTo: .subheadline, tracking: 0.7)
     }
     func typeFootnote() -> some View {
-        scaledFont(size: 11, weight: .regular, relativeTo: .caption2, lineHeight: 1.55)
+        scaledFont(size: 11, weight: .regular, relativeTo: .subheadline, lineHeight: 1.55)
     }
     func typeGridMeta() -> some View {
-        scaledFont(size: 10.5, weight: .regular, relativeTo: .caption2)
+        scaledFont(size: 10.5, weight: .regular, relativeTo: .subheadline)
     }
     func typeTabLabel() -> some View {
-        scaledFont(size: 9.5, weight: .semibold, relativeTo: .caption2)
+        scaledFont(size: 9.5, weight: .semibold, relativeTo: .subheadline)
     }
 }

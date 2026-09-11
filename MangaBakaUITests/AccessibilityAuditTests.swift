@@ -42,7 +42,21 @@ final class AccessibilityAuditTests: XCTestCase {
         var lines: [String] = []
         try app.performAccessibilityAudit(for: Self.audits) { issue in
             let element = issue.element?.description ?? "unknown element"
-            lines.append("\(screen)\t\(issue.auditType)\t\(issue.compactDescription)\t\(element)")
+            // The frame, because "Contrast failed" on a title drawn in a colour
+            // that measures 18:1 against the app's ground is not a claim about
+            // the colour — it is a claim about what is really behind it at that
+            // point on screen. Without coordinates the report can only be
+            // guessed at, and it was.
+            let frame = issue.element.map { element -> String in
+                let rect = element.frame
+                return String(
+                    format: "%.0f,%.0f %.0fx%.0f",
+                    rect.origin.x, rect.origin.y, rect.size.width, rect.size.height
+                )
+            } ?? "-"
+            lines.append(
+                "\(screen)\t\(issue.auditType)\t\(issue.compactDescription)\t\(element)\t\(frame)"
+            )
             // false = do not ignore; the issue still fails the test.
             return false
         }
