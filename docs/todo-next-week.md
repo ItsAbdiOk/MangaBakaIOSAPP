@@ -30,6 +30,25 @@ Weekly limit reset before any of it is built.
   (torn row on refresh — the review's suggested guard was wrong, the test
   caught it), L10, W16. P-F12 was already settled by `2f78286`.
 
+## Not done yet, and what is holding each one back
+
+Kept current so nothing is forgotten. Abdi, 2026-09-11.
+
+| Item | Blocked on |
+|---|---|
+| Webtoons / Tapas opening in-app from the "Read in English" chips | Abdi's phone with Webtoons installed; the simulator has no such app, so it opens Safari there |
+| mangabaka.org links opening in the app | MangaBaka hosting `/.well-known/apple-app-site-association` (draft ask above); then our Associated Domains entitlement, on a TestFlight day |
+| App Intents ("What's due this week", "Open <series>") | Nothing — next cheapest, ~half a day |
+| Spotlight cover thumbnails | A measurement: covers live in URLCache, 900 through it per launch is a cost to see first |
+| Glass covers + colour bleed (item 3) | The 16 Pro and the performance target: scroll frame time before it defaults on |
+| All the volumes (item 4) | 2–3 days; first request is One Piece `/v1/series/377/images` to count volume covers. Data-source accounts: **Rakuten Books API** (App ID, free, no sales quota — Japanese covers, volume numbers, ISBNs, dates) and **DMM Books affiliate API** (account; `floor=comic`) — Abdi is making both accounts. Both are data sources like Google Books, not buy destinations for iOS readers; DMM's FANZA side is adult and must never be queried. Terms of each to be read before a request is written |
+| Preview beside a volume (item 5) | Item 4 |
+| Apple Books price line | Item 4's iTunes lookup |
+| Barcode scan | Camera: cannot be verified on the simulator. Needs Google Books ISBN resolve + VisionKit, ~1 day, then a phone check |
+| New from a followed publisher | A design for "follow" |
+| The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
+| Volume covers unavailable for series with no English ebook | Rakuten/DMM above may close this gap for Japanese editions |
+
 ## From Abdi, in build order
 
 1. ~~Hero compression only when it has to.~~ Done, above.
