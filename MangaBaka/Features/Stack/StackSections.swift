@@ -144,6 +144,7 @@ struct StackCaption: View {
 struct StackSavedStrip: View {
     let saved: [Series]
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
     /// Opens the Library tab. "Shelf ›" was styled as a link — accent colour,
     /// chevron and all — and did nothing when tapped.
     let onOpenShelf: () -> Void
@@ -200,7 +201,10 @@ struct StackSavedStrip: View {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 10) {
                         ForEach(saved) { series in
-                            Button { path.append(series) } label: {
+                            Button {
+                                zoomRoute?.source = ZoomRoute.id("saved", series.id)
+                                path.append(series)
+                            } label: {
                                 CoverImage(
                                     cover: series.cover,
                                     width: Metrics.coverSavedStripWidth,
@@ -209,6 +213,7 @@ struct StackSavedStrip: View {
                                 )
                             }
                             .buttonStyle(.press)
+                            .zoomSource("saved", series.id)
                         }
                     }
                     .padding(.bottom, 4)

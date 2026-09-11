@@ -23,6 +23,7 @@ struct ScheduleRow: View {
                 .opacity(work.cadence == nil ? 0.55 : 1)
             }
             .buttonStyle(.press)
+            .zoomSource("schedule", work.series.id)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(work.series.displayTitle ?? "Untitled series")

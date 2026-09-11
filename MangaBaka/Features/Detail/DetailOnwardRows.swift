@@ -12,6 +12,7 @@ struct DetailOnwardRows: View {
     let alsoLike: [Series]
     let isLoading: Bool
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     var body: some View {
         relatedRow
@@ -33,13 +34,17 @@ struct DetailOnwardRows: View {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(relationships) { relation in
-                            Button { path.append(relation.series) } label: {
+                            Button {
+                                zoomRoute?.source = ZoomRoute.id("related", relation.series.id)
+                                path.append(relation.series)
+                            } label: {
                                 CoverCard(
                                     series: relation.series,
                                     width: Metrics.coverDetailRowWidth,
                                     meta: relation.label
                                 )
                             }
+                            .zoomSource("related", relation.series.id)
                             .buttonStyle(.press)
                         }
                     }
@@ -75,10 +80,14 @@ struct DetailOnwardRows: View {
                     ScrollView(.horizontal) {
                         HStack(alignment: .top, spacing: Metrics.gapCovers) {
                             ForEach(items) { item in
-                                Button { path.append(item) } label: {
+                                Button {
+                                    zoomRoute?.source = ZoomRoute.id(title, item.id)
+                                    path.append(item)
+                                } label: {
                                     CoverCard(series: item, width: Metrics.coverDetailRowWidth)
                                 }
                                 .buttonStyle(.press)
+                                .zoomSource(title, item.id)
                             }
                         }
                         .padding(.horizontal, Metrics.gutter)

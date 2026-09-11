@@ -8,6 +8,7 @@ import SwiftUI
 struct StackView: View {
     @State private var model: StackModel
     @Binding private var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     @State private var drag: CGSize = .zero
     @State private var hint = StackHint()
@@ -108,7 +109,8 @@ struct StackView: View {
                         }
                     }
                     .haptic(Haptics.settled, onEach: settles)
-                    .onTapGesture { path.append(current) }
+                    .onTapGesture { open(current) }
+                    .zoomSource("stack", current.id)
                     // VoiceOver cannot perform a drag, so saving and skipping
                     // are exposed as actions too. The buttons below are the
                     // visible equivalent.
@@ -219,6 +221,12 @@ struct StackView: View {
             }
     }
 
+    /// Opens the current card's page, growing out of the card.
+    private func open(_ series: Series) {
+        zoomRoute?.source = ZoomRoute.id("stack", series.id)
+        path.append(series)
+    }
+
     /// The one path for a reaction from any of its three triggers — the drag,
     /// the buttons, the VoiceOver actions — so the confirmation cannot be
     /// missed by one of them. Said after the save has landed, because only
@@ -246,7 +254,7 @@ struct StackView: View {
                 Task { await react(.skipped) }
             }
 
-            Button { if let current = model.current { path.append(current) } } label: {
+            Button { if let current = model.current { open(current) } } label: {
                 Text("Details")
                     .typeRowTitle()
                     .foregroundStyle(Palette.textPrimary)

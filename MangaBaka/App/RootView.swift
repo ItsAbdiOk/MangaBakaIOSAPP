@@ -61,8 +61,8 @@ struct RootView: View {
     @State private var discoverModel: DiscoverModel?
     @State private var stackModel: StackModel?
     /// The cover the detail page should grow out of, and the namespace the
-    /// source and destination share. Nil falls back to an ordinary push.
-    @State private var zoomSource: String?
+    /// source and destination share. See `ZoomRoute`.
+    @State private var zoomRoute = ZoomRoute()
     @Namespace private var coverTransition
     /// Real covers behind the first onboarding screen. Empty until the rising
     /// feed answers, which is the case the screen is built to survive.
@@ -80,6 +80,8 @@ struct RootView: View {
             // The one everybody expects. A re-tap pops to root and changes
             // nothing here, so it stays silent.
             .sensoryFeedback(Haptics.selection, trigger: selection)
+            .environment(\.zoomNamespace, coverTransition)
+            .environment(\.zoomRoute, zoomRoute)
             .task { await startSession() }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(
@@ -118,8 +120,6 @@ struct RootView: View {
                         model: discoverModel ?? DiscoverModel(repository: repository),
                         recentlyViewed: session.recentlyViewed,
                         path: $discoverPath,
-                        zoomSource: $zoomSource,
-                        namespace: coverTransition,
                         pulse: session.pulse,
                         chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries),
                         onOpenStack: { selection = .stack }
@@ -284,10 +284,11 @@ struct RootView: View {
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
         .task { await session.recentlyViewed.record(series) }
-        // Grows out of the cover that was tapped. Only Discover marks its
-        // covers as sources so far; every other route falls through to the
-        // ordinary push, which is what an unmatched id already does.
-        .navigationTransition(.zoom(sourceID: zoomSource ?? "none", in: coverTransition))
+        // Grows out of the cover that was tapped. Every screen that pushes a
+        // series marks its covers with `.zoomSource`; a route that did not
+        // falls through to the ordinary push, which is what an unmatched id
+        // already does.
+        .navigationTransition(.zoom(sourceID: zoomRoute.source ?? "none", in: coverTransition))
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

@@ -9,8 +9,7 @@ struct DiscoverView: View {
     @Binding private var path: [Series]
     /// Which cover the reader tapped, so the detail page can grow out of that
     /// one. See `open(_:from:)`.
-    @Binding private var zoomSource: String?
-    private let namespace: Namespace.ID
+    @Environment(\.zoomRoute) private var zoomRoute
     private let onOpenStack: () -> Void
     /// The database's pulse, and the reader's own place in it.
     private let pulse: CommunityPulseService?
@@ -21,8 +20,6 @@ struct DiscoverView: View {
         model: DiscoverModel,
         recentlyViewed: RecentlyViewedModel? = nil,
         path: Binding<[Series]>,
-        zoomSource: Binding<String?>,
-        namespace: Namespace.ID,
         pulse: CommunityPulseService? = nil,
         chaptersRead: Int = 0,
         onOpenStack: @escaping () -> Void
@@ -30,8 +27,6 @@ struct DiscoverView: View {
         _model = State(initialValue: model)
         self.recentlyViewed = recentlyViewed
         _path = path
-        _zoomSource = zoomSource
-        self.namespace = namespace
         self.pulse = pulse
         self.chaptersRead = chaptersRead
         self.onOpenStack = onOpenStack
@@ -46,7 +41,7 @@ struct DiscoverView: View {
     /// recorded here because the destination is built afterwards and has no
     /// other way to know which cover the reader actually touched.
     private func open(_ series: Series, from row: String) {
-        zoomSource = "\(row)#\(series.id)"
+        zoomRoute?.source = ZoomRoute.id(row, series.id)
         path.append(series)
     }
 
@@ -69,7 +64,7 @@ struct DiscoverView: View {
                 // Above the API's rows because it is the only one built from
                 // what this reader actually did.
                 if let recentlyViewed {
-                    RecentlyViewedRow(model: recentlyViewed, namespace: namespace) {
+                    RecentlyViewedRow(model: recentlyViewed) {
                         open($0, from: "recent")
                     }
                 }
@@ -194,7 +189,7 @@ struct DiscoverView: View {
                             // The detail page grows out of this cover rather
                             // than sliding in over it, which is what makes the
                             // tap read as opening the thing you touched.
-                            .matchedTransitionSource(id: "\(row.id)#\(series.id)", in: namespace)
+                            .zoomSource(row.id, series.id)
                             // Fetch when the reader reaches the run-up to the
                             // end, not the end itself: by the time the last
                             // card is visible it is already too late to load

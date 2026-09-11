@@ -7,6 +7,7 @@ import SwiftUI
 struct MixResults: View {
     let model: MixModel
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     var body: some View {
         if model.isRunning {
@@ -47,10 +48,14 @@ struct MixResults: View {
                     spacing: 16
                 ) {
                     ForEach(model.results) { recommendation in
-                        Button { path.append(recommendation.series) } label: {
+                        Button {
+                            zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
+                            path.append(recommendation.series)
+                        } label: {
                             card(recommendation)
                         }
                         .buttonStyle(.press)
+                        .zoomSource("mix", recommendation.series.id)
                     }
                 }
             }

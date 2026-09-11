@@ -56,3 +56,37 @@ struct MotionSystemFlagTests {
         }
     }
 }
+
+/// The zoom transition needs every screen that pushes a series to say which
+/// cover it came from. It was wired on Discover alone; every other route
+/// slid. The rule here is n of n: a file that pushes a series sets the route
+/// and marks a source, or names itself below with the reason it does not.
+@Suite("Every push into a series page grows out of its cover", .enabled(if: SourceTree.isAvailable))
+struct ZoomRouteCoverageTests {
+    /// Pushes without a zoom source, each with its reason.
+    private static let exempt: [String: String] = [
+        "MangaBaka/Features/Library/ShelfDetailView.swift": "unreachable; delete-or-rewire is Abdi's call"
+    ]
+    /// Files whose source mark lives in a sibling row view.
+    private static let markedElsewhere: [String: String] = [
+        "MangaBaka/Features/Schedule/ScheduleView.swift": "MangaBaka/Features/Schedule/ScheduleRow.swift"
+    ]
+
+    @Test("A file that pushes a series sets the zoom route and marks a source")
+    func pushersSetTheRoute() throws {
+        let files = try SourceTree.swiftFiles(under: "MangaBaka/Features")
+        var pushers = 0
+        for file in files where !Self.exempt.keys.contains(file) {
+            let source = try SourceTree.read(file)
+            guard source.contains("path.append(") else { continue }
+            pushers += 1
+            #expect(
+                source.contains("zoomRoute?.source = ZoomRoute.id("),
+                "\(file) pushes a series with no zoom route"
+            )
+            let marked = try SourceTree.read(Self.markedElsewhere[file] ?? file)
+            #expect(marked.contains(".zoomSource("), "\(file) sets a route but marks no source view")
+        }
+        #expect(pushers >= 8, "Fewer pushing files than expected: the sweep found \(pushers)")
+    }
+}

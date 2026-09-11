@@ -6,6 +6,7 @@ import SwiftUI
 struct PickBackUp: View {
     let entries: [LibraryEntry]
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     var body: some View {
         if !entries.isEmpty {
@@ -42,7 +43,10 @@ struct PickBackUp: View {
     /// A cover with a progress bar across its foot. `progress_chapter` against
     /// `total_chapters` is real for about three quarters of a library.
     private func card(_ entry: LibraryEntry, series: Series) -> some View {
-        Button { path.append(series) } label: {
+        Button {
+            zoomRoute?.source = ZoomRoute.id("pickup", series.id)
+            path.append(series)
+        } label: {
             VStack(alignment: .leading, spacing: 7) {
                 CoverImage(
                     cover: series.cover,
@@ -70,6 +74,7 @@ struct PickBackUp: View {
             .frame(width: Metrics.coverSavedStripWidth, alignment: .leading)
         }
         .buttonStyle(.press)
+        .zoomSource("pickup", series.id)
         .accessibilityLabel(
             "\(series.displayTitle ?? "Untitled series"), \(chapterLabel(entry))"
         )

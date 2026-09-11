@@ -4,6 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @Bindable var model: SearchModel
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
     /// Opens the genre and tag browser.
     ///
     /// Lives in the screen's own header rather than the navigation bar: the
@@ -236,7 +237,10 @@ struct SearchView: View {
     private var resultsGrid: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(model.results) { series in
-                Button { path.append(series) } label: {
+                Button {
+                    zoomRoute?.source = ZoomRoute.id("search", series.id)
+                    path.append(series)
+                } label: {
                     CoverCard(
                         series: series,
                         width: 111,
@@ -244,6 +248,7 @@ struct SearchView: View {
                         meta: DiscoverView.meta(for: series)
                     )
                 }
+                .zoomSource("search", series.id)
                 .buttonStyle(.press)
                 // Two rows from the bottom, so the next page is usually there
                 // before the reader arrives rather than after.

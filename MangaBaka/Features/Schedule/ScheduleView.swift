@@ -8,6 +8,7 @@ import SwiftUI
 struct ScheduleView: View {
     @State private var model: ScheduleModel
     @Binding private var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     init(model: ScheduleModel, path: Binding<[Series]>) {
         _model = State(initialValue: model)
@@ -229,7 +230,10 @@ struct ScheduleView: View {
 
             VStack(spacing: 0) {
                 ForEach(group.works) { work in
-                    ScheduleRow(work: work) { path.append(work.series) }
+                    ScheduleRow(work: work) {
+                        zoomRoute?.source = ZoomRoute.id("schedule", work.series.id)
+                        path.append(work.series)
+                    }
                 }
             }
             .padding(.top, 8)

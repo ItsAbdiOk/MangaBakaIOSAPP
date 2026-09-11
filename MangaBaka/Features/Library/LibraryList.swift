@@ -10,6 +10,7 @@ import SwiftUI
 struct LibraryList: View {
     @Bindable var model: LibraryModel
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
     /// Opens the edit sheet for one row. The redesign that replaced shelf
     /// cards with this list dropped the per-row edit, and the only copy
     /// survived on a screen nothing presents; marking a chapter read from
@@ -64,7 +65,9 @@ struct LibraryList: View {
 
     private func row(_ entry: LibraryEntry) -> some View {
         Button {
-            if let series = entry.series { path.append(series) }
+            guard let series = entry.series else { return }
+            zoomRoute?.source = ZoomRoute.id("library", series.id)
+            path.append(series)
         } label: {
             HStack(spacing: 12) {
                 if let series = entry.series {
@@ -109,6 +112,7 @@ struct LibraryList: View {
         .buttonStyle(.press)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("library-row")
+        .zoomSource("library", entry.seriesId)
         // A row is a link to the series; editing is a separate, deliberate act
         // rather than something a stray tap can do to real data.
         .accessibilityAction(named: "Edit") { onEdit(entry) }

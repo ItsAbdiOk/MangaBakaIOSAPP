@@ -18,6 +18,7 @@ import SwiftUI
 struct ReadingInsightsView: View {
     let entries: [LibraryEntry]
     @Binding var path: [Series]
+    @Environment(\.zoomRoute) private var zoomRoute
 
     /// Computed once when the library arrives, not on every body pass.
     ///
@@ -130,7 +131,9 @@ struct ReadingInsightsView: View {
 
     private func row(_ item: ReadingInsights.Behind, trailing: String) -> some View {
         Button {
-            if let series = item.series { path.append(series) }
+            guard let series = item.series else { return }
+            zoomRoute?.source = ZoomRoute.id("insights", series.id)
+            path.append(series)
         } label: {
             HStack(spacing: 12) {
                 if let series = item.series {
@@ -159,6 +162,7 @@ struct ReadingInsightsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.press)
+        .zoomSource("insights", item.entry.seriesId)
         .accessibilityElement(children: .combine)
     }
 
