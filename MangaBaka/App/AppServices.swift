@@ -139,7 +139,11 @@ struct AppServices {
     /// an in-memory one so the app still works, just without offline support
     /// until the next launch.
     private static func makeDatabase() -> AppDatabase {
-        if let onDisk = try? AppDatabase.onDisk() { return onDisk }
+        // The one unbounded piece of the launch path: a SQLite open, plus a
+        // migration on a version change. Measured on the simulator, cold,
+        // 2026-09-11: see the commit that added this interval.
+        let opened = Signposts.measure("Database open") { try? AppDatabase.onDisk() }
+        if let opened { return opened }
         return (try? AppDatabase.inMemory()) ?? {
             preconditionFailure("An in-memory SQLite database could not be opened.")
         }()

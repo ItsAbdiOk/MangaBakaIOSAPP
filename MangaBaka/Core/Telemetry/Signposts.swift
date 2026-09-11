@@ -39,4 +39,16 @@ enum Signposts {
         signposter.endInterval(name, state)
         return result
     }
+
+    /// The synchronous form, for work that happens before there is anything
+    /// to await — the composition root above all. The launch number quoted
+    /// in findings-todo (0.08 ms) was `didFinishLaunching`, which this app
+    /// does nothing in; the construction that matters happens after it, in
+    /// `AppServices.init`, and had no interval around it.
+    static func measure<T>(_ name: StaticString, _ body: () throws -> T) rethrows -> T {
+        let id = signposter.makeSignpostID()
+        let state = signposter.beginInterval(name, id: id)
+        defer { signposter.endInterval(name, state) }
+        return try body()
+    }
 }

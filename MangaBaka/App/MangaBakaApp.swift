@@ -7,7 +7,10 @@ struct MangaBakaApp: App {
     /// One property rather than nineteen, because the list had grown to the
     /// point where adding anything to it meant fighting the lint rather than
     /// thinking about the thing being added — which is the lint doing its job.
-    private let services = AppServices()
+    ///
+    /// Signposted: this is the launch work the 0.08 ms number never included,
+    /// visible in Instruments as "Services".
+    private let services = Signposts.measure("Services") { AppServices() }
 
     var body: some Scene {
         WindowGroup {
