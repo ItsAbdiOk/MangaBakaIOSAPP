@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The covers' colour, bleeding into the ground behind a row.
 ///
@@ -32,10 +33,15 @@ struct RowAmbient: View {
 
     var body: some View {
         if let colour = Self.tint(for: series) {
+            // Fades in as well as out. Starting at full strength on the
+            // section header drew a hard top edge, and the row read as a
+            // grey panel with a title on it rather than colour coming off
+            // the covers (Abdi's phone, 2026-09-11).
             LinearGradient(
                 stops: [
-                    .init(color: colour.opacity(Self.strength), location: 0),
-                    .init(color: colour.opacity(Self.strength * 0.5), location: 0.55),
+                    .init(color: .clear, location: 0),
+                    .init(color: colour.opacity(Self.strength), location: 0.3),
+                    .init(color: colour.opacity(Self.strength * 0.6), location: 0.65),
                     .init(color: .clear, location: 1)
                 ],
                 startPoint: .top,
@@ -57,10 +63,22 @@ struct RowAmbient: View {
             .compactMap(BlurHash.averageColour(of:))
         guard !colours.isEmpty else { return nil }
         let count = Double(colours.count)
-        return Color(
+        let mean = UIColor(
             red: colours.map(\.red).reduce(0, +) / count,
             green: colours.map(\.green).reduce(0, +) / count,
-            blue: colours.map(\.blue).reduce(0, +) / count
+            blue: colours.map(\.blue).reduce(0, +) / count,
+            alpha: 1
+        )
+        // The mean of six covers is nearly grey — on the Rising row it
+        // measured (28, 27, 26) at strength — so the hue is pushed back up
+        // and the colour lifted before it goes on a near-black ground. The
+        // factors are GUESSES.
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
+        mean.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
+        return Color(
+            hue: hue,
+            saturation: min(1, saturation * 2.2 + 0.2),
+            brightness: max(brightness, 0.7)
         )
     }
 }
