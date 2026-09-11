@@ -125,7 +125,12 @@ enum SortOrder {
         ("trending_7d", "Trending (7d)"),
         ("trending_30d", "Trending (30d)"),
         ("score_desc", "Score"),
-        ("popularity_desc", "Popularity"),
+        // `popularity` is a rank — 1 is the most popular — so ascending is
+        // the order a reader means by "popularity". `popularity_desc` put
+        // the least-rated series first: for publisher=Shueisha it answered
+        // three unrated entries where `popularity_asc` answers ONE PIECE
+        // (591k ratings) first. Verified live 2026-09-11.
+        ("popularity_asc", "Popularity"),
         ("latest", "Latest"),
         ("random", "Random")
     ]

@@ -21,8 +21,31 @@ struct PublisherView: View {
     let repository: any SeriesRepositoryProtocol
     @Binding var path: [Series]
 
+    /// How the list is ordered. Popularity first: "what is this studio
+    /// known for"; newest for "what are they doing now" (Abdi, 2026-09-11).
+    enum Order: String, CaseIterable {
+        // Ascending: MangaBaka's popularity is a rank. See SortOrder.
+        case popular = "popularity_asc"
+        case newest = "latest"
+
+        var label: String {
+            switch self {
+            case .popular: "Most popular"
+            case .newest: "Newest"
+            }
+        }
+    }
+
+    @State private var order: Order = .popular
     @State private var detail: PublisherDetail?
     @State private var series: [Series] = []
+    /// Everything MangaBaka attributes to the name, from the count endpoint —
+    /// Shueisha is thousands, and the header said "100" because that was the
+    /// page (Abdi's screenshot, 2026-09-11). Nil until counted.
+    @State private var total: Int?
+    @State private var page = 1
+    @State private var hasMore = false
+    @State private var isLoadingMore = false
     @State private var isLoading = true
     @State private var failed = false
     @Environment(\.openURL) private var openURL
@@ -37,6 +60,7 @@ struct PublisherView: View {
             VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
                 header
                 links
+                if !isLoading || !series.isEmpty { orderPicker }
                 if isLoading {
                     CoverSkeletonGrid()
                 } else if series.isEmpty {
@@ -57,7 +81,34 @@ struct PublisherView: View {
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
-        .task { await load() }
+        .task(id: order) { await load() }
+    }
+
+    /// Two chips, the way the Library filters states. A picked chip is the
+    /// accent; the other is plain, so which one is on reads at a glance.
+    private var orderPicker: some View {
+        HStack(spacing: 8) {
+            ForEach(Order.allCases, id: \.self) { candidate in
+                Button {
+                    guard candidate != order else { return }
+                    order = candidate
+                } label: {
+                    Text(candidate.label)
+                        .typeChip()
+                        .foregroundStyle(candidate == order ? Palette.onAccent : Palette.textPrimary)
+                        .padding(.horizontal, 13)
+                        .frame(minHeight: Metrics.headerPill + 8)
+                        .background(
+                            candidate == order ? Palette.accent : Palette.surfaceChip, in: Capsule()
+                        )
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.press)
+                .accessibilityAddTraits(candidate == order ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, Metrics.gutter)
+        .sensoryFeedback(Haptics.selection, trigger: order)
     }
 
     private var header: some View {
@@ -128,9 +179,10 @@ struct PublisherView: View {
                 Text("From \(name)")
                     .typeDetailSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
-                Text("\(series.count)")
+                Text((total ?? series.count).formatted())
                     .typeChip()
                     .foregroundStyle(Palette.textMuted)
+                    .countsNotCuts()
             }
             .padding(.horizontal, Metrics.gutter)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
@@ -146,31 +198,67 @@ struct PublisherView: View {
                     }
                     .zoomSource("publisher", item.id)
                     .buttonStyle(.press)
+                    // Two rows from the bottom, as Search does, so the next
+                    // page is usually there before the reader is.
+                    .onAppear {
+                        guard hasMore, !isLoadingMore,
+                              let index = series.firstIndex(where: { $0.id == item.id }),
+                              index >= series.count - 6
+                        else { return }
+                        Task { await loadMore() }
+                    }
                 }
             }
             .padding(.horizontal, Metrics.gutter)
+            if isLoadingMore {
+                ProgressView()
+                    .tint(Palette.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            }
         }
     }
 
-    /// The series list first — it is what the page is for — and the
-    /// directory record beside it when the name is known there. A name the
+    private var query: SearchQuery {
+        var query = SearchQuery(publisher: name)
+        query.sort = order.rawValue
+        query.page = page
+        return query
+    }
+
+    /// The series list first — it is what the page is for — the total beside
+    /// it, and the directory record when the name is known there. A name the
     /// directory lacks (a studio, most often) is not a failure.
     private func load() async {
         isLoading = true
         failed = false
-        var query = SearchQuery(publisher: name)
-        query.sort = "popularity_desc"
-        // One page, larger than Search's: REDICE STUDIO is 60 series and the
-        // first cut showed 30 of them under a header saying 30.
-        query.limit = 100
+        page = 1
         async let found = repository.search(query)
+        async let counted = repository.count(query)
         async let record = catalogue.findPublisher(named: name)
         let result = await found
         series = result.series
+        hasMore = series.count >= query.limit
         if case .staleAfter = result.origin { failed = series.isEmpty }
-        if let id = await record?.publisherID {
+        total = await counted
+        if detail == nil, let id = await record?.publisherID {
             detail = await catalogue.publisher(id: id)
         }
         isLoading = false
+    }
+
+    /// The next page, appended; a short page is the end. Deduplicated,
+    /// because the API repeats a series across pages when its ordering
+    /// shifts between requests, and a duplicate id traps ForEach.
+    func loadMore() async {
+        guard hasMore, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        page += 1
+        let result = await repository.search(query)
+        let known = Set(series.map(\.id))
+        let additions = result.series.filter { !known.contains($0.id) }
+        series.append(contentsOf: additions)
+        hasMore = result.series.count >= query.limit
     }
 }

@@ -40,6 +40,18 @@ struct PublisherPageTests {
 
     /// The series' Publishers row names several; the sheet labels each with
     /// its role so "REDICE STUDIO · Original" is told from "Manta · English".
+    /// Both orders are ones the API sorts by (`sort_by=latest` checked live
+    /// on REDICE STUDIO, 2026-09-11: ids descending, the newest entries).
+    @Test("The page offers popularity and newest, as the API spells them")
+    func orders() {
+        #expect(PublisherView.Order.allCases.map(\.rawValue) == ["popularity_asc", "latest"])
+        #expect(SortOrder.label(for: "latest") != nil)
+        #expect(SortOrder.label(for: "popularity_asc") != nil)
+        // The rank runs the other way; the app once sent desc everywhere
+        // and every "Popularity" list led with the least-rated series.
+        #expect(SortOrder.label(for: "popularity_desc") == nil)
+    }
+
     @Test("The choice sheet labels a publisher with its role")
     func choiceLabel() {
         #expect(DetailCredits.choiceLabel(.init(name: "REDICE STUDIO", type: "Original", note: nil))
@@ -56,7 +68,13 @@ struct PublisherWiringTests {
     func wiring() throws {
         let view = try SourceTree.read("MangaBaka/Features/Detail/PublisherView.swift")
         #expect(view.contains("var query = SearchQuery(publisher: name)"))
-        #expect(view.contains("query.sort = \"popularity_desc\""))
+        #expect(view.contains("query.sort = order.rawValue"))
+        // The header is the count endpoint's total, not the page's length,
+        // and the grid pages: Shueisha said "100" when it is thousands.
+        #expect(view.contains("async let counted = repository.count(query)"))
+        #expect(view.contains("Text((total ?? series.count).formatted())"))
+        #expect(view.contains("hasMore = result.series.count >= query.limit"))
+        #expect(view.contains(".task(id: order) { await load() }"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
         #expect(credits.contains("onOpenPublisher(publishers[0].name)"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")

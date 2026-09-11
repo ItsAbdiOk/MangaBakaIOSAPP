@@ -157,7 +157,7 @@ final class SearchModel {
         if let genre { next.tags = [genre] }
         if let tag { next.tags = [tag] }
         if let publisher { next.publisher = publisher }
-        next.sort = "popularity_desc"
+        next.sort = "popularity_asc"
         // Assigned here, not in the task: a caller may read the query
         // straight back, and it should be the browse.
         appliedText = next.text

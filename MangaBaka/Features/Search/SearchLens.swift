@@ -34,7 +34,7 @@ struct SearchLens: Identifiable, Equatable, Sendable, Codable {
             id: "seinen-unfinished",
             name: "Seinen I never finished",
             rule: "tag: seinen · sort: popularity",
-            query: SearchQuery(sort: "popularity_desc", tags: ["Seinen"])
+            query: SearchQuery(sort: "popularity_asc", tags: ["Seinen"])
         ),
         SearchLens(
             id: "regression-funny",
