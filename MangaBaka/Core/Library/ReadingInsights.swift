@@ -95,7 +95,7 @@ enum ReadingInsights {
     /// One place, because `chaptersRead` and `hoursRead` each derived the
     /// completed-series rule themselves and would have drifted apart the first
     /// time one of them was corrected.
-    private static func chaptersCounted(for entry: LibraryEntry) -> Double {
+    static func chaptersCounted(for entry: LibraryEntry) -> Double {
         let progress = entry.progressChapter ?? 0
         guard entry.state == .completed else { return progress }
         return max(progress, entry.series?.totalChapters ?? 0)
