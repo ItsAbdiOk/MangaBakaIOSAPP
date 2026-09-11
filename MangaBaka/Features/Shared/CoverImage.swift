@@ -107,7 +107,50 @@ private struct CoverFrame: ViewModifier {
         .frame(width: width, height: height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay { CoverGloss(radius: radius) }
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
+    }
+}
+
+/// The sheen that makes a cover read as a pane of glass over the artwork.
+///
+/// Two gradients and a hairline, nothing that samples the pixels behind it:
+/// no blur, no material, so it costs the same on sixty cards as on one and
+/// needs no frame-time measurement (Abdi, 2026-09-11: "just shiny, glossy
+/// like a glass pane", not the 3D effect). A diagonal highlight from the top
+/// left that fades out before the middle, a faint lift along the top edge
+/// where light would catch the pane, and a half-point edge so the pane has
+/// a rim against the ground. The opacities are GUESSES, tuned by eye on the
+/// 16 Pro simulator against the Discover rows.
+struct CoverGloss: View {
+    let radius: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        shape
+            .fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.42), location: 0),
+                        .init(color: .white.opacity(0.10), location: 0.38),
+                        .init(color: .clear, location: 0.6)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [.white.opacity(0.6), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 2)
+                .padding(.horizontal, radius * 0.6)
+            }
+            .overlay { shape.strokeBorder(.white.opacity(0.35), lineWidth: 0.5) }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

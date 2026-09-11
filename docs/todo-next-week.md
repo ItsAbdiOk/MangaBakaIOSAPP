@@ -40,7 +40,7 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | mangabaka.org links opening in the app | MangaBaka hosting `/.well-known/apple-app-site-association` (draft ask above); then our Associated Domains entitlement, on a TestFlight day |
 | App Intents ("What's due this week", "Open <series>") | Nothing — next cheapest, ~half a day |
 | Spotlight cover thumbnails | A measurement: covers live in URLCache, 900 through it per launch is a cost to see first |
-| Glass covers + colour bleed (item 3) | The 16 Pro and the performance target: scroll frame time before it defaults on |
+| Colour bleed behind rows (item 3, second half) | Nothing hard: BlurHash gives the colour; a per-row ambient tint is a gradient too. The gloss itself shipped (`glossy covers` commit) |
 | All the volumes (item 4) | 2–3 days; first request is One Piece `/v1/series/377/images` to count volume covers. Data-source accounts: **Rakuten Books API** (App ID, free, no sales quota — Japanese covers, volume numbers, ISBNs, dates) and **DMM Books affiliate API** (account; `floor=comic`) — Abdi is making both accounts. Both are data sources like Google Books, not buy destinations for iOS readers; DMM's FANZA side is adult and must never be queried. Terms of each to be read before a request is written |
 | Preview beside a volume (item 5) | Item 4 |
 | Apple Books price line | Item 4's iTunes lookup |
@@ -56,7 +56,10 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 2. ~~"Read" opens the exact title in the official app.~~ Done as the chip
    row, above; phone check outstanding.
 
-3. **Glass covers everywhere, cover colour bleeding into the ground.** BlurHash
+3. **Glass covers everywhere, cover colour bleeding into the ground.** The
+   gloss is done 2026-09-11 — Abdi clarified it is a shiny pane, not the
+   3D material, so it is two gradients and a rim, free on sixty cards, no
+   device measurement needed. The colour bleed remains. Original note: BlurHash
    already gives a dominant colour per card for free; a per-row ambient tint is
    an average of the visible cards'. Glass over ~60 cards is GPU work: build it
    behind a flag and measure scroll frame time on the 16 Pro with the

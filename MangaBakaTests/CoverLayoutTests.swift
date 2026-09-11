@@ -38,4 +38,22 @@ struct CoverLayoutTests {
         #expect(!source.contains("cover.aspectRatio ??"))
         #expect(source.contains(".frame(width: width, height: height)"))
     }
+
+}
+
+/// Every cover is a pane of glass: a sheen, not a material. A material or a
+/// blur samples the pixels behind it on every card, which is the GPU cost the
+/// roadmap wanted measured first; a gradient is free.
+@Suite("Cover gloss", .enabled(if: SourceTree.isAvailable))
+struct CoverGlossTests {
+    @Test("Covers carry the gloss, and the gloss is gradients only")
+    func glossIsCheap() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Shared/CoverImage.swift")
+        #expect(source.contains(".overlay { CoverGloss(radius: radius) }"))
+        let gloss = try #require(source.range(of: "struct CoverGloss"))
+        let body = source[gloss.lowerBound...]
+        #expect(!body.contains("Material"), "No material: it samples the artwork behind it")
+        #expect(!body.contains(".blur("))
+        #expect(body.contains("allowsHitTesting(false)"), "The sheen must not eat the tap")
+    }
 }
