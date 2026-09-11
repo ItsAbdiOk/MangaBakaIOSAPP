@@ -245,6 +245,15 @@ actor ReleaseScheduleService {
             await self.finishBuild()
         }
     }
+    /// Stops a build. A full one is fifty-five throttled requests three
+    /// seconds apart, and until this existed nothing could stop it — the
+    /// loop's cancellation check was unreachable. Signing out calls it: the
+    /// series being measured are the previous account's.
+    func cancelBuild() {
+        buildTask?.cancel()
+        finishBuild()
+    }
+
     private func finishBuild() {
         buildTask = nil
         progress.isRunning = false

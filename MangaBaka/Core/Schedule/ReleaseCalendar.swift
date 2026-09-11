@@ -14,9 +14,14 @@ import Foundation
 /// personal one, and the screen says which of the two it is showing.
 actor ReleaseCalendar {
     private let client: APIClient
-    /// One page is twenty; the window is a few hundred. Four pages covers the
-    /// month without walking a list nobody will read to the end of.
-    private static let pages = 4
+    /// The window measured 246 works (`UpcomingWork.swift`), sorted by date
+    /// ascending, so a cap drops the furthest-out dates first. Six pages of
+    /// fifty is 300: past the measured window with room for it to grow, and
+    /// the last page is usually short so it costs what it holds. (This was
+    /// four pages of fifty under a comment that did the arithmetic with a
+    /// page size of twenty: 200 of 246, and the 46 lost were the ones a
+    /// reader would be waiting longest for.)
+    private static let pages = 6
     private static let perPage = 50
 
     private var cached: [UpcomingWork]?

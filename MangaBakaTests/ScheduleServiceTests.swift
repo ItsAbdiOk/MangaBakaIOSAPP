@@ -97,6 +97,12 @@ struct ScheduleServiceTests {
         #expect(model.isMeasuring, "The build is still running while the reader was away")
         #expect(model.isFollowingBuild, "and the screen must follow it again")
         model.stop()
+
+        // And it can be stopped: three minutes of throttled requests used to
+        // be unstoppable, with a cancellation check in the loop that nothing
+        // could reach.
+        await service.cancelBuild()
+        #expect(await !service.progress.isRunning)
     }
 
     private final class OneEntryLibrary: LibraryProviding, @unchecked Sendable {

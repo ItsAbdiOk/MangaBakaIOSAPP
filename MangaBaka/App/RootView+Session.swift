@@ -122,6 +122,7 @@ extension RootView {
         // library. Without this, "<title> has finished" arrives on the lock
         // screen for an account the reader has signed out of.
         await reminders.cancelAll()
+        await schedule.cancelBuild()
     }
 
     /// The work a launch does once the first screen is on the way.
