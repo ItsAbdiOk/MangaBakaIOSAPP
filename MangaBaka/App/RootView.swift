@@ -35,6 +35,7 @@ struct RootView: View {
     /// The library in iOS search. A struct with no state, so it is built here
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
+    private let bridge = IntentBridge.shared
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
@@ -89,6 +90,12 @@ struct RootView: View {
             .task { await startSession() }
             // A library series tapped in Spotlight. The page opens in the
             // Library tab, which is where the reader's state on it lives.
+            // "Open <series>" from Siri or Shortcuts; see IntentBridge.
+            .task(id: bridge.pendingSeriesID) {
+                guard let id = bridge.pendingSeriesID else { return }
+                bridge.pendingSeriesID = nil
+                await openSeries(id: id)
+            }
             // A mangabaka.org series link. Dormant until the site hosts the
             // association file; see SeriesWebLink.
             .onOpenURL { url in

@@ -12,6 +12,11 @@ struct MangaBakaApp: App {
     /// visible in Instruments as "Services".
     private let services = Signposts.measure("Services") { AppServices() }
 
+    init() {
+        // The intents' only way in; see IntentBridge.
+        IntentBridge.shared.services = services
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(
