@@ -133,6 +133,20 @@ struct Cover: Codable, Equatable, Sendable, Hashable {
         return smallestSufficient?.url ?? largest?.url ?? raw
     }
 
+    /// Every rendering this cover can be served at, smallest first: the
+    /// three sizes at the three pixel ratios. For a caller looking for a
+    /// copy the app already holds, whichever size a row happened to load.
+    var renderings: [URL] {
+        var out: [URL] = []
+        for base in [x150, x250, x350] {
+            guard let base else { continue }
+            for ratio in 1...3 {
+                out.append(ratio == 1 ? base : Self.rendering(of: base, atRatio: ratio))
+            }
+        }
+        return out
+    }
+
     private static func rendering(of base: URL, atRatio ratio: Int) -> URL {
         let swapped = base.absoluteString.replacingOccurrences(of: "@1", with: "@\(ratio)")
         return URL(string: swapped) ?? base

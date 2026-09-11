@@ -47,6 +47,24 @@ struct SpotlightIndexTests {
         )
     }
 
+    /// Only a cover the app already holds; the closure stands in for the
+    /// URL cache, and a miss on the small rendering falls through to the
+    /// larger one a row may have loaded instead.
+    @Test("A thumbnail is whichever rendering is cached, never a fetch")
+    func thumbnails() throws {
+        let cover = Cover(
+            raw: nil, x150: URL(string: "https://c/x150@1.jpg"), x250: URL(string: "https://c/x250@1.jpg"),
+            x350: nil, blurhash: nil, width: nil, height: nil
+        )
+        let series = SeriesFactory.make(id: 7, title: "S", cover: cover)
+        let items = SpotlightIndex.items(from: [entry(7, series: series)]) { url in
+            url.absoluteString.contains("x250@2") ? Data([1, 2, 3]) : nil
+        }
+        #expect(items[0].attributeSet.thumbnailData == Data([1, 2, 3]))
+        let none = SpotlightIndex.items(from: [entry(7, series: series)])
+        #expect(none[0].attributeSet.thumbnailData == nil)
+    }
+
     @Test("A tapped result names its series; anything else is ignored")
     func parsesActivity() {
         let ours = NSUserActivity(activityType: CSSearchableItemActionType)
