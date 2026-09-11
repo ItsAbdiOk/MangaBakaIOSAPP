@@ -31,6 +31,19 @@ struct CoverImage: View {
 
     var body: some View {
         content
+            // The label the property has always documented, finally applied.
+            // `accessibilityText` was declared, commented ("without this a
+            // reader using VoiceOver hears nothing at all"), and passed in at
+            // every call site — and never reached the view. Every bare
+            // CoverImage, which is what the swipe stack, the detail hero and
+            // the mix seed slots all draw, announced nothing. Found by
+            // Periphery reporting the property as assigned and never read.
+            //
+            // A card that wraps this in its own accessibility element still
+            // wins, so nothing is read twice.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText)
+            .accessibilityAddTraits(.isImage)
             // Keyed on the URL so a recycled row loads its new cover rather
             // than keeping the old one. `.task` also re-runs when the view
             // reappears, which is what makes a failed cover retry on scroll-back

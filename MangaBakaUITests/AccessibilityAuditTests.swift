@@ -51,11 +51,32 @@ final class AccessibilityAuditTests: XCTestCase {
         try? data.write(to: URL(fileURLWithPath: "/tmp/mb-a11y-\(safe).png"))
     }
 
+    /// Fails rather than audits when navigation did not arrive.
+    ///
+    /// The first version of the deeper tests tapped its way in and audited
+    /// whatever was on screen. Two of them never left Discover and filed its
+    /// issues under "Cover gallery" and "Stack mid-drag" — a false record,
+    /// which is worse than no record. Every screen now proves it is itself
+    /// before anything is measured.
+    private func arrived(_ element: XCUIElement, _ screen: String) -> Bool {
+        guard element.waitForExistence(timeout: 10) else {
+            XCTFail("never reached \(screen): its marker element never appeared")
+            return false
+        }
+        return true
+    }
+
     private func audit(_ app: XCUIApplication, screen: String) throws {
         capture(screen)
         var lines: [String] = []
         try app.performAccessibilityAudit(for: Self.audits) { issue in
-            let element = issue.element?.description ?? "unknown element"
+            // Flattened: an element's description can carry a newline — a
+            // synopsis, a long note — and one of those splits a row of this
+            // tab-separated log into two, which then reads as a screen named
+            // after half a sentence.
+            let element = (issue.element?.description ?? "unknown element")
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "\t", with: " ")
             // The frame, because "Contrast failed" on a title drawn in a colour
             // that measures 18:1 against the app's ground is not a claim about
             // the colour — it is a claim about what is really behind it at that
@@ -114,17 +135,37 @@ final class AccessibilityAuditTests: XCTestCase {
         }
     }
 
+    /// The label every hero cover carries, and nothing else does.
+    private static let heroCover = NSPredicate(format: "label BEGINSWITH[c] 'Cover art for'")
+
+    /// Opens a series from Discover and proves the page arrived.
+    ///
+    /// Taking `app.scrollViews.buttons.firstMatch` does NOT open a series: the
+    /// first button on Discover is the "Open the stack" card, so the series
+    /// detail audit spent its life auditing the Stack and filing the result
+    /// under "Series detail". Found on 2026-09-11 by looking at the screenshot
+    /// the audit had saved of itself.
+    private func openSeries(in app: XCUIApplication) throws -> XCUIElement {
+        app.tabBars.buttons["Discover"].tap()
+        let card = app.scrollViews.buttons.matching(
+            NSPredicate(format: "NOT (label BEGINSWITH[c] 'Open the stack')")
+        ).firstMatch
+        guard card.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no series on Discover to open — offline or empty feed")
+        }
+        card.tap()
+        let hero = app.buttons.matching(Self.heroCover).firstMatch
+        guard arrived(hero, "Series detail") else {
+            throw XCTSkip("the series page never opened")
+        }
+        return hero
+    }
+
     /// The series page, which carries more distinct controls than any other
     /// screen in the app.
     func testSeriesDetailPassesTheAudit() throws {
         let app = launchedApp()
-        app.tabBars.buttons["Discover"].tap()
-        let cover = app.scrollViews.buttons.firstMatch
-        guard cover.waitForExistence(timeout: 15) else {
-            throw XCTSkip("no series on Discover to open — offline or empty feed")
-        }
-        cover.tap()
-        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 10)
+        _ = try openSeries(in: app)
         try audit(app, screen: "Series detail")
     }
 
@@ -154,30 +195,23 @@ final class AccessibilityAuditTests: XCTestCase {
             throw XCTSkip("no Settings control found from Library")
         }
         gear.tap()
-        let blocked = app.buttons["Add a tag"]
+        let blocked = app.staticTexts["Block a tag"]
         guard blocked.waitForExistence(timeout: 10) else {
             throw XCTSkip("no blocked-tags control in Settings")
         }
         blocked.tap()
-        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
+        guard arrived(app.navigationBars["Block a tag"], "Blocked tags") else { return }
         try audit(app, screen: "Blocked tags")
     }
 
     /// The cover gallery, which is the only full-screen surface in the app.
     func testCoverGalleryPassesTheAudit() throws {
         let app = launchedApp()
-        app.tabBars.buttons["Discover"].tap()
-        let cover = app.scrollViews.buttons.firstMatch
-        guard cover.waitForExistence(timeout: 15) else {
-            throw XCTSkip("no series on Discover to open — offline or empty feed")
-        }
-        cover.tap()
-        let hero = app.images.firstMatch
-        guard hero.waitForExistence(timeout: 10) else {
-            throw XCTSkip("no cover on the series page to open")
-        }
+        let hero = try openSeries(in: app)
         hero.tap()
-        _ = app.images.firstMatch.waitForExistence(timeout: 5)
+        // The gallery is a full-screen cover with its own Done button; that
+        // button existing is the only proof it opened.
+        guard arrived(app.buttons["Done"], "Cover gallery") else { return }
         try audit(app, screen: "Cover gallery")
     }
 
@@ -200,20 +234,23 @@ final class AccessibilityAuditTests: XCTestCase {
         try audit(app, screen: "Library search results")
     }
 
-    /// A shelf, opened from the Library.
+    /// A shelf, opened from the Library — if anything still opens one.
+    ///
+    /// `ShelfDetailView` exists, is tested, and has a navigation destination
+    /// waiting for it in `RootView`. Nothing presents it: the cards that used
+    /// to, `LibraryView.shelfCards` and `searchResults`, had no callers and
+    /// were removed on 2026-09-11 as dead code. The Library shows a filter row
+    /// and a flat list instead, which is a reasonable replacement for shelves
+    /// — but it means a whole screen is unreachable, and whether to wire it
+    /// back up or delete it is Abdi's call, not one to make at 2am.
+    ///
+    /// Skipped with that reason rather than deleted, so the question stays
+    /// visible in the test output until it is answered.
     func testShelfDetailPassesTheAudit() throws {
-        let app = launchedApp()
-        app.tabBars.buttons["Library"].tap()
-        // The shelf cards carry their own label; take whichever exists.
-        let shelf = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'saved' OR label CONTAINS[c] 'skipped'")
-        ).firstMatch
-        guard shelf.waitForExistence(timeout: 15) else {
-            throw XCTSkip("no shelf on Library to open")
-        }
-        shelf.tap()
-        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
-        try audit(app, screen: "Shelf detail")
+        throw XCTSkip("""
+        ShelfDetailView is currently unreachable: nothing in LibraryView \
+        presents a shelf card. See docs/unknowns-2026-09-11.md.
+        """)
     }
 
     /// A stack card held mid-drag, with its SKIP or SAVE badge showing.
@@ -224,6 +261,7 @@ final class AccessibilityAuditTests: XCTestCase {
     func testStackMidDragPassesTheAudit() throws {
         let app = launchedApp()
         app.tabBars.buttons["Stack"].tap()
+        guard arrived(app.staticTexts["The stack"], "Stack") else { return }
         let card = app.images.firstMatch
         guard card.waitForExistence(timeout: 15) else {
             throw XCTSkip("no card on the stack — offline or empty feed")
