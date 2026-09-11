@@ -221,6 +221,7 @@
 		D1DBB836A67E6071D7F2122D /* DiscoverModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A88E5CDA1D68F1872D2A150 /* DiscoverModel.swift */; };
 		D32F84E236B001A48095FDF5 /* TagPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FC9CFE10BB557D397078857 /* TagPickerSheet.swift */; };
 		D3C2E39C16EBC0D5D98D207C /* OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 820BFEEE577A74175EF5D73C /* OnboardingTests.swift */; };
+		D460862BEFB390BF5A996C48 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0512EAD80FB05E74DB12739 /* Skeleton.swift */; };
 		D47E6A4ECAF9E8ADCF122FB9 /* WrappedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D46C42EFD976A3AB76A6F58 /* WrappedView.swift */; };
 		D6D267F291CFCB65E1A58A8C /* ReadingWrappedYearTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B5B05A9EDC8D3E828F63A28 /* ReadingWrappedYearTests.swift */; };
 		D7175152ED07C74D5BE05D3D /* CoverLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD591CE7A28AE2A62A1086B /* CoverLayoutTests.swift */; };
@@ -498,6 +499,7 @@
 		C022903651CFA32DCF973238 /* AnnouncedSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnouncedSection.swift; sourceTree = "<group>"; };
 		C03BC78B3B1A70BFA7874485 /* DetailFidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailFidelityTests.swift; sourceTree = "<group>"; };
 		C04455D2D35F351577BB848E /* LibrarySnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySnapshotTests.swift; sourceTree = "<group>"; };
+		C0512EAD80FB05E74DB12739 /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		C17FEBF52EDDF5C6DAE7F64B /* StackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackView.swift; sourceTree = "<group>"; };
 		C186B2EC6AF408B902991225 /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		C1AC0739345843A501290299 /* LibrarySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySnapshot.swift; sourceTree = "<group>"; };
@@ -972,6 +974,7 @@
 				E15F4ACDF669DA32B5C5C72E /* ScrollEdge.swift */,
 				69646670DCC536BED5522233 /* SearchClearButton.swift */,
 				E857F687662541E0D139B80D /* SectionHeader.swift */,
+				C0512EAD80FB05E74DB12739 /* Skeleton.swift */,
 				9752C955E989BF49E5B5DCF0 /* StateAction.swift */,
 				67151A4C694B9F92EFDACB90 /* Toast.swift */,
 			);
@@ -1432,6 +1435,7 @@
 				E0686B09027F676E2D889540 /* ShelfDetailView.swift in Sources */,
 				2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */,
 				6D1351733E978FE96420B4F8 /* Signposts.swift in Sources */,
+				D460862BEFB390BF5A996C48 /* Skeleton.swift in Sources */,
 				0192D74336094BD2A497CD0E /* StackHeader.swift in Sources */,
 				E1F5D98A5DA05C786E830AF3 /* StackHint.swift in Sources */,
 				1BB993A98D838AF858D9F13C /* StackModel.swift in Sources */,

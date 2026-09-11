@@ -172,7 +172,7 @@ struct DiscoverView: View {
             }
 
             if row.isLoading && row.series.isEmpty {
-                skeletonRow
+                CoverSkeletonRow()
             } else if row.series.isEmpty {
                 Text("Nothing here right now.")
                     .typeSmallMeta()
@@ -254,20 +254,6 @@ struct DiscoverView: View {
               let index = row.series.firstIndex(where: { $0.id == series.id })
         else { return false }
         return index >= row.series.count - Self.prefetchDistance
-    }
-
-    private var skeletonRow: some View {
-        HStack(spacing: Metrics.gapCovers) {
-            ForEach(0..<3, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous)
-                    .fill(Palette.imagePlaceholder)
-                    .frame(
-                        width: Metrics.coverRowWidth,
-                        height: Metrics.coverRowWidth / Metrics.coverAspect
-                    )
-            }
-        }
-        .padding(.horizontal, Metrics.gutter)
     }
 
     private var emptyState: some View {

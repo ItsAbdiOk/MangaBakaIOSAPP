@@ -211,13 +211,30 @@ struct LibraryView: View {
         .padding(.top, 16)
     }
 
+    /// Rows in the list's own shape, shimmering, rather than a spinner: the
+    /// first page lands in a third of a second and the layout must not jump.
     private var loading: some View {
-        HStack {
-            Spacer()
-            ProgressView().tint(Palette.textTertiary)
-            Spacer()
+        VStack(spacing: 0) {
+            ForEach(0..<6, id: \.self) { index in
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Palette.imagePlaceholder)
+                        .frame(width: 38, height: 38 / Metrics.coverAspect)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Capsule().fill(Palette.surface)
+                            .frame(width: index.isMultiple(of: 2) ? 180 : 130, height: 11)
+                        Capsule().fill(Palette.surface)
+                            .frame(width: 80, height: 9)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+            }
         }
-        .padding(.top, 80)
+        .padding(.horizontal, Metrics.gutter)
+        .padding(.top, 24)
+        .shimmering()
+        .accessibilityHidden(true)
     }
 
     private var noAccount: some View {

@@ -213,10 +213,9 @@ struct SearchView: View {
                 }
             )
         } else if model.isSearching {
-            ProgressView()
-                .tint(Palette.accent)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 60)
+            // The shape of the answer, not a spinner: the grid the results
+            // will fill, shimmering, so nothing jumps when they land.
+            CoverSkeletonGrid()
         } else if let message = model.message, model.results.isEmpty {
             errorState(message)
         } else if model.results.isEmpty {
