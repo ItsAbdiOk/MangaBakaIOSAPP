@@ -188,13 +188,24 @@ struct MixView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: Metrics.ctaPrimary)
-            .foregroundStyle(Palette.onAccent)
-            .background(Palette.accent, in: RoundedRectangle(cornerRadius: Metrics.radiusCard))
+            // A disabled control is a different control, not a faded live one.
+            // `.opacity(0.4)` over the accent fill left accent-coloured text on
+            // an accent-coloured ground, which Apple's audit reports as an
+            // outright contrast failure — the button is least readable exactly
+            // when the reader is trying to work out why they cannot press it.
+            .foregroundStyle(isBlendReady ? Palette.onAccent : Palette.textMuted)
+            .background(
+                isBlendReady ? Palette.accent : Palette.surfaceChip,
+                in: RoundedRectangle(cornerRadius: Metrics.radiusCard)
+            )
         }
         .disabled(model.seeds.isEmpty || model.isRunning)
-        .opacity(model.seeds.isEmpty ? 0.4 : 1)
         .padding(.horizontal, Metrics.gutter)
     }
+
+    /// Whether the blend can run. A blend needs at least one seed — the API
+    /// rejects a seedless request outright rather than returning a default set.
+    private var isBlendReady: Bool { !model.seeds.isEmpty }
 
     // MARK: Blend DNA
 

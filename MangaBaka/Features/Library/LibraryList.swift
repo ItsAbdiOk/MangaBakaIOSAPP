@@ -140,10 +140,13 @@ struct LibraryList: View {
             }
             .accessibilityLabel("Rated \(Int((rating / 20).rounded())) out of 5")
         } else {
-            Text("—")
-                .typeSmallMeta()
-                .foregroundStyle(Palette.textQuaternary)
-                .accessibilityHidden(true)
+            // Nothing at all, rather than a dash.
+            //
+            // On the device an unrated row ended in an em dash at
+            // `textQuaternary` — 2.52:1 on this ground, so barely visible, and
+            // meaningless on its own even when it was seen. A reader does not
+            // need to be told that the space where a rating would be is empty.
+            EmptyView()
         }
     }
 }
