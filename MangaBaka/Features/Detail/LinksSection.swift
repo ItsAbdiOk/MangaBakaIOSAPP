@@ -90,14 +90,13 @@ struct LinksSection: View {
                     .foregroundStyle(Palette.textPrimary)
                 Spacer()
                 if let language = link.language {
-                    if let flag = LanguageFlag.emoji(for: language) {
-                        Text(flag)
-                            .typeGridMeta()
-                            .accessibilityHidden(true)
-                    }
                     Text(LanguageFlag.name(for: language))
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)
+                    Text(LanguageFlag.emoji(for: language) ?? "")
+                        .typeGridMeta()
+                        .frame(width: Metrics.flagColumn, alignment: .trailing)
+                        .accessibilityHidden(true)
                 }
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 11, weight: .semibold))

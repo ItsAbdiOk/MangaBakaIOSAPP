@@ -26,9 +26,14 @@ extension SeriesTitle {
         /// "English · Turkish · Portuguese (Brazil)". It was the codes —
         /// "EN · TR · PT-BR" — which a reader had to decode themselves.
         var languageLabel: String { languages.map(LanguageFlag.name(for:)).joined(separator: " · ") }
-        /// "🇬🇧 🇹🇷 🇧🇷" — one per language that has one, in the same order.
+        /// "🇬🇧 🇹🇷 🇧🇷" — one per distinct flag, in the languages' order.
+        /// Distinct: "ja" and "ja-latn" are one country, and the row showed
+        /// two Japanese flags.
         var flags: String {
-            languages.compactMap(LanguageFlag.emoji(for:)).joined(separator: " ")
+            var seen: Set<String> = []
+            return languages.compactMap(LanguageFlag.emoji(for:))
+                .filter { seen.insert($0).inserted }
+                .joined(separator: " ")
         }
     }
 

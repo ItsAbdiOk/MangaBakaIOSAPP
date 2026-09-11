@@ -112,6 +112,10 @@ enum Metrics {
     /// Every cover in the app is 2:3.
     static let coverAspect: CGFloat = 2.0 / 3.0
 
+    /// The column a flag emoji sits in at the end of a language label, so
+    /// the flags line up down a list. One flag at the meta size is ~18pt.
+    static let flagColumn: CGFloat = 22
+
     // MARK: Content insets
     //
     // The tab capsule floats over content, so scroll views need bottom room or

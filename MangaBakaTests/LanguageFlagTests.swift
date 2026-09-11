@@ -39,5 +39,8 @@ struct LanguageFlagTests {
     func rowFlags() {
         let row = SeriesTitle.Alternative(title: "Solo Leveling", languages: ["en", "tr", "pt-br", "xx"])
         #expect(row.flags == "🇬🇧 🇹🇷 🇧🇷")
+        // "ja" and "ja-latn" are one country; ONE PUNCH-MAN showed two flags.
+        let japanese = SeriesTitle.Alternative(title: "ONE PUNCH-MAN", languages: ["ja", "ja-latn"])
+        #expect(japanese.flags == "🇯🇵")
     }
 }

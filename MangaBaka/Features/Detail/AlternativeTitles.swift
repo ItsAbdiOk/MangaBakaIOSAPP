@@ -119,14 +119,16 @@ struct AlternativeTitlesSheet: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                if !row.flags.isEmpty {
-                    Text(row.flags)
-                        .typeGridMeta()
-                        .accessibilityHidden(true)
-                }
                 Text(row.languageLabel)
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
+                    .multilineTextAlignment(.trailing)
+                // Last, in a fixed column, so the flags line up down the
+                // list whatever the length of the name beside them.
+                Text(row.flags)
+                    .typeGridMeta()
+                    .frame(minWidth: Metrics.flagColumn, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
