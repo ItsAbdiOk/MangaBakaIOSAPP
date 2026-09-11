@@ -123,6 +123,9 @@ extension RootView {
         // screen for an account the reader has signed out of.
         await reminders.cancelAll()
         await schedule.cancelBuild()
+        // Same reason as the reminders: the index names the previous
+        // account's library.
+        await spotlight.clear()
     }
 
     /// The work a launch does once the first screen is on the way.
@@ -138,6 +141,22 @@ extension RootView {
         // list between launches — so it is corrected on return rather than kept
         // alive by anything running in the background.
         await refreshReminders()
+        // After the reminders, which already walked the library: the snapshot
+        // is cached now, so this costs no request.
+        await spotlight.reindex(await librarySnapshot.all())
+    }
+
+    /// Opens the series a Spotlight result named, from the library walk.
+    ///
+    /// The snapshot, not a request: the item was indexed from it, and the
+    /// series it holds is the one the reader's state is attached to. A series
+    /// that has since left the library is simply not opened — the index is
+    /// rebuilt on the next launch.
+    func openFromSpotlight(seriesID: Int) async {
+        let entries = await librarySnapshot.all()
+        guard let series = entries.first(where: { $0.seriesId == seriesID })?.series else { return }
+        selection = .library
+        shelfPath = [series]
     }
 
     /// Rebuilds every pending reminder from the current schedule.

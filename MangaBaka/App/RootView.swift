@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 
 /// The tab shell.
@@ -31,6 +32,9 @@ struct RootView: View {
     let calendar: ReleaseCalendar
     let librarySnapshot: LibrarySnapshot
     let reminders: ReleaseReminders
+    /// The library in iOS search. A struct with no state, so it is built here
+    /// rather than passed through `AppServices`.
+    let spotlight = SpotlightIndex()
     let onboarding: OnboardingState
 
     @State private var toasts = ToastCentre()
@@ -83,6 +87,12 @@ struct RootView: View {
             .environment(\.zoomNamespace, coverTransition)
             .environment(\.zoomRoute, zoomRoute)
             .task { await startSession() }
+            // A library series tapped in Spotlight. The page opens in the
+            // Library tab, which is where the reader's state on it lives.
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                guard let id = SpotlightIndex.seriesID(from: activity) else { return }
+                Task { await openFromSpotlight(seriesID: id) }
+            }
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(
                     covers: onboardingCovers,
