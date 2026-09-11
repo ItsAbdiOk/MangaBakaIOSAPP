@@ -24,6 +24,9 @@ struct DetailHero: View {
     @State private var didCopy = false
     /// Bumped per copy, for the haptic; see `Haptics`.
     @State private var copies = 0
+    /// The full column's height at the current width, measured off-screen;
+    /// nil until the first layout. See `text`.
+    @State private var fullHeight: CGFloat?
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -37,7 +40,9 @@ struct DetailHero: View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: Metrics.gapHero) {
                 cover
-                text
+                // Stacked, the column has the whole width and nothing beside
+                // it to leave a gap under, so it is always the full form.
+                column(.full)
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, 24)
@@ -62,13 +67,7 @@ struct DetailHero: View {
         // taller column pushed the artwork half way down the screen, so the
         // page opened on a gap.
         //
-        // The column is deliberately short now: a kicker, the title, and one
-        // line for the other names. The schedule block and the byline both
-        // used to live here and both wrapped badly at this width — the column
-        // is about 230pt once the cover has taken its share — so a long title
-        // left over 160pt of empty space beside it, between the artwork and
-        // "Add to library". Reported on "Repeated Vice: I Refuse to Be
-        // Important Enough to Die", which is a five-line title.
+        // The column is as full as the cover's height allows; see `text`.
         HStack(alignment: .top, spacing: Metrics.gapHero) {
             cover
             text
@@ -78,33 +77,91 @@ struct DetailHero: View {
         .padding(.bottom, Metrics.gutter)
     }
 
+    /// How much of the hero the column shows beside the cover.
+    ///
+    /// The hero is an HStack of a fixed-height cover beside a column that
+    /// grows, so every line the column gains past the cover becomes empty
+    /// space under the artwork: on "Repeated Vice: I Refuse to Be Important
+    /// Enough to Die", a five-line title, over 160pt of it between the cover
+    /// and "Add to library". The first fix compressed the column for every
+    /// series — one-line schedule, no byline — which threw away the byline and
+    /// the cadence sentence on the short titles that had room for them.
+    ///
+    /// Now the full column is measured off-screen at the column's real width,
+    /// and shown only if it is no taller than the cover; otherwise the compact
+    /// form. Not `ViewThatFits`: inside a vertical ScrollView the proposed
+    /// height is unbounded, so every candidate "fits", and forcing a frame
+    /// height on it would fix the hero's height at the cover's and overlap
+    /// whatever follows when even the compact form runs longer.
+    enum Form: Equatable {
+        /// Eyebrow, pill and lateness, cadence sentence; kicker; title; byline.
+        case full
+        /// Pill and lateness on one line; kicker; title. No byline.
+        case compact
+    }
+
+    /// The form the measured full column earns beside a cover this tall.
+    ///
+    /// Compact until measured: the first frame has no height yet, and a gap
+    /// that appears and then closes is worse than a byline that appears.
+    nonisolated static func form(fullHeight: CGFloat?, coverHeight: CGFloat) -> Form {
+        guard let fullHeight else { return .compact }
+        return fullHeight <= coverHeight ? .full : .compact
+    }
+
+    /// The front cover's height. The fan behind it adds a few points, but the
+    /// space that reads as a gap is the one below the front cover.
+    private var coverHeight: CGFloat { Metrics.coverDetailHeroWidth / Metrics.coverAspect }
+
     private var text: some View {
-        VStack(alignment: .leading, spacing: 0) {
-                if schedule != nil || isScheduleLoading {
-                    DetailScheduleBlock(
-                        estimate: schedule,
-                        isLoading: isScheduleLoading,
-                        onOpen: onOpenSchedule
-                    )
-                    .padding(.bottom, 9)
-                }
-                if let kicker {
-                    Text(kicker)
-                        .typeEyebrow()
-                        .foregroundStyle(Palette.accent)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                title
-                // Directly under the name, because "is this the same book I
-                // know as X?" is a question asked on arrival rather than two
-                // screens down. A line and a count; the list itself is a
-                // sheet, since twenty-five names inline would push the
-                // synopsis off the screen.
-                AlternativeTitlesButton(
-                    titles: series.titles ?? [],
-                    shown: series.displayTitle
-                )
+        column(Self.form(fullHeight: fullHeight, coverHeight: coverHeight))
+            // The measurer is a background: it is proposed the visible
+            // column's width, which is what decides the wrapping, and its own
+            // height cannot grow the column — the whole point.
+            .background {
+                column(.full)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        fullHeight = $0
+                    }
             }
+    }
+
+    private func column(_ form: Form) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if schedule != nil || isScheduleLoading {
+                DetailScheduleBlock(
+                    estimate: schedule,
+                    isLoading: isScheduleLoading,
+                    onOpen: onOpenSchedule,
+                    isExpanded: form == .full
+                )
+                .padding(.bottom, form == .full ? 13 : 9)
+            }
+            if let kicker {
+                Text(kicker)
+                    .typeEyebrow()
+                    .foregroundStyle(Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            title
+            if form == .full, let byline {
+                Text(byline)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 7)
+            }
+            // Directly under the name, because "is this the same book I
+            // know as X?" is a question asked on arrival rather than two
+            // screens down. A line and a count; the list itself is a
+            // sheet, since twenty-five names inline would push the
+            // synopsis off the screen.
+            AlternativeTitlesButton(
+                titles: series.titles ?? [],
+                shown: series.displayTitle
+            )
+        }
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -161,4 +218,17 @@ struct DetailHero: View {
     /// The mockup writes "native title · author". A series with no native title
     /// distinct from the displayed one shows the author alone rather than a
     /// separator with nothing before it.
+    private var byline: String? {
+        let parts = [nativeTitle, series.authors?.joined(separator: ", ")]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var nativeTitle: String? {
+        guard let displayed = series.displayTitle else { return nil }
+        return series.titles?
+            .first { $0.traits.contains("native") && $0.title != displayed }?
+            .title
+    }
 }

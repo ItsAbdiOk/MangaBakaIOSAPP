@@ -13,6 +13,10 @@ struct DetailScheduleBlock: View {
     /// Whether the ask is still in flight, as opposed to finished with nothing.
     let isLoading: Bool
     let onOpen: (() -> Void)?
+    /// The full form: an "Estimated next" eyebrow above the line and the
+    /// cadence sentence below it. The hero asks for it only when the column
+    /// has the room; see `DetailHero.Form`.
+    var isExpanded: Bool = false
 
     var body: some View {
         if let estimate {
@@ -44,26 +48,46 @@ struct DetailScheduleBlock: View {
         .accessibilityLabel("Working out when the next chapter is due")
     }
 
-    /// One line, inside the hero's text column.
+    /// One line by default, inside the hero's text column; three when expanded.
     ///
-    /// **It used to be four stacked rows there**: an "Estimated next" eyebrow,
-    /// the pill and the lateness, and a cadence sentence. The column is about
-    /// 230pt wide once the cover has taken its share, so the lateness wrapped
-    /// to two lines and the cadence sentence to two more — six rows tall. The
-    /// hero is an HStack of a fixed-height cover beside a column that grows,
-    /// so every one of those rows became empty space under the artwork: on a
-    /// long title, over 160pt of it between the cover and "Add to library".
-    /// Reported on "Repeated Vice: I Refuse to Be Important Enough to Die",
-    /// which is a five-line title.
+    /// **It used to be four stacked rows there, always**: an "Estimated next"
+    /// eyebrow, the pill and the lateness, and a cadence sentence. The column
+    /// is about 230pt wide once the cover has taken its share, so the lateness
+    /// wrapped to two lines and the cadence sentence to two more — six rows
+    /// tall, and on a long title every one of them became empty space under
+    /// the artwork. Reported on "Repeated Vice: I Refuse to Be Important
+    /// Enough to Die", a five-line title.
     ///
-    /// Now: the pill and the lateness, on one line. The confidence and the
+    /// The one-line form is the pill and the lateness. The confidence and the
     /// lateness stay separate because a very regular series can still be late,
     /// and that pairing is the most informative thing this block says —
     /// collapsing them once produced "LIKELY — expected 6 days ago", a healthy
-    /// pill on a late chapter. The cadence sentence moves to the schedule
-    /// screen the chevron opens, which is where a reader who wants the rhythm
-    /// rather than the date is going anyway.
+    /// pill on a late chapter. The expanded form puts the eyebrow back above
+    /// and the cadence sentence back below, and the hero uses it only when it
+    /// has measured that there is room. The schedule screen the chevron opens
+    /// has the sentence either way.
     private func content(_ estimate: Cadence) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if isExpanded {
+                Text("Estimated next")
+                    .typeEyebrow()
+                    .foregroundStyle(Palette.textMuted)
+                    .padding(.bottom, 8)
+            }
+            line(estimate)
+            if isExpanded {
+                Text(ScheduleRow.cadenceLine(estimate))
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private func line(_ estimate: Cadence) -> some View {
         let now = Date()
         let isLate = estimate.state(asOf: now) == .late
 
@@ -95,7 +119,5 @@ struct DetailScheduleBlock: View {
             }
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
     }
 }
