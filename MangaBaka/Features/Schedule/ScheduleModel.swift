@@ -87,6 +87,17 @@ final class ScheduleModel {
 
     var remeasureLabel: String { snapshot.measuredAt == nil ? "Measure" : "Re-measure" }
 
+    /// What went wrong the last time, when something did and it left series
+    /// unmeasured. `ScheduleProgress.failure` was written by the build and
+    /// read by nothing, so a measurement in which every request failed ended
+    /// in silence with "55 still to measure" and no reason.
+    var measurementFailureLine: String? {
+        guard !isMeasuring, !isLoading, snapshot.pending > 0, let failure = progress.failure else {
+            return nil
+        }
+        return "\(snapshot.pending) not measured. \(failure)"
+    }
+
     /// Nothing has ever been measured, and nothing is being measured now.
     ///
     /// The first run showed a "Measure" button, a panel reading "0 ESTIMATED
@@ -241,6 +252,10 @@ final class ScheduleModel {
     func applyForTesting(_ snapshot: ScheduleSnapshot) {
         self.snapshot = snapshot
         isLoading = false
+    }
+
+    func applyForTesting(_ progress: ScheduleProgress) {
+        self.progress = progress
     }
 
     func stop() {

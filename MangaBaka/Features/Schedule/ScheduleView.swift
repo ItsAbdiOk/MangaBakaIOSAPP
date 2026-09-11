@@ -196,6 +196,13 @@ struct ScheduleView: View {
             .foregroundStyle(Palette.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 13)
+            if let failure = model.measurementFailureLine {
+                Text(failure)
+                    .typeFootnote()
+                    .foregroundStyle(Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 9)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(15)

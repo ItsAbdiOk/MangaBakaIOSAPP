@@ -367,11 +367,15 @@ actor ReleaseScheduleService {
             for row in rows {
                 let id: Int = row["seriesId"]
                 let payload: Data? = row["payload"]
-                out[id] = CacheRow(
-                    cadence: payload.flatMap { try? decoder.decode(Cadence.self, from: $0) },
-                    fetchedAt: row["fetchedAt"],
-                    failure: row["failure"]
-                )
+                let cadence = payload.flatMap { try? decoder.decode(Cadence.self, from: $0) }
+                var failure: String? = row["failure"]
+                // A payload that no longer decodes — the Cadence shape moved
+                // under a row an older build wrote — is not a settled "too few
+                // releases". Recorded as a failure so the next build retries it.
+                if payload != nil, cadence == nil, failure == nil {
+                    failure = "The stored estimate could not be read."
+                }
+                out[id] = CacheRow(cadence: cadence, fetchedAt: row["fetchedAt"], failure: failure)
             }
             return out
         }

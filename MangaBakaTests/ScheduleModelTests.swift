@@ -152,6 +152,54 @@ struct ScheduleGroupingTests {
         #expect(snapshot.inScope == 0)
     }
 
+    /// A cached estimate that no longer decodes — the Cadence shape changed,
+    /// the row was written by an older build — used to read as a settled
+    /// "too few dated releases" and was never asked about again.
+    @Test("An unreadable cached estimate is retried, not shown as settled")
+    func unreadableCacheIsPending() async throws {
+        let database = try AppDatabase.inMemory()
+        let entry = LibraryEntry(
+            id: 1, seriesId: 1, state: .reading, progressChapter: 3,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(
+                id: 1, title: "S1", status: "releasing",
+                source: [
+                    "manga_updates": Series.TrackerEntry(id: "abc123", rating: nil, ratingNormalized: nil)
+                ]
+            )
+        )
+        try await database.writer.write { db in
+            try db.execute(
+                sql: """
+                INSERT INTO cadenceEntry (seriesId, payload, fetchedAt, failure) VALUES (?, ?, ?, NULL)
+                """,
+                arguments: [1, Data("not json".utf8), Date()]
+            )
+        }
+        let service = ReleaseScheduleService(library: OneEntryLibrary(entry: entry), database: database)
+        let snapshot = await service.snapshot()
+
+        #expect(snapshot.pending == 1, "Unreadable is 'still to do', not an answer")
+        #expect(snapshot.undated.isEmpty)
+    }
+
+    private final class OneEntryLibrary: LibraryProviding, @unchecked Sendable {
+        let entry: LibraryEntry
+        init(entry: LibraryEntry) { self.entry = entry }
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? [entry] : [] }
+        func hiddenTagIDs() async -> Set<Int>? { nil }
+        func topGenres() async -> [TopGenre]? { nil }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+
     private final class OfflineLibrary: LibraryProviding, @unchecked Sendable {
         func recommendationStatus() async -> RecommendationStatus? { nil }
         func recommendations(
@@ -164,6 +212,29 @@ struct ScheduleGroupingTests {
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
         func remove(seriesId: Int) async throws(APIError) {}
+    }
+
+    /// The build recorded its failure and no view read it: a measurement in
+    /// which every request failed ended with "55 still to measure" and no why.
+    @Test("A measurement that left series unmeasured says why")
+    func measurementFailureIsSaid() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.pending = 55
+        let model = try model(with: snapshot)
+        model.applyForTesting(
+            ScheduleProgress(isRunning: false, done: 55, total: 55, failure: "MangaUpdates returned 503.")
+        )
+        #expect(model.measurementFailureLine == "55 not measured. MangaUpdates returned 503.")
+    }
+
+    @Test("A finished measurement with nothing left says nothing")
+    func completeMeasurementSaysNothing() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        let model = try model(with: snapshot)
+        model.applyForTesting(ScheduleProgress(isRunning: false, done: 55, total: 55, failure: nil))
+        #expect(model.measurementFailureLine == nil)
     }
 
     @Test("The scope line counts what was estimated against what is in scope")
