@@ -14,7 +14,9 @@ struct ReleaseCalendarTests {
           "sequence_string": "11",
           "pages": 228,
           "collections": [{"title": "A Tale of the Secret Saint"}],
-          "links": [{"type": "publisher", "link": "https://example.test/book"}]
+          "links": [{"type": "publisher", "link": "https://example.test/book"}],
+          "price": [{"value": 1.99, "iso_code": "usd"}, {"value": 2.99, "iso_code": "cad"}],
+          "identifiers": [{"id": "9781975319441", "name": "isbn"}]
         }
         """
     }
@@ -88,6 +90,31 @@ struct ReleaseCalendarTests {
         #expect(utc.component(.month, from: date) == 9)
     }
 
+    @Test("A price in a currency we do not lead with is still shown")
+    func nonDollarPriceSurvives() async throws {
+        // USD first because every edition in the sample carried it, but a
+        // publisher who prices only in yen should not appear free.
+        defer { URLProtocolStub.reset() }
+        let json = """
+        {"id": "a", "series_id": 1, "release_date": "2026-09-15",
+         "price": [{"value": 700, "iso_code": "jpy"}]}
+        """
+        let calendar = calendar([json])
+        let work = try #require(await calendar.upcoming().first)
+        #expect(work.price?.contains("700") == true)
+    }
+
+    @Test("No price is claimed when none came back")
+    func absentPriceIsAbsent() async throws {
+        defer { URLProtocolStub.reset() }
+        let calendar = calendar(["""
+        {"id": "a", "series_id": 1, "release_date": "2026-09-15"}
+        """])
+        let work = try #require(await calendar.upcoming().first)
+        #expect(work.price == nil)
+        #expect(work.isbn == nil)
+    }
+
     @Test("A work says only what the API supplied")
     func detailIsHonest() async throws {
         defer { URLProtocolStub.reset() }
@@ -97,6 +124,13 @@ struct ReleaseCalendarTests {
         #expect(work.volume == "Vol. 11")
         #expect(work.title == "A Tale of the Secret Saint")
         #expect(work.publisherLink?.absoluteString == "https://example.test/book")
-        #expect(work.price == nil, "no price came back, so none is claimed")
+        // The API returns prices as a list of {value, iso_code}, verified
+        // live on 2026-09-11. It was modelled as a String, so every real
+        // response threw on decode and the whole calendar came back empty —
+        // silently, because a decode failure is caught and treated as "no
+        // works". The fixture said String too, so the tests agreed with the
+        // bug.
+        #expect(work.price == "$1.99", "one currency, formatted, not a list")
+        #expect(work.isbn == "9781975319441")
     }
 }

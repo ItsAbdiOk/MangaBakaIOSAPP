@@ -22,6 +22,26 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
         let link: String?
     }
 
+    /// One currency's price for this volume.
+    ///
+    /// **Modelled as a `String` until 2026-09-11, which meant the calendar
+    /// never worked.** The API sends a list —
+    /// `[{"value": 1.99, "iso_code": "usd"}, {"value": 2.99, "iso_code": "cad"}]`
+    /// — so every real response threw on decode, and the throw is caught and
+    /// read as "no upcoming works". The screen was empty for a reason nobody
+    /// could see. The test fixture said `String` too, so the tests agreed with
+    /// the bug.
+    struct Price: Decodable, Sendable, Equatable {
+        let value: Double
+        let isoCode: String?
+    }
+
+    /// One identifier, which in practice is an ISBN.
+    struct Identifier: Decodable, Sendable, Equatable {
+        let id: String?
+        let name: String?
+    }
+
     let id: String
     let seriesId: Int?
     /// ISO-8601 date, "2026-09-15".
@@ -30,9 +50,16 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     let sequenceString: String?
     let sequenceNumeric: Double?
     let pages: Int?
-    let price: String?
+    let prices: [Price]?
+    let identifiers: [Identifier]?
     let links: [Link]?
     let collections: [Collection]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, seriesId, releaseDate, sequenceString, sequenceNumeric
+        case pages, identifiers, links, collections
+        case prices = "price"
+    }
 
     /// The series' title, which this endpoint carries under its collection
     /// rather than on the work itself.
@@ -49,6 +76,26 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     var date: Date? {
         guard let releaseDate else { return nil }
         return Self.formatter.date(from: releaseDate)
+    }
+
+    /// The price, in one currency, formatted.
+    ///
+    /// USD when it is offered, because it is the currency every edition in the
+    /// sample carried; otherwise whatever came first. Deliberately not
+    /// converted or localised — this is the publisher's list price in the
+    /// currency they set it in, and quietly relabelling $9.99 as £9.99 would
+    /// be a lie about someone else's shop.
+    var price: String? {
+        guard let prices, !prices.isEmpty else { return nil }
+        let chosen = prices.first { $0.isoCode?.lowercased() == "usd" } ?? prices[0]
+        var format = FloatingPointFormatStyle<Double>.Currency(code: chosen.isoCode ?? "usd")
+        format = format.locale(Locale(identifier: "en_US"))
+        return chosen.value.formatted(format)
+    }
+
+    /// The ISBN, where the publisher registered one.
+    var isbn: String? {
+        identifiers?.first { $0.name?.lowercased() == "isbn" }?.id
     }
 
     /// Where to buy it, when the publisher gave a link.
