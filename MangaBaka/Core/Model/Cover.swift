@@ -103,21 +103,38 @@ struct Cover: Codable, Equatable, Sendable, Hashable {
         return width / height
     }
 
-    /// Best variant for a target height in points, accounting for screen scale.
+    /// The smallest rendering that covers the pixels actually drawn.
     ///
     /// The API documents that `@1` in the URL can be swapped for `@2` or `@3`
-    /// to request a higher device-pixel-ratio rendering.
+    /// to request a higher device-pixel-ratio rendering, so nine renderings
+    /// exist: three heights by three ratios. This used to pick the height by
+    /// points and then apply the screen's ratio regardless, which fetched
+    /// 450 px for a 78 pt thumbnail drawing 234 px — 3.7x the pixels — and
+    /// 350 px for a 400 pt hero on a 1x screen, which is blurry. Now the
+    /// target is in pixels and the cheapest rendering that reaches it wins.
     func url(forHeight height: Double, scale: Double) -> URL? {
-        let base: URL? = switch height {
-        case ..<175: x150
-        case ..<300: x250
-        default: x350
-        }
-        guard let base else { return raw }
-        guard scale > 1 else { return base }
+        let needed = height * max(scale, 1)
+        var smallestSufficient: (url: URL, pixels: Double)?
+        var largest: (url: URL, pixels: Double)?
 
-        let requested = min(Int(scale.rounded()), 3)
-        let swapped = base.absoluteString.replacingOccurrences(of: "@1", with: "@\(requested)")
+        for (base, points) in [(x150, 150.0), (x250, 250.0), (x350, 350.0)] {
+            guard let base else { continue }
+            for ratio in 1...3 {
+                let pixels = points * Double(ratio)
+                let url = ratio == 1 ? base : Self.rendering(of: base, atRatio: ratio)
+                if pixels >= needed, pixels < (smallestSufficient?.pixels ?? .infinity) {
+                    smallestSufficient = (url, pixels)
+                }
+                if pixels > (largest?.pixels ?? 0) {
+                    largest = (url, pixels)
+                }
+            }
+        }
+        return smallestSufficient?.url ?? largest?.url ?? raw
+    }
+
+    private static func rendering(of base: URL, atRatio ratio: Int) -> URL {
+        let swapped = base.absoluteString.replacingOccurrences(of: "@1", with: "@\(ratio)")
         return URL(string: swapped) ?? base
     }
 }
