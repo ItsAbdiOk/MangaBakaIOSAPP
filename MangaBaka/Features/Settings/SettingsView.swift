@@ -51,6 +51,12 @@ struct SettingsView: View {
         }
         .scrollIndicators(.hidden)
         .background(Palette.ground)
+        // The same top edge and screen name as every other pushed screen
+        // from this tab; Settings was the one with neither, so it rendered a
+        // different edge to its siblings and had no accessible name.
+        .scrollEdgeEffectStyle(.hard, for: .top)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             if storedTokenExists, case .idle = status { await check() }
         }

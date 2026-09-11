@@ -21,6 +21,8 @@ struct TagPickerSheet: View {
 
     @State private var query = ""
     @State private var tags: [Tag] = []
+    /// Kept beside `tags` and set with it, see `TagBreadth.sortedCounts`.
+    @State private var sortedCounts: [Int] = []
     @State private var isLoading = true
     @State private var openGroup: Int?
     @State private var search: TagSearch?
@@ -65,6 +67,7 @@ struct TagPickerSheet: View {
             let search = TagSearch(catalogue: catalogue)
             self.search = search
             tags = await catalogue.tags(limit: 500).filter(\.isUsable)
+            sortedCounts = TagBreadth.sortedCounts(of: tags)
             search.loaded = tags
             isLoading = false
         }
@@ -267,7 +270,7 @@ struct TagPickerSheet: View {
 
     // MARK: - Behaviour
 
-    private func breadth(_ tag: Tag) -> Int { TagBreadth.step(for: tag, among: tags) }
+    private func breadth(_ tag: Tag) -> Int { TagBreadth.step(for: tag, amongSortedCounts: sortedCounts) }
 
     private func toggle(_ name: String) {
         if let index = selected.firstIndex(of: name) {
@@ -369,8 +372,18 @@ enum TagBreadth {
     /// Rank spreads them evenly by construction, which is what a four-step bar
     /// has to do to say anything at all.
     static func step(for tag: Tag, among tags: [Tag]) -> Int {
+        step(for: tag, amongSortedCounts: sortedCounts(of: tags))
+    }
+
+    /// The sort, done once per tag list rather than once per row per body
+    /// pass — forty rows each sorting five hundred counts while the reader
+    /// typed, for an answer that was the same for every row.
+    static func sortedCounts(of tags: [Tag]) -> [Int] {
+        tags.compactMap(\.seriesCount).sorted()
+    }
+
+    static func step(for tag: Tag, amongSortedCounts counts: [Int]) -> Int {
         guard let count = tag.seriesCount else { return 1 }
-        let counts = tags.compactMap(\.seriesCount).sorted()
         guard counts.count > 1 else { return 1 }
         let below = counts.firstIndex(where: { $0 >= count }) ?? 0
         let percentile = Double(below) / Double(counts.count - 1)
