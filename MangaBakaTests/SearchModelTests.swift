@@ -135,3 +135,45 @@ struct SearchFilterEscapeTests {
         #expect(model.query.activeFilterCount == 0)
     }
 }
+
+/// A search whose page-two request is slow, so a new search can land while
+/// the old one's next page is still on its way.
+private final class SlowPageTwoRepository: StubRepositoryBase, @unchecked Sendable {
+    override func search(_ query: SearchQuery) async -> FeedResult {
+        // Distinct id ranges per query, so a stale page is recognisable by id.
+        let base = query.text == "naruto" ? 1 : 2
+        if query.page > 1 {
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        let ids = (0..<query.limit).map { base * 1000 + query.page * 100 + $0 }
+        return FeedResult(
+            series: ids.map { SeriesFactory.make(id: $0, title: "\(query.text ?? "")-\($0)") },
+            origin: .network
+        )
+    }
+}
+
+@Suite("Search pages belong to the search that asked for them")
+@MainActor
+struct SearchPagingGenerationTests {
+    /// The reader scrolls to the bottom of "naruto", the next page goes out,
+    /// and before it returns they type "bleach". Page two of naruto must not
+    /// be appended to page one of bleach.
+    @Test("A stale page is dropped when the query changed while it was loading")
+    func stalePageIsDropped() async {
+        let model = SearchModel(repository: SlowPageTwoRepository())
+        model.query.text = "naruto"
+        await model.search()
+        #expect(model.results.count == model.query.limit)
+
+        async let paging: Void = model.loadMore()
+        try? await Task.sleep(for: .milliseconds(20))
+        model.query.text = "bleach"
+        await model.search()
+        await paging
+
+        #expect(model.results.count == model.query.limit, "Naruto's page two was appended to bleach")
+        #expect(model.results.allSatisfy { $0.id >= 2000 }, "Only bleach's ids may be present")
+        #expect(model.query.page == 1, "The page counter must describe the current search")
+    }
+}

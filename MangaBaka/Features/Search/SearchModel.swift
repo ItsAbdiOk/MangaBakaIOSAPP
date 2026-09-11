@@ -15,6 +15,10 @@ final class SearchModel {
     private(set) var isSearching = false
     private(set) var message: String?
     private(set) var isLoadingMore = false
+    /// Bumped by every fresh search. A page that comes back for an older
+    /// generation belongs to a search the reader has since replaced, and is
+    /// dropped rather than appended under the new one.
+    private var generation = 0
     /// False once a page comes back short or empty. Starts false so the first
     /// page has to actually arrive before the view offers to fetch a second.
     private(set) var hasMore = false
@@ -77,8 +81,10 @@ final class SearchModel {
         // A new search is page one by definition. Without this a reader who
         // paged to 4 and then typed a new query would get page 4 of it.
         query.page = 1
+        generation += 1
+        let mine = generation
         let result = await repository.search(query)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, mine == generation else { return }
         results = result.series
         hasMore = result.series.count >= query.limit
         message = result.series.isEmpty ? result.blockingError?.userFacingMessage : nil
@@ -102,8 +108,11 @@ final class SearchModel {
 
         var next = query
         next.page += 1
+        let mine = generation
         let result = await repository.search(next)
-        guard !Task.isCancelled else { return }
+        // The reader scrolled to the bottom of one search and typed another
+        // before its page arrived: this page is for the old search.
+        guard !Task.isCancelled, mine == generation else { return }
 
         // Deduplicate: the API repeats series across pages when the underlying
         // ordering shifts between requests, and a duplicate id traps ForEach.
