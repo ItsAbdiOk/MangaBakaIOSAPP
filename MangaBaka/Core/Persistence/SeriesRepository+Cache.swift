@@ -93,8 +93,8 @@ extension SeriesRepository {
     /// process happens to start with answers a different question, and both of
     /// its wrong answers have shipped.
     var cachedExclusionUserID: String? {
-        get { UserDefaults.standard.string(forKey: Self.exclusionKey) }
-        set { UserDefaults.standard.set(newValue, forKey: Self.exclusionKey) }
+        get { defaults.string(forKey: Self.exclusionKey) }
+        set { defaults.set(newValue, forKey: Self.exclusionKey) }
     }
 
     private static let exclusionKey = "cache.libraryExclusionUserID"

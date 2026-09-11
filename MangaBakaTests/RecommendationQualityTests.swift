@@ -18,7 +18,10 @@ struct RecommendationQualityTests {
                 tokenProvider: UnauthenticatedTokenProvider()
             ),
             database: try AppDatabase.inMemory(),
-            clock: TestClock()
+            clock: TestClock(),
+            // Its own suite: this repository persists the exclusion id, and
+            // writing the app's defaults from a test polluted the simulator.
+            defaults: try #require(UserDefaults(suiteName: "repository.tests.\(UUID().uuidString)"))
         )
     }
 
@@ -474,7 +477,10 @@ struct IdentityCachingTests {
                 tokenProvider: UnauthenticatedTokenProvider()
             ),
             database: try AppDatabase.inMemory(),
-            clock: TestClock()
+            clock: TestClock(),
+            // Its own suite: this repository persists the exclusion id, and
+            // writing the app's defaults from a test polluted the simulator.
+            defaults: try #require(UserDefaults(suiteName: "repository.tests.\(UUID().uuidString)"))
         )
     }
 

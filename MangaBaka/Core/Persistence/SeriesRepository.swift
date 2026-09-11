@@ -307,6 +307,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     // widening of who is meant to touch these.
     let database: AppDatabase
     let clock: any Clock
+    /// Where the exclusion id the cache was built under is persisted.
+    /// Injectable so tests do not write the app's own defaults: three tests
+    /// that set a fake id left it behind on the simulator, and the next real
+    /// launch saw an account change and threw the feed cache away mid-load.
+    let defaults: UserDefaults
     let decoder: JSONDecoder
     /// Content ratings to request, or `nil` for no filter. Defaults to the
     /// product decision: safe and suggestive, with anything stronger behind a
@@ -339,11 +344,13 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         database: AppDatabase,
         clock: any Clock = SystemClock(),
         contentRatings: [String]? = ["safe", "suggestive"],
-        formats: [String] = []
+        formats: [String] = [],
+        defaults: UserDefaults = .standard
     ) {
         self.client = client
         self.database = database
         self.clock = clock
+        self.defaults = defaults
         self.contentRatings = contentRatings
         self.formats = formats
 
