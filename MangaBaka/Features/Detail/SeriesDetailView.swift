@@ -16,6 +16,8 @@ struct SeriesDetailView: View {
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
+    /// The platform's own cover, for the fan; see PlatformCoverClient.
+    var platformCover: PlatformCoverClient?
     /// The reader's content filter, so an explicit tag name is not shown to
     /// someone who filtered explicit content — a tag is rated independently of
     /// its series.
@@ -30,6 +32,7 @@ struct SeriesDetailView: View {
     @State private var similar: [Series] = []
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
+    @State var platformCoverURL: URL?
     @State var appleVolumes: [AppleBooksVolume] = []
     /// The store was asked and did not answer — distinct from "asked, and it
     /// has none", which shows MangaBaka's editions with no note.
@@ -38,7 +41,7 @@ struct SeriesDetailView: View {
     @State var appleEdition: AppleVolumesRow.Edition?
     @State private var alsoLike: [Series] = []
     @State var extras = SeriesExtras()
-    @State private var covers: [SeriesImage] = []
+    @State var covers: [SeriesImage] = []
     @State private var openCoversAt: GalleryStart?
     @State private var favouredTags: Set<String> = []
     @State private var favouredTagIDs: Set<Int> = []
@@ -234,7 +237,7 @@ struct SeriesDetailView: View {
     /// An English edition where the series has one — MangaBaka's own pick for a
     /// Korean manhwa is usually the Korean volume one, which is handsome and
     /// unreadable to most people looking at this app.
-    private var preferred: SeriesImage? {
+    var preferred: SeriesImage? {
         covers.preferredCover(nativeLanguage: shown.nativeLanguage)
     }
 
@@ -242,11 +245,6 @@ struct SeriesDetailView: View {
 
     /// Everything except whichever cover is already on the front, so the fan
     /// never shows the same image twice.
-    private var otherCovers: [SeriesImage] {
-        guard let preferred else { return covers }
-        return covers.filter { $0.id != preferred.id }
-    }
-
     private func load() async {
         // Two intervals, not one. "Readable" is when the page has its own
         // content and stops looking empty; "complete" is when the rows a reader
@@ -274,7 +272,8 @@ struct SeriesDetailView: View {
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()
         async let store: Void = loadAppleVolumes()
-        _ = await (cast, cadence, taste, store)
+        async let platform: Void = loadPlatformCover()
+        _ = await (cast, cadence, taste, store, platform)
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it
