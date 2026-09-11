@@ -11,10 +11,13 @@ import Foundation
 /// decoded: Abdi asked for the database's pulse, not a leaderboard, and a
 /// contribution count on a screen nobody contributes from is vanity.
 struct CommunityPulse: Codable, Equatable, Sendable {
-    let activeSeriesCount: Int
-    let activeSeriesCountPrevWeek: Int
-    let registeredUserCount: Int
-    let registeredUserCountPrevWeek: Int
+    /// Doubles, all six: the schema types every figure as `number`, and
+    /// `chapters_read_count` is measured to arrive fractional. `Int` throws
+    /// on 290.0, and a throw here hid the whole card. Rounded where shown.
+    let activeSeriesCount: Double
+    let activeSeriesCountPrevWeek: Double
+    let registeredUserCount: Double
+    let registeredUserCountPrevWeek: Double
     let chaptersReadCount: Double
     let chaptersReadCountPrevWeek: Double
 
@@ -43,14 +46,14 @@ struct CommunityPulse: Codable, Equatable, Sendable {
             ),
             figure(
                 id: "series",
-                now: Double(activeSeriesCount),
-                then: Double(activeSeriesCountPrevWeek),
+                now: activeSeriesCount,
+                then: activeSeriesCountPrevWeek,
                 label: "series in the database"
             ),
             figure(
                 id: "readers",
-                now: Double(registeredUserCount),
-                then: Double(registeredUserCountPrevWeek),
+                now: registeredUserCount,
+                then: registeredUserCountPrevWeek,
                 label: "people keeping libraries"
             )
         ]

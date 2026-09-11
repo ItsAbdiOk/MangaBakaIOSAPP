@@ -123,7 +123,11 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         tags = container.lenientTagNames(forKey: .tags)
         // Absent on v2 entirely, and on any v1 payload that predates it. A
         // series with no rich tags falls back to the flat names.
-        tagsV2 = try? container.decodeIfPresent([SeriesTag].self, forKey: .tagsV2)
+        //
+        // Element by element, so one malformed tag costs one tag. As a single
+        // array under `try?`, one null name emptied all 146 of Solo Leveling's
+        // — and the flat fallback list hid that the rich ones had gone.
+        tagsV2 = container.lenientElements(SeriesTag.self, forKey: .tagsV2)
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -265,6 +269,22 @@ private struct NamedTag: Decodable { let name: String? }
 
 private extension KeyedDecodingContainer {
     /// Tag names, whichever of the API's three shapes arrived.
+    /// An array where a bad element is dropped rather than failing the whole
+    /// array. Nil when the key is absent or not an array at all.
+    func lenientElements<Element: Decodable>(_ type: Element.Type, forKey key: Key) -> [Element]? {
+        guard contains(key), var elements = try? nestedUnkeyedContainer(forKey: key) else { return nil }
+        var decoded: [Element] = []
+        while !elements.isAtEnd {
+            if let element = try? elements.decode(Element.self) {
+                decoded.append(element)
+            } else {
+                // Skip the bad one; the container must advance past it.
+                _ = try? elements.decode(AnyDecodable.self)
+            }
+        }
+        return decoded
+    }
+
     func lenientTagNames(forKey key: Key) -> [String]? {
         if let names = try? decodeIfPresent([String].self, forKey: key) { return names }
         if let objects = try? decodeIfPresent([NamedTag].self, forKey: key) {
@@ -301,5 +321,18 @@ extension Series.TrackerEntry {
         }
         rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         ratingNormalized = try container.decodeIfPresent(Double.self, forKey: .ratingNormalized)
+    }
+}
+
+/// Consumes any JSON value, so a lenient array decode can step over one.
+private struct AnyDecodable: Decodable {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() { return }
+        if (try? container.decode(Bool.self)) != nil { return }
+        if (try? container.decode(Double.self)) != nil { return }
+        if (try? container.decode(String.self)) != nil { return }
+        if (try? container.decode([AnyDecodable].self)) != nil { return }
+        _ = try container.decode([String: AnyDecodable].self)
     }
 }

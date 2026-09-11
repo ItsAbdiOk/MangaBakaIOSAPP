@@ -63,6 +63,11 @@ extension [SeriesImage] {
             let matches = filter { $0.language?.hasPrefix(language) == true }
             if let best = matches.min(by: Self.byEditionOrder) { return best }
         }
+        // Nil, deliberately, and not "any cover": nil means the series' own
+        // cover — MangaBaka's pick, usually the native volume one — stands.
+        // The wire review read this as "a manhwa with only Korean covers gets
+        // no cover" (W15); the caller falls back to `series.cover`, so it gets
+        // exactly that one. Not a defect; recorded so it is not re-proposed.
         return nil
     }
 

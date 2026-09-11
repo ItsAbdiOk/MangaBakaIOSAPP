@@ -15,8 +15,8 @@ struct CommunityPulseTests {
         chapters: Double = 53_975_689.25981874, chaptersPrev: Double = 50_963_627.59869605
     ) -> CommunityPulse {
         CommunityPulse(
-            activeSeriesCount: series, activeSeriesCountPrevWeek: seriesPrev,
-            registeredUserCount: users, registeredUserCountPrevWeek: usersPrev,
+            activeSeriesCount: Double(series), activeSeriesCountPrevWeek: Double(seriesPrev),
+            registeredUserCount: Double(users), registeredUserCountPrevWeek: Double(usersPrev),
             chaptersReadCount: chapters, chaptersReadCountPrevWeek: chaptersPrev
         )
     }

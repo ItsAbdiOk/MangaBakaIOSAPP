@@ -101,11 +101,13 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
 extension SeriesWork {
     /// One volume, and every edition of it.
     struct Volume: Codable, Identifiable, Sendable, Equatable {
-        /// "1", "11", or whatever is on the spine.
-        let number: String
+        /// "1", "11", or whatever is on the spine. Nil for the editions the
+        /// API gave no number — a box set, a side story — which sit together
+        /// at the end.
+        let number: String?
         let editions: [SeriesWork]
 
-        var id: String { number }
+        var id: String { number ?? "other" }
 
         /// The first edition that carries artwork. Editions of a volume share
         /// the same art often enough that picking the first is right, and when
@@ -118,8 +120,8 @@ extension SeriesWork {
         var subTitle: String? { editions.compactMap(\.subTitle).first }
         var pages: Int? { editions.compactMap(\.pages).first }
 
-        /// "Vol. 1"
-        var label: String { "Vol. \(number)" }
+        /// "Vol. 1", or "Other editions" for the numberless.
+        var label: String { number.map { "Vol. \($0)" } ?? "Other editions" }
     }
 
     /// Editions gathered into volumes, in spine order.
@@ -132,12 +134,20 @@ extension SeriesWork {
     static func volumes(from works: [SeriesWork]) -> [Volume] {
         var byNumber: [String: [SeriesWork]] = [:]
         var order: [String] = []
+        var unnumbered: [SeriesWork] = []
         for work in works {
-            guard let number = work.sequenceString, !number.isEmpty else { continue }
+            guard let number = work.sequenceString, !number.isEmpty else {
+                // Kept, as the comment above has always promised. The loop
+                // used to `continue` past these, and the nil-handling in the
+                // sort below was dead work.
+                unnumbered.append(work)
+                continue
+            }
             if byNumber[number] == nil { order.append(number) }
             byNumber[number, default: []].append(work)
         }
         let volumes = order.map { Volume(number: $0, editions: byNumber[$0] ?? []) }
+        let others = unnumbered.isEmpty ? [] : [Volume(number: nil, editions: unnumbered)]
         return volumes.sorted { lhs, rhs in
             let left = lhs.editions.compactMap(\.sequenceNumeric).min()
             let right = rhs.editions.compactMap(\.sequenceNumeric).min()
@@ -147,6 +157,6 @@ extension SeriesWork {
             case (nil, _?): return false
             case (nil, nil): return false
             }
-        }
+        } + others
     }
 }

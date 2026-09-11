@@ -75,10 +75,14 @@ struct SeriesWorkTests {
         #expect(volumes.map(\.number) == ["1", "Box"])
     }
 
-    @Test("A work with no sequence at all is dropped")
-    func unsequencedWorksAreDropped() {
-        // Nothing to label it with. A row reading "Vol. " helps nobody.
-        #expect(SeriesWork.volumes(from: [work("a", number: nil)]).isEmpty)
+    @Test("A work with no sequence at all is kept, under its own label")
+    func unsequencedWorksAreKept() {
+        // This asserted `.isEmpty` — the loop dropped them — under the
+        // function's own promise that "a side story or a box set is still
+        // worth showing". A row reading "Vol. " helps nobody, so the label is
+        // its own.
+        let volumes = SeriesWork.volumes(from: [work("a", number: nil)])
+        #expect(volumes.map(\.label) == ["Other editions"])
     }
 
     @Test("A volume takes the earliest date any of its editions was published")

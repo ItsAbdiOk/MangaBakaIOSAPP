@@ -76,3 +76,55 @@ struct WireNullabilityTests {
         #expect(publishers.first?.name == "Seven Seas")
     }
 }
+
+/// Places where one bad element, or one missing field, cost more than itself.
+@Suite("One bad element costs one element")
+struct WireResilienceTests {
+    private let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }()
+
+    /// `tags_v2` was decoded as one array under `try?`: a single tag with a
+    /// null name emptied all 146 of Solo Leveling's, and the flat fallback
+    /// list hid that the rich ones had gone.
+    @Test("One malformed tag drops that tag, not all of them")
+    func oneBadTagCostsOneTag() throws {
+        let series = try decoder.decode(Series.self, from: Data("""
+        {"id": 1, "state": "active", "cover": {},
+         "tags_v2": [{"id": 1, "name": "Action"}, {"id": 2, "name": null}, {"id": 3, "name": "Murim"}]}
+        """.utf8))
+        #expect(series.richTags.map(\.name) == ["Action", "Murim"])
+    }
+
+    /// The comment on `volumes(from:)` promised numberless works — a box set,
+    /// a side story — would keep the API's order at the end. The loop dropped
+    /// them.
+    @Test("A work with no volume number is still listed, at the end")
+    func numberlessWorksAreKept() throws {
+        let works = try decoder.decode([SeriesWork].self, from: Data("""
+        [{"id": "box", "sequence_string": null, "sequence_numeric": null, "release_date": null,
+          "price": null, "identifiers": null},
+         {"id": "v2", "sequence_string": "2", "sequence_numeric": 2, "release_date": null,
+          "price": null, "identifiers": null},
+         {"id": "v1", "sequence_string": "1", "sequence_numeric": 1, "release_date": null,
+          "price": null, "identifiers": null}]
+        """.utf8))
+        let volumes = SeriesWork.volumes(from: works)
+        #expect(volumes.map(\.label) == ["Vol. 1", "Vol. 2", "Other editions"])
+        #expect(volumes.last?.editions.map(\.id) == ["box"])
+    }
+
+    /// The schema types every pulse figure as `number`, and a sibling field
+    /// is measured to arrive fractional. `Int` throws on 290.0.
+    @Test("A fractional count still decodes")
+    func fractionalCountsDecode() throws {
+        let pulse = try decoder.decode(CommunityPulse.self, from: Data("""
+        {"active_series_count": 304108.0, "active_series_count_prev_week": 303800.5,
+         "registered_user_count": 12000.0, "registered_user_count_prev_week": 11950.0,
+         "chapters_read_count": 53975689.25981874, "chapters_read_count_prev_week": 53000000.0}
+        """.utf8))
+        #expect(pulse.activeSeriesCount == 304_108)
+    }
+}

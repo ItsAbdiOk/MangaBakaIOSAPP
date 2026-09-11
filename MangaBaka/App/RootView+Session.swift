@@ -50,7 +50,7 @@ extension RootView {
                                     // year's staleness shifts a lift by about
                                     // 5% — enough to move a tag sitting on the
                                     // 2.0 gate, not enough to invent one.
-                                    catalogueSize: session.pulse.pulse?.activeSeriesCount
+                                    catalogueSize: session.pulse.pulse.map { Int($0.activeSeriesCount) }
                                         ?? ReadingWrapped.catalogueSizeOn20260911,
                                     path: $shelfPath
                                 )
