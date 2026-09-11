@@ -45,6 +45,13 @@ struct APIShapeContractTests {
     /// `/v1/series/mix` is the swipe stack's blend. It returns the v1 shape,
     /// so before `Cover` understood both, every blend failed to decode and the
     /// stack silently showed "that's the stack for now" instead.
+    ///
+    /// `mix.json` was captured from `GET /v1/series/mix` on 2026-09-09 (the
+    /// commit that added it, 79f8254) and then redacted: series ids rewritten
+    /// to 2000 and 2001, `shared_tags` emptied. The tracker ids, thumbhashes
+    /// and the `score`/`cosine` pair are the real response's. It was the one
+    /// fixture with no date on it, which is how a shape change on the stack's
+    /// only source would have gone unnoticed for as long as the fixture lived.
     @Test("A v1 mix response decodes, wrapper and all")
     func decodesV1MixShape() throws {
         let envelope = try decoder().decode(

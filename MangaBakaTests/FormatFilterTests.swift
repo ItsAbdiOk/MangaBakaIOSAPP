@@ -10,7 +10,7 @@ import Foundation
 /// fourteen manhwa and six manga, and `hidden-gems?type=manga` returned a novel.
 /// Search honours the parameter, which is why the setting looked like it worked
 /// everywhere until you looked at Discover.
-@Suite("The format filter holds everywhere")
+@Suite("The format filter holds everywhere", .serialized)
 struct FormatFilterTests {
     private func repository() throws -> SeriesRepository {
         SeriesRepository(
@@ -106,7 +106,7 @@ struct FormatFilterTests {
 
 /// The cache the app documents as its offline story, and which every launch
 /// was quietly throwing away.
-@Suite("Applying stored filters at launch is not a change")
+@Suite("Applying stored filters at launch is not a change", .serialized)
 struct FilterApplicationTests {
     private func repository() throws -> SeriesRepository {
         SeriesRepository(

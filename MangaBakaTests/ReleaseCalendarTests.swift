@@ -3,7 +3,7 @@ import Foundation
 @testable import MangaBaka
 
 /// Announced release dates, as opposed to estimated ones.
-@Suite("Release calendar")
+@Suite("Release calendar", .serialized)
 struct ReleaseCalendarTests {
     private func work(_ id: String, series: Int?, date: String?) -> String {
         """
