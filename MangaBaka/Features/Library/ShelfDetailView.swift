@@ -74,7 +74,7 @@ struct ShelfDetailView: View {
                 if visible.isEmpty && !searchText.isEmpty {
                     Text("Nothing on this shelf matches")
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                         .padding(.vertical, 20)
                 }
                 ForEach(visible) { entry in
@@ -192,7 +192,7 @@ struct LibraryRow: View {
                     if let note = entry.note, !note.isEmpty {
                         Text(note)
                             .typeFootnote()
-                            .foregroundStyle(Palette.textTertiary)
+                            .foregroundStyle(Palette.textMuted)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }

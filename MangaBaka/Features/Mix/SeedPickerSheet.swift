@@ -128,7 +128,7 @@ struct SeedPickerSheet: View {
             Spacer()
             Text(search.message ?? "Type a title you love.")
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Metrics.gutter)
             Spacer()

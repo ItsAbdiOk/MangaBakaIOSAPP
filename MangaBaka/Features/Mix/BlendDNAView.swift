@@ -43,7 +43,7 @@ struct BlendDNAView: View {
             every edit.
             """)
             .typeFootnote()
-            .foregroundStyle(Palette.textQuaternary)
+            .foregroundStyle(Palette.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)
             .padding(.horizontal, 2)
@@ -118,7 +118,7 @@ struct BlendDNAView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Text(percent(move.from))
                                     .typeSmallMeta()
-                                    .foregroundStyle(Palette.textQuaternary)
+                                    .foregroundStyle(Palette.textMuted)
                                 Image(systemName: "arrow.right")
                                     .font(.system(size: 9, weight: .semibold))
                                     .foregroundStyle(Palette.accent)

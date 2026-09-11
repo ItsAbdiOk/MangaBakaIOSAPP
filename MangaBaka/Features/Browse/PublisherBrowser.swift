@@ -35,7 +35,7 @@ struct PublisherBrowser: View {
             } else if hasSearched && results.isEmpty {
                 Text("No publisher by that name.")
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .padding(.horizontal, Metrics.gutter)
             } else {
                 FlowLayout(spacing: 8) {
@@ -57,7 +57,7 @@ struct PublisherBrowser: View {
                 if let note = note(publisher) {
                     Text(note)
                         .typeFootnote()
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                 }
             }
             .padding(.horizontal, 13)

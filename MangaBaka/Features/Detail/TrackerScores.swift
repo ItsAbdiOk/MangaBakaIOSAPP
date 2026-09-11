@@ -34,7 +34,7 @@ struct TrackerScores: View {
                                     .foregroundStyle(Palette.textPrimary)
                                 Text(Self.name(name))
                                     .typeGridMeta()
-                                    .foregroundStyle(Palette.textTertiary)
+                                    .foregroundStyle(Palette.textMuted)
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)

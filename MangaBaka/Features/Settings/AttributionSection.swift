@@ -55,7 +55,7 @@ struct AttributionSection: View {
                 purchases.
                 """)
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }

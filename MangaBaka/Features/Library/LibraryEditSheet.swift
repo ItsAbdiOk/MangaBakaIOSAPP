@@ -186,7 +186,7 @@ struct LibraryEditSheet: View {
                         .foregroundStyle(Palette.textPrimary)
                     Text("Hidden from anyone looking at your MangaBaka profile.")
                         .typeGridMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -160,7 +160,7 @@ struct LibraryView: View {
                     .foregroundStyle(Palette.textPrimary)
                 Text("Counts and search cover what has arrived.")
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
             }
             Spacer(minLength: 0)
         }

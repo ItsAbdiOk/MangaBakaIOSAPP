@@ -33,7 +33,7 @@ struct FormatSection: View {
                 fetched under the previous setting.
                 """)
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
         }

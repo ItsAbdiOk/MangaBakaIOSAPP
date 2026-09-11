@@ -130,7 +130,7 @@ struct DetailTagSections: View {
                 Text("\(count) spoiler\(count == 1 ? "" : "s")")
                     .typeChip()
             }
-            .foregroundStyle(Palette.textTertiary)
+            .foregroundStyle(Palette.textMuted)
             .padding(.horizontal, 12)
             .frame(minHeight: Metrics.headerPill)
             .background(Palette.surfaceChip, in: Capsule())

@@ -161,7 +161,7 @@ struct DiscoverView: View {
             } else if row.series.isEmpty {
                 Text("Nothing here right now.")
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .padding(.horizontal, Metrics.gutter)
             } else {
                 ScrollView(.horizontal) {

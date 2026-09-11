@@ -137,7 +137,7 @@ struct CoverCard: View {
             if let meta {
                 Text(meta)
                     .typeGridMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .lineLimit(1)
                     .padding(.top, 2)
             }

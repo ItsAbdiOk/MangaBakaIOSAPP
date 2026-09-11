@@ -77,7 +77,7 @@ struct ScheduleView: View {
         HStack(spacing: 10) {
             Text(model.measuredLine)
                 .typeSmallMeta()
-                .foregroundStyle(model.isStale ? Palette.accent : Palette.textTertiary)
+                .foregroundStyle(model.isStale ? Palette.accent : Palette.textMuted)
             Spacer(minLength: 0)
             Button {
                 Task { await model.measure(refresh: model.snapshot.measuredAt != nil) }
@@ -108,7 +108,7 @@ struct ScheduleView: View {
                 Spacer(minLength: 10)
                 Text("\(max(model.progress.total - model.progress.done, 0)) left")
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
             }
             ProgressView(value: model.progress.fraction)
                 .tint(Palette.accent)
@@ -118,7 +118,7 @@ struct ScheduleView: View {
             progress — it resumes where it stopped.
             """)
             .typeFootnote()
-            .foregroundStyle(Palette.textFaint)
+            .foregroundStyle(Palette.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 9)
         }
@@ -188,7 +188,7 @@ struct ScheduleView: View {
             useful part.
             """)
             .typeFootnote()
-            .foregroundStyle(Palette.textTertiary)
+            .foregroundStyle(Palette.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 13)
         }
@@ -207,11 +207,11 @@ struct ScheduleView: View {
                     .foregroundStyle(group.isOverdue ? Palette.accent : Palette.textPrimary)
                 Text(group.count)
                     .typeChip()
-                    .foregroundStyle(Palette.textFaint)
+                    .foregroundStyle(Palette.textMuted)
             }
             Text(group.blurb)
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
 

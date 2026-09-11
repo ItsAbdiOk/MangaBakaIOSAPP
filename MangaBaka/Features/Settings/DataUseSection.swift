@@ -102,7 +102,7 @@ struct DataUseSection: View {
                     .foregroundStyle(Palette.textPrimary)
                 Text("worst \(milliseconds(row.entry.slowestSeconds))")
                     .typeFootnote()
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textMuted)
             }
         }
     }

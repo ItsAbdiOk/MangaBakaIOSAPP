@@ -160,7 +160,7 @@ struct MixView: View {
                 SectionHeader(title: "From your shelf")
                 Text("Nothing saved yet. Swipe a few series in the Stack first.")
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .padding(.horizontal, Metrics.gutter)
             } else {
                 SectionHeader(title: "From your shelf")

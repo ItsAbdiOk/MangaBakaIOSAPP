@@ -108,7 +108,7 @@ struct StaleBar: View {
                     .foregroundStyle(Palette.textPrimary)
                 Text(detail)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

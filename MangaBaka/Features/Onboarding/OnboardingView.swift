@@ -255,7 +255,7 @@ private struct StackMechanicPage: View {
                 .foregroundStyle(tint)
             Text(label)
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(width: 66)
@@ -369,7 +369,7 @@ private struct AccountPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text(benefit.body)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

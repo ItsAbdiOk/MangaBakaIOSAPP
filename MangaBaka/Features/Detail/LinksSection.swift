@@ -53,7 +53,7 @@ struct LinksSection: View {
                 if let language = link.language {
                     Text(language.uppercased())
                         .typeGridMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                 }
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 11, weight: .semibold))
@@ -93,7 +93,7 @@ struct NewsSection: View {
                             if let date = item.publishedAt {
                                 Text(date.formatted(.relative(presentation: .named)))
                                     .typeSmallMeta()
-                                    .foregroundStyle(Palette.textTertiary)
+                                    .foregroundStyle(Palette.textMuted)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

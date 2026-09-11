@@ -19,7 +19,7 @@ struct MixResults: View {
         } else if let message = model.message {
             Text(message)
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .padding(.horizontal, Metrics.gutter)
         } else if !model.results.isEmpty {
             VStack(alignment: .leading, spacing: 0) {

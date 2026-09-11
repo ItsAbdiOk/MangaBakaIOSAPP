@@ -83,7 +83,7 @@ struct DetailCredits: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.id)
                                 .typeSmallMeta()
-                                .foregroundStyle(Palette.textQuaternary)
+                                .foregroundStyle(Palette.textMuted)
                             Text(row.value)
                                 .typeSmallMeta()
                                 .foregroundStyle(Palette.textPrimary)
@@ -96,7 +96,7 @@ struct DetailCredits: View {
                         HStack(alignment: .firstTextBaseline, spacing: 14) {
                             Text(row.id)
                                 .typeSmallMeta()
-                                .foregroundStyle(Palette.textQuaternary)
+                                .foregroundStyle(Palette.textMuted)
                             Spacer(minLength: 0)
                             Text(row.value)
                                 .typeSmallMeta()

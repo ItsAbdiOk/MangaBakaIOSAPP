@@ -151,7 +151,7 @@ struct ReadingInsightsView: View {
                         .lineLimit(1)
                     Text(progressLine(item))
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Text(trailing)
@@ -206,7 +206,7 @@ struct ReadingInsightsView: View {
             \(sample.total.formatted()) series we have tags for.
             """)
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -221,7 +221,7 @@ struct ReadingInsightsView: View {
             if let rating = verdict.rating {
                 Text(String(format: "%.1f★", rating))
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
             }
             Text(verdictLine(verdict))
                 .typeSmallMeta()
@@ -259,7 +259,7 @@ struct ReadingInsightsView: View {
             if let note {
                 Text(note)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 0) { content() }

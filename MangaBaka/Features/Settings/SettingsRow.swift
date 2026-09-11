@@ -97,7 +97,7 @@ struct SettingsRow<Trailing: View>: View {
             if let caption {
                 Text(caption)
                     .typeGridMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

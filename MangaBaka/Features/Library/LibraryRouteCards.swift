@@ -24,7 +24,7 @@ extension LibraryView {
                         .foregroundStyle(Palette.textPrimary)
                     Text(scheduleSummary ?? "Estimate when each one is due")
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -61,7 +61,7 @@ extension LibraryView {
                         .foregroundStyle(Palette.textPrimary)
                     Text("What is waiting, what you finish, what you drop")
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

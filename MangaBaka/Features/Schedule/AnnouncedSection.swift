@@ -22,7 +22,7 @@ struct AnnouncedSection: View {
                     an estimate; these are not.
                     """)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -47,7 +47,7 @@ struct AnnouncedSection: View {
                 if let detail = detail(work) {
                     Text(detail)
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textMuted)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,7 +81,7 @@ struct AnnouncedSection: View {
                 .foregroundStyle(Palette.accent)
             Text(month(work))
                 .typeEyebrow()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
         }
         .frame(width: 42)
         .accessibilityElement(children: .combine)

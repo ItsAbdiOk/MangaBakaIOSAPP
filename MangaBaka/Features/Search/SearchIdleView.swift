@@ -74,7 +74,7 @@ struct SearchIdleView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Text(subtitle(for: lens))
                             .typeSmallMeta()
-                            .foregroundStyle(Palette.textTertiary)
+                            .foregroundStyle(Palette.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

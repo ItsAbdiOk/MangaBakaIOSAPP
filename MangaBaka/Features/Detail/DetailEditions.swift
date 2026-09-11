@@ -62,7 +62,7 @@ struct DetailEditions: View {
                 if let detail = edition.detail {
                     Text(detail)
                         .typeFootnote()
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

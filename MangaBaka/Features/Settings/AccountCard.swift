@@ -76,7 +76,7 @@ struct AccountCard: View {
             if case let .signedIn(name) = status, let name {
                 Text(name)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .lineLimit(1)
             }
         }

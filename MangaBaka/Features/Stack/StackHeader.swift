@@ -56,7 +56,7 @@ struct StackHeader: View {
                 .foregroundStyle(Palette.accent)
             Text("saved")
                 .typeGridMeta()
-                .foregroundStyle(Palette.textFaint)
+                .foregroundStyle(Palette.textMuted)
         }
         .fixedSize()
         .accessibilityElement(children: .combine)

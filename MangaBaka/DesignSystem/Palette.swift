@@ -86,8 +86,6 @@ enum Palette {
     /// Meta lines and inactive tab labels. Between textSecondary and
     /// textTertiary, and the mockup uses it often enough to name.
     static let textMuted = Color(hex: 0xEBEBF5).opacity(0.50)
-    /// The label under a stat number.
-    static let textFaint = Color(hex: 0xEBEBF5).opacity(0.40)
 
     /// The dark badge sitting on a cover. rgba(10,10,12,0.6).
     static let surfaceBadge = Color(hex: 0x0A0A0C).opacity(0.60)

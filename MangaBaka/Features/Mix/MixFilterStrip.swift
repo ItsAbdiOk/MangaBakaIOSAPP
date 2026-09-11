@@ -42,7 +42,7 @@ extension MixView {
                     }
                     Text("Saves these filters as a lens, on Search.")
                         .typeFootnote()
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, Metrics.gapCovers)

@@ -70,7 +70,7 @@ struct ShelfCard: View {
 
             Text(shelf.note)
                 .typeFootnote()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

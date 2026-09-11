@@ -175,7 +175,7 @@ struct SeriesDetailView: View {
         MyAnimeList and Anime-Planet. CC BY-NC-SA 4.0.
         """)
             .typeFootnote()
-            .foregroundStyle(Palette.textQuaternary)
+            .foregroundStyle(Palette.textMuted)
             .padding(.horizontal, Metrics.gutter)
     }
 

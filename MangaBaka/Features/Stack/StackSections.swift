@@ -75,7 +75,7 @@ struct StackCaption: View {
             if let reason {
                 Text(reason)
                     .typeFootnote()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .padding(.top, 10)
             }
 

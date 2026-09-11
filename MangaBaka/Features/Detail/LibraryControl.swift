@@ -130,7 +130,7 @@ struct LibraryControl: View {
             if let failure = model.failure {
                 Text(failure)
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

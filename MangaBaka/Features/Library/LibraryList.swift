@@ -89,7 +89,7 @@ struct LibraryList: View {
                         if let progress = progressLine(entry) {
                             Text(progress)
                                 .typeSmallMeta()
-                                .foregroundStyle(Palette.textTertiary)
+                                .foregroundStyle(Palette.textMuted)
                                 .lineLimit(1)
                         }
                     }
@@ -220,7 +220,7 @@ struct LibraryFilterRow: View {
                 Text(title).typeChip()
                 Text(count.formatted())
                     .typeChip()
-                    .foregroundStyle(isOn ? Palette.onAccent.opacity(0.7) : Palette.textQuaternary)
+                    .foregroundStyle(isOn ? Palette.onAccent.opacity(0.7) : Palette.textMuted)
             }
             .foregroundStyle(isOn ? Palette.onAccent : Palette.textSecondary)
             .padding(.horizontal, 13)

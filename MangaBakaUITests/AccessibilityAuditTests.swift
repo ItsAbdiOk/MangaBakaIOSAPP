@@ -140,4 +140,99 @@ final class AccessibilityAuditTests: XCTestCase {
         _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
         try audit(app, screen: "Settings")
     }
+
+    /// The blocked-tags screen, reached from Settings.
+    ///
+    /// One of the six the device review never got to. Added here rather than
+    /// looked at once: a screen audited by hand is audited on the day somebody
+    /// remembers to, and this one is two taps deep where nobody goes.
+    func testBlockedTagsPassesTheAudit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Library"].tap()
+        let gear = app.buttons["Settings"]
+        guard gear.waitForExistence(timeout: 10) else {
+            throw XCTSkip("no Settings control found from Library")
+        }
+        gear.tap()
+        let blocked = app.buttons["Add a tag"]
+        guard blocked.waitForExistence(timeout: 10) else {
+            throw XCTSkip("no blocked-tags control in Settings")
+        }
+        blocked.tap()
+        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
+        try audit(app, screen: "Blocked tags")
+    }
+
+    /// The cover gallery, which is the only full-screen surface in the app.
+    func testCoverGalleryPassesTheAudit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Discover"].tap()
+        let cover = app.scrollViews.buttons.firstMatch
+        guard cover.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no series on Discover to open — offline or empty feed")
+        }
+        cover.tap()
+        let hero = app.images.firstMatch
+        guard hero.waitForExistence(timeout: 10) else {
+            throw XCTSkip("no cover on the series page to open")
+        }
+        hero.tap()
+        _ = app.images.firstMatch.waitForExistence(timeout: 5)
+        try audit(app, screen: "Cover gallery")
+    }
+
+    /// The Library with its inline search showing results, rather than idle.
+    ///
+    /// The review audited the Library at rest. A list with results in it is a
+    /// different screen: different row contents, a clear button, a count.
+    func testLibrarySearchResultsPassTheAudit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Library"].tap()
+        let field = app.searchFields.firstMatch.exists
+            ? app.searchFields.firstMatch
+            : app.textFields.firstMatch
+        guard field.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no search field on Library")
+        }
+        field.tap()
+        field.typeText("a")
+        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
+        try audit(app, screen: "Library search results")
+    }
+
+    /// A shelf, opened from the Library.
+    func testShelfDetailPassesTheAudit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Library"].tap()
+        // The shelf cards carry their own label; take whichever exists.
+        let shelf = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'saved' OR label CONTAINS[c] 'skipped'")
+        ).firstMatch
+        guard shelf.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no shelf on Library to open")
+        }
+        shelf.tap()
+        _ = app.staticTexts.firstMatch.waitForExistence(timeout: 5)
+        try audit(app, screen: "Shelf detail")
+    }
+
+    /// A stack card held mid-drag, with its SKIP or SAVE badge showing.
+    ///
+    /// The badges are at `opacity(0)` at rest, which is why a static audit of
+    /// the Stack says nothing about them — and why the contrast failures it
+    /// reported for them were measuring bare artwork. Held here instead.
+    func testStackMidDragPassesTheAudit() throws {
+        let app = launchedApp()
+        app.tabBars.buttons["Stack"].tap()
+        let card = app.images.firstMatch
+        guard card.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no card on the stack — offline or empty feed")
+        }
+        // Press, move, and hold: releasing would commit the swipe and the
+        // badge would be gone before the audit ran.
+        let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = card.coordinate(withNormalizedOffset: CGVector(dx: 1.4, dy: 0.5))
+        start.press(forDuration: 0.2, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.5)
+        try audit(app, screen: "Stack mid-drag")
+    }
 }

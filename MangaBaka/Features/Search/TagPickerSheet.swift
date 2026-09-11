@@ -162,7 +162,7 @@ struct TagPickerSheet: View {
         return Button { mode = value } label: {
             Text(title)
                 .typeChip()
-                .foregroundStyle(isOn ? Palette.textPrimary : Palette.textTertiary)
+                .foregroundStyle(isOn ? Palette.textPrimary : Palette.textMuted)
                 .padding(.horizontal, 14)
                 .frame(minHeight: Metrics.headerPill)
                 .background(isOn ? Palette.surfaceField : .clear, in: Capsule())
@@ -187,7 +187,7 @@ struct TagPickerSheet: View {
                     : "No tag matches \"\(query)\"."
             )
             .typeSmallMeta()
-            .foregroundStyle(Palette.textTertiary)
+            .foregroundStyle(Palette.textMuted)
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(found.prefix(40))) { tag in
@@ -234,10 +234,10 @@ struct TagPickerSheet: View {
                     Spacer(minLength: 8)
                     Text(chosenHere > 0 ? "\(chosenHere) · \(children.count)" : "\(children.count)")
                         .typeSmallMeta()
-                        .foregroundStyle(chosenHere > 0 ? Palette.accent : Palette.textTertiary)
+                        .foregroundStyle(chosenHere > 0 ? Palette.accent : Palette.textMuted)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                         .rotationEffect(.degrees(isOpen ? 180 : 0))
                 }
                 .padding(.vertical, 14)
@@ -258,7 +258,7 @@ struct TagPickerSheet: View {
                 if children.count > Self.perGroup {
                     Text("\(children.count - Self.perGroup) more in search")
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                         .padding(.bottom, 12)
                 }
             }

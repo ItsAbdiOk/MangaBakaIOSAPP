@@ -118,7 +118,7 @@ struct FilterSheet: View {
                 if onSaveLens != nil {
                     Text("The bookmark saves this as a lens. Greyed until a filter is set.")
                         .typeFootnote()
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .multilineTextAlignment(.center)
                 }

@@ -85,7 +85,7 @@ struct DetailStatsStrip: View {
                 Text(stat.label.uppercased())
                     .typeGridMeta()
                     .tracking(0.4)
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textMuted)
                     .lineLimit(1)
                     // A one-word label that wraps is always a defect. Shrinking
                     // it is the lesser evil, and "CHAPTERS" at 70% still reads.

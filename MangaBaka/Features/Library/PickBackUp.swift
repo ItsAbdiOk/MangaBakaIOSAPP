@@ -17,7 +17,7 @@ struct PickBackUp: View {
                     Spacer(minLength: 0)
                     Text("\(entries.count) in progress")
                         .typeSmallMeta()
-                        .foregroundStyle(Palette.textFaint)
+                        .foregroundStyle(Palette.textMuted)
                 }
                 .padding(.horizontal, Metrics.gutter)
                 .padding(.bottom, 11)
@@ -65,7 +65,7 @@ struct PickBackUp: View {
                 }
                 Text(chapterLabel(entry))
                     .typeFootnote()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
             }
             .frame(width: Metrics.coverSavedStripWidth, alignment: .leading)
         }

@@ -52,7 +52,7 @@ struct BrowseView: View {
                 and merged tags are never listed — they lead nowhere.
                 """)
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 2)
                 .padding(.top, 20)
@@ -151,7 +151,7 @@ struct BrowseView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Hidden everywhere. Press and hold a tag to unblock it.")
                     .typeFootnote()
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
@@ -165,7 +165,7 @@ struct BrowseView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(name)
                 .typeSmallMeta()
-                .foregroundStyle(Palette.textTertiary)
+                .foregroundStyle(Palette.textMuted)
                 .padding(.top, 9)
                 .padding(.bottom, 6)
 
@@ -180,7 +180,7 @@ struct BrowseView: View {
                             if tag.isSpoiler == true {
                                 Text("Spoiler tag")
                                     .typeFootnote()
-                                    .foregroundStyle(Palette.textTertiary)
+                                    .foregroundStyle(Palette.textMuted)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -133,7 +133,7 @@ struct BlockTagPicker: View {
                             : "No tag matches \"\(query)\"."
                     )
                     .typeSmallMeta()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .listRowBackground(Color.clear)
                 }
                 if isLoading {

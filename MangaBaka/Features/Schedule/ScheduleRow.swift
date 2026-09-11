@@ -80,7 +80,7 @@ struct ScheduleRow: View {
 
             Text(Self.provenance(cadence))
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
         }
     }
 

@@ -55,7 +55,7 @@ struct SaveLensSheet: View {
 
             Text("Generated from the filters. Selected, so typing replaces it.")
                 .typeFootnote()
-                .foregroundStyle(Palette.textQuaternary)
+                .foregroundStyle(Palette.textMuted)
                 .padding(.top, 8)
 
             stored
