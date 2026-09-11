@@ -63,6 +63,7 @@ struct BlockedTagsSection: View {
             .background(Palette.surfaceChip, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
             .contentShape(Capsule())
+            .tapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Unblock \(tag.name)")
@@ -85,6 +86,7 @@ struct BlockedTagsSection: View {
                 lineWidth: 0.5, dash: [3]
             )))
             .contentShape(Capsule())
+            .tapTarget()
         }
         .buttonStyle(.plain)
     }

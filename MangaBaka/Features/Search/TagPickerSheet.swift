@@ -137,6 +137,7 @@ struct TagPickerSheet: View {
                     .frame(minHeight: Metrics.headerPill)
                     .background(Palette.accentTint, in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.5), lineWidth: 0.5))
+                    .tapTarget()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove \(name)")
@@ -168,6 +169,7 @@ struct TagPickerSheet: View {
                 .overlay(Capsule().strokeBorder(
                     isOn ? .clear : Palette.borderPill, lineWidth: 0.5
                 ))
+                .tapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)

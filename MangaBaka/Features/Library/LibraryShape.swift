@@ -14,13 +14,17 @@ struct LibraryShapeBar: View {
 
     var body: some View {
         if total > 0 {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 0) {
                 bar
                 legend
             }
         }
     }
 
+    /// The bar is 7pt tall and its bands are the fastest way into a state, so
+    /// the row it lives in is 44pt and the bands are tapped through it. Apple's
+    /// audit named the bar by its full label — "Reading 71, Rereading 1, …" —
+    /// as a hit area of 370x7.
     private var bar: some View {
         GeometryReader { proxy in
             HStack(spacing: 2) {
@@ -32,7 +36,9 @@ struct LibraryShapeBar: View {
                         // and removing the rest would make it the shape of the
                         // filter instead.
                         .opacity(selected == nil || selected == band.state ? 1 : 0.28)
-                        .frame(width: width(band.count, in: proxy.size.width))
+                        .frame(width: width(band.count, in: proxy.size.width), height: Metrics.shapeBar)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             withAnimation(.snappy(duration: 0.2)) {
                                 selected = selected == band.state ? nil : band.state
@@ -40,8 +46,9 @@ struct LibraryShapeBar: View {
                         }
                 }
             }
+            .frame(maxHeight: .infinity)
         }
-        .frame(height: 7)
+        .frame(height: Metrics.tapTarget)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -56,8 +63,11 @@ struct LibraryShapeBar: View {
         return max(4, usable * CGFloat(count) / CGFloat(total))
     }
 
+    /// `lineSpacing: 0` because each row is now a full 44pt tap target and
+    /// carries its own room; the old 12pt gap on top of that would push the
+    /// first shelf off the screen.
     private var legend: some View {
-        FlowLayout(spacing: 12) {
+        FlowLayout(spacing: 12, lineSpacing: 0) {
             ForEach(counts, id: \.state) { band in
                 Button {
                     withAnimation(.snappy(duration: 0.2)) {
@@ -74,6 +84,8 @@ struct LibraryShapeBar: View {
                                 selected == band.state ? Palette.textPrimary : Palette.textTertiary
                             )
                     }
+                    .frame(minHeight: Metrics.tapTarget)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(band.state.title), \(band.count) series")

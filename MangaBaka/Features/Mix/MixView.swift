@@ -121,8 +121,15 @@ struct MixView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(Palette.textPrimary, Palette.ground)
+                        // The glyph alone was about 17pt square — the smallest
+                        // control in the app, sitting on the corner of a cover
+                        // where a miss taps the cover instead. The mark keeps
+                        // its size; the target does not have to.
+                        .frame(width: Metrics.tapTarget, height: Metrics.tapTarget)
+                        .contentShape(Rectangle())
                 }
-                .offset(x: -6, y: -6)
+                .accessibilityLabel("Remove \(series.displayTitle ?? "this seed")")
+                .offset(x: 8, y: -8)
             }
     }
 
@@ -130,12 +137,19 @@ struct MixView: View {
         Button { isPickingSeed = true } label: {
             RoundedRectangle(cornerRadius: Metrics.radiusSeed, style: .continuous)
                 .strokeBorder(Palette.borderDashed, style: StrokeStyle(lineWidth: 0.5, dash: [4]))
-                .frame(width: Metrics.coverSeedWidth, height: Metrics.coverSeedWidth / Metrics.coverAspect)
+                .frame(
+                    width: Metrics.coverSeedWidth,
+                    height: max(Metrics.coverSeedWidth / Metrics.coverAspect, Metrics.tapTarget)
+                )
                 .overlay {
                     Image(systemName: "plus")
                         .foregroundStyle(Palette.textTertiary)
                 }
+                .contentShape(Rectangle())
         }
+        // "plus" is what VoiceOver said, which is the glyph's name and not
+        // what the control does.
+        .accessibilityLabel("Add a seed")
     }
 
     // MARK: Suggested seeds

@@ -49,6 +49,10 @@ struct LibraryList: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundStyle(Palette.accent)
+            // 129x17 by Apple's measurement. The label keeps its size; the
+            // menu's target does not have to be the same shape as its words.
+            .frame(minHeight: Metrics.tapTarget)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel("Sort by \(model.sort.label)")
     }

@@ -193,7 +193,10 @@ struct AccountCard: View {
                 .typeBody()
                 .foregroundStyle(Palette.textPrimary)
                 .padding(.horizontal, 12)
-                .frame(height: Metrics.field)
+                // 40pt was the mockup's field height and Apple's audit
+                // measured the text field inside it at 225x19. A field you
+                // have to aim at is a field people mistype into.
+                .frame(height: max(Metrics.field, Metrics.tapTarget))
                 .background(Palette.surfaceField, in: RoundedRectangle(
                     cornerRadius: Metrics.radiusChip, style: .continuous
                 ))

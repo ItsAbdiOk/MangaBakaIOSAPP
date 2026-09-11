@@ -137,6 +137,7 @@ struct DetailTagSections: View {
             .overlay(Capsule().strokeBorder(Palette.borderDashed, style: StrokeStyle(
                 lineWidth: 0.5, dash: [3]
             )))
+            .tapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(count) spoiler tag\(count == 1 ? "" : "s") in \(group), hidden")
@@ -171,6 +172,7 @@ struct DetailTagSections: View {
                     lineWidth: 0.5
                 )
             )
+            .tapTarget()
             // Weight shown as presence, not as a label. A core tag reads as
             // more solid than an incidental one without a row of badges saying
             // "CORE" that nobody would look up the meaning of.

@@ -162,6 +162,7 @@ struct LockPill: View {
         .frame(minHeight: Metrics.headerPill)
         .background(Palette.surfaceChip, in: Capsule())
         .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
+        .tapTarget()
         .accessibilityLabel("Always on")
     }
 }

@@ -155,6 +155,7 @@ struct FilterSheet: View {
                     .frame(height: Metrics.headerPill)
                     .background(Palette.accentTint, in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.5), lineWidth: 0.5))
+                    .tapTarget()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Remove \(tag)")
@@ -175,6 +176,7 @@ struct FilterSheet: View {
                     lineWidth: 0.5, dash: [3]
                 )))
                 .contentShape(Capsule())
+                .tapTarget()
             }
             .buttonStyle(.plain)
         }
@@ -198,6 +200,7 @@ struct FilterSheet: View {
                 .frame(height: Metrics.headerPill)
                 .background(isOn ? Palette.accent : Palette.surfaceChip)
                 .clipShape(Capsule())
+                .tapTarget()
         }
         .buttonStyle(.plain)
     }

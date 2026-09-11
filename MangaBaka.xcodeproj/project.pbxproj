@@ -225,6 +225,7 @@
 		EF9797335C14F6325ABD8FC1 /* LibraryListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D564875BE933BC0CE67A5303 /* LibraryListTests.swift */; };
 		F053F0F645F9414E79069B4E /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67151A4C694B9F92EFDACB90 /* Toast.swift */; };
 		F22AF5DB92BAED94AE2E7017 /* ChromeReachabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83A0D9E8407AC0EA137D8EF2 /* ChromeReachabilityTests.swift */; };
+		F24DC9CB28FB32EA259706D6 /* TapTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = F141EBED1BB1027BEE234AE7 /* TapTarget.swift */; };
 		F36E3452DFDD3B0F873C8F17 /* Recommendation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C6BF62D4109C171EC07945 /* Recommendation.swift */; };
 		F51A0E1EA00D2AAC48E0B213 /* ReadingInsightsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 702B886642974DC7B330D3BB /* ReadingInsightsView.swift */; };
 		F5A9A5941311071FDD28A8B4 /* DetailBarTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 943CF006C11C838FC7CE40B1 /* DetailBarTitle.swift */; };
@@ -487,6 +488,7 @@
 		EE257CD51DA39AFFD611379A /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
 		EF224B95D6171608E734DE78 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
 		EFD1D4C8F09AFDC84B2CD496 /* NetworkLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLedger.swift; sourceTree = "<group>"; };
+		F141EBED1BB1027BEE234AE7 /* TapTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapTarget.swift; sourceTree = "<group>"; };
 		F33D33D9B86DA76ACDA606D9 /* BlurHashCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurHashCache.swift; sourceTree = "<group>"; };
 		F3CCDC1F0016F39AC4930FC0 /* BrowseDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseDestination.swift; sourceTree = "<group>"; };
 		F3E8D05B8A16F72E1C223EAD /* PickBackUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickBackUp.swift; sourceTree = "<group>"; };
@@ -911,6 +913,7 @@
 				EF224B95D6171608E734DE78 /* Glass.swift */,
 				FE022EC45BBE2B43323AB02D /* Metrics.swift */,
 				3F5D04922A2C422FF4312264 /* Palette.swift */,
+				F141EBED1BB1027BEE234AE7 /* TapTarget.swift */,
 				20330A856CAA2475C0B1C392 /* Typography.swift */,
 			);
 			path = DesignSystem;
@@ -1348,6 +1351,7 @@
 				62395C3C798B82C00CE8A1D5 /* StateAction.swift in Sources */,
 				D32F84E236B001A48095FDF5 /* TagPickerSheet.swift in Sources */,
 				773DF186686FA3A5A3125E72 /* TagSearch.swift in Sources */,
+				F24DC9CB28FB32EA259706D6 /* TapTarget.swift in Sources */,
 				FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */,
 				DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */,
 				4A0C19E90EBFD088A4D3D5D0 /* TasteProfile.swift in Sources */,

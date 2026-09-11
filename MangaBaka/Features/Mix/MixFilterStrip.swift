@@ -123,6 +123,7 @@ extension MixView {
                                 style: StrokeStyle(lineWidth: 0.5, dash: [3])
                             ))
                             .contentShape(Capsule())
+                            .tapTarget()
                         }
                         .buttonStyle(.plain)
                     }
@@ -183,6 +184,7 @@ extension MixView {
                     in: Capsule()
                 )
                 .overlay(Capsule().strokeBorder(Palette.border, lineWidth: isSelected ? 0 : 0.5))
+                .tapTarget()
         }
     }
 

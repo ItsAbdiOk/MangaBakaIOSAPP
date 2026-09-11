@@ -50,6 +50,17 @@ enum Metrics {
     /// Save-token button — until the state family gave every screen the same
     /// button component. A second height with no second meaning is how a design
     /// system starts drifting.
+    /// The library shape bar's own height. The row around it is a tap target;
+    /// the bar itself stays the thin band the mockup draws.
+    static let shapeBar: CGFloat = 7
+
+    /// Apple's minimum touch target, 44x44pt.
+    ///
+    /// Named rather than written as 44 at each site, because it is a platform
+    /// rule and not one of the mockup's numbers — the mockup's own `headerPill`
+    /// is 30, and the two should not be confused when one of them changes.
+    static let tapTarget: CGFloat = 44
+
     static let ctaSecondary: CGFloat = 46
     /// Search field and filter button.
     static let field: CGFloat = 40
