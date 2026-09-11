@@ -10,7 +10,7 @@ import Testing
 struct TasteModelTests {
     private final class StubLibrary: LibraryProviding, @unchecked Sendable {
         var genres: [TopGenre] = []
-        func topGenres() async -> [TopGenre] { genres }
+        func topGenres() async -> [TopGenre]? { genres }
         func recommendationStatus() async -> RecommendationStatus? { nil }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]

@@ -71,6 +71,6 @@ final class TasteModel {
         isLoading = true
         defer { isLoading = false }
         self.entries = entries
-        affinities = await library.topGenres()
+        affinities = await library.topGenres() ?? []
     }
 }

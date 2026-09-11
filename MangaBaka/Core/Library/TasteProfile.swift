@@ -25,7 +25,7 @@ actor TasteProfile {
     private let snapshot: LibrarySnapshot?
     private var cached: Set<String>?
     private var cachedIDs: Set<Int>?
-    private var inFlight: Task<Set<String>, Never>?
+    private var inFlight: Task<Set<String>?, Never>?
     private var inFlightIDs: Task<Set<Int>, Never>?
 
     init(
@@ -46,17 +46,19 @@ actor TasteProfile {
     func favouredTagNames() async -> Set<String> {
         if let cached { return cached }
         // Two series pages opened at once must not make two requests.
-        if let inFlight { return await inFlight.value }
+        if let inFlight { return await inFlight.value ?? [] }
 
-        let task = Task<Set<String>, Never> { [library] in
+        let task = Task<Set<String>?, Never> { [library] in
             let genres = await library.topGenres()
-            return Set(genres.map { $0.tagName.lowercased() })
+            return genres.map { Set($0.map { $0.tagName.lowercased() }) }
         }
         inFlight = task
         let result = await task.value
-        cached = result
+        // A failed request is not cached as "likes nothing" for the session;
+        // the next series page asks again.
+        if let result { cached = result }
         inFlight = nil
-        return result
+        return result ?? []
     }
 
     /// The tags this reader's own reading is actually made of.
@@ -104,7 +106,7 @@ actor TasteProfile {
         }
 
         let local = (try? await ledger?.favouredIDs()) ?? []
-        let genres = Set(await library.topGenres().map(\.tagId))
+        let genres = Set((await library.topGenres() ?? []).map(\.tagId))
         return local.union(genres)
     }
 

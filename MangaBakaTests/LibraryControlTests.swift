@@ -22,7 +22,7 @@ struct LibraryControlTests {
             limit: Int, page: Int, excluding: [Int]
         ) async -> [PersonalRecommendation] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
-        func topGenres() async -> [TopGenre] { [] }
+        func topGenres() async -> [TopGenre]? { [] }
 
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             reads += 1

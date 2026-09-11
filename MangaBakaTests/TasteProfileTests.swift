@@ -100,7 +100,7 @@ struct TasteProfileCostTests {
         func remove(seriesId: Int) async throws(APIError) {}
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
 
-        func topGenres() async -> [TopGenre] {
+        func topGenres() async -> [TopGenre]? {
             await counter.increment()
             return [
                 TopGenre(tagId: 1, tagName: "Fantasy", affinityScore: 90),
@@ -143,6 +143,38 @@ struct TasteProfileCostTests {
     func lowercasedAtSource() async {
         let names = await TasteProfile(library: CountingLibrary()).favouredTagNames()
         #expect(names == ["fantasy", "action"])
+    }
+
+    /// One failed request used to be cached as "this reader likes nothing" for
+    /// the session: every tag list after it went back to the API's own order.
+    @Test("A failed fetch is not cached; the next page asks again")
+    func failureIsRetried() async {
+        let library = FlakyLibrary()
+        let profile = TasteProfile(library: library)
+
+        #expect(await profile.favouredTagNames().isEmpty)
+        #expect(await profile.favouredTagNames() == ["fantasy"], "The retry must reach the library")
+    }
+
+    /// Fails the first ask and answers the second.
+    private final class FlakyLibrary: LibraryProviding, @unchecked Sendable {
+        let counter = Counter()
+
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
+        func hiddenTagIDs() async -> Set<Int>? { [] }
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+
+        func topGenres() async -> [TopGenre]? {
+            await counter.increment()
+            let first = await counter.value == 1
+            return first ? nil : [TopGenre(tagId: 1, tagName: "Fantasy", affinityScore: 90)]
+        }
     }
 
     /// A library that changed should be reflected without a relaunch.

@@ -177,8 +177,8 @@ struct LibraryTests {
 
         let genres = await makeService().topGenres()
 
-        #expect(genres.map(\.tagName) == ["Time Travel", "Transmigrated into a Game", "Age Regression"])
-        #expect(genres.first?.affinityScore == 83.7)
+        #expect(genres?.map(\.tagName) == ["Time Travel", "Transmigrated into a Game", "Age Regression"])
+        #expect(genres?.first?.affinityScore == 83.7)
     }
 
     /// Recommendations are built from the reader's own library, so without a
@@ -226,7 +226,7 @@ struct LibraryTests {
 
         #expect(await makeService().library().isEmpty)
         #expect(await makeService().recommendations().isEmpty)
-        #expect(await makeService().topGenres().isEmpty)
+        #expect(await makeService().topGenres() == nil, "A failure is nil, not an empty taste")
     }
 }
 

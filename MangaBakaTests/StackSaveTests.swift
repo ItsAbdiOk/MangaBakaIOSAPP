@@ -18,7 +18,7 @@ struct StackSaveWritesThroughTests {
         ) async -> [PersonalRecommendation] { [] }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
-        func topGenres() async -> [TopGenre] { [] }
+        func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
         func remove(seriesId: Int) async throws(APIError) {}
 

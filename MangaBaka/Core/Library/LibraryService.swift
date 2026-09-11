@@ -27,7 +27,9 @@ protocol LibraryProviding: Sendable {
     func hiddenTagIDs() async -> Set<Int>?
 
     /// The reader's strongest tag affinities, highest first.
-    func topGenres() async -> [TopGenre]
+    /// Nil when the request failed, so a failure is not cached as "this
+    /// reader likes nothing". Empty is a real answer: no library yet.
+    func topGenres() async -> [TopGenre]?
 
     /// Puts a series into the reader's library.
     ///
@@ -290,10 +292,10 @@ actor LibraryService: LibraryProviding {
     /// 50). Omitting it returns the real answer, which is a handful — three on
     /// a 937-series library — so this is a short list by nature, not a
     /// truncated one.
-    func topGenres() async -> [TopGenre] {
+    func topGenres() async -> [TopGenre]? {
         let results: [TopGenre]? = try? await client.getResults(
             "/v1/my/series/discover/top-genres"
         )
-        return (results ?? []).sorted { ($0.affinityScore ?? 0) > ($1.affinityScore ?? 0) }
+        return results?.sorted { ($0.affinityScore ?? 0) > ($1.affinityScore ?? 0) }
     }
 }
