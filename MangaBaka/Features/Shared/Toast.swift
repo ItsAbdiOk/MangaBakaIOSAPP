@@ -57,7 +57,7 @@ private struct ToastOverlay: ViewModifier {
                     .accessibilityAddTraits(.isStaticText)
             }
         }
-        .animation(.snappy(duration: 0.28), value: centre.message)
+        .animation(Motion.reduced(.snappy(duration: 0.28)), value: centre.message)
         // A toast is the confirmation that an action worked. It appears near
         // the bottom of a screen the reader may not be looking at, so the tap
         // gets an answer even when the text does not.

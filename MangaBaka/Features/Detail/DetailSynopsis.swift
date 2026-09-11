@@ -54,7 +54,7 @@ struct DetailSynopsis: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard isTruncated || isExpanded else { return }
-            withAnimation(.snappy(duration: 0.24)) { isExpanded.toggle() }
+            Motion.run(.snappy(duration: 0.24)) { isExpanded.toggle() }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isTruncated || isExpanded ? .isButton : [])

@@ -29,7 +29,7 @@ struct DetailBarTitle: ViewModifier {
             } action: { _, travelled in
                 let hidden = travelled > Self.heroTitleTravel
                 if hidden != heroTitleIsHidden {
-                    withAnimation(.easeOut(duration: 0.2)) { heroTitleIsHidden = hidden }
+                    Motion.run(.easeOut(duration: 0.2)) { heroTitleIsHidden = hidden }
                 }
             }
             .navigationTitle(title)

@@ -109,10 +109,10 @@ struct DetailHero: View {
         Button {
             UIPasteboard.general.string = series.displayTitle ?? ""
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.snappy(duration: 0.2)) { didCopy = true }
+            Motion.run(.snappy(duration: 0.2)) { didCopy = true }
             Task {
                 try? await Task.sleep(for: .seconds(1.6))
-                withAnimation(.snappy(duration: 0.25)) { didCopy = false }
+                Motion.run(.snappy(duration: 0.25)) { didCopy = false }
             }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {

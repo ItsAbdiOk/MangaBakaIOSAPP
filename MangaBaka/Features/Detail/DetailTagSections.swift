@@ -65,7 +65,7 @@ struct DetailTagSections: View {
         ).count
 
         return Button {
-            withAnimation(.snappy(duration: 0.24)) { showsAllGroups.toggle() }
+            Motion.run(.snappy(duration: 0.24)) { showsAllGroups.toggle() }
         } label: {
             HStack(spacing: 6) {
                 Text(showsAllGroups ? "Fewer tags" : "\(remaining) more tag groups")
@@ -98,7 +98,7 @@ struct DetailTagSections: View {
                 Spacer(minLength: 0)
                 if hidden > 0 || isExpanded {
                     Button {
-                        withAnimation(.snappy(duration: 0.22)) { toggle(group.name) }
+                        Motion.run(.snappy(duration: 0.22)) { toggle(group.name) }
                     } label: {
                         Text(isExpanded ? "Less" : "+\(hidden)")
                             .typeChip()
@@ -122,7 +122,7 @@ struct DetailTagSections: View {
     /// One chip for however many spoilers the group holds.
     private func spoilerToggle(_ group: String, count: Int) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.22)) { _ = revealedSpoilers.insert(group) }
+            Motion.run(.snappy(duration: 0.22)) { _ = revealedSpoilers.insert(group) }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "eye.slash")

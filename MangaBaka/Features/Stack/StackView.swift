@@ -188,7 +188,7 @@ struct StackView: View {
                 // settle and nothing to commit.
                 guard drag != .zero else { return }
                 guard abs(dx) > commitThreshold else {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.78)) { drag = .zero }
+                    Motion.run(.spring(response: 0.36, dampingFraction: 0.78)) { drag = .zero }
                     return
                 }
                 let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
@@ -199,7 +199,7 @@ struct StackView: View {
                 if reduceMotion {
                     drag = .zero
                 } else {
-                    withAnimation(.easeOut(duration: 0.22)) { drag.width = dx > 0 ? 700 : -700 }
+                    Motion.run(.easeOut(duration: 0.22)) { drag.width = dx > 0 ? 700 : -700 }
                 }
                 Task {
                     await model.react(kind)

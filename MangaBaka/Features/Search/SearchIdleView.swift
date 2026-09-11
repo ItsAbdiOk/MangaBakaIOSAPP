@@ -43,7 +43,7 @@ struct SearchIdleView: View {
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
                 Button(isEditing ? "Done" : "Edit") {
-                    withAnimation(.snappy(duration: 0.2)) { isEditing.toggle() }
+                    Motion.run(.snappy(duration: 0.2)) { isEditing.toggle() }
                 }
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
@@ -98,7 +98,7 @@ struct SearchIdleView: View {
             if isEditing {
                 Button {
                     counts.invalidate(lens.id)
-                    withAnimation(.snappy(duration: 0.2)) { lenses.delete(id: lens.id) }
+                    Motion.run(.snappy(duration: 0.2)) { lenses.delete(id: lens.id) }
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 20))

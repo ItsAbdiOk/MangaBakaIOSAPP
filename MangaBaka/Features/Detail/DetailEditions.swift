@@ -30,7 +30,7 @@ struct DetailEditions: View {
                     Spacer(minLength: 0)
                     if editions.count > Self.collapsedLimit {
                         Button {
-                            withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                            Motion.run(.snappy(duration: 0.22)) { isExpanded.toggle() }
                         } label: {
                             Text(isExpanded ? "Less" : "+\(editions.count - Self.collapsedLimit)")
                                 .typeChip()

@@ -137,7 +137,7 @@ struct SwitchIndicator: View {
                 .padding(.horizontal, 2)
         }
         .frame(width: Self.trackWidth, height: Self.trackHeight)
-        .animation(.snappy(duration: 0.2), value: isOn)
+        .animation(Motion.reduced(.snappy(duration: 0.2)), value: isOn)
         .accessibilityHidden(true)
     }
 }

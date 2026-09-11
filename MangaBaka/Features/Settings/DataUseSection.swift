@@ -43,7 +43,7 @@ struct DataUseSection: View {
 
                 if !slowest.isEmpty {
                     Button {
-                        withAnimation(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                        Motion.run(.snappy(duration: 0.22)) { isExpanded.toggle() }
                     } label: {
                         Text(isExpanded ? "Hide the detail" : "The eight slowest")
                             .typeInstruction()

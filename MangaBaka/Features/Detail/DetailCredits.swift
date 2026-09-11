@@ -112,7 +112,7 @@ struct DetailCredits: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     guard row.isExpandable else { return }
-                    withAnimation(.snappy(duration: 0.2)) { toggle(row) }
+                    Motion.run(.snappy(duration: 0.2)) { toggle(row) }
                 }
                 .padding(.vertical, 12)
                 .background(Palette.surface)

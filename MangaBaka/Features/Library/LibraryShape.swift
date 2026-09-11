@@ -40,7 +40,7 @@ struct LibraryShapeBar: View {
                         .frame(maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(.snappy(duration: 0.2)) {
+                            Motion.run(.snappy(duration: 0.2)) {
                                 selected = selected == band.state ? nil : band.state
                             }
                         }
@@ -70,7 +70,7 @@ struct LibraryShapeBar: View {
         FlowLayout(spacing: 12, lineSpacing: 0) {
             ForEach(counts, id: \.state) { band in
                 Button {
-                    withAnimation(.snappy(duration: 0.2)) {
+                    Motion.run(.snappy(duration: 0.2)) {
                         selected = selected == band.state ? nil : band.state
                     }
                 } label: {

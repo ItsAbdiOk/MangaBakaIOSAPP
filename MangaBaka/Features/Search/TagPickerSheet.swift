@@ -223,7 +223,7 @@ struct TagPickerSheet: View {
             Button {
                 // One group open at a time: four open groups is the wall this
                 // screen exists to avoid.
-                withAnimation(.snappy(duration: 0.2)) {
+                Motion.run(.snappy(duration: 0.2)) {
                     openGroup = isOpen ? nil : root.id
                 }
             } label: {

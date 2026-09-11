@@ -243,7 +243,7 @@ private struct ZoomableCover: View {
                 .onEnded { _ in committed = scale }
         )
         .onTapGesture(count: 2) {
-            withAnimation(.snappy(duration: 0.25)) {
+            Motion.run(.snappy(duration: 0.25)) {
                 scale = scale > 1 ? 1 : 2.5
                 committed = scale
             }

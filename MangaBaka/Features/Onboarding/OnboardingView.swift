@@ -57,7 +57,7 @@ struct OnboardingView: View {
                 Spacer(minLength: 12)
 
                 Button("Next") {
-                    withAnimation(.snappy(duration: 0.25)) { page += 1 }
+                    Motion.run(.snappy(duration: 0.25)) { page += 1 }
                 }
                 .typeRowTitle()
                 .foregroundStyle(Palette.accent)
