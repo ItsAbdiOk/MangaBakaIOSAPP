@@ -13,6 +13,9 @@ struct SeriesDetailView: View {
     let schedule: ReleaseScheduleService?
     let characters: CharacterService?
     let taste: TasteProfile?
+    /// The volumes on Apple Books. Optional like the others: a page without
+    /// it shows MangaBaka's own editions instead.
+    var appleBooks: AppleBooksClient?
     /// The reader's content filter, so an explicit tag name is not shown to
     /// someone who filtered explicit content — a tag is rated independently of
     /// its series.
@@ -25,6 +28,7 @@ struct SeriesDetailView: View {
     var onOpenSchedule: (() -> Void)?
 
     @State private var similar: [Series] = []
+    @State private var appleVolumes: [AppleBooksVolume] = []
     @State private var alsoLike: [Series] = []
     @State private var extras = SeriesExtras()
     @State private var covers: [SeriesImage] = []
@@ -79,7 +83,13 @@ struct SeriesDetailView: View {
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
                 DetailCredits(series: shown)
-                VolumesSection(volumes: extras.volumes)
+                // The store's shelf when it has one; MangaBaka's editions
+                // otherwise. Never both — the same volume twice is a bug.
+                if appleVolumes.isEmpty {
+                    VolumesSection(volumes: extras.volumes)
+                } else {
+                    AppleVolumesRow(volumes: appleVolumes, expected: shown.finalVolume.map { Int($0) })
+                }
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
                     relationships: extras.relationships,
@@ -262,7 +272,16 @@ struct SeriesDetailView: View {
         async let cast: Void = loadCast()
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()
-        _ = await (cast, cadence, taste)
+        async let store: Void = loadAppleVolumes()
+        _ = await (cast, cadence, taste, store)
+    }
+
+    /// One request, cached a week, after the page is readable: the shelf is
+    /// below the fold and the store is a third party with its own limit.
+    private func loadAppleVolumes() async {
+        guard let appleBooks else { return }
+        let country = Locale.current.region?.identifier ?? "us"
+        appleVolumes = await appleBooks.volumes(for: shown, country: country) ?? []
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it
