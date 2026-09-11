@@ -66,35 +66,17 @@ struct SecurityTests {
     @Test("A Release build cannot carry a personal access token",
           .enabled(if: SourceTree.isAvailable))
     func releaseCannotCarryAToken() throws {
-        let release = try SourceTree.read("Configs/Release.xcconfig")
+        let release = try Xcconfig.read("Release.xcconfig")
 
         // **The assignment's VALUE, not the fact that it exists.**
         // This read `release.contains("MB_PAT =")` until 2026-09-11, which
         // passes just as happily against `MB_PAT = mb-a-real-token`. The one
         // test whose entire job is to stop a credential shipping would have
-        // watched it ship. Found by a review agent asking, of every assertion
-        // in the suite, "would this still pass if the thing it guards were
-        // broken?"
-        let assignments = release
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { $0.hasPrefix("MB_PAT") }
-        #expect(!assignments.isEmpty, "Release must set MB_PAT, so a stale value cannot leak in")
-        for assignment in assignments {
-            let value = assignment
-                .drop { $0 != "=" }
-                .dropFirst()
-                .trimmingCharacters(in: .whitespaces)
-            #expect(value.isEmpty, "Release assigns MB_PAT a value: \(assignment)")
-        }
-        // The word appears in a comment explaining why it is absent, so the
-        // check is on the include itself rather than the mention.
-        let includesSecrets = release
-            .split(separator: "\n")
-            .contains { line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                return trimmed.hasPrefix("#include") && trimmed.contains("Secrets")
-            }
+        // watched it ship. The same assertion existed a second time in
+        // `LibraryTests`; both go through `Xcconfig` now, so there is nothing
+        // left to fix twice.
+        Xcconfig.expectEmpty("MB_PAT", in: release, file: "Release.xcconfig")
+        let includesSecrets = Xcconfig.includesSecrets(release)
         #expect(!includesSecrets, "Release must not include the file holding a real token")
     }
 

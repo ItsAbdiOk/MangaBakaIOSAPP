@@ -255,7 +255,12 @@ struct ReleaseTokenTests {
     func releaseExcludesSecrets() throws {
         let release = try config("Release.xcconfig")
         #expect(!includesSecrets(release))
-        #expect(release.contains("MB_PAT ="), "Release forces the value empty")
+        // Was `release.contains("MB_PAT =")`, whose comment claimed the value
+        // was empty and whose assertion did not look at it. The duplicate of
+        // this exact mistake in `SecurityTests` was fixed first; this one was
+        // found by a review agent grepping for the assertion rather than for
+        // the bug.
+        Xcconfig.expectEmpty("MB_PAT", in: release, file: "Release.xcconfig")
     }
 
     @Test("Debug config still picks the token up for local development")
