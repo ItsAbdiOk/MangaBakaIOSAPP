@@ -222,8 +222,17 @@ final class ScheduleModel {
         snapshot = await service.snapshot()
         progress = await service.progress
         isLoading = false
+        // Coming back to a build still running: follow it again. Leaving the
+        // screen cancelled the poll and nothing restarted it, so the card
+        // promising "leaving does not lose progress — it resumes" sat frozen
+        // at whatever count it had when the reader left.
+        if progress.isRunning { followBuild() }
         await loadAnnounced()
     }
+
+    /// Whether the screen is following a build. For the test that pins the
+    /// resume above; nothing on screen reads it.
+    var isFollowingBuild: Bool { pollTask != nil }
 
     /// The announced half, narrowed to the reader's own library.
     ///
@@ -240,13 +249,20 @@ final class ScheduleModel {
     /// Starts a measurement and follows it.
     func measure(refresh: Bool = false) async {
         await service.build(refresh: refresh)
+        followBuild()
+    }
+
+    private func followBuild() {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
             // Each series is banked as it lands, so the screen fills in rather
             // than waiting three minutes for a whole answer.
             while !Task.isCancelled {
                 guard let self else { return }
-                if await !self.refreshProgress() { return }
+                if await !self.refreshProgress() {
+                    self.pollTask = nil
+                    return
+                }
                 try? await Task.sleep(for: .seconds(2))
             }
         }
