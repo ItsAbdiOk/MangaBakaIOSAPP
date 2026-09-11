@@ -117,7 +117,7 @@ enum ReadingInsights {
     }
 
     /// Minutes for one chapter of a given format.
-    private static func minutesPerChapter(_ type: String?) -> Double {
+    static func minutesPerChapter(_ type: String?) -> Double {
         switch type?.lowercased() {
         // A vertical-scroll chapter is short: 40-70 panels read in one motion.
         case "manhwa", "manhua": 6

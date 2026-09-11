@@ -23,6 +23,7 @@ extension RootView {
                             scheduleSummary: nil,
                             onOpenSchedule: { showsSchedule = true },
                             onOpenTaste: { showsTaste = true },
+                            onOpenWrapped: { showsWrapped = true },
                             onOpenShelf: { state in
                                 openShelf = session.library.shelves.first { $0.state == state }
                             },
@@ -35,6 +36,19 @@ extension RootView {
                                     shelf: shelf,
                                     path: $shelfPath,
                                     onSave: saveLibraryChange
+                                )
+                            }
+                            .navigationDestination(isPresented: $showsWrapped) {
+                                WrappedView(
+                                    entries: session.library.entries,
+                                    // The baseline the signature statistic is
+                                    // measured against. From the live pulse
+                                    // where it has arrived, and a recent
+                                    // reading otherwise — it moves by a few
+                                    // hundred a week, and a stale denominator
+                                    // shifts a lift by less than a percent.
+                                    catalogueSize: session.pulse.pulse?.activeSeriesCount ?? 304_108,
+                                    path: $shelfPath
                                 )
                             }
                             .navigationDestination(isPresented: $showsTaste) {

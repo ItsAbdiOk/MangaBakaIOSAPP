@@ -10,6 +10,7 @@ struct LibraryView: View {
     let scheduleSummary: String?
     let onOpenSchedule: () -> Void
     let onOpenTaste: () -> Void
+    let onOpenWrapped: () -> Void
     private let onOpenShelf: (LibraryEntry.State) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenStack: () -> Void
@@ -20,6 +21,7 @@ struct LibraryView: View {
         scheduleSummary: String?,
         onOpenSchedule: @escaping () -> Void,
         onOpenTaste: @escaping () -> Void,
+        onOpenWrapped: @escaping () -> Void,
         onOpenShelf: @escaping (LibraryEntry.State) -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenStack: @escaping () -> Void
@@ -29,6 +31,7 @@ struct LibraryView: View {
         self.scheduleSummary = scheduleSummary
         self.onOpenSchedule = onOpenSchedule
         self.onOpenTaste = onOpenTaste
+        self.onOpenWrapped = onOpenWrapped
         self.onOpenShelf = onOpenShelf
         self.onOpenSettings = onOpenSettings
         self.onOpenStack = onOpenStack
@@ -83,6 +86,7 @@ struct LibraryView: View {
                     if !model.isSearching && model.filter == nil {
                         scheduleCard
                         tasteCard
+                        wrappedCard
                         PickBackUp(entries: model.inProgress, path: $path)
                     }
 

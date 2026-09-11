@@ -44,6 +44,7 @@ struct RootView: View {
     @State var shelfPath: [Series] = []
     @State var showsSchedule = false
     @State var showsTaste = false
+    @State var showsWrapped = false
     @State var showsSettings = false
     @State var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
@@ -202,6 +203,7 @@ struct RootView: View {
             openShelf = nil
             showsSchedule = false
             showsTaste = false
+            showsWrapped = false
             showsSettings = false
         case .search:
             searchPath.removeAll()

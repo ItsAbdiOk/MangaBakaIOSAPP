@@ -83,11 +83,30 @@ extension ReadingWrapped {
         var perDay: Int { max(1, Int((Double(chapters) / Double(max(days, 1))).rounded())) }
     }
 
+    /// The longest a person could plausibly spend reading in one day.
+    ///
+    /// **A guess, and the point of it is to catch logging rather than to
+    /// model a reader.** Sixteen hours is already an extraordinary day; it is
+    /// set high on purpose so that a genuine binge survives and only an
+    /// impossible one is rejected.
+    static let plausibleHoursPerDay: Double = 16
+
     /// The fastest thing the reader got through, of those with both dates.
     ///
-    /// Requires a real run — twenty chapters at least — because a one-chapter
-    /// oneshot finished the day it was started is technically the fastest
-    /// reading anybody has ever done and says nothing about them.
+    /// Two things are rejected, and both are the same mistake in different
+    /// clothes — treating a date field as though it recorded reading.
+    ///
+    /// **A oneshot.** One chapter finished the day it was started is
+    /// technically the fastest reading anybody has ever done.
+    ///
+    /// **A backfill.** Found on a real 939-entry library: the first version of
+    /// this screen announced "700 chapters a day — NARUTO, 700 chapters in 1
+    /// day". Nobody read Naruto in a day. What happened is that a series was
+    /// marked completed and its start and finish dates were both set to that
+    /// moment, which is what every importer and most bulk edits do. The guard
+    /// uses the app's own per-format minutes — themselves a labelled guess —
+    /// to ask whether the claim would fit in a waking day, and drops it when
+    /// it would not.
     static func fastestFinish(
         in entries: [LibraryEntry],
         calendar: Calendar = .current,
@@ -100,9 +119,18 @@ extension ReadingWrapped {
                 let chapters = Int(ReadingInsights.chaptersCounted(for: entry))
                 guard chapters >= minimumChapters else { return nil }
                 let days = calendar.dateComponents([.day], from: start, to: finish).day ?? 0
-                return Sprint(entry: entry, chapters: chapters, days: max(days, 1))
+                let sprint = Sprint(entry: entry, chapters: chapters, days: max(days, 1))
+                guard isPlausible(sprint) else { return nil }
+                return sprint
             }
             .max { $0.perDay < $1.perDay }
+    }
+
+    /// Whether a sprint could have been read rather than merely recorded.
+    static func isPlausible(_ sprint: Sprint) -> Bool {
+        let minutes = ReadingInsights.minutesPerChapter(sprint.entry.series?.type)
+        let hoursPerDay = Double(sprint.perDay) * minutes / 60
+        return hoursPerDay <= plausibleHoursPerDay
     }
 
     /// The series the reader has been part-way through the longest.

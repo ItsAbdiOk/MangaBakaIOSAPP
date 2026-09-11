@@ -250,9 +250,38 @@ struct ReadingWrappedTests {
 
     @Test("Same-day finishes count as one day, not none")
     func sameDayIsOneDay() throws {
-        let entries = [libraryEntry(1, total: 60, start: day("2026-02-02"), finish: day("2026-02-02"))]
+        let entries = [
+            libraryEntry(1, total: 60, start: day("2026-02-02"), finish: day("2026-02-02"))
+        ]
         let sprint = try #require(ReadingWrapped.fastestFinish(in: entries, calendar: utc))
         #expect(sprint.perDay == 60)
+    }
+
+    @Test("A whole series logged on one day is a backfill, not a binge")
+    func backfillsAreRejected() {
+        // Found on a real 939-entry library: the screen announced "700
+        // chapters a day — NARUTO, 700 chapters in 1 day". Nobody read Naruto
+        // in a day. A series marked completed with both dates set to that
+        // moment is what every importer and most bulk edits produce.
+        let entries = [
+            libraryEntry(1, total: 700, start: day("2026-01-01"),
+                         finish: day("2026-01-01"), type: "manga"),
+            libraryEntry(2, total: 120, start: day("2026-02-01"),
+                         finish: day("2026-02-03"), type: "manhwa")
+        ]
+        let sprint = ReadingWrapped.fastestFinish(in: entries, calendar: utc)
+        #expect(sprint?.entry.seriesId == 2, "the real binge, not the import")
+    }
+
+    @Test("A genuine binge is not rejected with the backfills")
+    func realBingesSurvive() {
+        // 40 manhwa chapters in a day is four hours. Extraordinary, possible,
+        // and exactly the kind of thing this card exists to celebrate.
+        let entries = [
+            libraryEntry(1, total: 40, start: day("2026-03-01"),
+                         finish: day("2026-03-01"), type: "manhwa")
+        ]
+        #expect(ReadingWrapped.fastestFinish(in: entries, calendar: utc)?.perDay == 40)
     }
 
     @Test("The thing you have been reading longest is still unfinished")
