@@ -50,14 +50,23 @@ struct SeedPickerSheet: View {
         .task { isFieldFocused = true }
     }
 
+    /// The query as a non-optional binding, written once.
+    ///
+    /// The field and its clear button both need it, and both had their own
+    /// copy of the same `Binding(get:set:)` — two places to change the day the
+    /// query stops being an optional string.
+    private var queryText: Binding<String> {
+        Binding(
+            get: { search.query.text ?? "" },
+            set: { search.query.text = $0 }
+        )
+    }
+
     private var field: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Palette.textTertiary)
-            TextField("Search for a series", text: Binding(
-                get: { search.query.text ?? "" },
-                set: { search.query.text = $0 }
-            ))
+            TextField("Search for a series", text: queryText)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .submitLabel(.search)
@@ -67,13 +76,7 @@ struct SeedPickerSheet: View {
             .onSubmit { Task { search.cancelPendingDebounce(); await search.search() } }
             .onChange(of: search.query.text) { _, _ in search.queryDidChange() }
 
-            SearchClearButton(
-                text: Binding(
-                    get: { search.query.text ?? "" },
-                    set: { search.query.text = $0 }
-                ),
-                onClear: { search.queryDidChange() }
-            )
+            SearchClearButton(text: queryText, onClear: { search.queryDidChange() })
         }
         .padding(.horizontal, 14)
         .frame(height: Metrics.field)

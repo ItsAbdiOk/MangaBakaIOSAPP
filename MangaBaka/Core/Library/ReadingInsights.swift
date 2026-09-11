@@ -37,14 +37,11 @@ enum ReadingInsights {
         entries
             .filter { $0.state == .reading || $0.state == .rereading || $0.state == .paused }
             .compactMap { entry -> Behind? in
-                guard let total = entry.series?.totalChapters, total > 0 else { return nil }
                 // You cannot have stopped something you never started. Without
                 // this the list ranks the longest series in the library rather
                 // than the ones the reader drifted away from: on a real 939
                 // series library, five of the eight top rows read "ch 0".
-                guard let read = entry.progressChapter, read > 0 else { return nil }
-                let waiting = Int(total - read)
-                guard waiting >= minimum else { return nil }
+                guard let waiting = chaptersLeft(for: entry), waiting >= minimum else { return nil }
                 return Behind(entry: entry, waiting: waiting)
             }
             .sorted { $0.waiting > $1.waiting }
@@ -63,13 +60,23 @@ enum ReadingInsights {
             .filter { $0.state == .reading || $0.state == .rereading || $0.state == .paused }
             .filter { $0.series?.status?.lowercased() == "completed" }
             .compactMap { entry -> Behind? in
-                guard let total = entry.series?.totalChapters, total > 0 else { return nil }
-                let read = entry.progressChapter ?? 0
-                let left = Int(total - read)
-                guard left > 0, left <= within else { return nil }
+                guard let left = chaptersLeft(for: entry), left <= within else { return nil }
                 return Behind(entry: entry, waiting: left)
             }
             .sorted { $0.waiting < $1.waiting }
+    }
+
+    /// Unread chapters for a series the reader has actually started.
+    ///
+    /// Nil where there is no chapter count to subtract from, where the series
+    /// was never opened, or where there is nothing left. `waiting` and
+    /// `nearlyFinished` ask the same question of the same numbers and differ
+    /// only in how big an answer they want, so the arithmetic lives once.
+    private static func chaptersLeft(for entry: LibraryEntry) -> Int? {
+        guard let total = entry.series?.totalChapters, total > 0 else { return nil }
+        guard let read = entry.progressChapter, read > 0 else { return nil }
+        let left = Int(total - read)
+        return left > 0 ? left : nil
     }
 
     // MARK: - How much you have read
@@ -80,12 +87,18 @@ enum ReadingInsights {
     /// a progress number — finishing something and not ticking the last box is
     /// the ordinary case, and counting it as zero would make the total absurd.
     static func chaptersRead(in entries: [LibraryEntry]) -> Int {
-        entries.reduce(0) { total, entry in
-            let progress = Int(entry.progressChapter ?? 0)
-            guard entry.state == .completed else { return total + progress }
-            let whole = Int(entry.series?.totalChapters ?? 0)
-            return total + max(progress, whole)
-        }
+        entries.reduce(0) { $0 + Int(chaptersCounted(for: $1)) }
+    }
+
+    /// How many chapters one entry contributes to a total.
+    ///
+    /// One place, because `chaptersRead` and `hoursRead` each derived the
+    /// completed-series rule themselves and would have drifted apart the first
+    /// time one of them was corrected.
+    private static func chaptersCounted(for entry: LibraryEntry) -> Double {
+        let progress = entry.progressChapter ?? 0
+        guard entry.state == .completed else { return progress }
+        return max(progress, entry.series?.totalChapters ?? 0)
     }
 
     /// Roughly how long that took, in hours.
@@ -98,11 +111,7 @@ enum ReadingInsights {
     /// shows them.
     static func hoursRead(in entries: [LibraryEntry]) -> Double {
         let minutes = entries.reduce(0.0) { total, entry in
-            let progress = Double(entry.progressChapter ?? 0)
-            let counted = entry.state == .completed
-                ? max(progress, entry.series?.totalChapters ?? 0)
-                : progress
-            return total + counted * minutesPerChapter(entry.series?.type)
+            total + chaptersCounted(for: entry) * minutesPerChapter(entry.series?.type)
         }
         return minutes / 60
     }

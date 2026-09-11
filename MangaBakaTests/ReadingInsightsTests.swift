@@ -92,6 +92,19 @@ struct ReadingInsightsTests {
 
     // MARK: - Nearly finished
 
+    @Test("A short completed series you never opened is not nearly finished")
+    func nearlyFinishedAlsoNeedsAStart() {
+        // The same bug as "waiting": a five-chapter completed series with no
+        // progress recorded is five chapters LEFT, which satisfied "within 12"
+        // and read as "you are nearly done". You are not; you never began.
+        let rows = ReadingInsights.nearlyFinished(in: [
+            entry(1, .reading, read: 0, total: 5, status: "completed"),
+            entry(2, .reading, read: nil, total: 5, status: "completed"),
+            entry(3, .reading, read: 3, total: 5, status: "completed")
+        ])
+        #expect(rows.map(\.entry.seriesId) == [3])
+    }
+
     @Test("Ended, and you are a few chapters short")
     func nearlyFinishedIsNarrow() {
         let rows = ReadingInsights.nearlyFinished(in: [
