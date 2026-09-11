@@ -48,6 +48,15 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Webtoon episode lists or thumbnails from the platforms | Declined twice (Abdi asked again 2026-09-11 with a Gemini recipe: og:image scrape + spoofed Referer). og:image is one image per series — the cover MangaBaka already has — so it adds nothing; the Referer spoof is circumventing the CDN's block and App Store guideline 5.2.2 territory. Original reason: no public APIs, and scraping is the terms line. The page shows Season · Episodes from MangaBaka + the schedule, and the read chips carry "Free" / "Free to start" / "Subscription" where that is settled (Webtoons, Tapas, Manta; 2026-09-11) |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
 
+## Accessibility audit, 2026-09-11 evening
+
+83 issues against 78 on the morning baseline. Diffed line by line: nearly
+all of the change is content churn (a different series was open, so its
+synopsis, title and labels appear and the old ones vanish). One issue from
+today's work — "Free" on the read chips failed contrast — fixed. The rest
+are the known classes: the stats strip's uppercase labels, the synopsis at
+AX sizes, the hero title's Dynamic Type, the library search field's height.
+
 ## From Abdi, in build order
 
 1. ~~Hero compression only when it has to.~~ Done, above.

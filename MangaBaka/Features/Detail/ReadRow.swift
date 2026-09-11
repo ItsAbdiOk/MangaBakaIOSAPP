@@ -67,7 +67,10 @@ struct ReadRow: View {
                 if let cost = link.costNote {
                     Text(cost)
                         .typeGridMeta()
-                        .foregroundStyle(Palette.textMuted)
+                        // Secondary, not muted: Apple's audit failed "Free"
+                        // for contrast at this size over the chip's fill
+                        // (2026-09-11 run).
+                        .foregroundStyle(Palette.textSecondary)
                         .lineLimit(1)
                 }
                 Image(systemName: "arrow.up.right")
