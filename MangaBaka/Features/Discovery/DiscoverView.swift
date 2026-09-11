@@ -219,6 +219,8 @@ struct DiscoverView: View {
                 .scrollTargetBehavior(.viewAligned)
             }
         }
+        // The covers' colour, faintly, on the ground behind them.
+        .rowAmbient(row.series)
     }
 
     /// Asks for the next few covers before they are on screen.

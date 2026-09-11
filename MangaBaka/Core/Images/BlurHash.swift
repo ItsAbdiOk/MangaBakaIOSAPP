@@ -27,6 +27,27 @@ enum BlurHash {
         var blue: Float
     }
 
+    /// The image's average colour, as sRGB components in 0...1.
+    ///
+    /// The DC term of a BlurHash *is* the average colour of the image — four
+    /// characters after the size and maximum flags — so this reads it without
+    /// rendering anything. Nil for a malformed hash.
+    static func averageColour(of hash: String) -> AverageColour? {
+        guard hash.count >= 6, let value = decode83(String(Array(hash)[2..<6])) else { return nil }
+        return AverageColour(
+            red: Double((value >> 16) & 255) / 255,
+            green: Double((value >> 8) & 255) / 255,
+            blue: Double(value & 255) / 255
+        )
+    }
+
+    /// sRGB components in 0...1.
+    struct AverageColour: Equatable, Sendable {
+        let red: Double
+        let green: Double
+        let blue: Double
+    }
+
     private struct Parsed {
         let componentsX: Int
         let componentsY: Int

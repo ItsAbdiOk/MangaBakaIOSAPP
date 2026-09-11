@@ -101,6 +101,7 @@ struct DetailOnwardRows: View {
                     .scrollTargetBehavior(.viewAligned)
                 }
             }
+            .rowAmbient(items)
         }
     }
 
