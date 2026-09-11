@@ -25,7 +25,7 @@ final class CommunityPulseService {
         guard !hasLoaded else { return }
         hasLoaded = true
         do {
-            pulse = try await client.getBare("/v0/frontpage/community-pulse", as: CommunityPulse.self)
+            pulse = try await client.getRoot("/v0/frontpage/community-pulse", as: CommunityPulse.self)
         } catch {
             didFail = true
         }

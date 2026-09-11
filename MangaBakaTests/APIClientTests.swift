@@ -18,6 +18,21 @@ struct APIClientFailurePathTests {
         )
     }
 
+    /// A count is read from the pagination block. It used to decode the whole
+    /// series that came back in the one-item page, so a series that would not
+    /// decode cost a saved lens its count.
+    @Test("A count survives a row that does not decode as a series")
+    func totalIgnoresTheRow() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"""
+            {"status":200,"data":[{"id":"not-a-number","cover":null}],
+             "pagination":{"page":1,"limit":1,"count":411,"pages":411}}
+            """#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+        #expect(try await makeClient().total("/v2/series/search") == 411)
+    }
+
     /// Control: with a well-formed response the client succeeds. If this fails,
     /// every failure assertion below is meaningless.
     @Test("Control — a well-formed response decodes")

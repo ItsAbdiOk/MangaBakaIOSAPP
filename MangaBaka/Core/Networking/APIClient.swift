@@ -69,25 +69,6 @@ actor APIClient {
         return payload
     }
 
-    /// A response with no envelope around it.
-    ///
-    /// Two envelope shapes were already known — `data` for most endpoints,
-    /// `results` for recommendations. `/v0/frontpage/community-pulse` is a
-    /// third: the object itself, with no wrapper at all. Verified live on
-    /// 2026-09-11. Decoding it as either of the others fails outright.
-    func getBare<Payload: Decodable>(
-        _ path: String,
-        query: [URLQueryItem] = [],
-        as _: Payload.Type = Payload.self
-    ) async throws(APIError) -> Payload {
-        let data = try await rawData(path: path, query: query)
-        do {
-            return try decoder.decode(Payload.self, from: data)
-        } catch {
-            throw APIError.decoding(underlying: String(describing: error))
-        }
-    }
-
     /// How many results a query has, without downloading them.
     ///
     /// The API reports the total in its pagination block, so a count costs one
@@ -99,13 +80,22 @@ actor APIClient {
     /// missing count, never as zero — "0 now" beside a saved search is a
     /// statement that it found nothing, which is a different and much worse
     /// thing to say.
+    ///
+    /// Only the pagination block is decoded. It used to decode the whole
+    /// `Series` that came back in the one-item page, which made the count
+    /// hostage to that row's shape — any of the decode failures this app has
+    /// had would have cost a saved lens its count.
     func total(_ path: String, query: [URLQueryItem] = []) async throws(APIError) -> Int? {
         let data = try await rawData(path: path, query: query)
         do {
-            return try decoder.decode(APIEnvelope<[Series]>.self, from: data).pagination?.count
+            return try decoder.decode(PaginationOnly.self, from: data).pagination?.count
         } catch {
             throw APIError.decoding(underlying: String(describing: error))
         }
+    }
+
+    private struct PaginationOnly: Decodable {
+        let pagination: Pagination?
     }
 
     /// Performs the request and returns the raw body, having already turned
@@ -292,6 +282,9 @@ actor APIClient {
     /// turned it into nil, and the swipe stack concluded the reader had no
     /// profile to recommend from. Nothing surfaced; the stack just quietly used
     /// a worse source.
+    ///
+    /// `/v0/frontpage/community-pulse` is the same shape (verified 2026-09-11)
+    /// and briefly had its own copy of this function under another name.
     func getRoot<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
@@ -300,9 +293,10 @@ actor APIClient {
         let data = try await rawData(path: path, query: query)
         do {
             return try decoder.decode(Payload.self, from: data)
-        } catch let error as APIError {
-            throw error
         } catch {
+            // Only a DecodingError can land here: rawData's typed throw
+            // happens before the do. The `catch let error as APIError` that
+            // stood above this could never fire.
             throw APIError.decoding(underlying: String(describing: error))
         }
     }
