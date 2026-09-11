@@ -220,4 +220,18 @@ struct ReadingInsightsTests {
         #expect(sample.seen == 2)
         #expect(sample.total == 5)
     }
+
+    /// The verdicts leave plan-to-read out; the line beside them saying how
+    /// many series they saw counted it in. The one number whose job is to
+    /// stop the reader over-trusting the verdict was itself inflated.
+    @Test("The sample counts what the verdicts counted")
+    func sampleMatchesVerdicts() {
+        let sample = ReadingInsights.sampleSize(in: [
+            entry(1, .completed, tags: [tag(1, "Murim")]),
+            entry(2, .planToRead, tags: [tag(1, "Murim")]),
+            entry(3, .considering, tags: [tag(1, "Murim")])
+        ])
+        #expect(sample.seen == 1, "A tagged backlog entry was never read")
+        #expect(sample.total == 3)
+    }
 }

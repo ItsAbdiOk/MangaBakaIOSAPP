@@ -215,7 +215,11 @@ enum ReadingInsights {
     /// a different claim from one drawn from all of them, and the reader cannot
     /// tell which they are looking at.
     static func sampleSize(in entries: [LibraryEntry]) -> (seen: Int, total: Int) {
-        let usable = entries.filter { $0.series?.richTags.isEmpty == false }
+        // The same two exclusions `verdicts` makes. Counting the backlog here
+        // inflated the one number whose job is to keep the verdict honest.
+        let usable = entries.filter {
+            $0.state != .planToRead && $0.state != .considering && $0.series?.richTags.isEmpty == false
+        }
         return (usable.count, entries.count)
     }
 }
