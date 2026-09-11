@@ -96,6 +96,22 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    /// The calendar year of a release date, fixed to UTC to match how
+    /// `date` itself is parsed — a device-zone calendar can push a date
+    /// west of UTC onto the previous year.
+    fileprivate static func utcYear(of date: Date) -> Int {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        return utc.component(.year, from: date)
+    }
+
+    /// The median of an already-sorted, non-empty list of page counts.
+    fileprivate static func median(of sorted: [Int]) -> Double {
+        let count = sorted.count
+        if count % 2 == 1 { return Double(sorted[count / 2]) }
+        return Double(sorted[count / 2 - 1] + sorted[count / 2]) / 2
+    }
 }
 
 extension SeriesWork {
@@ -122,6 +138,66 @@ extension SeriesWork {
 
         /// "Vol. 1", or "Other editions" for the numberless.
         var label: String { number.map { "Vol. \($0)" } ?? "Other editions" }
+
+        /// A short, honest label per edition, keyed by `SeriesWork.id`.
+        ///
+        /// `/v1/series/{id}/works` carries no format/binding field (verified
+        /// 2026-09-11), so an edition can never be called "paperback" or
+        /// "digital" — that would be invented. This leans only on what the
+        /// API actually gives us and differs between editions: the release
+        /// year, an oversized page count (a labelled GUESS at an omnibus),
+        /// and, if editions still read identical after that, the ISBN
+        /// suffix as a last resort — so two cards for the same volume never
+        /// say the same thing. A volume with a single edition gets no
+        /// labels: there is nothing to tell it apart from.
+        var editionLabels: [String: String] {
+            guard editions.count > 1 else { return [:] }
+
+            let years = editions.compactMap { $0.date.map { SeriesWork.utcYear(of: $0) } }
+            let yearsDiffer = Set(years).count > 1
+
+            let pageCounts = editions.compactMap(\.pages).sorted()
+            let medianPages = pageCounts.isEmpty ? nil : SeriesWork.median(of: pageCounts)
+
+            var parts: [String: [String]] = [:]
+            for edition in editions {
+                var editionParts: [String] = []
+                if yearsDiffer, let date = edition.date {
+                    editionParts.append(String(SeriesWork.utcYear(of: date)))
+                }
+                if let pages = edition.pages, let medianPages,
+                   Double(pages) >= 2.2 * medianPages {
+                    // GUESS: there is no format field to confirm this. The
+                    // 2.2x-median threshold is picked to catch Hunter x
+                    // Hunter vol. 8's 616pp 3-in-1 against its ~195-200pp
+                    // single editions, without flagging a volume that is
+                    // merely long.
+                    editionParts.append("likely an omnibus")
+                }
+                parts[edition.id] = editionParts
+            }
+
+            // If two editions still read the same after year and page-count
+            // labelling, fall back to the ISBN suffix so no two cards ever
+            // read identically — the reader's actual complaint.
+            let counts = Dictionary(grouping: parts.values) { $0.joined(separator: " · ") }
+            let duplicated = Set(counts.filter { $0.value.count > 1 }.keys)
+            if !duplicated.isEmpty {
+                for edition in editions {
+                    guard let editionParts = parts[edition.id],
+                          duplicated.contains(editionParts.joined(separator: " · ")),
+                          let isbn = edition.isbn, isbn.count >= 4
+                    else { continue }
+                    parts[edition.id, default: []].append("ISBN …\(isbn.suffix(4))")
+                }
+            }
+
+            var labels: [String: String] = [:]
+            for (id, editionParts) in parts where !editionParts.isEmpty {
+                labels[id] = editionParts.joined(separator: " · ")
+            }
+            return labels
+        }
     }
 
     /// Editions gathered into volumes, in spine order.

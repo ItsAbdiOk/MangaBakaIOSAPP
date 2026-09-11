@@ -111,7 +111,7 @@ struct VolumeSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     ForEach(volume.editions) { edition in
-                        editionCard(edition)
+                        editionCard(edition, label: volume.editionLabels[edition.id])
                     }
                 }
                 .padding(.horizontal, Metrics.gutter)
@@ -165,18 +165,34 @@ struct VolumeSheet: View {
     /// One edition. The ISBN is shown because it is the only thing that tells
     /// a paperback from a hardcover when the covers and titles are identical —
     /// and because it is what a reader takes to a bookshop.
-    private func editionCard(_ edition: SeriesWork) -> some View {
+    ///
+    /// `label` comes from `SeriesWork.Volume.editionLabels`: without a price,
+    /// it replaces the repeated "Price not listed" headline (three identical
+    /// cards for Hunter x Hunter vol. 8 was the bug report); with a price,
+    /// it sits on the meta line instead so the price still leads.
+    /// The price when there is one; otherwise the label that tells this
+    /// edition from its siblings, so three cards never read the same.
+    private func headline(_ edition: SeriesWork, label: String?) -> some View {
+        Text(edition.price ?? label ?? "Price not listed")
+            .typeDetailSectionHeader()
+            .foregroundStyle(edition.price == nil ? Palette.textMuted : Palette.textPrimary)
+    }
+
+    private func editionCard(_ edition: SeriesWork, label: String?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(edition.price ?? "Price not listed")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(edition.price == nil ? Palette.textMuted : Palette.textPrimary)
+                headline(edition, label: label)
                 Spacer(minLength: 8)
                 if let pages = edition.pages {
                     Text("\(pages.formatted()) pp")
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
+            }
+            if edition.price != nil, let label {
+                Text(label)
+                    .typeGridMeta()
+                    .foregroundStyle(Palette.textMuted)
             }
 
             if let isbn = edition.isbn {
