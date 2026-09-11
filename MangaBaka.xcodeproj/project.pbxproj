@@ -223,7 +223,6 @@
 		D7BB799564E52E6E814831F8 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCBF5D620B264CE3642E9F9 /* TokenStore.swift */; };
 		D82EE639AF5818E765A8482A /* StackSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A6C7BDE02EF1D5618DBBF97 /* StackSaveTests.swift */; };
 		D84B75E1AA8C7B233A63FF52 /* SeriesFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EED0A0A3A05647D2445F70 /* SeriesFactory.swift */; };
-		DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC64BD874EBCE6A7158371CF /* TasteModel.swift */; };
 		DB639DB55378A1D95799A40C /* FormatPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41B78E9BC45F46C39BABCE7 /* FormatPreferences.swift */; };
 		DC0BAC00956380F4B187E44B /* LibraryWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5140A9265F7AD2392EAC27 /* LibraryWriteTests.swift */; };
 		DD3D5E8B24757372CA053249 /* PublisherBrowseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33D23182CCFB7A9D323BE3F /* PublisherBrowseTests.swift */; };
@@ -266,7 +265,6 @@
 		FE9D48BF6F8F6C94A61BB78F /* MixModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EB62C466EA9D205CAF1E43 /* MixModel.swift */; };
 		FED4BE9B85B862E4DD39B937 /* DetailSynopsis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B0478C5E79631F422DE74E /* DetailSynopsis.swift */; };
 		FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */; };
-		FF8DA99F5481C26988FDD419 /* TasteModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658E85CDA5F805FE594CD22B /* TasteModelTests.swift */; };
 		FFE8036ADF7EBF35B553021B /* TasteProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0E5C3645601A4E1DAF73E0 /* TasteProfileTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -393,7 +391,6 @@
 		6218AAB3B2F81AA31F14F9BD /* CharacterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterTests.swift; sourceTree = "<group>"; };
 		64EED0A0A3A05647D2445F70 /* SeriesFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesFactory.swift; sourceTree = "<group>"; };
 		657A52EB92EF36BCF2CA0380 /* LibraryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryModelTests.swift; sourceTree = "<group>"; };
-		658E85CDA5F805FE594CD22B /* TasteModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModelTests.swift; sourceTree = "<group>"; };
 		65EE5304AC21E3D3FDFCAD34 /* ScheduleModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleModelTests.swift; sourceTree = "<group>"; };
 		66AC80B7959AD108FCFD7FFF /* StackModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackModel.swift; sourceTree = "<group>"; };
 		67151A4C694B9F92EFDACB90 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
@@ -527,7 +524,6 @@
 		DA80EE3FE0BAFFD883C3E1CA /* control.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = control.json; sourceTree = "<group>"; };
 		DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackResetMenu.swift; sourceTree = "<group>"; };
 		DC42EC577D0B00F110637E3C /* BrowseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseModel.swift; sourceTree = "<group>"; };
-		DC64BD874EBCE6A7158371CF /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
 		E15F4ACDF669DA32B5C5C72E /* ScrollEdge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollEdge.swift; sourceTree = "<group>"; };
 		E3206B8E76D17989895A38DB /* StackHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackHeader.swift; sourceTree = "<group>"; };
 		E34EA181BB806A56A047B665 /* ScheduleRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleRow.swift; sourceTree = "<group>"; };
@@ -701,7 +697,6 @@
 				9BD3ABF2DE6BE7DF85D6DD04 /* Shared */,
 				79CE7309405C7B6552225D8B /* Shelf */,
 				478ED303415CCB3C0410FF78 /* Stack */,
-				C8C6AAF17AAB1E29BF186204 /* Taste */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -935,7 +930,6 @@
 				1A0D6462580D13B5583DD893 /* TagGroupingTests.swift */,
 				F80BC8BA2A37E95E18ED12ED /* TagSearchTests.swift */,
 				7B5857B9B0D8F62B45DED4DB /* TasteLedgerTests.swift */,
-				658E85CDA5F805FE594CD22B /* TasteModelTests.swift */,
 				5A0E5C3645601A4E1DAF73E0 /* TasteProfileTests.swift */,
 				7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */,
 				AB31715F3498511F3FA97399 /* WireNullabilityTests.swift */,
@@ -1059,14 +1053,6 @@
 				4EA0FAE13665B4C11439C5A4 /* TokenProvider.swift */,
 			);
 			path = Networking;
-			sourceTree = "<group>";
-		};
-		C8C6AAF17AAB1E29BF186204 /* Taste */ = {
-			isa = PBXGroup;
-			children = (
-				DC64BD874EBCE6A7158371CF /* TasteModel.swift */,
-			);
-			path = Taste;
 			sourceTree = "<group>";
 		};
 		CEE5AD03CD8404B7319BDC77 /* Settings */ = {
@@ -1443,7 +1429,6 @@
 				773DF186686FA3A5A3125E72 /* TagSearch.swift in Sources */,
 				F24DC9CB28FB32EA259706D6 /* TapTarget.swift in Sources */,
 				FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */,
-				DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */,
 				4A0C19E90EBFD088A4D3D5D0 /* TasteProfile.swift in Sources */,
 				F832A9705F574283636CF853 /* TitlePreference.swift in Sources */,
 				CD26E3FD2D5CD78EA215B269 /* TitleSection.swift in Sources */,
@@ -1561,7 +1546,6 @@
 				3D4A4EC64B6872907B3174C9 /* TagGroupingTests.swift in Sources */,
 				47AE0686BC32DFC61BCACDFD /* TagSearchTests.swift in Sources */,
 				066EC731FD7232CBD471A87F /* TasteLedgerTests.swift in Sources */,
-				FF8DA99F5481C26988FDD419 /* TasteModelTests.swift in Sources */,
 				FFE8036ADF7EBF35B553021B /* TasteProfileTests.swift in Sources */,
 				3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */,
 				FE45C64EFE4949E7F85108CC /* WireNullabilityTests.swift in Sources */,
