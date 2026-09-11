@@ -80,3 +80,22 @@ Weekly limit reset before any of it is built.
 Declined, with the reason: Amazon links without an Associates account; pulling
 preview pages as images; a generic "open Webtoons" button that lands anywhere
 but the title; Crunchyroll for the anime (no per-title link in the data).
+
+## Review findings deliberately left, with reasons
+
+From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
+
+- **Decisions for Abdi** — `ShelfDetailView` delete-or-rewire; L12 two rating
+  scales (out of 5 in Library, out of 10 in Wrapped); L7 the A-Z jump index at
+  20×13pt (a redesign); L11/S-F21 the hand-drawn switch (contested in the
+  review itself); S-F12 `AppServices`' nineteen values.
+- **Judgement calls** — R24 series titles on the lock screen; D-A3 tag chips
+  re-blend and type chips do not; P-F10 a client backstop for `tag_not`.
+- **Would need a measurement first** — S-F17 the gallery's two 1000pt blurs;
+  S-F5 `heroTitleTravel` at AX sizes; S-F14 leading vs Dynamic Type; S-F19
+  Bold Text; S-F6 `Motion` and view invalidation; S-F4 the key-window inset.
+- **Tied to the shelf decision** — L3 `shelves` derived for a screen nothing
+  presents.
+- **Small and unglamorous** — L10 the 0.6/0.3 thresholds in a view (label
+  them when next in the file); P-F12 three filter functions as one; D-A4;
+  D-B2; W16 a comment naming values the schema lacks.

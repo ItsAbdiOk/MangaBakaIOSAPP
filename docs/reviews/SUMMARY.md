@@ -1,3 +1,8 @@
+> **2026-09-11, after the fixes.** Every finding below is either fixed — one
+> commit each in `247eb91..f19a76b`, the failing test in the message — or
+> listed with its reason in `docs/todo-next-week.md`. The ten slice reports this
+> summarised were deleted the same day; they are in git history at `247eb91`.
+
 # Deep review — synthesis
 
 2026-09-11. Six read-only slice reviews, 104 findings, ~18,400 lines of Swift read in

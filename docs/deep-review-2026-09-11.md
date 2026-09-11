@@ -1,6 +1,6 @@
 # The deep review, fixed — 2026-09-11
 
-What happened after `docs/handoff-deep-review.md`, in the order you set: fix it
+What happened after the deep review (`docs/reviews/SUMMARY.md`), in the order you set: fix it
 all, then the feel of the app, then ship. 64 commits, one per finding or one per
 feel step, each with the failing test in its message where a test could see it.
 
@@ -38,7 +38,7 @@ feel step, each with the failing test in its message where a test could see it.
   "From 13 gaps between releases" instead of a count of days.
 - **Covers download at the size they are drawn** — a 52pt thumbnail was
   fetching 3.7× the pixels.
-- **The feel pass**, per `docs/feel-plan.md`: every commitment has a haptic;
+- **The feel pass** — motion explains, haptics confirm: every commitment has a haptic;
   every button answers the finger; numbers count instead of cutting; every
   series page grows out of the cover you tapped (was Discover only); cover rows
   arrive and snap; symbols react; loading shimmers in the shape of the answer.
@@ -61,4 +61,9 @@ feel step, each with the failing test in its message where a test could see it.
 - The A–Z jump index at 20×13pt per letter is a redesign, not a fix.
 - Whether `.claude/skills/deep-review/` should be tracked (it is gitignored).
 
-Everything else left is listed with its reason in `docs/handoff-deep-review.md`.
+Everything else left is listed with its reason in `docs/todo-next-week.md`.
+
+Not done from the feel plan, deliberately: the tab icons' `.replace` (the system
+tab bar draws them), an end-of-feed haptic on Discover (would fire on scroll, not
+on an action), and the cover gallery zooming from the tapped cover (a sheet, a
+different transition family).

@@ -79,7 +79,8 @@ simulator or the phone looked at wherever the change was visible.
 
 ## Where everything is
 
-- `docs/findings-todo.md` — the list, with what was fixed and what was not.
+- The findings list was `docs/findings-todo.md`; closed out and deleted on
+  2026-09-11, the commits `6c2a89b..3660c77` carry each item's evidence.
 - `docs/unknowns-2026-09-11.md` — all six unknowns, with their evidence.
 - `docs/apple-experiment/` — the Apple branch's screenshots and write-up.
 - `docs/periphery-2026-09-11.txt` — the full dead-code report.
