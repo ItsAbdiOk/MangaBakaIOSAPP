@@ -72,6 +72,7 @@ struct SeriesDetailView: View {
                 if let description = shown.description, !description.isEmpty {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
+                AlternativeTitles(titles: shown.titles ?? [], shown: shown.displayTitle)
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
                 DetailCredits(series: series)

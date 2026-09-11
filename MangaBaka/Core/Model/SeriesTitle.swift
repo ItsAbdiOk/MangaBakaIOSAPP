@@ -16,3 +16,33 @@ struct SeriesTitle: Codable, Equatable, Sendable, Hashable {
     /// alone yields an arbitrary language. See `DisplayTitle`.
     let isPrimary: Bool?
 }
+
+extension SeriesTitle {
+    /// One of a series' other names, with every language that uses it.
+    struct Alternative: Identifiable, Equatable, Sendable {
+        let title: String
+        let languages: [String]
+        var id: String { title }
+        /// "EN · TR · PT-BR"
+        var languageLabel: String { languages.map { $0.uppercased() }.joined(separator: " · ") }
+    }
+
+    /// Every title except the one already on screen, de-duplicated.
+    ///
+    /// Duplicates across languages are ordinary: "Solo Leveling" is the title
+    /// in English, Turkish and Brazilian Portuguese. Listing it three times
+    /// would make the section look broken rather than thorough, so the
+    /// languages are gathered onto one row.
+    ///
+    /// The API's order is kept. It carries no meaning we can improve on, and
+    /// sorting alphabetically would put Arabic first for every series.
+    static func alternatives(in titles: [SeriesTitle], excluding shown: String?) -> [Alternative] {
+        var byTitle: [String: [String]] = [:]
+        var order: [String] = []
+        for entry in titles where entry.title != shown && !entry.title.isEmpty {
+            if byTitle[entry.title] == nil { order.append(entry.title) }
+            byTitle[entry.title, default: []].append(entry.language)
+        }
+        return order.map { Alternative(title: $0, languages: byTitle[$0] ?? []) }
+    }
+}
