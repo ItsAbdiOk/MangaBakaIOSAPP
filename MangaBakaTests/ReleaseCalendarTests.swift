@@ -67,6 +67,41 @@ struct ReleaseCalendarTests {
         #expect(mine.map(\.id) == ["mine"])
     }
 
+    /// One failed fetch used to cache an empty calendar for the process, so
+    /// the Schedule screen stayed empty of announced dates until relaunch.
+    @Test("A failed fetch is not cached; the next ask tries again")
+    func failureIsRetried() async throws {
+        defer { URLProtocolStub.reset() }
+        let gate = FailureGate()
+        let body = work("a", series: 1, date: "2026-09-15")
+        URLProtocolStub.setHandler { request in
+            if gate.failing { return .fail(URLError(.networkConnectionLost)) }
+            let isFirst = !(request.url?.query?.contains("page=2") ?? false)
+            return .respond(.init(body: Data("""
+            {"status": 200, "data": [\(isFirst ? body : "")]}
+            """.utf8)))
+        }
+        let calendar = ReleaseCalendar(client: APIClient(
+            baseURL: URL(string: "https://api.example.invalid").unsafeTestURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        ))
+
+        gate.failing = true
+        #expect(await calendar.upcoming().isEmpty)
+        gate.failing = false
+        #expect(await calendar.upcoming().map(\.id) == ["a"], "The retry must reach the network")
+    }
+
+    private final class FailureGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        var failing: Bool {
+            get { lock.lock(); defer { lock.unlock() }; return value }
+            set { lock.lock(); defer { lock.unlock() }; value = newValue }
+        }
+    }
+
     @Test("With no library there is nothing to narrow against, so nothing is shown")
     func noLibraryMeansNoSection() async throws {
         defer { URLProtocolStub.reset() }

@@ -30,6 +30,7 @@ actor ReleaseCalendar {
         if let cached { return cached }
 
         var all: [UpcomingWork] = []
+        var complete = true
         for page in 1...Self.pages {
             let query = [
                 URLQueryItem(name: "limit", value: String(Self.perPage)),
@@ -37,7 +38,10 @@ actor ReleaseCalendar {
             ]
             guard let batch: [UpcomingWork] = try? await client.get(
                 "/v1/works/upcoming", query: query
-            ), !batch.isEmpty else { break }
+            ) else {
+                complete = false
+                break
+            }
             all.append(contentsOf: batch)
             if batch.count < Self.perPage { break }
         }
@@ -45,7 +49,7 @@ actor ReleaseCalendar {
         // Dated first, in date order. A work with no date is not upcoming in
         // any useful sense and goes last rather than to the top, where a nil
         // sorted before this was written down.
-        cached = all.sorted { left, right in
+        let sorted = all.sorted { left, right in
             switch (left.date, right.date) {
             case let (leftDate?, rightDate?): leftDate < rightDate
             case (_?, nil): true
@@ -53,7 +57,12 @@ actor ReleaseCalendar {
             default: (left.title ?? "") < (right.title ?? "")
             }
         }
-        return cached ?? []
+        // Only a complete answer is kept. A failed page used to cache whatever
+        // had arrived — an empty calendar, if it was the first — for the whole
+        // process, and the Schedule screen showed no announced dates until
+        // relaunch. Now the next ask tries again.
+        if complete { cached = sorted }
+        return sorted
     }
 
     /// Only the works for series the reader has in their library.
