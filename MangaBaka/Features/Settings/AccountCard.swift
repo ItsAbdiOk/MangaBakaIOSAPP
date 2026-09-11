@@ -15,7 +15,7 @@ struct AccountCard: View {
     @Binding var entry: String
     let onSave: () async -> Void
     let onCheck: () async -> Void
-    let onRemove: () -> Void
+    let onRemove: () async -> Void
     /// Set when the reader arrived here from onboarding's "Connect an account".
     /// Dropping them at the top of Settings after they said yes is the version
     /// that loses them.
@@ -178,7 +178,9 @@ struct AccountCard: View {
                 StateAction(title: "Replace", weight: .wayOut) { entry = "" }
             }
 
-            Button("Remove token", role: .destructive, action: onRemove)
+            Button("Remove token", role: .destructive) {
+                Task { await onRemove() }
+            }
                 .typeRowTitle()
                 .foregroundStyle(Palette.accent)
         }

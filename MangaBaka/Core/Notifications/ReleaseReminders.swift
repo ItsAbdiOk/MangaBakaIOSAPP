@@ -67,6 +67,16 @@ final class ReleaseReminders {
         await centre.removeAll()
     }
 
+    /// Drops every pending reminder without turning the feature off.
+    ///
+    /// For an account change. `disable()` is the reader saying they do not
+    /// want reminders; this is the app saying the ones it has are about
+    /// somebody else's library. Keeping `isEnabled` means the next refresh
+    /// schedules the new account's releases rather than silently stopping.
+    func cancelAll() async {
+        await centre.removeAll()
+    }
+
     /// Replaces every pending reminder with one per upcoming release.
     ///
     /// Replaces rather than adds: a release date moves, a series leaves the

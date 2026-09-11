@@ -97,10 +97,27 @@ extension RootView {
     /// every recommendation quietly about the wrong person. Both existed with
     /// a way to clear them and nothing calling it — found by Periphery, which
     /// reported them as dead code; they were a behavioural gap instead.
+    /// Everything scoped to the person who was signed in.
+    ///
+    /// Listed in one place because the list is the bug. Two of these existed
+    /// with a way to clear them and nothing calling it; a third was missed
+    /// when the first two were wired up; and the "Remove token" button took a
+    /// different path that called none of them. Four account-scoped values,
+    /// three ways to change account, and no two agreeing.
     func forgetPreviousAccount() async {
         await library.forgetProfile()
         await taste.forgetEverything()
         await librarySnapshot.invalidate()
+        // The reader's own id, used to keep series they already track out of a
+        // blend. Left behind, it excludes somebody else's library from their
+        // recommendations — and because it is only ever written at launch,
+        // signing in mid-session never enabled the exclusion at all until the
+        // next relaunch.
+        await repository.updateLibraryExclusion(userID: nil)
+        // Pending notifications name series from the previous account's
+        // library. Without this, "<title> has finished" arrives on the lock
+        // screen for an account the reader has signed out of.
+        await reminders.cancelAll()
     }
 
     /// The work a launch does once the first screen is on the way.

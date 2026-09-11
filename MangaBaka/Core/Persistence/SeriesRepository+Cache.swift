@@ -40,6 +40,70 @@ extension SeriesRepository {
         }
     }
 
+    /// Throws away every cached series page.
+    ///
+    /// Needed because the detail cache holds rating-filtered and tag-filtered
+    /// content — a series page's tag rows, its editions, its images — and was
+    /// invalidated by nothing, ever. Change the content rating and the page
+    /// kept showing the tags that rating was set to hide, for six hours.
+    /// What a filter governs, and therefore what a change to it must throw away.
+    ///
+    /// **Declared rather than remembered.** Four setters each wrote their own
+    /// version of this and the four did not agree: the feed cache was cleared
+    /// four times, the rating-filtered image cache never, the detail cache
+    /// never by anything at all, and one setter had no first-application guard
+    /// so every signed-in launch wiped the lot. Each omission was individually
+    /// invisible, because the rule lived in whichever setter you happened to
+    /// be reading.
+    ///
+    /// The test for a new filter is now "what does it filter?", and the answer
+    /// is in the enum rather than in four places.
+    struct CacheScope: OptionSet {
+        let rawValue: Int
+        /// Feeds on disk. Every filter narrows these.
+        static let feeds = CacheScope(rawValue: 1 << 0)
+        /// Per-series images, filtered by content rating on the way in.
+        static let images = CacheScope(rawValue: 1 << 1)
+        /// The six-hour series-page cache, which holds rating- and
+        /// tag-filtered tags, editions and links.
+        static let detail = CacheScope(rawValue: 1 << 2)
+        static let everythingDerived: CacheScope = [.feeds, .images, .detail]
+    }
+
+    /// Applies a filter change and discards exactly what it invalidated.
+    ///
+    /// One path, so a fifth filter cannot be added with a fourth policy.
+    func apply(
+        _ key: String,
+        changed: Bool,
+        invalidating scope: CacheScope
+    ) {
+        let discards = shouldDiscard(key)
+        guard changed, discards else { return }
+        if scope.contains(.feeds) { try? discardCachedFeeds() }
+        if scope.contains(.images) { cachedImages.removeAll() }
+        if scope.contains(.detail) { try? discardDetailCache() }
+    }
+
+    /// The exclusion id the cached feeds on disk were written under.
+    ///
+    /// Persisted, because the question "is this a change?" is about the cache,
+    /// and the cache outlives the process. Comparing against whatever this
+    /// process happens to start with answers a different question, and both of
+    /// its wrong answers have shipped.
+    var cachedExclusionUserID: String? {
+        get { UserDefaults.standard.string(forKey: Self.exclusionKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.exclusionKey) }
+    }
+
+    private static let exclusionKey = "cache.libraryExclusionUserID"
+
+    func discardDetailCache() throws {
+        try database.writer.write { db in
+            try db.execute(sql: "DELETE FROM seriesDetail")
+        }
+    }
+
     func readCache(_ feed: FeedKind, requireFresh: Bool) throws -> [Series] {
         try readCacheWithDate(feed, requireFresh: requireFresh).series
     }

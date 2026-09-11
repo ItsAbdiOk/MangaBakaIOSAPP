@@ -332,7 +332,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// In memory rather than on disk: these are only wanted while a series page
     /// or its gallery is open, and the case worth covering is going back and
     /// forward between them — which used to refetch 58 KB every time.
-    private var cachedImages: [Int: [SeriesImage]] = [:]
+    var cachedImages: [Int: [SeriesImage]] = [:]
 
     init(
         client: APIClient,
@@ -503,32 +503,61 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// last time the app ran. Only a genuine change discards.
     private var applied: Set<String> = []
 
-    private func shouldDiscard(_ key: String) -> Bool {
+    func shouldDiscard(_ key: String) -> Bool {
         defer { applied.insert(key) }
         return applied.contains(key)
     }
 
     func updateContentRatings(_ ratings: [String]) async {
         let changed = ratings != contentRatings
-        let discards = shouldDiscard("ratings")
         contentRatings = ratings
-        guard changed, discards else { return }
-        try? discardCachedFeeds()
+        // Ratings filter images per image and tags per tag, so all three.
+        apply("ratings", changed: changed, invalidating: .everythingDerived)
     }
 
     func updateFormats(_ formats: [String]) async {
         let changed = formats != self.formats
-        let discards = shouldDiscard("formats")
         self.formats = formats
-        guard changed, discards else { return }
-        try? discardCachedFeeds()
+        // A format narrows which series appear, not what is shown about one.
+        apply("formats", changed: changed, invalidating: .feeds)
     }
 
     func updateBlockedTags(_ ids: [Int]) async {
         let changed = ids != blockedTags
-        let discards = shouldDiscard("blockedTags")
         blockedTags = ids
-        guard changed, discards else { return }
+        // Blocked tags are filtered out of a series page's tag rows too, and
+        // those live in the detail cache.
+        apply("blockedTags", changed: changed, invalidating: [.feeds, .detail])
+    }
+
+    /// The reader's own MangaBaka id, used to keep series they already track
+    /// out of a blend.
+    ///
+    /// **This one cannot use `applied`, and finding out why took a test.**
+    /// The `applied` mechanism assumes a first application is not a change,
+    /// because the cache on disk was written under exactly the values the app
+    /// is about to be handed. True for ratings, formats and blocked tags,
+    /// which are read from the same `UserDefaults` the cache was written
+    /// under. Not true here, and the two failure modes point opposite ways:
+    ///
+    /// - Treat the first application as a change, and every launch by a
+    ///   signed-in reader deletes the whole feed cache before the first screen
+    ///   draws. That shipped, and offline support was silently dead again.
+    /// - Treat it as not a change, and a reader who browses signed out and
+    ///   then signs in keeps blends full of series they already track. That is
+    ///   what `RecommendationQualityTests` asserts, and it failed the moment
+    ///   the first fix was tried — the test was right.
+    ///
+    /// Both are real, so neither guess is good enough. The id the cache was
+    /// actually written under is recorded beside it, and a change is measured
+    /// against that rather than against whatever this process started with.
+    func updateLibraryExclusion(userID: String?) async {
+        let previous = cachedExclusionUserID
+        libraryExclusionUserID = userID
+        guard userID != previous else { return }
+        cachedExclusionUserID = userID
+        // Cached blends were built under the previous value, so they still
+        // hold series the reader already tracks — or exclude ones they do not.
         try? discardCachedFeeds()
     }
 
@@ -540,14 +569,6 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         (try? database.writer.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM series") ?? 0
         }) ?? 0
-    }
-
-    func updateLibraryExclusion(userID: String?) async {
-        guard userID != libraryExclusionUserID else { return }
-        libraryExclusionUserID = userID
-        // Cached blends were built without the exclusion, so they still hold
-        // series the reader already tracks.
-        try? discardCachedFeeds()
     }
 
     /// Applies only to blends. Search and discovery are browsing surfaces where
@@ -591,7 +612,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
 
     /// Split out because GRDB offers both a sync and an async `write`, and in
     /// an async context `try?` picks the async one, which does not compile here.
-    private func discardCachedFeeds() throws {
+    func discardCachedFeeds() throws {
         try database.writer.write { db in
             // Only the feed cache is cleared. The shelf holds the reader's own
             // saves and is not derived from the filter.

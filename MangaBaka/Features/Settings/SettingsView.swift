@@ -67,6 +67,12 @@ struct SettingsView: View {
                     storedTokenExists = false
                     entry = ""
                     status = .idle
+                    // The third way to change account, and the one that called
+                    // none of this. Removing a token and entering a different
+                    // one left the previous person's taste ledger, profile id
+                    // and library snapshot on disk — the same bug the save
+                    // path was fixed for, in the path nobody wired.
+                    await onAccountChanged()
                 },
                 focusOnAppear: focusAccount
             )
