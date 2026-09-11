@@ -105,6 +105,26 @@ struct APIClientFailurePathTests {
         }
     }
 
+    /// The write path caught one URLError code where the read path caught
+    /// three, so a connection dropping mid-save was reported as the app
+    /// breaking rather than the signal dropping — a different headline, and
+    /// a different decision about whether stale content is still useful.
+    @Test("Connection lost mid-write is offline too, and the write is counted")
+    func writeConnectionLost() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.networkConnectionLost)) }
+        defer { URLProtocolStub.reset() }
+
+        let before = await NetworkLedger.shared.totalRequests
+        await #expect(throws: APIError.offline) {
+            try await makeClient().post("/things", body: ["id": 1])
+        }
+        // Not counted: the request never got a response. But a write that does
+        // must be, so the budget numbers stop excluding the bursty half.
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 201, body: Data("{}".utf8))) }
+        _ = try? await makeClient().post("/things", body: ["id": 1])
+        #expect(await NetworkLedger.shared.totalRequests == before + 1, "Writes were invisible to the ledger")
+    }
+
     /// The spec documents `message` as safe to show end users verbatim, so it
     /// must survive to the UI rather than being replaced by a generic string.
     @Test("Server error surfaces the API's own message verbatim")

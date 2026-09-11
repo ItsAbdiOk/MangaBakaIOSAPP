@@ -98,9 +98,17 @@ actor APIClient {
         let pagination: Pagination?
     }
 
-    /// Performs the request and returns the raw body, having already turned
-    /// every transport and status failure into a named `APIError`.
-    private func rawData(path: String, query: [URLQueryItem]) async throws(APIError) -> Data {
+    /// The one path every request takes, read or write: the rate-limit gate,
+    /// the token, the transport, the ledger, and the 429. Reads and writes had
+    /// two copies of this that disagreed — the write's offline detection
+    /// caught one URLError code where the read's caught three, so a
+    /// connection dropping mid-save was reported as the app breaking rather
+    /// than the signal dropping; and writes were invisible to the ledger, so every
+    /// request-budget number excluded the bursty half of the traffic.
+    private func perform(
+        _ request: URLRequest,
+        path: String
+    ) async throws(APIError) -> (data: Data, http: HTTPURLResponse) {
         // Refuse before spending a request we already know will be refused.
         // The limit is per IP and shared with strangers on the same network, so
         // hammering it during a backoff makes their searches fail too.
@@ -108,11 +116,8 @@ actor APIClient {
             throw APIError.rateLimited(retryAfter: wait)
         }
 
-        let request = try makeRequest(path: path, query: query)
-        let header = await tokenProvider.authorizationHeader()
-
         var authorized = request
-        if let header {
+        if let header = await tokenProvider.authorizationHeader() {
             authorized.setValue(header.value, forHTTPHeaderField: header.field)
         }
 
@@ -144,12 +149,20 @@ actor APIClient {
         guard let http = response as? HTTPURLResponse else {
             throw APIError.transport(underlying: "Response was not HTTP.")
         }
-
         if http.statusCode == 429 {
-            let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             await limiter.recordRateLimit(retryAfter: retryAfter)
             throw APIError.rateLimited(retryAfter: retryAfter)
         }
+        return (data, http)
+    }
+
+    /// Performs the request and returns the raw body, having already turned
+    /// every transport and status failure into a named `APIError`.
+    private func rawData(path: String, query: [URLQueryItem]) async throws(APIError) -> Data {
+        let request = try makeRequest(path: path, query: query)
+        let (data, http) = try await perform(request, path: path)
+
         guard (200...299).contains(http.statusCode) else {
             // Errors always carry `message`, and it is documented as safe to
             // show users. Fall back only if the body is unreadable.
@@ -219,13 +232,6 @@ actor APIClient {
         path: String,
         body: [String: any Sendable]?
     ) async throws(APIError) {
-        // Same per-IP window as every read. A save fired during a backoff
-        // is refused just as surely, and costs the strangers sharing the
-        // address one more failed request each.
-        if let wait = await limiter.secondsUntilAllowed() {
-            throw APIError.rateLimited(retryAfter: wait)
-        }
-
         var request = try makeRequest(path: path, query: [])
         request.httpMethod = method
         if let body {
@@ -236,28 +242,7 @@ actor APIClient {
             request.httpBody = encoded
         }
 
-        if let header = await tokenProvider.authorizationHeader() {
-            request.setValue(header.value, forHTTPHeaderField: header.field)
-        }
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch let error as URLError where error.code == .notConnectedToInternet {
-            throw APIError.offline
-        } catch {
-            throw APIError.transport(underlying: String(describing: error))
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "Not an HTTP response.")
-        }
-        if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            await limiter.recordRateLimit(retryAfter: retryAfter)
-            throw APIError.rateLimited(retryAfter: retryAfter)
-        }
+        let (data, http) = try await perform(request, path: path)
         guard (200..<300).contains(http.statusCode) else {
             // 401 and 403 are worth separating from any other failure: they
             // mean the token is wrong or lacks permission, so retrying will
