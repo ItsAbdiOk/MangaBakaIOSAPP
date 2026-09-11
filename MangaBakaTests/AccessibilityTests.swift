@@ -31,10 +31,7 @@ struct AccessibilityTests {
     /// hard-coded it would stay put while everything around it grew.
     @Test("Every ramp entry is anchored to a text style")
     func rampIsScalable() throws {
-        let source = try String(
-            contentsOfFile: "\(repositoryRoot)/MangaBaka/DesignSystem/Typography.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/DesignSystem/Typography.swift")
         // Every scaledFont call in the named ramp must pass relativeTo, which
         // is what ties it to Dynamic Type.
         let calls = source.components(separatedBy: "scaledFont(size:").dropFirst()
@@ -52,10 +49,7 @@ struct AccessibilityTests {
     /// actions the whole screen is unreachable with the screen reader on.
     @Test("The stack exposes save and skip as actions, not only as gestures")
     func stackHasActions() throws {
-        let source = try String(
-            contentsOfFile: "\(repositoryRoot)/MangaBaka/Features/Stack/StackView.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
         #expect(source.contains("accessibilityAction(named: \"Save\")"))
         #expect(source.contains("accessibilityAction(named: \"Skip\")"))
     }
@@ -64,10 +58,7 @@ struct AccessibilityTests {
     /// someone who has asked for less of it.
     @Test("The stack honours Reduce Motion")
     func stackHonoursReduceMotion() throws {
-        let source = try String(
-            contentsOfFile: "\(repositoryRoot)/MangaBaka/Features/Stack/StackView.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
         #expect(source.contains("accessibilityReduceMotion"))
     }
 
@@ -75,20 +66,10 @@ struct AccessibilityTests {
     /// that matter.
     @Test("Decorative symbols are hidden from VoiceOver")
     func decorativeIsHidden() throws {
-        let source = try String(
-            contentsOfFile: "\(repositoryRoot)/MangaBaka/Features/Shared/FailureState.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/Features/Shared/FailureState.swift")
         #expect(source.contains("accessibilityHidden(true)"))
     }
 
-    private var repositoryRoot: String {
-        // The tests run from the built bundle, so walk back to the source tree.
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .path
-    }
 }
 
 /// Fixed heights containing scaled text are the recurring Dynamic Type bug in
@@ -97,7 +78,7 @@ struct AccessibilityTests {
 @Suite("Dynamic Type layout", .enabled(if: SourceTree.isAvailable))
 struct DynamicTypeLayoutTests {
     private func source(_ path: String) throws -> String {
-        try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
+        try SourceTree.read(path)
     }
 
     /// A row holding two lines of scaled text cannot have a fixed height, or
@@ -223,7 +204,7 @@ struct TabBarClearanceTests {
         arguments: TabBarClearanceTests.screensWithATopInset
     )
     func topInsetIsNamedNotNumbered(path: String) throws {
-        let text = try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
+        let text = try SourceTree.read(path)
         #expect(
             text.contains("Metrics.scrollTopInset"),
             "\(path) sets its own top inset, so it will not follow when the token changes"
@@ -235,7 +216,7 @@ struct TabBarClearanceTests {
         arguments: TabBarClearanceTests.scrollingScreens
     )
     func everyScreenReservesIt(path: String) throws {
-        let text = try String(contentsOfFile: "\(SourceTree.root)/\(path)", encoding: .utf8)
+        let text = try SourceTree.read(path)
         // Either token clears the bar — `clearanceIsEnough` asserts that of
         // both. The screens now use the mockup's own 150pt bottom padding, so
         // naming only the old token would fail a screen that reserves MORE.
@@ -252,10 +233,7 @@ struct TabBarClearanceTests {
 struct InteractiveControlTests {
     @Test("Settings rows do not combine an interactive child into one element")
     func rowsAreNotCombined() throws {
-        let source = try String(
-            contentsOfFile: "\(SourceTree.root)/MangaBaka/Features/Settings/SettingsView.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/Features/Settings/SettingsView.swift")
         #expect(
             !source.contains("accessibilityElement(children: .combine)"),
             "Combining a row around an interactive child breaks direct interaction"
@@ -266,10 +244,7 @@ struct InteractiveControlTests {
     /// compete for touches.
     @Test("The border overlay is not hit-testable")
     func borderDoesNotStealTouches() throws {
-        let source = try String(
-            contentsOfFile: "\(SourceTree.root)/MangaBaka/DesignSystem/Metrics.swift",
-            encoding: .utf8
-        )
+        let source = try SourceTree.read("MangaBaka/DesignSystem/Metrics.swift")
         #expect(source.contains("allowsHitTesting(false)"))
     }
 

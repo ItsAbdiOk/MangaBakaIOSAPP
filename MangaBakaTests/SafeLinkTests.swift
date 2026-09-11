@@ -64,11 +64,7 @@ struct SafeLinkTests {
     /// The views must use the filtered accessor, not the raw one.
     @Test("The links view never opens a raw URL")
     func viewUsesFilteredURL() throws {
-        let path = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("MangaBaka/Features/Detail/LinksSection.swift")
-        let source = try String(contentsOf: path, encoding: .utf8)
+        let source = try SourceTree.read("MangaBaka/Features/Detail/LinksSection.swift")
 
         #expect(source.contains("link.safeURL"))
         #expect(source.contains("item.safeURL"))

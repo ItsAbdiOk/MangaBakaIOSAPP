@@ -278,7 +278,11 @@ struct ReleaseTokenTests {
     func exampleIsPlaceholder() throws {
         let example = try config("Secrets.example.xcconfig")
         #expect(example.contains("mb-your-personal-access-token-here"))
-        // A real token is 60+ characters; the placeholder must not look like one.
-        #expect(!example.contains("mb-") || example.contains("your-personal"))
+        // Every "mb-" prefixed value in the file must be the placeholder. The
+        // assertion this replaces was `!contains("mb-") || contains("your-
+        // personal")`, which the line above made true forever: a real token
+        // pasted under the placeholder passed.
+        let values = example.matches(of: /mb-[A-Za-z0-9-]+/).map { String($0.output) }
+        #expect(values == ["mb-your-personal-access-token-here"], "The example holds something token-shaped")
     }
 }

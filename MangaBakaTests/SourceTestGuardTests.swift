@@ -40,8 +40,14 @@ struct SourceTestGuardTests {
                 let suiteIsGated = declaration.contains("SourceTree.isAvailable")
 
                 for test in suite.components(separatedBy: "\n    @Test").dropFirst() {
+                    // Any way of reaching the source tree counts, not only the
+                    // helper: two suites read files through #filePath directly
+                    // and the guard could not see them.
                     let readsSource = test.contains("SourceTree.read")
                         || test.contains("SourceTree.root")
+                        || test.contains("SourceTree.swiftFiles")
+                        || test.contains("contentsOfFile:")
+                        || test.contains("#filePath")
                     guard readsSource, !suiteIsGated else { continue }
 
                     // The gate must sit in the test's own attribute, which

@@ -349,7 +349,7 @@ actor APIClient {
     /// `blend_user_id` is listed although the app does not send it: if it is
     /// ever added, it must not be the change that quietly starts caching an
     /// account id to disk.
-    private static let identifyingParameters: Set<String> = [
+    static let identifyingParameters: Set<String> = [
         "exclude_user_library",
         "blend_user_id"
     ]

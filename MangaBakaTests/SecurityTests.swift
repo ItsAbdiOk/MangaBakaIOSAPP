@@ -86,10 +86,15 @@ struct SecurityTests {
     @Test("Identity-bearing parameters are named and never cached",
           .enabled(if: SourceTree.isAvailable))
     func identityIsNeverCached() throws {
-        let source = try SourceTree.read("MangaBaka/Core/Networking/APIClient.swift")
+        // The compiled set, not the source text: both names also sit in the
+        // doc comment above the set, so a grep passed with the set emptied.
         for parameter in ["exclude_user_library", "blend_user_id"] {
-            #expect(source.contains(parameter), "\(parameter) is not treated as identity")
+            #expect(
+                APIClient.identifyingParameters.contains(parameter),
+                "\(parameter) is not treated as identity"
+            )
         }
+        let source = try SourceTree.read("MangaBaka/Core/Networking/APIClient.swift")
         #expect(source.contains("carriesIdentity"))
     }
 
