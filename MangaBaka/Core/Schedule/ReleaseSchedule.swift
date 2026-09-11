@@ -227,13 +227,6 @@ actor ReleaseScheduleService {
             await self.finishBuild()
         }
     }
-
-    func cancelBuild() {
-        buildTask?.cancel()
-        buildTask = nil
-        progress.isRunning = false
-    }
-
     private func finishBuild() {
         buildTask = nil
         progress.isRunning = false
@@ -295,16 +288,6 @@ actor ReleaseScheduleService {
         case none
         case unavailable
     }
-
-    /// The cadence already measured for one series, or nil if none has been.
-    ///
-    /// Cache only, and it never makes a request — the caller decides whether to
-    /// pay for one.
-    func cachedCadence(forSeriesId id: Int) -> Cadence? {
-        guard let row = (try? readCache())?[id] else { return nil }
-        return row.cadence
-    }
-
     /// The cadence for one series, measuring it if it has not been measured.
     ///
     /// One MangaUpdates request, not the ten pages a full build costs, and only

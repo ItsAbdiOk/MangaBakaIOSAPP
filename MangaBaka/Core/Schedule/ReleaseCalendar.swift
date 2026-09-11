@@ -64,8 +64,4 @@ actor ReleaseCalendar {
             return seriesIDs.contains(id)
         }
     }
-
-    func invalidate() {
-        cached = nil
-    }
 }

@@ -48,6 +48,7 @@
 		2BDF53BD65744006506FD17E /* DataUseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6884B5544D0A7F8048EEB483 /* DataUseSection.swift */; };
 		2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9097F42ABA9FEE8097956C /* ShelfStore.swift */; };
 		2D9486A31DC173C395B75D3F /* InlineSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533409A4F8D0EB72D1B0A569 /* InlineSearchTests.swift */; };
+		2E42C9CDB5D6CDB788FD592D /* DynamicTypeRampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5871F1B8DE1BC69E170E8C /* DynamicTypeRampTests.swift */; };
 		2EAE470F7F27AFD57FCCF6B4 /* SearchAndMixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF948E62761E7CFD4F55CB3 /* SearchAndMixTests.swift */; };
 		2FA0DF5FFDF1CAEB853A0C2A /* FixtureLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F15759A5A1518C7E2D5E148 /* FixtureLoading.swift */; };
 		34AF9A11440F2EB9E9A7A971 /* CoverGalleryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C673007BFE53E9F8B2A0B2 /* CoverGalleryTests.swift */; };
@@ -203,7 +204,6 @@
 		D7BB799564E52E6E814831F8 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDCBF5D620B264CE3642E9F9 /* TokenStore.swift */; };
 		D82EE639AF5818E765A8482A /* StackSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A6C7BDE02EF1D5618DBBF97 /* StackSaveTests.swift */; };
 		D84B75E1AA8C7B233A63FF52 /* SeriesFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64EED0A0A3A05647D2445F70 /* SeriesFactory.swift */; };
-		D8F574211C01E3219F6984B7 /* TasteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C39E8BE2F572DB37BE4CB59 /* TasteView.swift */; };
 		DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC64BD874EBCE6A7158371CF /* TasteModel.swift */; };
 		DB639DB55378A1D95799A40C /* FormatPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41B78E9BC45F46C39BABCE7 /* FormatPreferences.swift */; };
 		DC0BAC00956380F4B187E44B /* LibraryWriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5140A9265F7AD2392EAC27 /* LibraryWriteTests.swift */; };
@@ -343,6 +343,7 @@
 		5AA7827799CD364196381C9C /* APIShapeContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIShapeContractTests.swift; sourceTree = "<group>"; };
 		5BA5BA539B9FDC738A9AC3A9 /* AniListClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AniListClient.swift; sourceTree = "<group>"; };
 		5BE10CD385F43FE04D006A5C /* SeriesStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesStatus.swift; sourceTree = "<group>"; };
+		5D5871F1B8DE1BC69E170E8C /* DynamicTypeRampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicTypeRampTests.swift; sourceTree = "<group>"; };
 		5EF948E62761E7CFD4F55CB3 /* SearchAndMixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAndMixTests.swift; sourceTree = "<group>"; };
 		602EA6151855A477E1E7766B /* CachedSeries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedSeries.swift; sourceTree = "<group>"; };
 		6218AAB3B2F81AA31F14F9BD /* CharacterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterTests.swift; sourceTree = "<group>"; };
@@ -415,7 +416,6 @@
 		99B0478C5E79631F422DE74E /* DetailSynopsis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailSynopsis.swift; sourceTree = "<group>"; };
 		9A8062597275E0B6DC97413D /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
 		9AF86279E0C72E98A96DB15A /* TagSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagSearch.swift; sourceTree = "<group>"; };
-		9C39E8BE2F572DB37BE4CB59 /* TasteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteView.swift; sourceTree = "<group>"; };
 		9C68EE1F8DFE37D05CDEE001 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaBakaApp.swift; sourceTree = "<group>"; };
 		9F4C16162EFD459588A6311B /* LibraryScreenPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryScreenPerformanceTests.swift; sourceTree = "<group>"; };
@@ -809,6 +809,7 @@
 				2E023571EE66E5639E011F2E /* DesignTokenTests.swift */,
 				C03BC78B3B1A70BFA7874485 /* DetailFidelityTests.swift */,
 				9FDF0A3AE179F1D34BFD5528 /* DisplayTitleTests.swift */,
+				5D5871F1B8DE1BC69E170E8C /* DynamicTypeRampTests.swift */,
 				6F15759A5A1518C7E2D5E148 /* FixtureLoading.swift */,
 				8B99E7C1250F25B41530682F /* FlowAffordanceTests.swift */,
 				284745288D4DBAAB17FFC173 /* FormatFilterTests.swift */,
@@ -979,7 +980,6 @@
 			isa = PBXGroup;
 			children = (
 				DC64BD874EBCE6A7158371CF /* TasteModel.swift */,
-				9C39E8BE2F572DB37BE4CB59 /* TasteView.swift */,
 			);
 			path = Taste;
 			sourceTree = "<group>";
@@ -1347,7 +1347,6 @@
 				FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */,
 				DAF9FDCEE75AED1221EDC8D2 /* TasteModel.swift in Sources */,
 				4A0C19E90EBFD088A4D3D5D0 /* TasteProfile.swift in Sources */,
-				D8F574211C01E3219F6984B7 /* TasteView.swift in Sources */,
 				F832A9705F574283636CF853 /* TitlePreference.swift in Sources */,
 				CD26E3FD2D5CD78EA215B269 /* TitleSection.swift in Sources */,
 				F053F0F645F9414E79069B4E /* Toast.swift in Sources */,
@@ -1401,6 +1400,7 @@
 				4C22CA15C16523F3B59F0607 /* DesignTokenTests.swift in Sources */,
 				D15E60C7EA0FFB8DB078D027 /* DetailFidelityTests.swift in Sources */,
 				C52D86F53A03486BBF37B0AE /* DisplayTitleTests.swift in Sources */,
+				2E42C9CDB5D6CDB788FD592D /* DynamicTypeRampTests.swift in Sources */,
 				2FA0DF5FFDF1CAEB853A0C2A /* FixtureLoading.swift in Sources */,
 				A110A31A239AD07024473805 /* FlowAffordanceTests.swift in Sources */,
 				B7AAAADD48ACE5CBD550C234 /* FormatFilterTests.swift in Sources */,

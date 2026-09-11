@@ -21,14 +21,6 @@ final class StackModel {
         /// A random sample. Nothing to personalise from yet.
         case random
 
-        var caption: String {
-            switch self {
-            case .yourProfile: "Picked from your whole MangaBaka library"
-            case .yourSaves: "Based on what you've saved"
-            case .yourLibrary: "Blended from your MangaBaka library"
-            case .random: "A random sample — save a few to make this yours"
-            }
-        }
     }
 
     private(set) var queue: [Series] = []

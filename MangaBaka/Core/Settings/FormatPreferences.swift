@@ -73,11 +73,6 @@ struct FormatPreferences: Sendable, Equatable {
         }
     }
 
-    /// A short line for Settings, built from the actual selection.
-    var summary: String {
-        if !isFiltering { return "Everything" }
-        return Format.allCases.filter(allowed.contains).map(\.title).joined(separator: ", ")
-    }
 }
 
 /// Persists the format choice and tells the cache owner when it changes.

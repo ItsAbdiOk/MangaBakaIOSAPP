@@ -28,11 +28,6 @@ final class ToastCentre {
             self?.message = nil
         }
     }
-
-    func dismiss() {
-        dismissal?.cancel()
-        message = nil
-    }
 }
 
 private struct ToastOverlay: ViewModifier {

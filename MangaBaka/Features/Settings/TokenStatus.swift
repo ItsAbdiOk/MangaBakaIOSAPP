@@ -21,13 +21,4 @@ enum TokenStatus: Equatable {
 
     var isRejection: Bool { if case .failed = self { true } else { false } }
 
-    /// What to show under the field. An unverified token is not a failure
-    /// to report as one.
-    var message: String? {
-        switch self {
-        case let .failed(reason): reason
-        case let .unverified(reason): "Saved, but not checked: \(reason)"
-        case .idle, .checking, .signedIn: nil
-        }
-    }
 }

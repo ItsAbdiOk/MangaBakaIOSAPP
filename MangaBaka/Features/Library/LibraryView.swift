@@ -183,29 +183,6 @@ struct LibraryView: View {
         .padding(.top, 16)
     }
 
-    /// Matching entries, still grouped by shelf so a result keeps its context.
-    private var searchResults: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(model.matchCount == 0
-                 ? "Nothing in your library matches"
-                 : "\(model.matchCount) in your library")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-                .padding(.horizontal, Metrics.gutter)
-                .padding(.bottom, 12)
-
-            ForEach(model.visibleShelves) { shelf in
-                Button { onOpenShelf(shelf.state) } label: {
-                    ShelfCard(shelf: shelf)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, Metrics.gutter)
-                .padding(.bottom, Metrics.gapCovers)
-            }
-        }
-        .padding(.top, Metrics.sectionGap)
-    }
-
     private var loading: some View {
         HStack {
             Spacer()
@@ -225,16 +202,4 @@ struct LibraryView: View {
         )
     }
 
-    private var shelfCards: some View {
-        VStack(spacing: Metrics.gapCovers) {
-            ForEach(model.shelves) { shelf in
-                Button { onOpenShelf(shelf.state) } label: {
-                    ShelfCard(shelf: shelf)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, Metrics.gutter)
-        .padding(.top, Metrics.sectionGap)
-    }
 }

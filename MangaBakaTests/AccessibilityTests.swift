@@ -132,9 +132,15 @@ struct DynamicTypeLayoutTests {
     }
 
     /// A pill with a fixed height clips its own label once the label grows.
+    ///
+    /// Pointed at `SeriesDetailView.swift` until 2026-09-11, where it matched
+    /// `FlowChips` — a view nothing had presented for some time. The test
+    /// passed for months against code that never ran, which is the case
+    /// against source-grep tests in one line. The chips a reader actually sees
+    /// are in `DetailTagSections`.
     @Test("Chips size to their content")
     func chipsAreFlexible() throws {
-        let text = try source("MangaBaka/Features/Detail/SeriesDetailView.swift")
+        let text = try source("MangaBaka/Features/Detail/DetailTagSections.swift")
         #expect(text.contains("frame(minHeight: Metrics.headerPill)"))
     }
 

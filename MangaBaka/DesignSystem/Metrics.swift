@@ -7,7 +7,6 @@ enum Metrics {
     /// Screen gutter, everywhere except the stack and the status row.
     static let gutter: CGFloat = 18
     static let gutterStack: CGFloat = 22
-    static let gutterStatus: CGFloat = 26
 
     // MARK: Rhythm
 
@@ -54,7 +53,6 @@ enum Metrics {
     static let ctaSecondary: CGFloat = 46
     /// Search field and filter button.
     static let field: CGFloat = 40
-    static let backButton: CGFloat = 38
     static let ratingSegment: CGFloat = 34
     static let headerPill: CGFloat = 30
 

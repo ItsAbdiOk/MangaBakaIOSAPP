@@ -1,0 +1,102 @@
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Library/LibraryEntry.swift:135:17: warning: Assign-only property 'weight' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Library/LibraryService.swift:145:10: warning: Unused function 'forgetProfile()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Library/TasteLedger.swift:168:10: warning: Unused function 'clear()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:26:9: warning: Assign-only property 'description' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:31:9: warning: Assign-only property 'isGenre' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:36:9: warning: Assign-only property 'contentRating' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:52:9: warning: Assign-only property 'subType' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:53:9: warning: Assign-only property 'aliases' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:54:9: warning: Assign-only property 'parentId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:55:9: warning: Assign-only property 'languages' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Catalogue.swift:57:9: warning: Assign-only property 'founded' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Cover.swift:72:13: warning: Assign-only property 'x2' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Cover.swift:73:13: warning: Assign-only property 'x3' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Recommendation.swift:12:13: warning: Assign-only property 'id' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Recommendation.swift:18:9: warning: Assign-only property 'score' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Series.swift:68:13: warning: Assign-only property 'note' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Series.swift:74:13: warning: Assign-only property 'start' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/Series.swift:75:13: warning: Assign-only property 'end' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesEdition.swift:20:13: warning: Assign-only property 'language' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesEdition.swift:24:13: warning: Assign-only property 'id' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesEdition.swift:27:13: warning: Assign-only property 'type' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesEdition.swift:42:9: warning: Assign-only property 'countExtra' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesEdition.swift:44:9: warning: Assign-only property 'endDate' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesExtras.swift:18:9: warning: Assign-only property 'type' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesExtras.swift:55:9: warning: Assign-only property 'primary' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesExtras.swift:68:9: warning: Assign-only property 'note' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesImage.swift:11:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesTag.swift:19:9: warning: Assign-only property 'isExplicit' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesTag.swift:27:9: warning: Assign-only property 'seriesCount' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Model/SeriesTitle.swift:17:9: warning: Assign-only property 'isPrimary' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/APIEnvelope.swift:14:9: warning: Assign-only property 'message' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/APIEnvelope.swift:20:9: warning: Assign-only property 'page' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/APIEnvelope.swift:21:9: warning: Assign-only property 'limit' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/APIEnvelope.swift:35:9: warning: Assign-only property 'next' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/APIEnvelope.swift:40:9: warning: Assign-only property 'status' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/ResultsEnvelope.swift:10:9: warning: Assign-only property 'status' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/ResultsEnvelope.swift:14:9: warning: Assign-only property 'coldStart' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/ResultsEnvelope.swift:17:9: warning: Assign-only property 'profileStale' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/ResultsEnvelope.swift:18:9: warning: Assign-only property 'pagination' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Networking/TokenProvider.swift:52:8: warning: Unused struct 'KeychainTokenProvider'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:10:9: warning: Assign-only property 'cachedAt' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:17:9: warning: Assign-only property 'feedKey' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:18:9: warning: Assign-only property 'position' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:31:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:32:9: warning: Assign-only property 'kind' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:33:9: warning: Assign-only property 'addedAt' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:45:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:46:9: warning: Assign-only property 'viewedAt' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:64:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:65:9: warning: Assign-only property 'countedAt' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:73:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:82:9: warning: Assign-only property 'seriesId' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:91:9: warning: Assign-only property 'id' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/CachedSeries.swift:100:9: warning: Assign-only property 'feedKey' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/SeriesRepository.swift:55:10: warning: Unused function 'updateContentRatings(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/SeriesRepository.swift:59:10: warning: Unused function 'updateFormats(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/SeriesRepository.swift:63:10: warning: Unused function 'updateLibraryExclusion(userID:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Persistence/SeriesRepository.swift:67:10: warning: Unused function 'updateBlockedTags(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/ReleaseCalendar.swift:68:10: warning: Unused function 'invalidate()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/ReleaseSchedule.swift:42:9: warning: Unused property 'isEmpty'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/ReleaseSchedule.swift:50:9: warning: Assign-only property 'failure' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/ReleaseSchedule.swift:231:10: warning: Unused function 'cancelBuild()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/ReleaseSchedule.swift:303:10: warning: Unused function 'cachedCadence(forSeriesId:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Schedule/UpcomingWork.swift:31:9: warning: Assign-only property 'sequenceNumeric' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Settings/FormatPreferences.swift:77:9: warning: Unused property 'summary'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Telemetry/NetworkLedger.swift:70:10: warning: Unused function 'reset()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Core/Telemetry/Signposts.swift:33:9: warning: Unused parameter 'isolation'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/DesignSystem/Metrics.swift:10:16: warning: Unused property 'gutterStatus'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/DesignSystem/Metrics.swift:57:16: warning: Unused property 'backButton'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/DesignSystem/Typography.swift:117:10: warning: Unused function 'typeWordmark()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Detail/DetailBackdrop.swift:16:9: warning: Assign-only property 'height' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Detail/SeriesDetailView.swift:50:41: warning: Unused property 'openURL'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Detail/SeriesDetailView.swift:52:46: warning: Unused property 'displayScale'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Detail/SeriesDetailView.swift:341:8: warning: Unused struct 'FlowChips'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryModel.swift:21:13: warning: Unused property 'covers'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryModel.swift:43:17: warning: Assign-only property 'library' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryModel.swift:204:24: warning: Unused property 'pageSize'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryModel.swift:214:24: warning: Unused property 'pageCap'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryView.swift:187:17: warning: Unused property 'searchResults'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/LibraryView.swift:228:17: warning: Unused property 'shelfCards'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Library/ShelfCard.swift:5:8: warning: Unused struct 'ShelfCard'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Mix/MixModel.swift:34:9: warning: Unused property 'hasRun'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Mix/SeedPickerSheet.swift:17:9: warning: Assign-only property 'repository' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Settings/TokenStatus.swift:26:9: warning: Unused property 'message'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Shared/CoverImage.swift:15:9: warning: Assign-only property 'accessibilityText' is assigned, but never used
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Shared/EmptyState.swift:69:8: warning: Unused struct 'CoverSkeletonRow'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Shared/EmptyState.swift:102:8: warning: Unused struct 'PaginationFooter'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Shared/Toast.swift:32:10: warning: Unused function 'dismiss()'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Stack/StackModel.swift:24:13: warning: Unused property 'caption'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Stack/StackView.swift:9:49: warning: Unused property 'typeSize'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Taste/TasteView.swift:4:8: warning: Unused struct 'TasteView'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBaka/Features/Taste/TasteView.swift:178:8: warning: Unused struct 'RatingHistogram'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/DesignTokenTests.swift:3:1: warning: Unused imported module 'MangaBaka'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/FlowAffordanceTests.swift:3:1: warning: Unused imported module 'MangaBaka'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/ScheduleModelTests.swift:10:17: warning: Unused property 'calendar'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/SeriesFactory.swift:96:10: warning: Unused function 'updateContentRatings(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/SeriesFactory.swift:98:10: warning: Unused function 'updateFormats(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/SeriesFactory.swift:100:10: warning: Unused function 'updateLibraryExclusion(userID:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/SeriesFactory.swift:102:10: warning: Unused function 'updateBlockedTags(_:)'
+/Users/abdi/Code/MangaBakaIOSAPP/MangaBakaTests/SourceTestGuardTests.swift:3:1: warning: Unused imported module 'MangaBaka'
+
+[exited with code 0]

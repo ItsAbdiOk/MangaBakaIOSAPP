@@ -31,8 +31,6 @@ final class MixModel {
 
     /// Whether the DNA has been edited away from what the seeds produced.
     var isDNAEdited: Bool { !excludedTags.isEmpty }
-    var hasRun: Bool { !dna.isEmpty || !results.isEmpty }
-
     var filters = SearchQuery()
 
     /// Seeds beyond this are refused rather than silently dropped, so the UI

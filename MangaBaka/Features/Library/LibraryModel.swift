@@ -193,26 +193,6 @@ final class LibraryModel {
         await load()
     }
 
-    /// Entries per request. 100 is what the endpoint has been exercised at.
-    ///
-    /// The design board assumes 500 and says "500 of 1,204 loaded". That may
-    /// well be right, but it is untested against the live endpoint and the
-    /// failure mode of guessing high is silent: if the server capped a
-    /// 500-request at 100, the short-page check below would read that as the
-    /// end of the library and stop after one page. Raise it only with a real
-    /// response to look at.
-    private static let pageSize = 100
-
-    /// How many pages to walk before giving up.
-    ///
-    /// Was ten, which is a thousand entries — and Abdi's own library is 937.
-    /// Sixty-four more series and the rest would have disappeared with no
-    /// error, which is the same class of bug as the one that offered "Add to
-    /// library" for a series already in it. Thirty is far past any real library
-    /// and still bounded, because an unbounded loop against a paginated API is
-    /// how you hammer a shared rate limit when the server misbehaves.
-    private static let pageCap = 30
-
     func load() async {
         await Signposts.measure("Library load") { await fetchAll() }
     }

@@ -66,13 +66,6 @@ actor NetworkLedger {
             .prefix(limit)
             .map { (path: $0.key, entry: $0.value) }
     }
-
-    func reset() {
-        byPath = [:]
-        imageBytes = 0
-        imageCount = 0
-    }
-
     /// `/v1/series/3397/images` becomes `/v1/series/{id}/images`.
     ///
     /// Without this the tally is one row per series and answers nothing. A

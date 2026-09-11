@@ -6,7 +6,6 @@ import SwiftUI
 /// point of drag, a 92pt commit threshold, and badge opacity tied to |dx| / 80
 /// so the decision is legible before the reader lets go.
 struct StackView: View {
-    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var model: StackModel
     @Binding private var path: [Series]
 

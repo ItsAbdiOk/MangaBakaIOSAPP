@@ -7,7 +7,9 @@ struct SeriesDetailView: View {
     let library: any LibraryProviding
     /// The app's one copy of the reader's library.
     let libraryStore: LibraryModel
-    /// The release schedule, read from its cache only — see `cachedCadence`.
+    /// The release schedule. The detail page asks it for one series at a time
+    /// (`cadence(for:)`), which costs at most one MangaUpdates request, rather
+    /// than triggering the ten-page build the schedule screen pays for.
     let schedule: ReleaseScheduleService?
     let characters: CharacterService?
     let taste: TasteProfile?
@@ -47,10 +49,7 @@ struct SeriesDetailView: View {
     private var shown: Series {
         extras.full.map { series.filling(gapsFrom: $0) } ?? series
     }
-    @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.displayScale) private var displayScale
-
     var body: some View {
         ScrollView {
             // The mockup's order, which is an argument about what a reader
@@ -333,31 +332,6 @@ struct SeriesDetailView: View {
         defer { isCadenceLoading = false }
         if case let .measured(estimate) = await schedule.cadence(for: shown) {
             cadence = estimate
-        }
-    }
-}
-
-/// Chips that wrap onto as many lines as they need.
-struct FlowChips: View {
-    let items: [String]
-
-    var body: some View {
-        if !items.isEmpty {
-            FlowLayout {
-                ForEach(items, id: \.self) { item in
-                    Text(item)
-                        .typeChip()
-                        .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .padding(.horizontal, 9)
-                        // minHeight, not height: at accessibility text sizes a
-                        // fixed 30pt pill clips its own label.
-                        .frame(minHeight: Metrics.headerPill)
-                        .background(Palette.surfaceChip, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
-                }
-            }
         }
     }
 }
