@@ -140,3 +140,44 @@ struct SeriesRelationship: Codable, Identifiable, Equatable, Sendable {
             .capitalized
     }
 }
+
+extension SeriesLink {
+    /// The official reading platforms carrying the series in one language.
+    ///
+    /// Only `webplatform` links: a publisher's shop or a wiki is not somewhere
+    /// to read. Only the reader's language: series 3397 lists thirteen
+    /// platforms in seven languages, and a reader in English wants the four
+    /// that are, not Piccoma in Japanese. The API's own order is kept.
+    ///
+    /// The language tags are compared on their primary subtag — the API writes
+    /// "pt-br" for Planet Manga and the device says "pt" — so a Brazilian
+    /// edition counts for a Portuguese reader. Regional mismatches are a far
+    /// smaller wrong than an empty row.
+    ///
+    /// One chip per platform. ONE PIECE (377) lists MANGA Plus five times in
+    /// English — the main run, the colour edition and the spin-offs — and the
+    /// row read "MANGA Plus, MANGA Plus, MANGA Plus". The first listing is
+    /// kept: on 377 it is the main title (100020), and the links section
+    /// further down still shows all five.
+    static func readable(_ links: [SeriesLink], in language: String) -> [SeriesLink] {
+        let wanted = primarySubtag(language)
+        guard !wanted.isEmpty else { return [] }
+        var seen: Set<String> = []
+        return links.filter {
+            guard $0.type == Purpose.webplatform.rawValue,
+                  $0.safeURL != nil,
+                  primarySubtag($0.language ?? "") == wanted
+            else { return false }
+            return seen.insert($0.name ?? $0.title).inserted
+        }
+    }
+
+    /// "pt-BR" → "pt"; "en" → "en". Case-insensitive, whitespace ignored.
+    static func primarySubtag(_ tag: String) -> String {
+        tag.trimmingCharacters(in: .whitespaces)
+            .lowercased()
+            .split(separator: "-", maxSplits: 1)
+            .first
+            .map(String.init) ?? ""
+    }
+}
