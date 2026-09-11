@@ -109,6 +109,20 @@ struct CadenceTests {
     /// The fallback. Clustering a genuinely daily series would collapse it to a
     /// single session and produce no estimate at all, which is worse than the
     /// bug it prevents.
+    /// Three bursts of four consecutive days, three weeks apart: three
+    /// sessions, below the minimum. The fallback to raw days — written for a
+    /// daily series, which collapses to one session — took this too, and
+    /// twelve days with nine one-day gaps read "every 1 day, exactly" and then
+    /// "38 days overdue". Refusing is what the minimum is for.
+    @Test("A few bursts do not fall back to a daily estimate")
+    func fewSessionsRefuse() {
+        let cadence = Cadence.estimate(
+            from: dates(daysAgo: [0, 1, 2, 3, 21, 22, 23, 24, 42, 43, 44, 45]),
+            calendar: calendar
+        )
+        #expect(cadence == nil, "Got \(String(describing: cadence?.medianGapDays)) days")
+    }
+
     @Test("A genuinely daily series still gets a daily estimate")
     func trulyDailySeriesSurvives() throws {
         let cadence = try #require(

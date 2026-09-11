@@ -81,16 +81,18 @@ struct SeasonReadingTests {
     }
 
     @Test("A straggler from an old season does not roll the season back")
-    func newestReleaseWins() {
-        // A late-posted chapter of season one should not make the app say the
-        // series is back on season one.
+    func stragglerDoesNotRollBack() {
+        // A late-posted chapter of season one must not make the app say the
+        // series is back on season one. This test used to assert exactly that
+        // — season 1 — under this title, because the code took the newest
+        // release's volume, which is how a straggler rolls the season back.
         let releases = [
             sample(volume: 1, chapter: 80, day: 1),
             sample(volume: 2, chapter: 5, day: 20),
             sample(volume: 1, chapter: 81, day: 25)
         ]
         #expect(SeasonReading.hasSeasons(releases))
-        #expect(SeasonReading.currentSeason(releases) == 1, "the newest release is what it says")
+        #expect(SeasonReading.currentSeason(releases) == 2, "seasons only go up")
     }
 
     @Test("With no releases there is nothing to say")

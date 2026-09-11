@@ -108,7 +108,20 @@ struct Cadence: Equatable, Sendable, Codable {
         // A genuinely daily series collapses into a single session, which would
         // leave nothing to measure. Fall back to raw days rather than refuse to
         // estimate something that really does ship every day.
-        let measured = sessionStarts.count >= minimumDates ? sessionStarts : days
+        //
+        // Only for that case. The fallback used to take anything under the
+        // minimum, so three bursts of four consecutive days — three sessions —
+        // were measured as twelve days with nine one-day gaps: "every 1 day,
+        // exactly", the pathology the session grouping exists to prevent. Two
+        // or three sessions is too little history, and refusing is the answer.
+        let measured: [Date]
+        if sessionStarts.count >= minimumDates {
+            measured = sessionStarts
+        } else if sessionStarts.count == 1 {
+            measured = days
+        } else {
+            return nil
+        }
 
         let gaps: [Int] = zip(measured, measured.dropFirst()).compactMap { newer, older in
             let days = calendar.dateComponents([.day], from: older, to: newer).day ?? 0

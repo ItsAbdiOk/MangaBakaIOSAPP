@@ -77,9 +77,12 @@ enum SeasonReading {
     /// The season a series is currently releasing, or nil where it has none.
     static func currentSeason(_ samples: [Sample]) -> Int? {
         guard hasSeasons(samples) else { return nil }
-        // The newest release, not the highest volume: a straggler from an
-        // earlier season posted late should not roll the season back.
-        return samples.max { $0.date < $1.date }?.volume
+        // The highest volume, not the newest release's: a straggler from an
+        // earlier season posted late must not roll the season back, and the
+        // newest release is exactly what a straggler is. Seasons only go up.
+        // (The comment said this and the code did the opposite; the test
+        // asserted the opposite under this comment's title.)
+        return samples.map(\.volume).max()
     }
 
     /// "Season 3 · chapter 235", or just the chapter where there are no
