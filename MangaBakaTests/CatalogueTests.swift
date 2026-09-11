@@ -39,10 +39,14 @@ struct CatalogueTests {
         defer { URLProtocolStub.reset() }
 
         let service = makeService()
-        _ = await service.genres()
-        _ = await service.genres()
+        let first = await service.genres()
+        let second = await service.genres()
 
         #expect(URLProtocolStub.requests.count == 1)
+        // One request is only a saving if the second answer is the first one.
+        // A cache that stored the response and returned [] passed this before.
+        #expect(first.map(\.label) == ["Action"])
+        #expect(second == first)
     }
 
     private let tagPayload = Data("""

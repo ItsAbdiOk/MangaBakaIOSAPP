@@ -77,6 +77,9 @@ struct RecommendationQualityTests {
         _ = await repository.search(SearchQuery(text: "solo"))
         _ = await repository.feed(.rising, forceRefresh: true)
 
+        // Two requests went out, or the loop below asserts on nothing and
+        // reports that no identity leaked without having looked.
+        #expect(URLProtocolStub.requests.count == 2)
         for request in URLProtocolStub.requests {
             let names = try items(from: request).map(\.name)
             #expect(!names.contains("exclude_user_library"))

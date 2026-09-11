@@ -351,7 +351,9 @@ struct DetailRowFittingTests {
     @Test("Short rows are never expandable")
     func shortRowsFixed() {
         let series = SeriesFactory.make(id: 1, authors: ["A"], contentRating: "safe")
-        for row in DetailCredits(series: series).rows where row.id != "Publishers" {
+        let rows = DetailCredits(series: series).rows.filter { $0.id != "Publishers" }
+        #expect(!rows.isEmpty, "No rows to check: the loop below would pass on nothing")
+        for row in rows {
             #expect(!row.isExpandable, "\(row.id) offers a tap that does nothing")
         }
     }

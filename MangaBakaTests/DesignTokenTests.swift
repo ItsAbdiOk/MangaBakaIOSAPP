@@ -45,7 +45,9 @@ struct DesignTokenTests {
             .map { try SourceTree.read($0) }
             .joined(separator: "\n")
 
-        for token in try tokens(in: file) {
+        let tokens = try tokens(in: file)
+        #expect(!tokens.isEmpty, "No tokens parsed from \(file): the loop below would pass on nothing")
+        for token in tokens {
             let qualified = "\(file).\(token)"
             guard !Self.deliberatelyUnused.contains(qualified) else { continue }
             #expect(

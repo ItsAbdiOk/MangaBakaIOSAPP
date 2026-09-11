@@ -38,6 +38,7 @@ struct AccessibilityTests {
         // Every scaledFont call in the named ramp must pass relativeTo, which
         // is what ties it to Dynamic Type.
         let calls = source.components(separatedBy: "scaledFont(size:").dropFirst()
+        #expect(!calls.isEmpty, "No ramp entries found: the loop below would pass on nothing")
         for call in calls {
             let head = String(call.prefix(220))
             #expect(
@@ -405,6 +406,7 @@ struct NewScreenAccessibilityTests {
     /// focus stop that says nothing at all.
     @Test("Covers with no label of their own are hidden, not silent")
     func silentCoversAreHidden() throws {
+        var exercised = 0
         for path in [
             "MangaBaka/Features/Library/ShelfDetailView.swift",
             "MangaBaka/Features/Library/LibraryView.swift"
@@ -413,8 +415,12 @@ struct NewScreenAccessibilityTests {
             // Every empty-labelled cover is followed by a hide.
             let empties = source.components(separatedBy: "accessibilityText: \"\"").count - 1
             let hidden = source.components(separatedBy: "accessibilityHidden(true)").count - 1
+            exercised += empties
             #expect(hidden >= empties, "\(path) leaves a cover focusable with nothing to say")
         }
+        // `0 >= 0` passes for a file with no such cover at all — LibraryView
+        // today. The rule has to have met at least one to have been checked.
+        #expect(exercised > 0, "No empty-labelled cover found anywhere; the rule was never exercised")
     }
 
     /// It is drawn in the accent colour with a chevron. It has to do something.

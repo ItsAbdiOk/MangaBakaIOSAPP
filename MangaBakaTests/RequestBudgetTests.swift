@@ -44,8 +44,11 @@ struct RequestBudgetTests {
         URLProtocolStub.setHandler { [data = payload(count: 20)] _ in .respond(.init(body: data)) }
         defer { URLProtocolStub.reset() }
 
-        _ = try await makeRepository().feed(.rising, forceRefresh: false)
+        let result = try await makeRepository().feed(.rising, forceRefresh: false)
         #expect(URLProtocolStub.requests.count == 1)
+        // The request has to have bought something. A decode regression that
+        // cached an empty feed would keep the count at one and the screen empty.
+        #expect(result.series.count == 20)
     }
 
     /// The endpoint caps `limit` at 20 and the CDN holds the response for a
@@ -69,8 +72,10 @@ struct RequestBudgetTests {
         defer { URLProtocolStub.reset() }
 
         let repository = try makeRepository()
-        for _ in 0..<5 { _ = await repository.feed(.rising, forceRefresh: false) }
+        var cards = 0
+        for _ in 0..<5 { cards += await repository.feed(.rising, forceRefresh: false).series.count }
 
+        #expect(cards == 100, "The claim is a hundred cards; the count is what makes it one")
         #expect(URLProtocolStub.requests.count == 1,
                 "100 cards cost \(URLProtocolStub.requests.count) requests; the cache should make it 1")
         #expect(URLProtocolStub.requests.count <= 6)

@@ -88,6 +88,8 @@ struct DynamicTypeRampTests {
         }
         try? lines.joined(separator: "\n")
             .write(toFile: "/tmp/mb-type-anchors.txt", atomically: true, encoding: .utf8)
-        #expect(!lines.isEmpty)
+        // An instrument, as the comment above says. The `#expect(!lines.isEmpty)`
+        // that stood here iterated a six-element literal and could not fail; it
+        // read as coverage and was not.
     }
 }
