@@ -128,12 +128,22 @@ time.
   spring is 0.36/0.78. Anything looser reads as a toy.
 - **Nothing that bypasses `Motion.reduced`.**
 
-## Order
+## Order — done, 2026-09-11, one commit each
 
-1. Haptics (cheap, felt immediately, no layout risk)
-2. Press feedback (one file)
-3. Numeric transitions (mechanical)
-4. Zoom transitions everywhere (the big one)
-5. Scroll transitions and snapping
-6. Symbol effects
-7. Shimmer
+1. Haptics — `Haptics.swift` is the vocabulary; every site is `.sensoryFeedback`,
+   and a source test keeps `FeedbackGenerator` out of the app.
+2. Press feedback — `PressStyle`, applied to all 98 buttons.
+3. Numeric transitions — `countsNotCuts()`, on every figure that changes on screen.
+4. Zoom transitions everywhere — `ZoomRoute` in the environment; ten routes;
+   a source test enforces n of n.
+5. Scroll transitions and snapping — `arrives()` on six rows, `.viewAligned`.
+6. Symbol effects — search pulse, stack bounces, schedule rotate.
+7. Shimmer — `Skeleton.swift`; `CoverSkeletonRow` back and wired.
+
+Not done from the tables above, deliberately: the tab icons' `.replace` (the
+system tab bar draws them; not ours to animate), "reached the end of a feed" on
+Discover (rows page silently and the haptic would fire on scroll, not on an
+action), and the cover gallery zooming from the tapped cover (a sheet, not a
+push; a different transition family and a bigger change than this pass).
+
+Everything above reads `accessibilityReduceMotion` or goes through `Motion`.
