@@ -16,7 +16,7 @@ actor MangaUpdatesClient {
     private let baseURL: URL
     private let session: URLSession
     private let clock: any Clock
-    private var nextAllowedRequest: Date = .distantPast
+    private var spacing = RequestSpacing(minimumInterval: MangaUpdatesClient.minimumInterval)
 
     /// Identifies the app, as their terms require.
     static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
@@ -116,7 +116,7 @@ actor MangaUpdatesClient {
         }
         if http.statusCode == 429 {
             let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
-            nextAllowedRequest = clock.now.addingTimeInterval(retryAfter ?? 60)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
             throw APIError.rateLimited(retryAfter: retryAfter)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -138,17 +138,15 @@ actor MangaUpdatesClient {
     }
 
     /// Blocks until the spacing interval has elapsed since the last request.
+    /// The slot is claimed before the wait; see `RequestSpacing` for why.
     private func waitForSlot() async throws(APIError) {
-        let now = clock.now
-        if nextAllowedRequest > now {
-            let wait = nextAllowedRequest.timeIntervalSince(now)
-            do {
-                try await Task.sleep(for: .seconds(wait))
-            } catch {
-                throw APIError.transport(underlying: "Cancelled while waiting for a request slot.")
-            }
+        let wait = spacing.claim(now: clock.now)
+        guard wait > 0 else { return }
+        do {
+            try await Task.sleep(for: .seconds(wait))
+        } catch {
+            throw APIError.transport(underlying: "Cancelled while waiting for a request slot.")
         }
-        nextAllowedRequest = clock.now.addingTimeInterval(Self.minimumInterval)
     }
 }
 
