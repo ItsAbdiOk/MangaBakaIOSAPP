@@ -18,16 +18,20 @@ enum ReleaseNotes {
     }
 
     static let current = Release(
-        id: "2026-09-11-b",
+        id: "2026-09-11-c",
         headline: "New in this build",
         items: [
             "Every volume on Apple Books, with official covers and prices — "
-                + "Japanese editions where your store has none",
-            "\"Read in English\": the official platforms carrying a series in your language",
-            "Your library in iOS search, and Siri: \"What's due this week in MangaBaka\"",
+                + "and the Japanese edition where your store has none",
+            "\"Read in English\": the official platforms carrying a series in your language, "
+                + "marked Free where they are",
+            "Manhwa count in seasons and episodes",
+            "Your library in iOS search, with covers; and Siri: \"What's due this week in MangaBaka\"",
             "Glossy covers, and each row's colour on the ground behind it",
             "Flags and language names on titles and links",
-            "Share a series as its mangabaka.org link"
+            "Share a series as its mangabaka.org link",
+            "Open a shelf on its own page from the Library filter",
+            "This card, once per update"
         ]
     )
 }

@@ -39,13 +39,13 @@ Kept current so nothing is forgotten. Abdi, 2026-09-11.
 | Webtoons / Tapas opening in-app from the "Read in English" chips | Abdi's phone with Webtoons installed; the simulator has no such app, so it opens Safari there |
 | mangabaka.org links opening in the app | MangaBaka hosting `/.well-known/apple-app-site-association` (draft ask above); then our Associated Domains entitlement, on a TestFlight day |
 | Siri / Shortcuts intents tried for real | Only the logic is tested; Siri is not on the simulator. Try "What's due this week in MangaBaka" on the phone |
-| Spotlight cover thumbnails | A measurement: covers live in URLCache, 900 through it per launch is a cost to see first |
-| Volumes for series with no English ebook | Rakuten Books / DMM Books as Japanese-edition fillers once Abdi's accounts exist and their terms are read. DMM: `floor=comic` only, never FANZA. Until then such series show MangaBaka's editions or nothing |
+| ~~Spotlight cover thumbnails~~ | Done: 941 entries in 84 ms off the main actor; cache only |
+| Volumes for series with no English ebook | Mostly done: the Japanese store's edition (covers and count, no price). Rakuten/DMM parked — Abdi declined the signup 2026-09-11 |
 | Volumes: Google Books as second filler | **Keyless is not dependable.** Two keyless requests on 2026-09-11 both got HTTP 429 "Queries per day" exhausted — for Google's shared anonymous project, not this IP, so every keyless reader shares one bucket. Needs a free API key (Google Cloud console → enable Books API → create key; ~5 min, but a signup). With a key: 1,000/day per key, enough at a request per series page cached a week. Parked until Abdi wants the signup; the Japanese-store fallback covers most of the gap |
 | Preview beside a volume (item 5 original) | Apple Books' "Sample" is native on the store page the spine opens, so this may be done by default; confirm on the phone |
 | Barcode scan | Abdi said leave it for now. Camera: cannot be verified on the simulator |
 | New from a followed publisher | A design for "follow" |
-| Webtoon episode lists or thumbnails from the platforms | Declined: no public APIs, and scraping is the terms line. The page shows Season · Episodes from MangaBaka + the schedule, and the read chips carry "Free" / "Free to start" / "Subscription" where that is settled (Webtoons, Tapas, Manta; 2026-09-11) |
+| Webtoon episode lists or thumbnails from the platforms | Declined twice (Abdi asked again 2026-09-11 with a Gemini recipe: og:image scrape + spoofed Referer). og:image is one image per series — the cover MangaBaka already has — so it adds nothing; the Referer spoof is circumventing the CDN's block and App Store guideline 5.2.2 territory. Original reason: no public APIs, and scraping is the terms line. The page shows Season · Episodes from MangaBaka + the schedule, and the read chips carry "Free" / "Free to start" / "Subscription" where that is settled (Webtoons, Tapas, Manta; 2026-09-11) |
 | The hero's one unreproduced compact first-open | Reproduction; watch for it on the phone |
 
 ## From Abdi, in build order
