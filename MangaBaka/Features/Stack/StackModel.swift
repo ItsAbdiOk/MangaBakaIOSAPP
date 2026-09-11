@@ -25,6 +25,7 @@ final class StackModel {
 
     private(set) var queue: [Series] = []
     private(set) var isLoading = false
+    private var refillTask: Task<Void, Never>?
     private(set) var message: String?
     private(set) var source: Source = .random
     /// Set when a save reached the reader's MangaBaka library, so the screen
@@ -114,15 +115,34 @@ final class StackModel {
 
     func loadIfNeeded() async {
         await refreshSaved()
-        guard queue.isEmpty, !isLoading else { return }
+        guard queue.isEmpty else { return }
         await refill()
+    }
+
+    /// Tops the queue up, or joins the top-up already in progress.
+    ///
+    /// Three places call this — first load, every reaction that leaves two
+    /// cards, and the empty state's retry — and they overlap in practice: a
+    /// quick second swipe lands while the first swipe's refill is still
+    /// fetching. Each overlap used to be a second feed request for the same
+    /// stack, against a limit shared with strangers. A caller that finds a
+    /// refill in flight now waits for that one instead.
+    func refill() async {
+        if let refillTask {
+            await refillTask.value
+            return
+        }
+        let task = Task { await performRefill() }
+        refillTask = task
+        await task.value
+        refillTask = nil
     }
 
     private func refreshSaved() async {
         saved = ((try? await shelf.entries(.saved)) ?? [])
     }
 
-    func refill() async {
+    private func performRefill() async {
         isLoading = true
         defer { isLoading = false }
 

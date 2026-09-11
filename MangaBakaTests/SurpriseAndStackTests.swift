@@ -71,8 +71,48 @@ struct StackPersonalisationTests {
         }
     }
 
+    /// A feed that takes a moment, so two refills can overlap in the test.
+    private final class SlowRepository: StubRepositoryBase, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var feeds: Int {
+            lock.lock(); defer { lock.unlock() }
+            return count
+        }
+
+        private func noteFeed() {
+            lock.lock(); defer { lock.unlock() }
+            count += 1
+        }
+
+        override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
+            noteFeed()
+            try? await Task.sleep(for: .milliseconds(150))
+            return FeedResult(
+                series: (1...5).map { SeriesFactory.make(id: $0, title: "S\($0)") },
+                origin: .network
+            )
+        }
+    }
+
     private func makeShelf() throws -> ShelfStore {
         ShelfStore(database: try AppDatabase.inMemory())
+    }
+
+    /// A refill is triggered from three places — first load, every reaction
+    /// that leaves two cards, and the empty state's retry — and none of them
+    /// waited for the last one. Two overlapping refills are two feed requests
+    /// against a limit shared with strangers, for one stack.
+    @Test("An overlapping refill does not fetch twice")
+    func overlappingRefillFetchesOnce() async throws {
+        let repository = SlowRepository()
+        let model = await StackModel(repository: repository, shelf: try makeShelf())
+
+        async let first: Void = model.refill()
+        async let second: Void = model.refill()
+        _ = await (first, second)
+
+        #expect(repository.feeds == 1, "The second refill must join the first, not repeat it")
     }
 
     /// With nothing saved and no account, the queue is a random sample. The
