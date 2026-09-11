@@ -48,11 +48,16 @@ struct CoverImage: View {
             // than keeping the old one. `.task` also re-runs when the view
             // reappears, which is what makes a failed cover retry on scroll-back
             // instead of staying broken for the life of the screen.
+            //
+            // The state is reset before the fetch, not only after it. Keying
+            // the task decides when the load runs; it does not touch `loaded`,
+            // so a view that kept its identity across a cover change — the
+            // stack's card, handed a new series every swipe — drew the old
+            // artwork for a whole round trip and skipped the BlurHash
+            // placeholder that exists for exactly that gap.
             .task(id: url) {
-                if let cached = CoverStore.shared.cached(url) {
-                    loaded = cached
-                    return
-                }
+                loaded = CoverStore.shared.cached(url)
+                guard loaded == nil else { return }
                 loaded = await CoverStore.shared.image(for: url)
             }
     }
