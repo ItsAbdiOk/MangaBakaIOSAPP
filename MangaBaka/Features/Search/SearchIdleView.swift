@@ -150,9 +150,13 @@ struct SearchIdleView: View {
                     .typeSubsectionHeader()
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
+                // Muted, not accent. Accent on this screen means "a way
+                // onward"; throwing away your own search history is not one,
+                // and three same-weight accent links told the reader nothing
+                // about which to reach for.
                 Button("Clear") { recents.clear() }
                     .typeInstruction()
-                    .foregroundStyle(Palette.accent)
+                    .foregroundStyle(Palette.textMuted)
                     .buttonStyle(.plain)
             }
 

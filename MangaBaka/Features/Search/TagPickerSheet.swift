@@ -38,6 +38,7 @@ struct TagPickerSheet: View {
                         chosen
                         matchMode
                     }
+                    breadthLegend
                     if query.isEmpty {
                         groups
                     } else {
@@ -71,6 +72,31 @@ struct TagPickerSheet: View {
     }
 
     // MARK: - Pieces
+
+    /// What the little orange bar on each row means.
+    ///
+    /// VoiceOver was told ("Broad, 9,000 series") and a sighted reader was
+    /// not. A reviewer looking straight at the bars concluded they were a
+    /// leftover slider control, which is a fair reading of an unlabelled
+    /// 44x3pt rectangle repeated down a list.
+    private var breadthLegend: some View {
+        HStack(spacing: 8) {
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.surfaceChip)
+                Capsule().fill(Palette.accent.opacity(0.75)).frame(width: 30)
+            }
+            .frame(width: 44, height: 3)
+            Text("how many series carry the tag")
+                .typeFootnote()
+                .foregroundStyle(Palette.textMuted)
+            Spacer(minLength: 0)
+        }
+        // One element, and a sentence rather than a picture: reading a legend
+        // aloud as "bar, how many series carry the tag" helps nobody, and each
+        // row already announces its own breadth in words.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Each row's bar shows how many series carry that tag.")
+    }
 
     private var field: some View {
         HStack(spacing: 8) {

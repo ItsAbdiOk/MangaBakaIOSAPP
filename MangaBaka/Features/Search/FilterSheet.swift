@@ -13,6 +13,8 @@ struct FilterSheet: View {
     var catalogue: CatalogueService?
 
     @State private var isPickingTags = false
+    /// The filters "Clear all" threw away, kept so they can be put back.
+    @State private var cleared: SearchQuery?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -71,10 +73,25 @@ struct FilterSheet: View {
                         }
                     }
 
+                    // Reversible in place, rather than gone.
+                    //
+                    // This wiped every filter with no undo and no
+                    // confirmation. A confirmation would be worse — a dialog
+                    // in front of a sheet to protect a one-tap action — so the
+                    // button keeps what it cleared and offers it back. It only
+                    // stops offering when the reader changes a filter
+                    // themselves, at which point there is nothing coherent to
+                    // return to.
                     Button {
-                        query = SearchQuery()
+                        if let cleared {
+                            query = cleared
+                            self.cleared = nil
+                        } else {
+                            cleared = query
+                            query = SearchQuery()
+                        }
                     } label: {
-                        Text("Clear all")
+                        Text(cleared == nil ? "Clear all" : "Undo clear")
                             .typeCTA()
                             .foregroundStyle(Palette.textPrimary)
                             .frame(maxWidth: .infinity)
@@ -82,6 +99,7 @@ struct FilterSheet: View {
                             .background(Palette.surfaceChip)
                             .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
                     }
+                    .disabled(cleared == nil && query.isEmpty)
 
                     Button {
                         onApply()

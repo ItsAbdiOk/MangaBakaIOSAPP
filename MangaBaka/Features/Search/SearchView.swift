@@ -136,12 +136,24 @@ struct SearchView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// Two actions of different weight, drawn differently.
+    ///
+    /// They were three same-weight accent links — "Browse", "Surprise me" and
+    /// the recents "Clear" below — which told the reader nothing about which
+    /// one to reach for. Browse opens a whole other surface and is the one
+    /// worth finding, so it takes a chip; "Surprise me" reorders the results
+    /// you already have and stays a plain link.
     private var headerActions: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Button(action: onBrowse) {
                 Text("Browse")
                     .typeInstruction()
                     .foregroundStyle(Palette.accent)
+                    .padding(.horizontal, 13)
+                    .frame(minHeight: Metrics.headerPill)
+                    .background(Palette.accentTint, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.4), lineWidth: 0.5))
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             Button {
@@ -150,7 +162,9 @@ struct SearchView: View {
             } label: {
                 Text("Surprise me")
                     .typeInstruction()
-                    .foregroundStyle(Palette.accent)
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(minHeight: Metrics.headerPill)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(model.isSearching)
