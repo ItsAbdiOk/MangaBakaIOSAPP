@@ -110,6 +110,66 @@ struct ReminderTests {
         #expect(centre.added.map(\.id) == ["announced-a"])
     }
 
+    private func nearlyFinished(_ id: Int) -> LibraryEntry {
+        LibraryEntry(
+            id: id, seriesId: id, state: .reading, progressChapter: 196,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(id: id, title: "S\(id)", status: "completed", totalChapters: 200)
+        )
+    }
+
+    /// The two library nudges were re-added at now+24h and now+30d on every
+    /// foreground. Open the app daily and neither ever fired: the date was
+    /// always tomorrow.
+    @Test("A nudge keeps its date across foregrounds, and then fires once")
+    func nudgeKeepsItsDate() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
+        await reminders.enable()
+        let library = [nearlyFinished(7)]
+
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        let first = try #require(centre.added.first { $0.id == "finished-7" }?.date)
+
+        clock.advance(by: 6 * 3_600)
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        let second = try #require(centre.added.first { $0.id == "finished-7" }?.date)
+        #expect(second == first, "Six hours later the nudge is still set for the same moment")
+
+        // Past its date it has fired. A series can only end once.
+        clock.advance(by: 30 * 3_600)
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        #expect(!centre.added.contains { $0.id == "finished-7" })
+    }
+
+    @Test("The backlog nudge comes round again a month after it fired")
+    func backlogNudgeIsMonthly() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
+        await reminders.enable()
+        var behind = nearlyFinished(3)
+        behind = LibraryEntry(
+            id: 3, seriesId: 3, state: .reading, progressChapter: 10,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(id: 3, title: "S3", status: "releasing", totalChapters: 60)
+        )
+
+        await reminders.reschedule(announced: [], predicted: [], library: [behind])
+        let first = try #require(centre.added.first { $0.id == "catch-up" }?.date)
+
+        clock.advance(by: 31 * 86_400)
+        await reminders.reschedule(announced: [], predicted: [], library: [behind])
+        let next = try #require(centre.added.first { $0.id == "catch-up" }?.date)
+        #expect(next > first)
+        #expect(next.timeIntervalSince(clock.now) > 29 * 86_400, "Roughly a month from now, not from then")
+    }
+
     @Test("Turning it off clears what was pending")
     func disableClears() async throws {
         let centre = FakeCentre()
@@ -136,6 +196,48 @@ struct ReminderTests {
             removeAllCount += 1
             added = []
         }
+    }
+}
+
+/// When a reminder actually goes off. Nine in the morning, local time, on the
+/// day — except that a trigger already in the past is refused by iOS, and the
+/// refusal was hidden behind `try?`, so a chapter due at three this afternoon
+/// was scheduled for nine this morning and never arrived.
+@Suite("Reminder trigger time")
+struct ReminderTriggerTests {
+    private let calendar = Calendar(identifier: .gregorian)
+
+    private func date(_ hour: Int, dayOffset: Int = 0, from now: Date) -> Date {
+        var day = calendar.startOfDay(for: now)
+        day = calendar.date(byAdding: .day, value: dayOffset, to: day) ?? day
+        return calendar.date(byAdding: .hour, value: hour, to: day) ?? day
+    }
+
+    @Test("A date on a later day fires at nine that morning")
+    func laterDayIsNine() {
+        let now = date(14, from: Date())
+        let due = date(3, dayOffset: 2, from: now)
+        let trigger = ReminderRequest.triggerDate(for: due, now: now, calendar: calendar)
+        #expect(calendar.component(.hour, from: trigger) == 9)
+        #expect(calendar.isDate(trigger, inSameDayAs: due))
+    }
+
+    @Test("A date later today, after nine, fires at that time rather than in the past")
+    func laterTodayIsNotInThePast() {
+        let now = date(10, from: Date())
+        let due = date(15, from: now)
+        let trigger = ReminderRequest.triggerDate(for: due, now: now, calendar: calendar)
+        #expect(trigger > now)
+        #expect(trigger == due)
+    }
+
+    @Test("A date that has already passed fires shortly, not never")
+    func pastIsSoon() {
+        let now = date(10, from: Date())
+        let due = date(8, from: now)
+        let trigger = ReminderRequest.triggerDate(for: due, now: now, calendar: calendar)
+        #expect(trigger > now)
+        #expect(trigger.timeIntervalSince(now) <= 120)
     }
 }
 

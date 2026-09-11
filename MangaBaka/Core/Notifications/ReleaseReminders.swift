@@ -32,10 +32,16 @@ final class ReleaseReminders {
 
     private let defaults: UserDefaults
     private let centre: any NotificationScheduling
+    private let now: () -> Date
 
-    init(defaults: UserDefaults = .standard, centre: any NotificationScheduling = LiveNotificationCentre()) {
+    init(
+        defaults: UserDefaults = .standard,
+        centre: any NotificationScheduling = LiveNotificationCentre(),
+        now: @escaping () -> Date = Date.init
+    ) {
         self.defaults = defaults
         self.centre = centre
+        self.now = now
         isEnabled = defaults.bool(forKey: Self.key)
     }
 
@@ -100,8 +106,9 @@ final class ReleaseReminders {
 
         var requests: [ReminderRequest] = []
 
+        let now = now()
         for work in announced {
-            guard let date = work.date, date > Date() else { continue }
+            guard let date = work.date, date > now else { continue }
             requests.append(ReminderRequest(
                 id: "announced-\(work.id)",
                 title: work.title ?? "A release you are waiting for",
@@ -112,7 +119,7 @@ final class ReleaseReminders {
         }
 
         for work in predicted {
-            guard let cadence = work.cadence, cadence.due > Date() else { continue }
+            guard let cadence = work.cadence, cadence.due > now else { continue }
             requests.append(ReminderRequest(
                 id: "predicted-\(work.series.id)",
                 title: work.series.displayTitle ?? "A series you are reading",
@@ -124,7 +131,9 @@ final class ReleaseReminders {
             ))
         }
 
-        requests.append(contentsOf: Self.catchUp(in: library))
+        let nudges = Self.catchUp(in: library, now: now, previous: nudgeDates)
+        rememberNudges(nudges, now: now)
+        requests.append(contentsOf: nudges)
 
         let soonest = requests
             .sorted { $0.date < $1.date }
@@ -147,26 +156,44 @@ extension ReleaseReminders {
     /// same forty-chapter backlog is a reminder you turn off — so the backlog
     /// one is monthly, and the finished one fires once per series because a
     /// series can only end once.
-    static func catchUp(in entries: [LibraryEntry]) -> [ReminderRequest] {
+    ///
+    /// - Parameter previous: when each nudge was last set to fire, by id. Every
+    ///   reschedule used to set these at now+24h and now+30d afresh, so a reader
+    ///   who opened the app daily never saw either — the date was always
+    ///   tomorrow. A nudge keeps its date until it passes; then the finished
+    ///   one is done (a series ends once) and the backlog one comes round again
+    ///   a month later.
+    static func catchUp(
+        in entries: [LibraryEntry],
+        now: Date = Date(),
+        previous: [String: Date] = [:]
+    ) -> [ReminderRequest] {
         var requests: [ReminderRequest] = []
 
         // It ended and nobody said. The worst way to lose a story: the last few
         // chapters are sitting there and you think you are up to date.
         for item in ReadingInsights.nearlyFinished(in: entries).prefix(3) {
+            let id = "finished-\(item.entry.seriesId)"
+            guard let date = nudgeDate(
+                id: id, now: now, previous: previous, after: 60 * 60 * 24, repeats: false
+            ) else { continue }
             let title = item.series?.displayTitle ?? "A series you were reading"
             requests.append(ReminderRequest(
-                id: "finished-\(item.entry.seriesId)",
+                id: id,
                 title: "\(title) has finished",
                 body: item.waiting == 1
                     ? "You are one chapter from the end."
                     : "You are \(item.waiting) chapters from the end.",
-                date: Date().addingTimeInterval(60 * 60 * 24)
+                date: date
             ))
         }
 
         // The backlog, once a month, and only when it is worth saying.
         let behind = ReadingInsights.waiting(in: entries, minimum: 10)
-        if let biggest = behind.first {
+        if let biggest = behind.first,
+           let date = nudgeDate(
+               id: "catch-up", now: now, previous: previous, after: 60 * 60 * 24 * 30, repeats: true
+           ) {
             let title = biggest.series?.displayTitle ?? "something you were reading"
             let others = behind.count - 1
             requests.append(ReminderRequest(
@@ -175,11 +202,37 @@ extension ReleaseReminders {
                 body: others > 0
                     ? "And \(others) other series you were part way through."
                     : "Still where you left it.",
-                date: Date().addingTimeInterval(60 * 60 * 24 * 30)
+                date: date
             ))
         }
 
         return requests
+    }
+
+    /// When a nudge fires: its existing date while that is still ahead; a
+    /// fresh one after `after` when there was none; nil once a one-off has
+    /// passed.
+    private static func nudgeDate(
+        id: String, now: Date, previous: [String: Date], after: TimeInterval, repeats: Bool
+    ) -> Date? {
+        if let set = previous[id] {
+            if set > now { return set }
+            if !repeats { return nil }
+        }
+        return now.addingTimeInterval(after)
+    }
+
+    private static let nudgeKey = "reminders.nudgeDates"
+
+    private var nudgeDates: [String: Date] {
+        (defaults.dictionary(forKey: Self.nudgeKey) as? [String: Date]) ?? [:]
+    }
+
+    /// Keeps the fired one-offs on record too, so they are not re-set.
+    private func rememberNudges(_ nudges: [ReminderRequest], now: Date) {
+        var dates = nudgeDates
+        for nudge in nudges { dates[nudge.id] = nudge.date }
+        defaults.set(dates, forKey: Self.nudgeKey)
     }
 }
 
@@ -189,6 +242,23 @@ struct ReminderRequest: Equatable, Sendable {
     let title: String
     let body: String
     let date: Date
+
+    /// When it actually goes off.
+    ///
+    /// Nine in the morning, local time, on the day: a release that fires at
+    /// midnight is a notification nobody sees and a phone that lit up in a dark
+    /// room. But a trigger already in the past is refused by iOS, and the
+    /// refusal was hidden behind `try?` — a chapter due at three this afternoon
+    /// was scheduled for nine this morning and never arrived. So: nine if that
+    /// is still ahead; the date itself if that is; a minute from now otherwise.
+    static func triggerDate(for date: Date, now: Date, calendar: Calendar = .current) -> Date {
+        var nine = calendar.dateComponents([.year, .month, .day], from: date)
+        nine.hour = 9
+        nine.minute = 0
+        if let morning = calendar.date(from: nine), morning > now { return morning }
+        if date > now { return date }
+        return now.addingTimeInterval(60)
+    }
 }
 
 /// The part of `UNUserNotificationCenter` this app uses.
@@ -220,14 +290,10 @@ struct LiveNotificationCentre: NotificationScheduling {
         content.body = request.body
         content.sound = .default
 
-        // Nine in the morning, local time, on the day itself. A release that
-        // fires at midnight is a notification nobody sees and a phone that lit
-        // up in a dark room.
-        var components = Calendar.current.dateComponents(
-            [.year, .month, .day], from: request.date
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: ReminderRequest.triggerDate(for: request.date, now: Date())
         )
-        components.hour = 9
-
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
         try? await UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: request.id, content: content, trigger: trigger)
