@@ -204,12 +204,10 @@ struct SearchView: View {
                 counts: counts,
                 recents: recents,
                 onRun: { lens in
-                    model.query = lens.query
-                    Task { model.cancelPendingDebounce(); await model.search() }
+                    Task { await model.apply(lens.query) }
                 },
                 onRunTerm: { term in
-                    model.query = SearchQuery(text: term)
-                    Task { model.cancelPendingDebounce(); await model.search() }
+                    Task { await model.apply(SearchQuery(text: term)) }
                 }
             )
         } else if model.isSearching {

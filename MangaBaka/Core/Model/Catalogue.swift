@@ -50,7 +50,9 @@ struct PublisherRecord: Decodable, Identifiable, Sendable, Equatable, Hashable {
     let name: String
     /// "publisher" and similar.
     let type: String?
-    /// "both", "original", "english" — which side of the business it is.
+    /// "physical", "digital" or "both" — what it puts out. The schema's enum
+    /// (`docs/schemas/mangabaka_openapi.json`); an earlier comment here named
+    /// values it does not have.
     let subType: String?
     let parentId: Int?
     let countryOfOrigin: String?

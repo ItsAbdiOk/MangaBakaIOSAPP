@@ -133,7 +133,7 @@ struct PaginationTests {
 
     // MARK: - Discover rows
 
-    private final class RowPagingRepository: StubRepositoryBase, @unchecked Sendable {
+    private class RowPagingRepository: StubRepositoryBase, @unchecked Sendable {
         private(set) var requested: [(key: String, page: Int)] = []
 
         override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
@@ -186,5 +186,36 @@ struct PaginationTests {
         await model.load(forceRefresh: true)
         #expect(await model.rows.first { $0.id == trending }?.page == 1)
         #expect(await model.rows.first { $0.id == trending }?.hasReachedEnd == false)
+    }
+
+    /// A page fetch that is slow enough for a pull-to-refresh to land first.
+    private final class SlowPageRepository: RowPagingRepository, @unchecked Sendable {
+        var gate: CheckedContinuation<Void, Never>?
+
+        override func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
+            await withCheckedContinuation { gate = $0 }
+            return await super.feedPage(feed, page: page)
+        }
+    }
+
+    /// Pull to refresh while page 2 is in flight: the row is replaced with a
+    /// fresh page 1, and the old page 2 must not be appended to it. It was,
+    /// which left the row at page 2 with the refreshed 1 plus the stale 2.
+    @Test("A page that was in flight during a refresh is dropped")
+    func refreshDuringPageFetchDropsThePage() async {
+        let repository = SlowPageRepository()
+        let model = await DiscoverModel(repository: repository)
+        await model.load()
+        let trending = FeedKind.trending.cacheKey
+
+        let paging = Task { await model.loadMore(trending) }
+        while repository.gate == nil { await Task.yield() }
+        await model.load(forceRefresh: true)
+        repository.gate?.resume()
+        await paging.value
+
+        let row = await model.rows.first { $0.id == trending }
+        #expect(row?.series.count == 20, "The refreshed page 1 alone")
+        #expect(row?.page == 1)
     }
 }

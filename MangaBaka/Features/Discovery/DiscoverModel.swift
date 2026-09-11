@@ -19,6 +19,9 @@ final class DiscoverModel {
         var isLoading = true
         /// The last page fetched. 1 until the row is scrolled to its end.
         var page = 1
+        /// Bumped each time a reload replaces the row's contents, so a page
+        /// fetch that was in flight across the reload can tell.
+        var reloads = 0
         var isLoadingMore = false
         /// Set when a page comes back short or empty, or when the endpoint has
         /// no paging at all. `rising` and `hidden-gems` are capped at 20 by the
@@ -89,6 +92,7 @@ final class DiscoverModel {
                 // page 5 of a row that currently holds page 1.
                 rows[index].page = 1
                 rows[index].hasReachedEnd = false
+                rows[index].reloads += 1
                 if case let .staleAfter(error) = result.origin {
                     firstFailure = firstFailure ?? error
                     // One bar for the screen, not one per row. Four rows all
@@ -146,7 +150,17 @@ final class DiscoverModel {
         defer { rows[index].isLoadingMore = false }
 
         let nextPage = rows[index].page + 1
+        let reloads = rows[index].reloads
         let result = await repository.feedPage(rows[index].kind, page: nextPage)
+
+        // A pull-to-refresh while this page was in flight has replaced the
+        // row with a fresh page 1. Appending would leave the row holding the
+        // new page 1 plus the old page 2, with `page` saying 2 — so the next
+        // scroll fetched page 3 of a row missing its 2. Compared on a reload
+        // count, not on `page`: the reload resets `page` to 1, which is
+        // exactly the value this fetch started from, so a page check passes.
+        // (Tried first; the test caught it.)
+        guard rows[index].reloads == reloads else { return }
 
         // Deduplicate against what is already on screen. The API can and does
         // repeat a series across pages when the underlying ordering shifts

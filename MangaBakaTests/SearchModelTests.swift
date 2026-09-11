@@ -42,6 +42,29 @@ struct SearchModelTests {
         #expect(model.isSearching == false, "The spinner must not be left running")
     }
 
+    /// Running a lens or a recent term assigns the query and searches at
+    /// once; the assignment also fires the field's change observer, which
+    /// used to schedule a second, identical search 300ms later.
+    @Test("An applied query searches once, even when the field observes the edit")
+    func appliedQuerySearchesOnce() async throws {
+        let repository = RecordingRepository()
+        let model = SearchModel(repository: repository)
+
+        await model.apply(SearchQuery(text: "solo"))
+        // What the view's onChange(of: query.text) does, whichever side of
+        // the explicit search it lands on.
+        model.queryDidChange()
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(repository.searchCount == 1)
+
+        // The next real keystroke still debounces into a search of its own.
+        model.query.text = "solo l"
+        model.queryDidChange()
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(repository.searchCount == 2)
+    }
+
     @Test("The loading state clears even when nothing was found")
     func clearsLoadingOnEmpty() async {
         let repository = RecordingRepository()

@@ -25,6 +25,9 @@ final class SearchModel {
 
     private let repository: any SeriesRepositoryProtocol
     private var debounceTask: Task<Void, Never>?
+    /// The text `apply(_:)` just set, so the field's own change observer can
+    /// tell that edit from a keystroke. See `queryDidChange`.
+    private var appliedText: String?
 
     init(repository: any SeriesRepositoryProtocol) {
         self.repository = repository
@@ -35,6 +38,19 @@ final class SearchModel {
     /// the last keystroke in a burst ever reaches the network.
     func queryDidChange() {
         debounceTask?.cancel()
+        // An explicit apply — a lens, a recent term, a browse — sets the whole
+        // query and searches at once, but assigning it also changes the text
+        // the field observes, and that observer lands here and scheduled a
+        // fresh debounce after the explicit search had already gone out: two
+        // identical requests per tap, on a 30 req/min budget shared with
+        // strangers. Whether the observer runs before or after the explicit
+        // search is SwiftUI's business and not something to bet on, so the
+        // model remembers what it applied and this ignores that one edit.
+        if let appliedText, appliedText == query.text {
+            self.appliedText = nil
+            return
+        }
+        appliedText = nil
         // Typing a title means you want that title, not a shuffle. "Surprise
         // me" sets `sort = "random"` and nothing ever unset it, so every search
         // after one tap of it was randomised: `q=one piece&sort_by=random`
@@ -142,9 +158,22 @@ final class SearchModel {
         if let tag { next.tags = [tag] }
         if let publisher { next.publisher = publisher }
         next.sort = "popularity_desc"
+        // Assigned here, not in the task: a caller may read the query
+        // straight back, and it should be the browse.
+        appliedText = next.text
         query = next
-        debounceTask?.cancel()
+        cancelPendingDebounce()
         Task { await search() }
+    }
+
+    /// Replaces the whole query and searches at once, without the debounce a
+    /// keystroke gets. For the explicit triggers: a saved lens, a recent term,
+    /// a browse. See `queryDidChange` for why the text is remembered first.
+    func apply(_ next: SearchQuery) async {
+        appliedText = next.text
+        query = next
+        cancelPendingDebounce()
+        await search()
     }
 
     /// Drops a pending debounce without touching an in-flight search. Call this

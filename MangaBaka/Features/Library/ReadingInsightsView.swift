@@ -174,12 +174,20 @@ struct ReadingInsightsView: View {
 
     // MARK: - What you like
 
+    /// A tag is "what you finish" when the reader completed at least this
+    /// share of the series carrying it, and "what you give up on" at or below
+    /// the other. GUESSES: neither is derived from anyone's library. They are
+    /// far enough apart that a tag cannot be both, which is the only property
+    /// relied on; the gap in between is deliberately unlabelled.
+    private static let finishThreshold = 0.6
+    private static let abandonThreshold = 0.3
+
     private var tasteSection: some View {
         let finishes = derived.verdicts
-            .filter { ($0.completionRate ?? 0) >= 0.6 }
+            .filter { ($0.completionRate ?? 0) >= Self.finishThreshold }
             .prefix(6)
         let abandons = derived.verdicts
-            .filter { ($0.completionRate ?? 1) <= 0.3 }
+            .filter { ($0.completionRate ?? 1) <= Self.abandonThreshold }
             .prefix(6)
 
         return VStack(alignment: .leading, spacing: 22) {
