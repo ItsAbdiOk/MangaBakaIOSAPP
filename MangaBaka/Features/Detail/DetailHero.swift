@@ -27,6 +27,8 @@ struct DetailHero: View {
     /// The full column's height at the current width, measured off-screen;
     /// nil until the first layout. See `text`.
     @State private var fullHeight: CGFloat?
+    /// The middle form's height, measured the same way.
+    @State private var bylineHeight: CGFloat?
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -42,7 +44,7 @@ struct DetailHero: View {
                 cover
                 // Stacked, the column has the whole width and nothing beside
                 // it to leave a gap under, so it is always the full form.
-                column(.full)
+                column(.full, fill: false)
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, 24)
@@ -96,17 +98,29 @@ struct DetailHero: View {
     enum Form: Equatable {
         /// Eyebrow, pill and lateness, cadence sentence; kicker; title; byline.
         case full
+        /// Pill and lateness on one line; kicker; title; byline. The middle:
+        /// a three-line title had room for the byline but not the cadence
+        /// sentence, and went straight to compact — 60pt of gap under a
+        /// column that could have said who drew it (Abdi's screenshot,
+        /// "Return of the Blossoming Blade", 2026-09-11).
+        case byline
         /// Pill and lateness on one line; kicker; title. No byline.
         case compact
+
+        var hasByline: Bool { self != .compact }
+        var isExpanded: Bool { self == .full }
     }
 
-    /// The form the measured full column earns beside a cover this tall.
+    /// The richest form whose measured height fits beside a cover this tall.
     ///
     /// Compact until measured: the first frame has no height yet, and a gap
     /// that appears and then closes is worse than a byline that appears.
-    nonisolated static func form(fullHeight: CGFloat?, coverHeight: CGFloat) -> Form {
-        guard let fullHeight else { return .compact }
-        return fullHeight <= coverHeight ? .full : .compact
+    nonisolated static func form(
+        fullHeight: CGFloat?, bylineHeight: CGFloat?, coverHeight: CGFloat
+    ) -> Form {
+        if let fullHeight, fullHeight <= coverHeight { return .full }
+        if let bylineHeight, bylineHeight <= coverHeight { return .byline }
+        return .compact
     }
 
     /// The front cover's height. The fan behind it adds a few points, but the
@@ -114,29 +128,48 @@ struct DetailHero: View {
     private var coverHeight: CGFloat { Metrics.coverDetailHeroWidth / Metrics.coverAspect }
 
     private var text: some View {
-        column(Self.form(fullHeight: fullHeight, coverHeight: coverHeight))
-            // The measurer is a background: it is proposed the visible
-            // column's width, which is what decides the wrapping, and its own
-            // height cannot grow the column — the whole point.
+        let form = Self.form(
+            fullHeight: fullHeight, bylineHeight: bylineHeight, coverHeight: coverHeight
+        )
+        // The chosen form, stretched to the cover's height with the slack
+        // in the gaps between its blocks — schedule, name, other names — so
+        // the column ends where the cover ends instead of some way above
+        // it. A column taller than the cover is left alone.
+        return column(form, fill: true)
+            .frame(minHeight: coverHeight, alignment: .top)
+            // The measurers are a background: proposed the visible column's
+            // width, which is what decides the wrapping, and their own
+            // heights cannot grow the column — the whole point.
             .background {
-                column(.full)
+                column(.full, fill: false)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         fullHeight = $0
                     }
             }
+            .background {
+                column(.byline, fill: false)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        bylineHeight = $0
+                    }
+            }
     }
 
-    private func column(_ form: Form) -> some View {
+    /// `fill` puts spacers between the blocks, which is what lets the
+    /// column stretch; the measurers leave them out so they report the
+    /// column's natural height.
+    private func column(_ form: Form, fill: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if schedule != nil || isScheduleLoading {
                 DetailScheduleBlock(
                     estimate: schedule,
                     isLoading: isScheduleLoading,
                     onOpen: onOpenSchedule,
-                    isExpanded: form == .full
+                    isExpanded: form.isExpanded
                 )
-                .padding(.bottom, form == .full ? 13 : 9)
+                .padding(.bottom, form.isExpanded ? 13 : 9)
+                if fill { Spacer(minLength: 0) }
             }
             if let kicker {
                 Text(kicker)
@@ -145,13 +178,14 @@ struct DetailHero: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             title
-            if form == .full, let byline {
+            if form.hasByline, let byline {
                 Text(byline)
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 7)
             }
+            if fill { Spacer(minLength: 0) }
             // Directly under the name, because "is this the same book I
             // know as X?" is a question asked on arrival rather than two
             // screens down. A line and a count; the list itself is a
