@@ -142,10 +142,21 @@ struct AppleVolumesRowTests {
         #expect(AppleVolumesRow(volumes: [volume], expected: nil).countLine == "1")
     }
 
+    /// The phone showed MangaBaka's seven One Piece editions with no hint
+    /// of the store, and it was not possible to tell a failed request from
+    /// a build without the feature. Now a failure says so.
+    @Test("A store that could not be reached is said, not silent")
+    func failureIsSaid() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
+        #expect(source.contains("appleUnreachable = answer == nil"))
+        #expect(source.contains("note: appleUnreachable ? \"Apple Books couldn't be reached\" : nil"))
+    }
+
     @Test("The store's shelf replaces MangaBaka's editions, never joins them")
     func replaces() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
-        let either = "if appleVolumes.isEmpty {\n                    VolumesSection(volumes: extras.volumes)"
+        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
+        let either = "if appleVolumes.isEmpty {\n            VolumesSection(\n"
         #expect(source.contains(either))
+        #expect(source.contains("volumes: extras.volumes,"))
     }
 }

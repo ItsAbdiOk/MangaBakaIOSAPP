@@ -28,9 +28,14 @@ struct SeriesDetailView: View {
     var onOpenSchedule: (() -> Void)?
 
     @State private var similar: [Series] = []
-    @State private var appleVolumes: [AppleBooksVolume] = []
+    // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
+    // for the lint's ceiling on this type.
+    @State var appleVolumes: [AppleBooksVolume] = []
+    /// The store was asked and did not answer — distinct from "asked, and it
+    /// has none", which shows MangaBaka's editions with no note.
+    @State var appleUnreachable = false
     @State private var alsoLike: [Series] = []
-    @State private var extras = SeriesExtras()
+    @State var extras = SeriesExtras()
     @State private var covers: [SeriesImage] = []
     @State private var openCoversAt: GalleryStart?
     @State private var favouredTags: Set<String> = []
@@ -50,7 +55,7 @@ struct SeriesDetailView: View {
     /// swipe stack had no synopsis, no length and no next-chapter estimate —
     /// while the same series opened from Search had all three. The reader is
     /// looking at one series; it should not matter which door they came in by.
-    private var shown: Series {
+    var shown: Series {
         extras.full.map { series.filling(gapsFrom: $0) } ?? series
     }
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -83,13 +88,7 @@ struct SeriesDetailView: View {
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
                 DetailCredits(series: shown)
-                // The store's shelf when it has one; MangaBaka's editions
-                // otherwise. Never both — the same volume twice is a bug.
-                if appleVolumes.isEmpty {
-                    VolumesSection(volumes: extras.volumes)
-                } else {
-                    AppleVolumesRow(volumes: appleVolumes, expected: shown.finalVolume.map { Int($0) })
-                }
+                volumesShelf
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
                     relationships: extras.relationships,
@@ -274,14 +273,6 @@ struct SeriesDetailView: View {
         async let taste: Void = loadTaste()
         async let store: Void = loadAppleVolumes()
         _ = await (cast, cadence, taste, store)
-    }
-
-    /// One request, cached a week, after the page is readable: the shelf is
-    /// below the fold and the store is a third party with its own limit.
-    private func loadAppleVolumes() async {
-        guard let appleBooks else { return }
-        let country = Locale.current.region?.identifier ?? "us"
-        appleVolumes = await appleBooks.volumes(for: shown, country: country) ?? []
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it

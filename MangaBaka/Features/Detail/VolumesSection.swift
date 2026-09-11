@@ -14,6 +14,10 @@ import SwiftUI
 /// two editions become visible, which is where the difference matters.
 struct VolumesSection: View {
     let volumes: [SeriesWork.Volume]
+    /// Why this is MangaBaka's shelf rather than the store's, when there is
+    /// a reason worth saying: "Apple Books couldn't be reached". A failure
+    /// shown as silence looks like the feature does not exist.
+    var note: String?
 
     @State private var opened: SeriesWork.Volume?
 
@@ -28,6 +32,11 @@ struct VolumesSection: View {
                         .typeChip()
                         .foregroundStyle(Palette.textMuted)
                     Spacer(minLength: 0)
+                    if let note {
+                        Text(note)
+                            .typeGridMeta()
+                            .foregroundStyle(Palette.textMuted)
+                    }
                 }
                 .padding(.horizontal, Metrics.gutter)
 
