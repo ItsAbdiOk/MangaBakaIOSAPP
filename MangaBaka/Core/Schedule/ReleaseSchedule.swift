@@ -239,6 +239,14 @@ actor ReleaseScheduleService {
     func build(refresh: Bool = false) {
         guard buildTask == nil else { return }
 
+        // Running from this call, not from when the task gets around to
+        // walking the library. A follower that asks straight after `build()`
+        // returns — the schedule screen does, on the same tick — saw
+        // `isRunning == false`, concluded there was nothing to follow, and
+        // stopped polling a build that then ran for three minutes unwatched.
+        // Deterministic on a busy simulator (the pre-push hook's iPhone 17
+        // Pro failed 3 of 3), timing-dependent on an idle one.
+        progress.isRunning = true
         buildTask = Task { [weak self] in
             guard let self else { return }
             await self.run(refresh: refresh)
