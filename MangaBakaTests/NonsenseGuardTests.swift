@@ -166,6 +166,19 @@ struct PartialDataTests {
         #expect(model.hasAccount, "an unreachable library is not an absent account")
         #expect(!model.isComplete)
         #expect(model.failure != nil)
+        // The failure was stored and read by no view: a reader offline with 937
+        // series saw "Nothing saved yet". The screen picks its state here.
+        guard case .failed = model.screenState else {
+            Issue.record("A walk that failed with nothing shown must render as a failure, not emptiness")
+            return
+        }
+    }
+
+    @Test("An empty library with no failure is the empty state")
+    func emptyRendersAsEmpty() async {
+        let model = LibraryModel(library: FailingLibrary(entries: [], failOnPage: 99))
+        await model.load()
+        #expect(model.screenState == .noAccount)
     }
 
     /// A genuinely empty library still reads as one.

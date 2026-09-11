@@ -57,13 +57,21 @@ struct LibraryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if !model.entries.isEmpty { searchField }
-                if model.isLoading && model.entries.isEmpty {
+                switch model.screenState {
+                case .loading:
                     loading
-                } else if !model.hasAccount {
+                case .noAccount:
                     noAccount
-                } else if model.entries.isEmpty {
+                case let .failed(error):
+                    FailureState(
+                        error: error,
+                        retry: { await model.reload() },
+                        openSettings: onOpenSettings
+                    )
+                    .padding(.top, 80)
+                case .empty:
                     emptyLibrary
-                } else {
+                case .list:
                     LibraryFilterRow(
                         shape: model.shape,
                         total: model.total,

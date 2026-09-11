@@ -40,6 +40,28 @@ final class LibraryModel {
     private(set) var isComplete = true
     private(set) var failure: APIError?
 
+    /// What the screen shows, decided in one place.
+    enum ScreenState: Equatable {
+        case loading
+        case noAccount
+        /// The walk failed before anything arrived. `failure` used to be
+        /// stored here and read by no view, so a reader offline with 937
+        /// series was shown "Nothing saved yet".
+        case failed(APIError)
+        case empty
+        case list
+    }
+
+    var screenState: ScreenState {
+        if isLoading && entries.isEmpty { return .loading }
+        if !hasAccount { return .noAccount }
+        if entries.isEmpty {
+            if let failure { return .failed(failure) }
+            return .empty
+        }
+        return .list
+    }
+
     private let library: any LibraryProviding
     private let snapshot: LibrarySnapshot
 
