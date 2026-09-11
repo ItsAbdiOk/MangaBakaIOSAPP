@@ -31,6 +31,16 @@ struct BrowseModelTests {
         return model
     }
 
+    /// The fetch is the first N tags in the API's order, not the N most used
+    /// — Romance is absent from the first 500 — so the subtitle must not
+    /// claim "most-used".
+    @Test("The subtitle does not claim the tags are the most used")
+    func subtitleDoesNotOverclaim() throws {
+        let subtitle = model([try tag(1, "Action", count: 10)]).subtitle
+        #expect(!subtitle.localizedCaseInsensitiveContains("most"))
+        #expect(subtitle.contains("1 of the tags"))
+    }
+
     /// A merged tag points at a survivor. Listing it sends the reader nowhere.
     @Test("Merged tags are never listed")
     func mergedAreHidden() throws {

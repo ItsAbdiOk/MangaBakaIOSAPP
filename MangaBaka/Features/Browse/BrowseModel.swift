@@ -16,14 +16,16 @@ final class BrowseModel {
         self.catalogue = catalogue
     }
 
-    /// "46 genres, or the 200 most-used tags beneath them."
+    /// "46 genres, or 200 of the tags beneath them."
     ///
-    /// Says "most-used" rather than claiming the whole taxonomy: there are
-    /// 7,105 tags and only the heaviest are fetched, so a bare count would be
-    /// a number about this request rather than about MangaBaka.
+    /// Not "the 200 most-used": `/v1/tags?limit=200` is the first 200 in the
+    /// API's own order, which is not by use — Romance, a tag on thousands of
+    /// series, is absent from the first 500 (measured 2026-09-10, see
+    /// `CatalogueService.searchTags`). The list is sorted by use after it
+    /// arrives, which orders what was fetched and cannot change what was.
     var subtitle: String {
         guard !genres.isEmpty || !tags.isEmpty else { return "Loading the vocabulary" }
-        return "\(genres.count) genres, or the \(tags.count.formatted()) most-used tags beneath them."
+        return "\(genres.count) genres, or \(tags.count.formatted()) of the tags beneath them."
     }
 
     /// Tags worth listing, grouped under their root.
