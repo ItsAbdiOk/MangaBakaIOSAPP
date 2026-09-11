@@ -163,3 +163,49 @@ and there is no field explaining rank beyond `score` and `cosine`.
   who set the app to safe content would still receive explicit suggestions
   unless the filter is passed explicitly.
 - `/v1/series/{id}/news` ignored a `limit` of 2 and returned 48.
+
+---
+
+## Checked on 2026-09-11, during the parity pass
+
+### Custom lists — THEY DO NOT EXIST
+
+The website tracks "lists" alongside status and notes, and the handoff said to
+check the explorer before building anything. The explorer's own spec is not
+served at any of the documented locations (`/openapi.json`, `/openapi`,
+`/docs/openapi.json`, `/v1/openapi.json` and the site's `/api` page all 404 or
+return a JavaScript shell), so the endpoints were probed directly instead:
+
+    404  /v1/my/lists
+    404  /v0/my/lists
+    404  /v1/lists
+
+**Negative result.** Whatever the website's lists are built on is not in the
+public API, or is not named anything obvious. Nothing to build. Worth asking
+MangaBaka directly rather than guessing at more paths — three misses is enough
+to stop.
+
+### Per-series works — THE ENDPOINT EXISTS, and it is worth a screen
+
+    200  /v1/series/3397/works   -> 25 works
+
+Each work carries: `sequence_string` ("1", "2"), `release_date` ("2021-03-02"),
+`price` (a LIST — `[{"value": 9.99, "iso_code": "usd"}, …]`), `pages` (320),
+`identifiers` (ISBN), `images` (full cover art per volume, with BlurHash-able
+hashes), `sub_title`, `part_of_volume`, `trim`, and `collections`.
+
+Note the two entries per volume: Solo Leveling vol. 1 appears twice, once at
+$9.99 and once at $20 — paperback and hardcover, distinguished only by their
+ISBNs and prices. Any volume list has to handle that or it will look duplicated.
+
+**Not built tonight, deliberately.** This is a volume grid with cover art,
+prices and buy links; it is a design question, and the standing rule is that
+design-needing work waits for the Claude Design pass. The data layer is
+already most of the way there — `UpcomingWork` decodes this exact shape.
+
+### And a bug found by checking
+
+`UpcomingWork.price` was a `String`. The API sends the list above, so every
+real response threw on decode and the announced-releases section has been
+empty since it was built. Fixed; see the commit "Fix the release calendar,
+which has never once shown a volume".
