@@ -21,11 +21,25 @@ final class TagSearch {
     /// able to say "could not search" rather than "no such tag".
     private(set) var didFail = false
 
-    private let catalogue: CatalogueService
+    /// How a remote search is actually performed.
+    ///
+    /// A function rather than the service, so the debounce and the failure
+    /// path can be tested. Those are the two halves that matter and neither is
+    /// reachable through a real `CatalogueService` without a network: the file
+    /// sat at 15.4% covered, with only the pure merge exercised.
+    private let search: (String) async -> [Tag]?
     private var task: Task<Void, Never>?
 
+    /// How long typing settles before a request goes out. Long enough that a
+    /// word is one request rather than seven.
+    static let debounce: Duration = .milliseconds(250)
+
     init(catalogue: CatalogueService) {
-        self.catalogue = catalogue
+        self.search = { await catalogue.searchTags($0) }
+    }
+
+    init(search: @escaping (String) async -> [Tag]?) {
+        self.search = search
     }
 
     /// What to show for the current query. Empty query means the popular list.
@@ -46,10 +60,9 @@ final class TagSearch {
         isSearching = true
 
         task = Task { [weak self] in
-            // Long enough that typing a word is one request, not seven.
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: Self.debounce)
             guard !Task.isCancelled, let self else { return }
-            let remote = await catalogue.searchTags(trimmed)
+            let remote = await search(trimmed)
             guard !Task.isCancelled else { return }
             isSearching = false
             guard let remote else {

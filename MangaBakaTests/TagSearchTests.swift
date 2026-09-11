@@ -37,3 +37,91 @@ struct TagSearchTests {
         #expect(merged.map(\.name) == ["Romance"])
     }
 }
+
+/// The two halves of `TagSearch` a merge test cannot reach: waiting before it
+/// asks, and what it says when the asking fails.
+///
+/// The file was 15.4% covered. Both of these are behaviours a reader feels —
+/// one is whether typing a word costs one request or seven against a shared
+/// rate limit, the other is whether an unreachable server is reported as "no
+/// such tag".
+@Suite("Tag search, over time")
+@MainActor
+struct TagSearchTimingTests {
+    private static func tag(_ id: Int, _ name: String) -> MangaBaka.Tag {
+        MangaBaka.Tag(
+            id: id, name: name, namePath: name, parentId: nil, level: nil,
+            description: nil, seriesCount: nil, isGenre: nil, isSpoiler: nil,
+            mergedWith: nil, contentRating: nil
+        )
+    }
+
+    /// Counts what the debounce is for.
+    private final class Counter: @unchecked Sendable {
+        private(set) var queries: [String] = []
+        func record(_ query: String) { queries.append(query) }
+    }
+
+    @Test("Typing a word is one request, not one per letter")
+    func debounceCollapsesTyping() async throws {
+        let counter = Counter()
+        let search = TagSearch { query in
+            counter.record(query)
+            return [Self.tag(1, "Romance")]
+        }
+
+        for prefix in ["r", "ro", "rom", "roma", "roman", "romance"] {
+            search.update(query: prefix)
+        }
+        try await Task.sleep(for: TagSearch.debounce * 3)
+
+        #expect(counter.queries == ["romance"], "seven keystrokes should cost one request")
+    }
+
+    @Test("Local matches appear before anything is asked of the API")
+    func localMatchesAreImmediate() {
+        let search = TagSearch { _ in nil }
+        search.loaded = [Self.tag(1, "Workplace Romance"), Self.tag(2, "Cooking")]
+
+        search.update(query: "roman")
+
+        #expect(search.results.map(\.id) == [1], "the local hit is on screen at once")
+        #expect(search.isSearching)
+    }
+
+    @Test("A failure with nothing to show says so")
+    func failureIsReportedWhenThereIsNothing() async throws {
+        // "Could not search" and "no such tag" are different sentences and the
+        // screen picks between them on this flag.
+        let search = TagSearch { _ in nil }
+        search.update(query: "romance")
+        try await Task.sleep(for: TagSearch.debounce * 3)
+
+        #expect(search.didFail)
+        #expect(!search.isSearching)
+    }
+
+    @Test("A failure with local matches on screen is not called a failure")
+    func failureIsSilentWhenLocalHitsStand() async throws {
+        // The reader can see results. Telling them the search failed would
+        // contradict the screen.
+        let search = TagSearch { _ in nil }
+        search.loaded = [Self.tag(1, "Workplace Romance")]
+        search.update(query: "romance")
+        try await Task.sleep(for: TagSearch.debounce * 3)
+
+        #expect(!search.didFail)
+        #expect(search.results.map(\.id) == [1])
+    }
+
+    @Test("Emptying the field abandons the search")
+    func clearingResets() async throws {
+        let search = TagSearch { _ in [Self.tag(9, "Romance")] }
+        search.update(query: "romance")
+        search.update(query: "  ")
+        try await Task.sleep(for: TagSearch.debounce * 3)
+
+        #expect(search.results.isEmpty)
+        #expect(!search.isSearching)
+    }
+}
