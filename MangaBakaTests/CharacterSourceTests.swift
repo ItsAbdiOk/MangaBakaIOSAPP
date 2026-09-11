@@ -53,12 +53,29 @@ struct CharacterSourceTests {
         }
     }
 
-    private func service() -> CharacterService {
+    private func service(clock: any Clock = SystemClock()) -> CharacterService {
         let session = URLProtocolStub.makeSession()
         return CharacterService(
             aniList: AniListClient(session: session),
-            shikimori: ShikimoriClient(session: session)
+            shikimori: ShikimoriClient(session: session),
+            clock: clock
         )
+    }
+
+    /// Counts requests to AniList while answering each with the outcome given.
+    private final class AniListCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var calls: Int {
+            lock.lock(); defer { lock.unlock() }
+            return count
+        }
+
+        func bump() -> Int {
+            lock.lock(); defer { lock.unlock() }
+            count += 1
+            return count
+        }
     }
 
     // MARK: Preference
@@ -220,6 +237,56 @@ struct CharacterSourceTests {
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
         #expect(aniListCalls == 2)
+    }
+
+    /// A request cancelled because the reader left the page, or one dropped
+    /// packet, says nothing about AniList. Remembering either as an outage
+    /// silently dropped the preferred source for the whole session — the
+    /// reader got worse portraits from then on and nothing ever said why.
+    @Test("A cancelled or dropped request is not an outage")
+    func transportFailureIsNotAnOutage() async {
+        defer { URLProtocolStub.reset() }
+        let counter = AniListCounter()
+        let shikimori = shikimoriBody(names: ["Fallback"])
+        let aniList = aniListBody(names: ["Preferred"])
+        URLProtocolStub.setHandler { request in
+            guard request.url?.host()?.contains("anilist") == true else {
+                return .respond(.init(body: shikimori))
+            }
+            return counter.bump() == 1 ? .fail(URLError(.cancelled)) : .respond(.init(body: aniList))
+        }
+
+        let subject = service()
+        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
+        #expect(counter.calls == 2, "AniList must be asked again after a transport failure")
+        #expect(cast.map(\.name) == ["Preferred"])
+    }
+
+    /// An outage ends. A session can outlive one — the app stays open across a
+    /// day of reading — so the memory expires rather than lasting the session.
+    @Test("The outage memory expires")
+    func outageMemoryExpires() async {
+        defer { URLProtocolStub.reset() }
+        let counter = AniListCounter()
+        let shikimori = shikimoriBody(names: ["Fallback"])
+        URLProtocolStub.setHandler { request in
+            guard request.url?.host()?.contains("anilist") == true else {
+                return .respond(.init(body: shikimori))
+            }
+            _ = counter.bump()
+            return .respond(.init(statusCode: 403, body: Data()))
+        }
+
+        let clock = TestClock()
+        let subject = service(clock: clock)
+        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        #expect(counter.calls == 1, "Inside the window the outage is remembered")
+
+        clock.advance(by: CharacterService.outageMemory + 1)
+        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        #expect(counter.calls == 2, "After the window AniList is tried again")
     }
 
     // MARK: Skipping a source entirely

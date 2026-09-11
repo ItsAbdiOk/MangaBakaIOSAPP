@@ -29,14 +29,33 @@ actor CharacterService {
     /// Which source answered last. Diagnostic only — nothing on screen reads it.
     private(set) var lastOutcome: Source = .none
 
-    /// Remembered for the session so a series page opened twice does not pay
-    /// AniList's timeout twice over. Not persisted: an outage that ends should
-    /// end for the reader on their next launch without them clearing anything.
-    private var aniListIsDown = false
+    /// How long a refusal from AniList is remembered before it is tried again.
+    /// A session can outlive an outage — the app stays open across a day of
+    /// reading — so the memory expires rather than lasting the session. Fifteen
+    /// minutes is a guess: long enough that a series page opened twice does not
+    /// pay the timeout twice, short enough that a fixed API is noticed soon.
+    static let outageMemory: TimeInterval = 15 * 60
 
-    init(aniList: AniListClient = AniListClient(), shikimori: ShikimoriClient = ShikimoriClient()) {
+    /// Set only by a refusal from the service itself. A cancelled request, a
+    /// dropped packet or being offline says nothing about AniList, and treating
+    /// them as an outage used to drop the preferred source for the whole
+    /// session over a reader leaving a page early.
+    private var aniListDownUntil: Date?
+    private let clock: any Clock
+
+    private var aniListIsDown: Bool {
+        guard let until = aniListDownUntil else { return false }
+        return clock.now < until
+    }
+
+    init(
+        aniList: AniListClient = AniListClient(),
+        shikimori: ShikimoriClient = ShikimoriClient(),
+        clock: any Clock = SystemClock()
+    ) {
         self.aniList = aniList
         self.shikimori = shikimori
+        self.clock = clock
     }
 
     /// The cast, or an empty list if neither source can answer.
@@ -51,11 +70,13 @@ actor CharacterService {
                 lastOutcome = .aniList
                 return cast
             } catch {
-                // A rate limit is about us and passes; anything else is taken
-                // as the service being unavailable for this session, because
-                // retrying a disabled API on every series page costs the reader
-                // a wait before every fallback.
-                if case .rateLimited = error {} else { aniListIsDown = true }
+                // Only the service's own refusal counts as an outage. A rate
+                // limit is about us; offline and transport failures are about
+                // the network; a decode failure is a shape problem that will
+                // recur and is cheap to hit again.
+                if case .server = error {
+                    aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
+                }
             }
         }
 
@@ -71,9 +92,9 @@ actor CharacterService {
         return []
     }
 
-    /// Lets a new launch — or a test — try AniList again.
+    /// Lets a caller try AniList again before the memory expires.
     func clearOutageMemory() {
-        aniListIsDown = false
+        aniListDownUntil = nil
     }
 }
 
