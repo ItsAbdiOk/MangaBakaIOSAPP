@@ -40,7 +40,12 @@ struct ScheduleSnapshot: Equatable, Sendable {
     /// Why the library could not be read, when it could not. `inScope` is 0
     /// then, and must not be shown as "nothing in scope".
     var libraryFailure: APIError?
+    /// When the newest estimate landed. Drives "has anything been measured".
     var measuredAt: Date?
+    /// When the oldest still-used estimate landed. The header's age is taken
+    /// from this: a schedule is as old as its oldest row, and reporting the
+    /// newest one said "Measured 1 minute ago" over 54 rows six weeks old.
+    var oldestMeasuredAt: Date?
 
     var isEmpty: Bool { dated.isEmpty && undated.isEmpty }
 }
@@ -181,6 +186,7 @@ actor ReleaseScheduleService {
         snapshot.libraryFailure = scope.failure
 
         var newest: Date?
+        var oldest: Date?
         for entry in entries {
             guard let series = entry.series else { continue }
 
@@ -203,6 +209,7 @@ actor ReleaseScheduleService {
             }
 
             newest = max(newest ?? row.fetchedAt, row.fetchedAt)
+            oldest = min(oldest ?? row.fetchedAt, row.fetchedAt)
             if now.timeIntervalSince(row.fetchedAt) > Self.staleAfter { snapshot.stale += 1 }
 
             if let cadence = row.cadence {
@@ -225,6 +232,7 @@ actor ReleaseScheduleService {
                 < ($1.reason?.rawValue ?? "", $1.series.displayTitle ?? "")
         }
         snapshot.measuredAt = newest
+        snapshot.oldestMeasuredAt = oldest
         return snapshot
     }
 

@@ -75,14 +75,26 @@ final class ScheduleModel {
                 ? "\(snapshot.pending) still to measure"
                 : "Not measured yet"
         }
+        let now = Date()
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        // Rows measured at different times are described by the oldest: the
+        // schedule is as old as its oldest estimate. Opening one series page
+        // six weeks after a build refreshes one row, and "Measured 1 minute
+        // ago" over 54 six-week-old rows was the flattering number chosen over
+        // the honest one the same loop had already counted as stale.
+        if let oldest = snapshot.oldestMeasuredAt, measuredAt.timeIntervalSince(oldest) > 86_400 {
+            let span = formatter.localizedString(for: oldest, relativeTo: now)
+                .replacing("ago", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            return "Measured over the last \(span)"
+        }
         // "Measured 0 seconds ago" is what a relative formatter says the
         // instant a build lands, and "in 0 seconds" is what it says a moment
         // before that if the clocks disagree by a hair.
-        let age = Date().timeIntervalSince(measuredAt)
+        let age = now.timeIntervalSince(measuredAt)
         guard age >= 60 else { return "Measured just now" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return "Measured \(formatter.localizedString(for: measuredAt, relativeTo: Date()))"
+        return "Measured \(formatter.localizedString(for: measuredAt, relativeTo: now))"
     }
 
     var remeasureLabel: String { snapshot.measuredAt == nil ? "Measure" : "Re-measure" }

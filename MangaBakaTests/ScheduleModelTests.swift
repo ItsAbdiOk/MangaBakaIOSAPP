@@ -238,6 +238,28 @@ struct ScheduleGroupingTests {
         #expect(model.measurementFailureLine == nil)
     }
 
+    /// Measure everything, come back six weeks later, open one series page:
+    /// one row is fresh and 54 are old. The header used to report the fresh one.
+    @Test("The measured line is as old as the oldest estimate")
+    func measuredLineUsesOldest() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.measuredAt = Date().addingTimeInterval(-60)
+        snapshot.oldestMeasuredAt = Date().addingTimeInterval(-42 * 86_400)
+        let model = try model(with: snapshot)
+        #expect(model.measuredLine == "Measured over the last 1 month")
+    }
+
+    @Test("Rows measured together report one time")
+    func measuredLineForOneBuild() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.measuredAt = Date().addingTimeInterval(-3 * 3_600)
+        snapshot.oldestMeasuredAt = Date().addingTimeInterval(-3 * 3_600 - 120)
+        let model = try model(with: snapshot)
+        #expect(model.measuredLine == "Measured 3 hours ago")
+    }
+
     @Test("The scope line counts what was estimated against what is in scope")
     func scopeLine() throws {
         var snapshot = ScheduleSnapshot()
