@@ -57,6 +57,29 @@ today's work — "Free" on the read chips failed contrast — fixed. The rest
 are the known classes: the stats strip's uppercase labels, the synopsis at
 AX sizes, the hero title's Dynamic Type, the library search field's height.
 
+## App Store readiness, checked 2026-09-11
+
+Swept against the review guidelines (a Sonnet agent over the code, then
+judgement calls by hand). Everything else was OK with evidence; these are
+the things to do or say at submission:
+
+- **Privacy questionnaire in App Store Connect** must match the manifest:
+  *User ID* and *Other user content* (the reader's library, sent to their
+  MangaBaka account), linked to the user, for app functionality, not used
+  for tracking. Nothing else. No analytics, no ads, no IAP.
+- **Age rating**: explicit content is reachable behind an opt-in toggle, so
+  answer the questionnaire honestly (mature/suggestive themes present,
+  off by default) rather than "none".
+- **Reviewer note** to write: "Reader links on a series page come verbatim
+  from MangaBaka's community-maintained dataset (CC BY-NC-SA 4.0); the app
+  opens only http(s) links and does not curate them. Sign-in is a personal
+  access token from mangabaka.org; the app creates no accounts, so there is
+  no in-app account deletion — 'Remove token' de-links the device."
+- **Hosts the app talks to**, for the reviewer if asked: api.mangabaka.org,
+  api.mangaupdates.com, itunes.apple.com, graphql.anilist.co,
+  shikimori.one. Nothing identifying goes to any but MangaBaka.
+- Removed before submission: anything that read a platform's web page.
+
 ## From Abdi, in build order
 
 1. ~~Hero compression only when it has to.~~ Done, above.

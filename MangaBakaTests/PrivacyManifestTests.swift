@@ -34,10 +34,16 @@ struct PrivacyManifestTests {
         #expect(reasons.contains("CA92.1"))
     }
 
-    @Test("Nothing is collected and nothing tracks")
+    @Test("Only the reader's own library is collected, and nothing tracks")
     func collectsNothing() throws {
         let manifest = try manifest()
-        #expect((manifest["NSPrivacyCollectedDataTypes"] as? [Any])?.isEmpty == true)
+        // The reader's library goes to their MangaBaka account and stays
+        // there, which is Apple's definition of collected: declared as a
+        // user ID and user content, linked, never for tracking.
+        let collected = (manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]]) ?? []
+        let types = Set(collected.compactMap { $0["NSPrivacyCollectedDataType"] as? String })
+        #expect(types == ["NSPrivacyCollectedDataTypeUserID", "NSPrivacyCollectedDataTypeOtherUserContent"])
+        #expect(collected.allSatisfy { ($0["NSPrivacyCollectedDataTypeTracking"] as? Bool) == false })
         #expect(manifest["NSPrivacyTracking"] as? Bool == false)
         #expect((manifest["NSPrivacyTrackingDomains"] as? [Any])?.isEmpty == true)
     }

@@ -2,10 +2,45 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- The app collects nothing. There is no backend, no analytics, and no
-       third-party SDK. Reviewed decision, not an oversight. -->
+  <!-- No backend of our own, no analytics, no third-party SDK. What the app
+       does send off the device is the reader's own library — states, chapter
+       progress, ratings, notes — to their MangaBaka account, under the token
+       they pasted from mangabaka.org. Apple's definition of "collected" is
+       "transmitted off the device in a way that allows you and/or your
+       third-party partners to access it for longer than servicing the
+       request", and MangaBaka keeps it, so it is declared: a user ID (the
+       account the token names) and other user content, linked to the
+       reader, for the app's function only, never for tracking. Declared
+       2026-09-11 before the first submission; the App Store Connect
+       questionnaire must say the same. Nothing is sent to MangaUpdates,
+       AniList, Shikimori or Apple's store search that identifies anyone. -->
   <key>NSPrivacyCollectedDataTypes</key>
-  <array/>
+  <array>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeUserID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+  </array>
   <key>NSPrivacyTracking</key>
   <false/>
   <key>NSPrivacyTrackingDomains</key>
