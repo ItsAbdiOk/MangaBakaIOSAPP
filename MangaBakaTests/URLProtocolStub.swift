@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 
 /// Deterministic HTTP for tests. No real network, no flakiness, and it counts
 /// requests so the request-budget test can assert against a real number.
@@ -22,30 +23,47 @@ final class URLProtocolStub: URLProtocol, @unchecked Sendable {
     }
 
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var handler: (@Sendable (URLRequest) -> Outcome)?
-    nonisolated(unsafe) private static var recorded: [URLRequest] = []
+    /// Handlers and recorded requests, per test.
+    ///
+    /// They were one global pair. Swift Testing runs suites in parallel, so
+    /// two suites using the stub at once saw each other's handlers and
+    /// requests — "Multi-select filters are sent as repeated keys" once found
+    /// a MangaUpdates request from the schedule suite as its first request.
+    /// `.serialized` only orders tests within a suite. Now each test's
+    /// session stamps the test's id on every request, and the handler and
+    /// the record are looked up by it; code outside any test (a suite-level
+    /// helper) falls back to a shared bucket, as before.
+    nonisolated(unsafe) private static var handlers: [String: @Sendable (URLRequest) -> Outcome] = [:]
+    nonisolated(unsafe) private static var recorded: [String: [URLRequest]] = [:]
+    private static let header = "X-MangaBaka-Test"
+    private static let shared = "shared"
+
+    private static var currentKey: String {
+        Test.current.map { String(describing: $0.id) } ?? shared
+    }
 
     static func setHandler(_ handler: @escaping @Sendable (URLRequest) -> Outcome) {
         lock.lock(); defer { lock.unlock() }
-        self.handler = handler
-        recorded = []
+        handlers[currentKey] = handler
+        recorded[currentKey] = []
     }
 
     static func reset() {
         lock.lock(); defer { lock.unlock() }
-        handler = nil
-        recorded = []
+        handlers[currentKey] = nil
+        recorded[currentKey] = nil
     }
 
     /// Every request the client actually issued, in order.
     static var requests: [URLRequest] {
         lock.lock(); defer { lock.unlock() }
-        return recorded
+        return recorded[currentKey] ?? []
     }
 
     static func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [URLProtocolStub.self]
+        configuration.httpAdditionalHeaders = [header: currentKey]
         return URLSession(configuration: configuration)
     }
 
@@ -55,9 +73,10 @@ final class URLProtocolStub: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        let key = request.value(forHTTPHeaderField: Self.header) ?? Self.shared
         Self.lock.lock()
-        Self.recorded.append(request)
-        let handler = Self.handler
+        Self.recorded[key, default: []].append(request)
+        let handler = Self.handlers[key]
         Self.lock.unlock()
 
         guard let handler else {

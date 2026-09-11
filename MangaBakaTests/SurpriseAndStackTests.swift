@@ -71,7 +71,8 @@ struct StackPersonalisationTests {
         }
     }
 
-    /// A feed that takes a moment, so two refills can overlap in the test.
+    /// A feed that pauses mid-request, so two refills can be proven to
+    /// overlap instead of hoping a fixed sleep makes them overlap.
     private final class SlowRepository: StubRepositoryBase, @unchecked Sendable {
         private let lock = NSLock()
         private var count = 0
@@ -85,9 +86,14 @@ struct StackPersonalisationTests {
             count += 1
         }
 
+        /// Set once a feed request is in flight and paused, so the test can
+        /// wait for it deterministically — see `SlowPageRepository` in
+        /// PaginationTests.
+        var gate: CheckedContinuation<Void, Never>?
+
         override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
             noteFeed()
-            try? await Task.sleep(for: .milliseconds(150))
+            await withCheckedContinuation { gate = $0 }
             return FeedResult(
                 series: (1...5).map { SeriesFactory.make(id: $0, title: "S\($0)") },
                 origin: .network
@@ -110,6 +116,12 @@ struct StackPersonalisationTests {
 
         async let first: Void = model.refill()
         async let second: Void = model.refill()
+        // Wait for the first (and only, if dedup works) feed request to
+        // actually be in flight before releasing it, so the overlap is
+        // proven rather than assumed from a fixed sleep.
+        let deadline = Date().addingTimeInterval(2)
+        while repository.gate == nil, Date() < deadline { await Task.yield() }
+        repository.gate?.resume()
         _ = await (first, second)
 
         #expect(repository.feeds == 1, "The second refill must join the first, not repeat it")

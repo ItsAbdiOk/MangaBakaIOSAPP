@@ -73,6 +73,7 @@ struct TagSearchTimingTests {
         for prefix in ["r", "ro", "rom", "roma", "roman", "romance"] {
             search.update(query: prefix)
         }
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
 
         #expect(counter.queries == ["romance"], "seven keystrokes should cost one request")
@@ -95,6 +96,7 @@ struct TagSearchTimingTests {
         // screen picks between them on this flag.
         let search = TagSearch { _ in nil }
         search.update(query: "romance")
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
 
         #expect(search.didFail)
@@ -108,6 +110,7 @@ struct TagSearchTimingTests {
         let search = TagSearch { _ in nil }
         search.loaded = [Self.tag(1, "Workplace Romance")]
         search.update(query: "romance")
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
 
         #expect(!search.didFail)
@@ -119,6 +122,7 @@ struct TagSearchTimingTests {
         let search = TagSearch { _ in [Self.tag(9, "Romance")] }
         search.update(query: "romance")
         search.update(query: "  ")
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
 
         #expect(search.results.isEmpty)
@@ -138,6 +142,7 @@ struct TagSearchCopyTests {
     func nothingFoundNamesTheQuery() async throws {
         let search = TagSearch { _ in [] }
         search.update(query: "zzzz")
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
         #expect(search.emptyMessage(for: "zzzz") == "No tag matches \"zzzz\".")
     }
@@ -148,6 +153,7 @@ struct TagSearchCopyTests {
         // statement about the database.
         let search = TagSearch { _ in nil }
         search.update(query: "romance")
+        // Waits on TagSearch's own debounce timer, at 3x margin.
         try await Task.sleep(for: TagSearch.debounce * 3)
         #expect(search.emptyMessage(for: "romance") == "Could not search tags just now.")
     }

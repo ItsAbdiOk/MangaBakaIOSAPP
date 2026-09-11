@@ -10,6 +10,16 @@ struct LensTests {
         try #require(UserDefaults(suiteName: "lens.tests.\(UUID().uuidString)"))
     }
 
+    /// Polls instead of sleeping a fixed amount, so a test does not race the
+    /// model's internal 250ms spacing between lens counts on a busy machine.
+    /// Bounded, so a genuine bug still fails rather than hanging.
+    private func waitUntil(_ condition: () -> Bool) async {
+        let deadline = Date().addingTimeInterval(2)
+        while !condition(), Date() < deadline {
+            await Task.yield()
+        }
+    }
+
     @Test("A repeated search moves up rather than being listed twice")
     func recentsDeduplicate() throws {
         let recents = RecentSearches(defaults: try defaults())
@@ -55,11 +65,14 @@ struct LensTests {
     /// most on the failure it would otherwise be reporting as a result.
     @Test("An unanswered count is missing, not zero")
     func missingCountIsNotZero() async throws {
-        let counts = LensCounts(repository: SilentRepository())
+        let repository = SilentRepository()
+        let counts = LensCounts(repository: repository)
         let lens = try #require(SearchLens.presets.first)
 
         counts.load([lens])
-        try await Task.sleep(for: .milliseconds(120))
+        // Gate on the repository having actually been asked, rather than
+        // sleeping past the 250ms internal spacing.
+        await waitUntil { repository.asked }
 
         #expect(counts.counts[lens.id] == nil)
     }
@@ -71,10 +84,10 @@ struct LensTests {
         let lenses = Array(SearchLens.presets.prefix(2))
 
         counts.load(lenses)
-        try await Task.sleep(for: .milliseconds(900))
+        await waitUntil { repository.calls == lenses.count }
         counts.load(lenses)
-        try await Task.sleep(for: .milliseconds(300))
-
+        // Every lens is already asked, so this second load starts no task at
+        // all (see LensCounts.load's `pending` guard) — nothing to wait for.
         #expect(repository.calls == 2, "the idle screen is returned to constantly")
     }
 
@@ -88,13 +101,16 @@ struct LensTests {
         let lenses = Array(SearchLens.presets.prefix(3))
 
         counts.load(lenses)
-        try await Task.sleep(for: .milliseconds(100))
+        // Cancel as soon as one lens has been counted, instead of racing a
+        // fixed sleep against the walk's own 250ms spacing — the exact race
+        // that failed the pre-push hook's busier simulator 3/3.
+        await waitUntil { repository.calls >= 1 }
         counts.cancel()
         let reached = repository.calls
         #expect(reached < lenses.count, "The walk must still have had lenses left")
 
         counts.load(lenses)
-        try await Task.sleep(for: .milliseconds(900))
+        await waitUntil { repository.calls == lenses.count }
         #expect(repository.calls == lenses.count, "Every lens counted exactly once across the two walks")
     }
 
@@ -107,11 +123,18 @@ struct LensTests {
         let lens = try #require(SearchLens.presets.first)
 
         counts.load([lens])
-        try await Task.sleep(for: .milliseconds(300))
+        await waitUntil { repository.attempts == 1 }
         #expect(counts.counts[lens.id] == nil)
 
-        counts.load([lens])
-        try await Task.sleep(for: .milliseconds(300))
+        // `load` is a no-op while the first walk is still in its spacing
+        // sleep after the failed ask, so keep offering it until the walk has
+        // ended and the second ask goes out — then wait on the model's
+        // state, since the stub is entered before its answer is written.
+        await waitUntil {
+            counts.load([lens])
+            return repository.attempts == 2
+        }
+        await waitUntil { counts.counts[lens.id] == 12 }
         #expect(counts.counts[lens.id] == 12, "The second ask must reach the network")
     }
 
@@ -119,6 +142,10 @@ struct LensTests {
     private final class FlakyRepository: StubRepositoryBase, @unchecked Sendable {
         private let lock = NSLock()
         private var asks = 0
+        var attempts: Int {
+            lock.lock(); defer { lock.unlock() }
+            return asks
+        }
 
         override func count(_ query: SearchQuery) async -> Int? {
             first() ? nil : 12
@@ -150,7 +177,17 @@ struct LensTests {
 
     /// Answers nothing, the way a rate-limited or offline app does.
     private final class SilentRepository: StubRepositoryBase, @unchecked Sendable {
-        override func count(_ query: SearchQuery) async -> Int? { nil }
+        private let lock = NSLock()
+        private var wasAsked = false
+        var asked: Bool {
+            lock.lock(); defer { lock.unlock() }
+            return wasAsked
+        }
+
+        override func count(_ query: SearchQuery) async -> Int? {
+            lock.withLock { wasAsked = true }
+            return nil
+        }
     }
 
     private final class CountingRepository: StubRepositoryBase, @unchecked Sendable {

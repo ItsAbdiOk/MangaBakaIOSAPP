@@ -86,8 +86,10 @@ struct ScheduleServiceTests {
             database: try AppDatabase.inMemory()
         )
         let model = ScheduleModel(service: service)
+        // No wait needed: measure() awaits service.build() to completion and
+        // then calls followBuild() synchronously, so isFollowingBuild is
+        // already set the moment measure() returns.
         await model.measure()
-        try await Task.sleep(for: .milliseconds(200))
         #expect(model.isFollowingBuild)
 
         model.stop()

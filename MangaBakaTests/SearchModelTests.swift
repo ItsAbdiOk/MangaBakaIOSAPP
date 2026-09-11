@@ -35,6 +35,7 @@ struct SearchModelTests {
 
         model.query.text = "solo"
         model.queryDidChange()
+        // Waits on SearchModel's own 300ms debounce, at 2x margin.
         try await Task.sleep(for: .milliseconds(600))
 
         #expect(repository.searchCount == 1, "The debounced search must actually run")
@@ -54,6 +55,7 @@ struct SearchModelTests {
         // What the view's onChange(of: query.text) does, whichever side of
         // the explicit search it lands on.
         model.queryDidChange()
+        // Waits on SearchModel's own 300ms debounce, at 2x margin.
         try await Task.sleep(for: .milliseconds(600))
 
         #expect(repository.searchCount == 1)
@@ -61,6 +63,7 @@ struct SearchModelTests {
         // The next real keystroke still debounces into a search of its own.
         model.query.text = "solo l"
         model.queryDidChange()
+        // Waits on SearchModel's own 300ms debounce, at 2x margin.
         try await Task.sleep(for: .milliseconds(600))
         #expect(repository.searchCount == 2)
     }
@@ -86,6 +89,7 @@ struct SearchModelTests {
             model.query.text = text
             model.queryDidChange()
         }
+        // Waits on SearchModel's own 300ms debounce, at 2x margin.
         try await Task.sleep(for: .milliseconds(600))
 
         #expect(repository.searchCount == 1, "30 req/min is shared with strangers on the same network")
@@ -162,11 +166,16 @@ struct SearchFilterEscapeTests {
 /// A search whose page-two request is slow, so a new search can land while
 /// the old one's next page is still on its way.
 private final class SlowPageTwoRepository: StubRepositoryBase, @unchecked Sendable {
+    /// Set once the page-two request is in flight and paused, so the test can
+    /// wait for it deterministically instead of racing a fixed sleep against
+    /// a real network stub — see `SlowPageRepository` in PaginationTests.
+    var gate: CheckedContinuation<Void, Never>?
+
     override func search(_ query: SearchQuery) async -> FeedResult {
         // Distinct id ranges per query, so a stale page is recognisable by id.
         let base = query.text == "naruto" ? 1 : 2
         if query.page > 1 {
-            try? await Task.sleep(for: .milliseconds(150))
+            await withCheckedContinuation { gate = $0 }
         }
         let ids = (0..<query.limit).map { base * 1000 + query.page * 100 + $0 }
         return FeedResult(
@@ -184,15 +193,22 @@ struct SearchPagingGenerationTests {
     /// be appended to page one of bleach.
     @Test("A stale page is dropped when the query changed while it was loading")
     func stalePageIsDropped() async {
-        let model = SearchModel(repository: SlowPageTwoRepository())
+        let repository = SlowPageTwoRepository()
+        let model = SearchModel(repository: repository)
         model.query.text = "naruto"
         await model.search()
         #expect(model.results.count == model.query.limit)
 
         async let paging: Void = model.loadMore()
-        try? await Task.sleep(for: .milliseconds(20))
+        // Wait for page two to actually be in flight before switching the
+        // query, rather than guessing at a sleep that races loadMore()'s own
+        // scheduling — the same race that failed the pre-push hook 3/3.
+        // Bounded so a genuine bug fails the test instead of hanging it.
+        let deadline = Date().addingTimeInterval(2)
+        while repository.gate == nil, Date() < deadline { await Task.yield() }
         model.query.text = "bleach"
         await model.search()
+        repository.gate?.resume()
         await paging
 
         #expect(model.results.count == model.query.limit, "Naruto's page two was appended to bleach")
