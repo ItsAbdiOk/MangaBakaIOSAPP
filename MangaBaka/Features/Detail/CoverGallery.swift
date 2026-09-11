@@ -10,6 +10,7 @@ struct CoverGallery: View {
     @State private var selection: Int
     @State private var scrolledIndex: Int?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(series: Series, frontCover: Cover, images: [SeriesImage], startAt: Int = 0) {
         self.series = series
@@ -63,6 +64,25 @@ struct CoverGallery: View {
         .preferredColorScheme(.dark)
     }
 
+    /// How far a card leans, shrinks and fades at a given scroll phase.
+    ///
+    /// With Reduce Motion on, only the fade remains: the 3D lean and the
+    /// scale are exactly the kind of motion the setting asks to be spared,
+    /// and this was the one animation in the app that ignored it — recorded
+    /// as fixed in the audit, and not fixed.
+    struct Glide: Equatable, Sendable {
+        var scale: Double
+        var opacity: Double
+        var degrees: Double
+    }
+
+    nonisolated static func glide(phase: Double, isReduced: Bool) -> Glide {
+        let distance = abs(phase)
+        let opacity = 1 - distance * 0.35
+        guard !isReduced else { return Glide(scale: 1, opacity: opacity, degrees: 0) }
+        return Glide(scale: 1 - distance * 0.10, opacity: opacity, degrees: phase * -14)
+    }
+
     /// A paged scroll view rather than a `TabView`.
     ///
     /// `TabView` gives no access to where the drag has got to, so the only
@@ -82,12 +102,15 @@ struct CoverGallery: View {
                             // middle and leans back as it leaves, so the stack
                             // reads as objects moving over a surface rather
                             // than as pictures being swapped.
-                            .scrollTransition(.interactive, axis: .horizontal) { view, phase in
-                                view
-                                    .scaleEffect(1 - abs(phase.value) * 0.10)
-                                    .opacity(1 - abs(phase.value) * 0.35)
+                            .scrollTransition(
+                                .interactive, axis: .horizontal
+                            ) { [reduceMotion] view, phase in
+                                let glide = Self.glide(phase: phase.value, isReduced: reduceMotion)
+                                return view
+                                    .scaleEffect(glide.scale)
+                                    .opacity(glide.opacity)
                                     .rotation3DEffect(
-                                        .degrees(phase.value * -14),
+                                        .degrees(glide.degrees),
                                         axis: (x: 0, y: 1, z: 0),
                                         perspective: 0.5
                                     )

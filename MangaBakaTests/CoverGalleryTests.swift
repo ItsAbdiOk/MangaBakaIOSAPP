@@ -32,6 +32,20 @@ struct CoverGalleryTests {
 
     /// MangaBaka's own pick for a Korean manhwa is usually the Korean volume
     /// one: handsome, and unreadable to most people looking at this app.
+    /// Recorded as fixed in the accessibility audit and not fixed: the
+    /// gallery's 3D lean ran regardless of Reduce Motion.
+    @Test("The gallery glide keeps only its fade under Reduce Motion")
+    func glideHonoursReduceMotion() {
+        let moving = CoverGallery.glide(phase: 0.5, isReduced: false)
+        #expect(moving.degrees == -7)
+        #expect(moving.scale == 0.95)
+
+        let still = CoverGallery.glide(phase: 0.5, isReduced: true)
+        #expect(still.degrees == 0, "No lean")
+        #expect(still.scale == 1, "No shrink")
+        #expect(still.opacity == moving.opacity, "The fade is not motion, and stays")
+    }
+
     @Test("An English edition is preferred")
     func prefersEnglish() {
         let covers = [
