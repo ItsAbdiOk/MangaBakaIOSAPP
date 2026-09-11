@@ -75,6 +75,7 @@
 		43712EAA1449BE99C07DD147 /* CoverGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871365D1FF3C09052F18666C /* CoverGallery.swift */; };
 		479A82A2C1500DF4E29E1AA5 /* HistorySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13A256F3F6707503FBEF8BD /* HistorySection.swift */; };
 		47AE0686BC32DFC61BCACDFD /* TagSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F80BC8BA2A37E95E18ED12ED /* TagSearchTests.swift */; };
+		490B2E0C7B120A24E55E2CCD /* LinkGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8313A1E8F2D029AF536BCC /* LinkGroupingTests.swift */; };
 		4A0C19E90EBFD088A4D3D5D0 /* TasteProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 793E2478DD1A6E103A4EF063 /* TasteProfile.swift */; };
 		4A1A5C78A36C773EBE2306C3 /* Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE022EC45BBE2B43323AB02D /* Metrics.swift */; };
 		4C22CA15C16523F3B59F0607 /* DesignTokenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E023571EE66E5639E011F2E /* DesignTokenTests.swift */; };
@@ -425,6 +426,7 @@
 		993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteLedger.swift; sourceTree = "<group>"; };
 		99B0478C5E79631F422DE74E /* DetailSynopsis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailSynopsis.swift; sourceTree = "<group>"; };
 		9A8062597275E0B6DC97413D /* APIError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIError.swift; sourceTree = "<group>"; };
+		9A8313A1E8F2D029AF536BCC /* LinkGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkGroupingTests.swift; sourceTree = "<group>"; };
 		9AF86279E0C72E98A96DB15A /* TagSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagSearch.swift; sourceTree = "<group>"; };
 		9C68EE1F8DFE37D05CDEE001 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		9E8790B3C22A16713DE2D677 /* MangaBakaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaBakaApp.swift; sourceTree = "<group>"; };
@@ -838,6 +840,7 @@
 				C04455D2D35F351577BB848E /* LibrarySnapshotTests.swift */,
 				9934115A7E74CC9CC2E920D5 /* LibraryTests.swift */,
 				6E5140A9265F7AD2392EAC27 /* LibraryWriteTests.swift */,
+				9A8313A1E8F2D029AF536BCC /* LinkGroupingTests.swift */,
 				E9B75B41390A4AF825B01438 /* MixModelTests.swift */,
 				05B8B7FA2FBA55E5CF997803 /* MotionTests.swift */,
 				192355E1466D48ADE1969CEA /* NonsenseGuardTests.swift */,
@@ -1437,6 +1440,7 @@
 				F7ADD5BC4B9CA9A4DF9680E2 /* LibrarySnapshotTests.swift in Sources */,
 				22C001130D744941D6B658D2 /* LibraryTests.swift in Sources */,
 				DC0BAC00956380F4B187E44B /* LibraryWriteTests.swift in Sources */,
+				490B2E0C7B120A24E55E2CCD /* LinkGroupingTests.swift in Sources */,
 				59B8068276B79D7C21B43A0B /* MixModelTests.swift in Sources */,
 				F6A03246A02A42975CAAFEB1 /* MotionTests.swift in Sources */,
 				403C8681077D3BEAF6180A05 /* NonsenseGuardTests.swift in Sources */,

@@ -30,6 +30,61 @@ struct SeriesLink: Codable, Identifiable, Equatable, Sendable {
     var safeURL: URL? { url.flatMap(SafeLink.web) }
 }
 
+extension SeriesLink {
+    /// What a link is for.
+    ///
+    /// The API's own vocabulary, checked against series 3397 on 2026-09-11:
+    /// 13 `webplatform`, 4 `publisher`, 3 `info`, 1 `social`. Ordered as a
+    /// reader wants them — somewhere to read it first, because that is what
+    /// someone on a series page is usually after; social last, because it is
+    /// about the creators rather than the work.
+    enum Purpose: String, CaseIterable, Sendable {
+        case webplatform, publisher, info, social
+
+        var heading: String {
+            switch self {
+            case .webplatform: "Read it"
+            case .publisher: "Publishers"
+            case .info: "More about it"
+            case .social: "Social"
+            }
+        }
+    }
+
+    /// One heading and the links under it.
+    struct Group: Identifiable, Equatable, Sendable {
+        let heading: String
+        let links: [SeriesLink]
+        var id: String { heading }
+        var count: Int { links.count }
+    }
+
+    /// Links grouped by purpose, empty groups omitted.
+    ///
+    /// Kept out of the view so it can be tested: the old section took the
+    /// first six links of any kind under one heading, which on a series with
+    /// thirteen reading platforms lost the publisher and the official page
+    /// purely to ordering.
+    ///
+    /// An unrecognised or absent `type` lands in "Elsewhere" rather than being
+    /// dropped — MangaBaka's data is community-maintained and its vocabulary
+    /// can grow, and a new kind appearing should not make a link vanish.
+    ///
+    /// `safeURL` filters throughout. These URLs come from other people, and an
+    /// arbitrary scheme can trigger another installed app.
+    static func grouped(_ links: [SeriesLink]) -> [Group] {
+        let usable = links.filter { $0.safeURL != nil }
+        var groups = Purpose.allCases.compactMap { purpose -> Group? in
+            let matching = usable.filter { $0.type == purpose.rawValue }
+            return matching.isEmpty ? nil : Group(heading: purpose.heading, links: matching)
+        }
+        let known = Set(Purpose.allCases.map(\.rawValue))
+        let others = usable.filter { !known.contains($0.type ?? "") }
+        if !others.isEmpty { groups.append(Group(heading: "Elsewhere", links: others)) }
+        return groups
+    }
+}
+
 /// Scheme filtering for URLs that arrive from other people.
 enum SafeLink {
     /// Returns the URL only when it is an ordinary web link.

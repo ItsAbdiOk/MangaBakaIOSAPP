@@ -1,6 +1,13 @@
 import SwiftUI
 
-/// Where the series can actually be read.
+/// Where a series lives on the rest of the internet, grouped by what each link
+/// is for.
+///
+/// The API returns four kinds and the app showed six links of any kind under
+/// one heading, "Read it". On a real series that meant six of twenty-one, with
+/// a publisher's page and an official store listing thrown in among the
+/// reading platforms and no way to tell them apart. Verified against series
+/// 3397 on 2026-09-11: 13 webplatform, 4 publisher, 3 info, 1 social.
 ///
 /// Opens in the browser rather than an in-app view: these are third-party
 /// sites, and framing someone else's page inside the app misrepresents whose
@@ -8,36 +15,68 @@ import SwiftUI
 struct LinksSection: View {
     let links: [SeriesLink]
 
+    /// How many links of one kind are shown before the group folds.
+    ///
+    /// Thirteen reading platforms is a wall. Six is enough to see that the
+    /// series is widely available and short enough to read past.
+    private static let collapsedLimit = 6
+
+    @State private var expanded: Set<String> = []
     @Environment(\.openURL) private var openURL
 
-    private var readable: [SeriesLink] {
-        Array(links.filter { $0.safeURL != nil }.prefix(6))
-    }
-
     var body: some View {
-        if !readable.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Read it")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-
-                VStack(spacing: 0) {
-                    ForEach(readable) { link in
-                        row(link)
-                        if link.id != readable.last?.id {
-                            Rectangle()
-                                .fill(Palette.hairline)
-                                .frame(height: 0.5)
-                                .padding(.leading, 14)
-                        }
-                    }
+        let groups = SeriesLink.grouped(links)
+        if !groups.isEmpty {
+            VStack(alignment: .leading, spacing: 22) {
+                ForEach(groups) { group in
+                    section(group.heading, links: group.links, key: group.heading)
                 }
-                .background(Palette.surface, in: RoundedRectangle(
-                    cornerRadius: Metrics.radiusCard, style: .continuous
-                ))
-                .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             }
             .padding(.horizontal, Metrics.gutter)
+        }
+    }
+
+    private func section(_ heading: String, links: [SeriesLink], key: String) -> some View {
+        let isExpanded = expanded.contains(key)
+        let shown = isExpanded ? links : Array(links.prefix(Self.collapsedLimit))
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(heading)
+                .typeDetailSectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+
+            VStack(spacing: 0) {
+                ForEach(shown) { link in
+                    row(link)
+                    if link.id != shown.last?.id || links.count > shown.count {
+                        Rectangle()
+                            .fill(Palette.hairline)
+                            .frame(height: 0.5)
+                            .padding(.leading, 14)
+                    }
+                }
+                if links.count > Self.collapsedLimit {
+                    Button {
+                        Motion.run(.snappy(duration: 0.22)) {
+                            if isExpanded { expanded.remove(key) } else { expanded.insert(key) }
+                        }
+                    } label: {
+                        Text(isExpanded
+                             ? "Show fewer"
+                             : "Show \(links.count - Self.collapsedLimit) more")
+                            .typeSmallMeta()
+                            .foregroundStyle(Palette.accent)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .frame(height: Metrics.ctaSecondary)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(Palette.surface, in: RoundedRectangle(
+                cornerRadius: Metrics.radiusCard, style: .continuous
+            ))
+            .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
         }
     }
 
@@ -57,7 +96,7 @@ struct LinksSection: View {
                 }
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
             }
             .padding(.horizontal, 14)
             .frame(height: Metrics.ctaSecondary)
