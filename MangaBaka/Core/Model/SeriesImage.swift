@@ -7,7 +7,9 @@ import Foundation
 /// languages. `/v1/series/{id}/images` returns them all, each one wrapping the
 /// same `Cover` shape the rest of the app already decodes.
 struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
-    let id: Int
+    /// Nullable on the wire (`V1_Series_Cover_Image.id`). Rows without one
+    /// are told apart by the image they carry.
+    let imageID: Int?
     let seriesId: Int?
     /// "volume", "other".
     let type: String?
@@ -22,6 +24,15 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
     /// bug this app has already shipped once, on personalised recommendations.
     let contentRating: String?
     let image: Cover
+
+    var id: String {
+        imageID.map(String.init) ?? image.raw?.absoluteString ?? "\(index ?? "")-\(language ?? "")"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case imageID = "id"
+        case seriesId, type, index, indexNumeric, language, contentRating, image
+    }
 
     /// "Vol. 3 · EN", or nothing when the API said neither.
     var caption: String? {

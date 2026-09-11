@@ -39,7 +39,7 @@ struct CoverGalleryTests {
             image(id: 2, language: "en"),
             image(id: 3, language: "pt")
         ]
-        #expect(covers.preferredCover(nativeLanguage: "ko")?.id == 2)
+        #expect(covers.preferredCover(nativeLanguage: "ko")?.imageID == 2)
     }
 
     /// The fallback is the work's own language, not whatever happens to be
@@ -48,14 +48,14 @@ struct CoverGalleryTests {
     @Test("Without English, the original language wins")
     func fallsBackToNative() {
         let covers = [image(id: 1, language: "pt"), image(id: 2, language: "ko")]
-        #expect(covers.preferredCover(nativeLanguage: "ko")?.id == 2)
+        #expect(covers.preferredCover(nativeLanguage: "ko")?.imageID == 2)
     }
 
     /// "pt-br" is Portuguese; a native language of "pt" should match it.
     @Test("Regional variants match their base language")
     func regionalVariants() {
         let covers = [image(id: 1, language: "pt-br")]
-        #expect(covers.preferredCover(nativeLanguage: "pt")?.id == 1)
+        #expect(covers.preferredCover(nativeLanguage: "pt")?.imageID == 1)
     }
 
     /// Nothing to prefer means the series' own cover stands, rather than an
@@ -76,14 +76,14 @@ struct CoverGalleryTests {
             image(id: 2, index: 1),
             image(id: 3, index: 3)
         ]
-        #expect(covers.preferredCover(nativeLanguage: nil)?.id == 2)
+        #expect(covers.preferredCover(nativeLanguage: nil)?.imageID == 2)
     }
 
     /// "other" images are promotional art, not the book.
     @Test("A volume cover beats promotional art")
     func volumeBeatsOther() {
         let covers = [image(id: 1, type: "other", index: nil), image(id: 2, index: 5)]
-        #expect(covers.preferredCover(nativeLanguage: nil)?.id == 2)
+        #expect(covers.preferredCover(nativeLanguage: nil)?.imageID == 2)
     }
 
     // MARK: The content filter
@@ -98,7 +98,7 @@ struct CoverGalleryTests {
             image(id: 2, index: 2, rating: "explicit")
         ]
         let allowed = covers.presentable(allowedRatings: ["safe", "suggestive"])
-        #expect(allowed.map(\.id) == [1])
+        #expect(allowed.map(\.imageID) == [1])
     }
 
     /// Nil is how the repository spells "no filter set" — which means
@@ -128,7 +128,7 @@ struct CoverGalleryTests {
             image(id: 2, index: 1, language: "ko"),
             image(id: 3, index: 1, language: "en")
         ]
-        #expect(covers.presentable(allowedRatings: nil).map(\.id) == [3, 2, 1])
+        #expect(covers.presentable(allowedRatings: nil).map(\.imageID) == [3, 2, 1])
     }
 
     // MARK: Captions

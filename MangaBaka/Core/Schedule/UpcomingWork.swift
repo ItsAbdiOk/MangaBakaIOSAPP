@@ -32,7 +32,8 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     /// could see. The test fixture said `String` too, so the tests agreed with
     /// the bug.
     struct Price: Decodable, Sendable, Equatable {
-        let value: Double
+        /// Nullable on the wire too (`V1_Price.value`).
+        let value: Double?
         let isoCode: String?
     }
 
@@ -86,11 +87,13 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     /// currency they set it in, and quietly relabelling $9.99 as £9.99 would
     /// be a lie about someone else's shop.
     var price: String? {
-        guard let prices, !prices.isEmpty else { return nil }
-        let chosen = prices.first { $0.isoCode?.lowercased() == "usd" } ?? prices[0]
+        let priced = (prices ?? []).filter { $0.value != nil }
+        guard let chosen = priced.first(where: { $0.isoCode?.lowercased() == "usd" }) ?? priced.first,
+              let value = chosen.value
+        else { return nil }
         var format = FloatingPointFormatStyle<Double>.Currency(code: chosen.isoCode ?? "usd")
         format = format.locale(Locale(identifier: "en_US"))
-        return chosen.value.formatted(format)
+        return value.formatted(format)
     }
 
     /// The ISBN, where the publisher registered one.

@@ -99,7 +99,9 @@ enum SafeLink {
 
 /// A news item mentioning the series.
 struct NewsItem: Codable, Identifiable, Equatable, Sendable {
-    let id: Int
+    /// Nullable on the wire (`V1_News.id`). Rows without one are told apart
+    /// by their URL, then their title.
+    let newsID: Int?
     let title: String
     /// Raw as received; use `safeURL` to open it.
     let url: URL?
@@ -112,6 +114,13 @@ struct NewsItem: Codable, Identifiable, Equatable, Sendable {
     /// The URL only if it is an ordinary web link. Same reasoning as
     /// `SeriesLink.safeURL`: news URLs are contributed data too.
     var safeURL: URL? { SafeLink.web(url) }
+
+    var id: String { newsID.map(String.init) ?? url?.absoluteString ?? title }
+
+    enum CodingKeys: String, CodingKey {
+        case newsID = "id"
+        case title, url, sourceName, publishedAt, primary
+    }
 }
 
 /// A formal relationship to another series: a sequel, a spin-off, the novel a

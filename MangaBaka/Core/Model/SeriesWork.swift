@@ -9,7 +9,10 @@ import Foundation
 /// lists these without grouping them looks duplicated and broken.
 struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     struct Price: Codable, Sendable, Equatable {
-        let value: Double
+        /// Nullable on the wire (`V1_Price.value`). Non-optional here until
+        /// 2026-09-11, when one unpriced edition threw the whole volumes
+        /// array and the section vanished — the same bug the calendar had.
+        let value: Double?
         let isoCode: String?
     }
 
@@ -61,11 +64,13 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     /// Never converted — this is someone else's shop's price in the currency
     /// they set it in.
     var price: String? {
-        guard let prices, !prices.isEmpty else { return nil }
-        let chosen = prices.first { $0.isoCode?.lowercased() == "usd" } ?? prices[0]
+        let priced = (prices ?? []).filter { $0.value != nil }
+        guard let chosen = priced.first(where: { $0.isoCode?.lowercased() == "usd" }) ?? priced.first,
+              let value = chosen.value
+        else { return nil }
         var format = FloatingPointFormatStyle<Double>.Currency(code: chosen.isoCode ?? "usd")
         format = format.locale(Locale(identifier: "en_US"))
-        return chosen.value.formatted(format)
+        return value.formatted(format)
     }
 
     var cover: Cover? { images?.compactMap(\.image).first }

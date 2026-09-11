@@ -44,17 +44,27 @@ struct Tag: Decodable, Identifiable, Sendable, Equatable, Hashable {
 
 /// A publisher, imprint or licensor.
 struct PublisherRecord: Decodable, Identifiable, Sendable, Equatable, Hashable {
-    let id: Int
+    /// Nullable on the wire (`/v1/publishers/search`). A publisher is opened
+    /// by name, so a missing id costs nothing but a stable row identity.
+    let publisherID: Int?
     let name: String
     /// "publisher" and similar.
     let type: String?
     /// "both", "original", "english" — which side of the business it is.
     let subType: String?
-    let aliases: [String]?
     let parentId: Int?
-    let languages: [String]?
     let countryOfOrigin: String?
     let founded: Int?
     /// Whether the publisher has shut down.
     let closed: Bool?
+
+    var id: String { publisherID.map(String.init) ?? name }
+
+    // `aliases` and `languages` are deliberately not decoded: nothing reads
+    // them, and the spec has `aliases` as title objects where this once said
+    // strings — a shape that threw on the first publisher with an alias.
+    enum CodingKeys: String, CodingKey {
+        case publisherID = "id"
+        case name, type, subType, parentId, countryOfOrigin, founded, closed
+    }
 }
