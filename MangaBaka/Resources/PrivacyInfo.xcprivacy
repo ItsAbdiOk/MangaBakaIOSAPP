@@ -10,7 +10,28 @@
   <false/>
   <key>NSPrivacyTrackingDomains</key>
   <array/>
+  <!-- Required-reason APIs. Apple rejects an upload that uses one of these
+       and does not declare it (ITMS-91053), and the check is on the binary,
+       not on the source — so an undeclared use is found at submission time
+       rather than here.
+
+       Audited on 2026-09-11: UserDefaults is the only one this app touches.
+       Eleven files use it, all for the reader's own settings on their own
+       device — title language, content rating, formats, blocked tags,
+       onboarding state, reminders. CA92.1 is the reason for exactly that:
+       accessing information from the app itself, and no data is sent
+       anywhere. File timestamps, disk space, system boot time and active
+       keyboards were each searched for and are not used. -->
   <key>NSPrivacyAccessedAPITypes</key>
-  <array/>
+  <array>
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>
