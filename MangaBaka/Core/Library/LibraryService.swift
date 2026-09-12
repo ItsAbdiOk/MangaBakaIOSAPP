@@ -225,8 +225,10 @@ actor LibraryService: LibraryProviding {
     /// treat nil as "withhold the explanation", because showing an unverified
     /// tag name is the failure worth avoiding; a missing caption is not.
     func hiddenTagIDs() async -> Set<Int>? {
-        let disallowed = ContentPreferences.Rating.allCases
-            .map(\.rawValue)
+        // The API's whole vocabulary, not the app's offered subset: the app no
+        // longer offers `pornographic`, and deriving this from `Rating` would
+        // stop hiding those tag names rather than keep hiding them.
+        let disallowed = ContentPreferences.apiRatings
             .filter { !contentRatings.contains($0) }
         // Nothing is disallowed, so nothing needs hiding and nothing is fetched.
         guard !disallowed.isEmpty else { return [] }

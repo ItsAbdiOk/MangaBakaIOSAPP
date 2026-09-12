@@ -26,6 +26,8 @@ struct SettingsView: View {
     @State private var entry = ""
     @State private var status: TokenStatus = .idle
     @State private var storedTokenExists = TokenStore().read() != nil
+    /// The rating awaiting confirmation, set while the opt-in alert is up.
+    @State private var pendingOptIn: ContentPreferences.Rating?
     private let store = TokenStore()
 
     var body: some View {
@@ -57,6 +59,22 @@ struct SettingsView: View {
         .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(
+            "Show \(pendingOptIn?.title.lowercased() ?? "this") content?",
+            isPresented: Binding(
+                get: { pendingOptIn != nil },
+                set: { if !$0 { pendingOptIn = nil } }
+            ),
+            presenting: pendingOptIn
+        ) { rating in
+            Button("Cancel", role: .cancel) { pendingOptIn = nil }
+            Button("Show it") {
+                Task { await content.set(rating, allowed: true) }
+                pendingOptIn = nil
+            }
+        } message: { _ in
+            Text(optInWarning)
+        }
         .task {
             if storedTokenExists, case .idle = status { await check() }
         }
@@ -121,13 +139,31 @@ struct SettingsView: View {
             + "the old filter, so they are discarded."
     }
 
+    /// Why turning this on is a decision rather than a preference. Named as
+    /// plainly as the setting itself: someone deciding this is owed the actual
+    /// consequence, not a euphemism.
+    private var optInWarning: String {
+        """
+        This adds sexual content to your feeds, search and recommendations \
+        throughout the app. Only turn it on if you are 18 or over. You can \
+        turn it off again at any time.
+        """
+    }
+
     private func ratingRow(_ rating: ContentPreferences.Rating) -> some View {
         let isOn = content.preferences.allowed.contains(rating)
         let isLocked = rating == .safe
 
         return Button {
             guard !isLocked else { return }
-            Task { await content.set(rating, allowed: !isOn) }
+            // Confirmed on the way in, never on the way out: a reader turning
+            // adult content off is not a decision anyone should be asked to
+            // reconsider, and `requiresOptIn` describes the switch, not the tap.
+            if !isOn, rating.requiresOptIn {
+                pendingOptIn = rating
+            } else {
+                Task { await content.set(rating, allowed: !isOn) }
+            }
         } label: {
             SettingsRow(title: rating.title, caption: rating.caption) {
                 // A rule, not a broken control. The row title stays at full

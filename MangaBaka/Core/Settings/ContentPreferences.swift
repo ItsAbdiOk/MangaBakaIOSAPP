@@ -2,24 +2,30 @@ import Foundation
 
 /// What the reader is willing to see.
 ///
-/// The product decision is safe and suggestive by default, with anything
-/// stronger behind a deliberate opt-in. Filtering happens server-side on every
-/// request, so excluded covers are never downloaded, never cached, and never
-/// briefly visible while a client-side filter catches up.
+/// The product decision is safe and suggestive by default, with erotica behind
+/// a deliberate opt-in. Filtering happens server-side on every request, so
+/// excluded covers are never downloaded, never cached, and never briefly
+/// visible while a client-side filter catches up.
+///
+/// The API's `pornographic` rating is deliberately not offered. App Review
+/// guideline 1.1.4 bans overtly sexual material, and a default-off switch is no
+/// defence — a reviewer who can turn it on is a reviewer who sees it, and the
+/// penalty there is removal rather than a resubmittable rejection. Erotica —
+/// "sex, not explicit" — is the line Apple actually draws, and the app is rated
+/// for adults on that basis. Abdi's call, 2026-09-12. See `apiRatings` for why
+/// the value still has to be named somewhere.
 struct ContentPreferences: Sendable, Equatable {
-    /// The API's four values, in increasing explicitness.
+    /// What the reader can choose between, in increasing explicitness.
     enum Rating: String, CaseIterable, Sendable {
         case safe
         case suggestive
         case erotica
-        case pornographic
 
         var title: String {
             switch self {
             case .safe: "Safe"
             case .suggestive: "Suggestive"
             case .erotica: "Erotica"
-            case .pornographic: "Explicit"
             }
         }
 
@@ -31,7 +37,6 @@ struct ContentPreferences: Sendable, Equatable {
             case .safe: "The baseline everyone sees"
             case .suggestive: "Fan service, innuendo"
             case .erotica: "Sex, not explicit"
-            case .pornographic: "Explicit"
             }
         }
 
@@ -39,10 +44,22 @@ struct ContentPreferences: Sendable, Equatable {
         var requiresOptIn: Bool {
             switch self {
             case .safe, .suggestive: false
-            case .erotica, .pornographic: true
+            case .erotica: true
             }
         }
     }
+
+    /// Every value the API's `content_rating` can take, including the one this
+    /// app does not offer.
+    ///
+    /// Requests are built from `Rating`, which is an allowlist — so dropping
+    /// `pornographic` from the enum already keeps those series out. This exists
+    /// for the inverse question, "what has the reader *not* opted into", which
+    /// `LibraryService.hiddenTagIDs` asks to keep explicit tag names out of the
+    /// recommender's captions. Derived from `Rating` it would silently stop
+    /// counting pornographic tags the moment the case was removed, and those
+    /// names would reappear in captions with nothing to show they had.
+    static let apiRatings = ["safe", "suggestive", "erotica", "pornographic"]
 
     /// Defaults chosen once, in the spec: the website's ordinary range, without
     /// making a first run explicit.
@@ -91,6 +108,9 @@ final class ContentPreferencesStore {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if let stored = defaults.array(forKey: Self.key) as? [String] {
+            // A stored "pornographic" from before that option was removed
+            // decodes to nil and is dropped here, which is the migration: the
+            // reader silently returns to whatever else they had allowed.
             let ratings = stored.compactMap(ContentPreferences.Rating.init(rawValue:))
             // Safe is always present, even if a corrupt or hand-edited value
             // omitted it.

@@ -40,7 +40,44 @@ struct ContentPreferencesTests {
         #expect(!ContentPreferences.Rating.safe.requiresOptIn)
         #expect(!ContentPreferences.Rating.suggestive.requiresOptIn)
         #expect(ContentPreferences.Rating.erotica.requiresOptIn)
-        #expect(ContentPreferences.Rating.pornographic.requiresOptIn)
+    }
+
+    /// Guideline 1.1.4: the app must not be able to show pornographic material
+    /// at all, so there is no option for it and no request can ask for it.
+    /// Erotica remains, which is the line Apple actually draws.
+    @Test("Pornographic is not something the reader can choose")
+    func pornographicIsNotOffered() {
+        #expect(ContentPreferences.Rating.allCases.map(\.rawValue)
+                == ["safe", "suggestive", "erotica"])
+        #expect(ContentPreferences.Rating(rawValue: "pornographic") == nil)
+
+        let everything = ContentPreferences(allowed: Set(ContentPreferences.Rating.allCases))
+        #expect(!everything.queryValues.contains("pornographic"))
+    }
+
+    /// Someone who had opted in before the option was removed must come back
+    /// without it rather than keeping a setting that no longer exists.
+    @Test("A stored pornographic choice is dropped on the next launch")
+    func storedPornographicIsMigratedAway() throws {
+        let defaults = try makeDefaults()
+        defaults.set(["safe", "suggestive", "erotica", "pornographic"],
+                     forKey: "content.allowedRatings")
+
+        let store = ContentPreferencesStore(defaults: defaults)
+        #expect(store.preferences.allowed == [.safe, .suggestive, .erotica])
+        #expect(!store.preferences.queryValues.contains("pornographic"))
+    }
+
+    /// The inverse question — what has the reader NOT opted into — still has to
+    /// count pornographic, or explicit tag names would reappear in the
+    /// recommender's captions the moment the option stopped existing.
+    @Test("The API's full vocabulary still names pornographic")
+    func apiVocabularyIsUnchanged() {
+        #expect(ContentPreferences.apiRatings
+                == ["safe", "suggestive", "erotica", "pornographic"])
+        let notOptedInto = ContentPreferences.apiRatings
+            .filter { !ContentPreferences.default.queryValues.contains($0) }
+        #expect(notOptedInto == ["erotica", "pornographic"])
     }
 
     /// The subtle one: a cached feed was fetched under the previous filter, so
@@ -94,8 +131,8 @@ struct ContentPreferencesTests {
 
     @Test("Query values are ordered and never comma-joined")
     func queryValueShape() {
-        let preferences = ContentPreferences(allowed: [.pornographic, .safe, .suggestive])
-        #expect(preferences.queryValues == ["safe", "suggestive", "pornographic"])
+        let preferences = ContentPreferences(allowed: [.erotica, .safe, .suggestive])
+        #expect(preferences.queryValues == ["safe", "suggestive", "erotica"])
         #expect(!preferences.queryValues.contains { $0.contains(",") })
     }
 
