@@ -144,13 +144,15 @@ struct CharacterProfileView: View {
         }
         state = .loaded(profile.withDescription(nil))
 
-        // Checked before ever setting `translationConfiguration`: an
-        // unsupported language pair should never trigger `.translationTask`
-        // at all, let alone its system download prompt.
+        // Checked before ever setting `translationConfiguration`, because
+        // `.translationTask` raising the system download prompt from inside
+        // this sheet is what killed TestFlight build 64. Only an already
+        // installed pack translates without any system UI — see
+        // `TranslationGate`, which carries the crash report's reasoning.
         let availability = await LanguageAvailability().status(
             from: Self.sourceLanguage, to: Self.targetLanguage
         )
-        guard availability != .unsupported else { return }
+        guard TranslationGate.allows(availability) else { return }
 
         pendingTranslation = description
         translationConfiguration = TranslationSession.Configuration(
