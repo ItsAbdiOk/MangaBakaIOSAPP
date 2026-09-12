@@ -199,6 +199,14 @@ struct AppleBooksClientTests {
 
 @Suite("Apple volumes on the page", .enabled(if: SourceTree.isAvailable))
 struct AppleVolumesRowTests {
+    /// One spine on the shelf, built the way the page builds it.
+    @MainActor
+    private func row(_ volume: AppleBooksVolume, expected: Int?) -> AppleVolumesRow {
+        AppleVolumesRow(
+            volumes: VolumeShelf.merge(apple: [volume], google: []), expected: expected
+        )
+    }
+
     @Test("The count admits when the store is behind the series")
     @MainActor
     func countLine() {
@@ -206,9 +214,9 @@ struct AppleVolumesRowTests {
             id: 1, number: 1, title: "x", artworkURL: nil, storeURL: nil,
             price: nil, formattedPrice: nil, releaseDate: nil
         )
-        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: 27).countLine == "1 of 27")
-        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: 1).countLine == "1")
-        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: nil).countLine == "1")
+        #expect(row(volume, expected: 27).countLine == "1 of 27")
+        #expect(row(volume, expected: 1).countLine == "1")
+        #expect(row(volume, expected: nil).countLine == "1")
     }
 
     /// The phone showed MangaBaka's seven One Piece editions with no hint
