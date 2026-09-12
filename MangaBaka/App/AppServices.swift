@@ -21,9 +21,9 @@ struct AppServices {
     let schedule: ReleaseScheduleService
     let characters = CharacterService()
     let appleBooks = AppleBooksClient()
-    /// Fills volume gaps Apple does not carry. Its key is resolved per request
-    /// — Settings first, then the build — so a key typed on the phone works
-    /// without a relaunch. See `GoogleBooksKey`.
+    /// Fills volume gaps Apple does not carry. Unauthenticated, so it answers
+    /// nil whenever the shared anonymous quota is spent — Apple Books above is
+    /// the source the page actually depends on.
     let googleBooks = GoogleBooksClient()
     let taste: TasteProfile
     let catalogue: CatalogueService

@@ -6,12 +6,14 @@ import Foundation
 /// Google is data only — Apple Books is where these iOS readers actually buy
 /// (Abdi, 2026-09-11) — so this client is never asked when Apple already
 /// answered with volumes; the caller decides that, this type only answers
-/// when asked. A key is required: the keyless quota is shared with the whole
-/// internet and was already exhausted (HTTP 429, verified 2026-09-12). The
-/// key lives in `MB_GOOGLE_BOOKS_KEY` in Info.plist, sourced from
-/// `Configs/Secrets.xcconfig` (gitignored, Debug-only), so a Release build has
-/// none — this must degrade to "no extra covers", never an error, when that
-/// is the case.
+/// when asked.
+///
+/// Unauthenticated, at Abdi's call (2026-09-12): no API key, so the shared
+/// anonymous quota is what this gets. That pool was exhausted when measured
+/// (HTTP 429, 2026-09-12), so a nil answer here is the expected case, not the
+/// exceptional one, and every failure path must degrade to "no extra covers"
+/// rather than surfacing an error. Apple Books is the source that is actually
+/// relied on; this only ever adds.
 actor GoogleBooksClient {
     /// No documented per-minute limit the way Apple's is; kept in the same
     /// neighbourhood as `AppleBooksClient` on the assumption that any public
@@ -23,18 +25,12 @@ actor GoogleBooksClient {
     private let session: URLSession
     private let clock: any Clock
     private let cacheDirectory: URL?
-    /// Resolved per request, not held: a key typed into Settings on the phone
-    /// must take effect on the next series page rather than after a relaunch,
-    /// and on a device build Settings is the only way a key can arrive at all
-    /// (Release carries none). See `GoogleBooksKey`.
-    private let resolveKey: @Sendable () -> String?
     private var spacing = RequestSpacing(minimumInterval: GoogleBooksClient.minimumInterval)
 
     init(
         baseURL: URL = URL(string: "https://www.googleapis.com/books/v1/volumes").unsafeStoreFallback,
         session: URLSession = .shared,
         clock: any Clock = SystemClock(),
-        resolveKey: @escaping @Sendable () -> String? = { GoogleBooksKey.resolved() },
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("googlebooks", isDirectory: true)
     ) {
@@ -42,17 +38,16 @@ actor GoogleBooksClient {
         self.session = session
         self.clock = clock
         self.cacheDirectory = cacheDirectory
-        self.resolveKey = resolveKey
     }
 
-    /// The series' volumes, sourced from Google's catalogue, or nil when
-    /// there is no key or the request failed. Empty means asked and none.
+    /// The series' volumes, sourced from Google's catalogue, or nil when the
+    /// request failed — including the shared quota being spent, which is the
+    /// common case. Empty means asked and none.
     ///
     /// Call this only when Apple Books came back empty for the series — this
     /// is gap-filling, not a second source fired on every page, per Abdi's
     /// scoping (2026-09-12).
     func volumes(for series: Series, language: String? = nil) async -> [GoogleBooksVolume]? {
-        guard resolveKey() != nil else { return nil }
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         // Versioned like Apple's cache key: a matcher change must not be
         // outlived by a week of answers made under the old rule.
@@ -72,7 +67,6 @@ actor GoogleBooksClient {
     }
 
     private func search(_ term: String) async -> [GoogleBooksItem]? {
-        guard let apiKey = resolveKey() else { return nil }
         let wait = spacing.claim(now: clock.now)
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
 
@@ -82,8 +76,7 @@ actor GoogleBooksClient {
             // Apple's needs 200 to find a long-running series among mixed
             // editions; Google ranks similarly, so the same margin is used.
             URLQueryItem(name: "maxResults", value: "40"),
-            URLQueryItem(name: "printType", value: "books"),
-            URLQueryItem(name: "key", value: apiKey)
+            URLQueryItem(name: "printType", value: "books")
         ]
         guard let url = components?.url else { return nil }
 

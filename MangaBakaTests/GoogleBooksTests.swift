@@ -129,16 +129,15 @@ struct GoogleBooksDecodingTests {
     }
 }
 
-/// The client: no key asks nothing, gap-filling is keyed to the series and
-/// language, and an answer is cached like Apple's is.
+/// The client: gap-filling is keyed to the series and language, and an answer
+/// is cached like Apple's is.
 @Suite("Google Books client", .serialized)
 struct GoogleBooksClientTests {
-    private func makeClient(clock: TestClock, key: String? = "test-key") -> GoogleBooksClient {
+    private func makeClient(clock: TestClock) -> GoogleBooksClient {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("googlebooks-tests-\(UUID().uuidString)", isDirectory: true)
         return GoogleBooksClient(
             session: URLProtocolStub.makeSession(), clock: clock,
-            resolveKey: { key },
             cacheDirectory: directory
         )
     }
@@ -151,26 +150,23 @@ struct GoogleBooksClientTests {
     ]}
     """#.utf8)
 
-    /// Control for the "no key" behaviour: WITH a key, the same series and
-    /// stub answer produces a volume — so the nil below is really the key
-    /// gate, not a broken client.
-    @Test("No key asks nothing and returns nil; the same request with a key works")
-    func noKey() async {
-        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+    /// The anonymous quota is shared and was spent when measured, so a 429 is
+    /// the likely everyday answer. It has to read as "no extra covers" — nil,
+    /// no throw — because Apple's volumes and MangaBaka's own covers are still
+    /// on the page and must not be disturbed by Google being unavailable.
+    @Test("A spent anonymous quota degrades to nil, not an error")
+    func quotaExhausted() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
         defer { URLProtocolStub.reset() }
         let series = SeriesFactory.make(id: 3397, title: "Solo Leveling")
 
-        let noKeyClient = makeClient(clock: TestClock(), key: nil)
-        let noKeyResult = await noKeyClient.volumes(for: series)
-        #expect(noKeyResult == nil)
-        #expect(URLProtocolStub.requests.isEmpty, "No key must not fire a request at all")
-
-        let keyedClient = makeClient(clock: TestClock(), key: "test-key")
-        let keyedResult = await keyedClient.volumes(for: series)
-        #expect(keyedResult?.map(\.number) == [1])
+        let result = await makeClient(clock: TestClock()).volumes(for: series)
+        #expect(result == nil)
     }
 
-    @Test("Asks with intitle and the key; a second look inside a week costs no request")
+    /// No key is sent at all now that the app uses the anonymous pool — a
+    /// stray `key=` would be an unsubstituted build setting reaching Google.
+    @Test("Asks with intitle and no key; a second look inside a week costs no request")
     func requestAndCache() async {
         URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
         defer { URLProtocolStub.reset() }
@@ -182,7 +178,7 @@ struct GoogleBooksClientTests {
         #expect(first?.map(\.number) == [1])
         let url = URLProtocolStub.requests.first?.url?.absoluteString ?? ""
         #expect(url.contains("intitle"))
-        #expect(url.contains("key=test-key"))
+        #expect(!url.contains("key="))
 
         _ = await client.volumes(for: series)
         #expect(URLProtocolStub.requests.count == 1, "Cached inside the week")
