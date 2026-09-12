@@ -102,7 +102,13 @@ final class SearchModel {
         let result = await repository.search(query)
         guard !Task.isCancelled, mine == generation else { return }
         results = result.series
-        hasMore = result.series.count >= query.limit
+        // The API's own signal (`pagination.next`), not the filtered count:
+        // `search` drops rows locally for `isDiscoverable`/format, so a page
+        // that had 30 on the wire can arrive with fewer, and comparing that
+        // count to the limit stopped pagination dead after page one for any
+        // tag common enough to have a filtered row on it — "Isekai" (7,105
+        // results) never got past 30. See FeedResult.hasMore.
+        hasMore = result.hasMore
         message = result.series.isEmpty ? result.blockingError?.userFacingMessage : nil
     }
 
@@ -116,36 +122,63 @@ final class SearchModel {
         await search()
     }
 
+    /// A page that contributes no new rows but a bound on how many of those
+    /// this will tolerate in a row before giving up, even while the API says
+    /// there is more. Local filtering (`isDiscoverable`/format) can zero out
+    /// a whole page legitimately — every one of its 30 rows filtered — while
+    /// later pages still have results, so stopping at the first empty page is
+    /// wrong. But looping unbounded is also wrong: the search endpoint allows
+    /// 30 requests/minute per IP, shared with everyone else on the same NAT,
+    /// so an unlucky run of filtered pages must not spend that whole budget
+    /// on one scroll. Three is arbitrary but small next to the 30/minute cap.
+    private static let maxConsecutiveEmptyPages = 3
+
     /// Appends the next page. Driven by scroll position, not a button.
     func loadMore() async {
         guard hasMore, !isSearching, !isLoadingMore, !query.isEmpty else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
 
-        var next = query
-        next.page += 1
         let mine = generation
-        let result = await repository.search(next)
-        // The reader scrolled to the bottom of one search and typed another
-        // before its page arrived: this page is for the old search.
-        guard !Task.isCancelled, mine == generation else { return }
+        var next = query
+        var emptyPages = 0
 
-        // Deduplicate: the API repeats series across pages when the underlying
-        // ordering shifts between requests, and a duplicate id traps ForEach.
-        // Under sort_by=random it is not an edge case but the normal outcome.
-        let known = Set(results.map(\.id))
-        let additions = result.series.filter { !known.contains($0.id) }
+        while true {
+            next.page += 1
+            let result = await repository.search(next)
+            // The reader scrolled to the bottom of one search and typed
+            // another before its page arrived: this page is for the old
+            // search.
+            guard !Task.isCancelled, mine == generation else { return }
 
-        guard !additions.isEmpty else {
-            // Either the end or a failure. Stop asking either way, rather than
-            // re-requesting into a rate limit shared with everyone on this IP.
-            hasMore = false
-            return
+            // Deduplicate: the API repeats series across pages when the
+            // underlying ordering shifts between requests, and a duplicate id
+            // traps ForEach. Under sort_by=random it is not an edge case but
+            // the normal outcome.
+            let known = Set(results.map(\.id))
+            let additions = result.series.filter { !known.contains($0.id) }
+
+            query.page = next.page
+            // The API's own signal, not the filtered count — see
+            // FeedResult.hasMore. A genuinely last page (`hasMore == false`)
+            // ends this regardless of whether this particular page added
+            // anything.
+            hasMore = result.hasMore
+
+            if !additions.isEmpty {
+                results.append(contentsOf: additions)
+                return
+            }
+            guard hasMore else { return }
+
+            emptyPages += 1
+            guard emptyPages < Self.maxConsecutiveEmptyPages else {
+                // Give up rather than keep spending the shared 30 req/min
+                // budget chasing a run of filtered-out pages.
+                hasMore = false
+                return
+            }
         }
-
-        results.append(contentsOf: additions)
-        query.page = next.page
-        hasMore = result.series.count >= query.limit
     }
 
     /// Runs a search for a genre or tag picked while browsing.

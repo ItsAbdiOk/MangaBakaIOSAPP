@@ -298,6 +298,21 @@ struct FeedResult: Sendable {
     /// When the cached copy was written, for a stale result that needs to say
     /// how old it is. Nil for anything that came off the network.
     var cachedAt: Date?
+    /// Whether the API itself says another page exists (`pagination.next !=
+    /// nil`), not whether this page's `series` count reached the limit.
+    ///
+    /// A page is filtered locally for `isDiscoverable`/format before it
+    /// reaches here, so a page that had 30 rows on the wire can arrive with
+    /// fewer — a tag like "Isekai" (7,105 results) was capped at 30 forever
+    /// because one filtered row made `count >= limit` false on page one.
+    /// Defaults to false: a cached or failed result has no pagination to
+    /// consult, and claiming more pages exist when there is nothing to fetch
+    /// them from would spin a caller that trusts this flag.
+    var hasMore = false
+    /// The query's total row count, from the same pagination block, when the
+    /// caller happened to fetch it. Nil, not zero, when unknown — see
+    /// `APIClient.total`'s doc comment for why zero is never a safe default.
+    var total: Int?
 
     /// An error to show only when there is nothing at all to display. When
     /// stale content exists, the content is shown instead of an error page.
@@ -408,53 +423,6 @@ actor SeriesRepository: SeriesRepositoryProtocol {
                 origin: .staleAfter(error),
                 cachedAt: stale.cachedAt
             )
-        }
-    }
-
-    func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
-        guard feed.supportsPaging, page > 1 else {
-            return FeedResult(series: [], origin: .network)
-        }
-        var query = [
-            URLQueryItem(name: "limit", value: String(feed.limit)),
-            URLQueryItem(name: "page", value: String(page))
-        ]
-        query.append(contentsOf: feed.extraQuery)
-        query.append(contentsOf: filterQuery)
-        do {
-            let series: [Series] = try await client.get(feed.path, query: query)
-            return FeedResult(
-                series: series.filter { $0.isDiscoverable && allowsFormat($0) },
-                origin: .network
-            )
-        } catch {
-            return FeedResult(series: [], origin: .staleAfter(error))
-        }
-    }
-
-    func search(_ query: SearchQuery) async -> FeedResult {
-        var items = query.queryItems
-        items.append(contentsOf: (contentRatings ?? []).map {
-            URLQueryItem(name: "content_rating", value: $0)
-        })
-        // An explicit choice in the filter sheet wins over the standing
-        // preference. Sending both would intersect them, so picking "novel" in
-        // the sheet while novels are switched off in Settings would silently
-        // return nothing at all rather than what was asked for.
-        if query.types.isEmpty {
-            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
-        }
-        items.append(contentsOf: blockedTags.map {
-            URLQueryItem(name: "tag_not", value: String($0))
-        })
-        do {
-            let series: [Series] = try await client.get("/v2/series/search", query: items)
-            return FeedResult(
-                series: series.filter { $0.isDiscoverable && allowsFormat($0) },
-                origin: .network
-            )
-        } catch {
-            return FeedResult(series: [], origin: .staleAfter(error))
         }
     }
 
@@ -627,7 +595,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         return formats.contains(type)
     }
 
-    private var filterQuery: [URLQueryItem] {
+    /// Internal rather than private so the paging half can reach it. See
+    /// SeriesRepository+Paging.swift — the split is the lint's doing, not a
+    /// widening of who is meant to touch this.
+    var filterQuery: [URLQueryItem] {
         (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
             + formats.map { URLQueryItem(name: "type", value: $0) }
             + blockedTags.map { URLQueryItem(name: "tag_not", value: String($0)) }

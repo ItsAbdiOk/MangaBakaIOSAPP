@@ -29,6 +29,8 @@ struct DetailHero: View {
     @State private var fullHeight: CGFloat?
     /// The middle form's height, measured the same way.
     @State private var bylineHeight: CGFloat?
+    /// The richest form's height — the full column plus the chapter count.
+    @State private var chaptersHeight: CGFloat?
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -96,6 +98,14 @@ struct DetailHero: View {
     /// height on it would fix the hero's height at the cover's and overlap
     /// whatever follows when even the compact form runs longer.
     enum Form: Equatable {
+        /// Everything `full` has, plus the chapter count. The richest form, and
+        /// only reachable on a short column — a one- or two-line title with a
+        /// cover's worth of height still unspent. Asked for by Abdi
+        /// (2026-09-12): the count is the thing you want next to the artwork
+        /// when deciding whether to start something, and on those series the
+        /// space was simply empty. The stats strip still carries it further
+        /// down for every series, short column or not.
+        case chapters
         /// Eyebrow, pill and lateness, cadence sentence; kicker; title; byline.
         case full
         /// Pill and lateness on one line; kicker; title; byline. The middle:
@@ -108,7 +118,8 @@ struct DetailHero: View {
         case compact
 
         var hasByline: Bool { self != .compact }
-        var isExpanded: Bool { self == .full }
+        var isExpanded: Bool { self == .chapters || self == .full }
+        var showsChapters: Bool { self == .chapters }
     }
 
     /// The richest form whose measured height fits beside a cover this tall.
@@ -116,8 +127,12 @@ struct DetailHero: View {
     /// Compact until measured: the first frame has no height yet, and a gap
     /// that appears and then closes is worse than a byline that appears.
     nonisolated static func form(
-        fullHeight: CGFloat?, bylineHeight: CGFloat?, coverHeight: CGFloat
+        chaptersHeight: CGFloat?,
+        fullHeight: CGFloat?,
+        bylineHeight: CGFloat?,
+        coverHeight: CGFloat
     ) -> Form {
+        if let chaptersHeight, chaptersHeight <= coverHeight { return .chapters }
         if let fullHeight, fullHeight <= coverHeight { return .full }
         if let bylineHeight, bylineHeight <= coverHeight { return .byline }
         return .compact
@@ -129,7 +144,10 @@ struct DetailHero: View {
 
     private var text: some View {
         let form = Self.form(
-            fullHeight: fullHeight, bylineHeight: bylineHeight, coverHeight: coverHeight
+            chaptersHeight: chaptersHeight,
+            fullHeight: fullHeight,
+            bylineHeight: bylineHeight,
+            coverHeight: coverHeight
         )
         // The chosen form, stretched to the cover's height with the slack
         // in the gaps between its blocks — schedule, name, other names — so
@@ -140,6 +158,13 @@ struct DetailHero: View {
             // The measurers are a background: proposed the visible column's
             // width, which is what decides the wrapping, and their own
             // heights cannot grow the column — the whole point.
+            .background {
+                column(.chapters, fill: false)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        chaptersHeight = $0
+                    }
+            }
             .background {
                 column(.full, fill: false)
                     .hidden()
@@ -183,6 +208,12 @@ struct DetailHero: View {
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 7)
+            }
+            if form.showsChapters, let chapterCount {
+                Text(chapterCount)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textSecondary)
                     .padding(.top, 7)
             }
             if fill { Spacer(minLength: 0) }
@@ -257,6 +288,14 @@ struct DetailHero: View {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "212 chapters". Nil when MangaBaka has no count, which is common enough
+    /// on new series that the line has to be able to not exist.
+    private var chapterCount: String? {
+        guard let chapters = series.totalChapters, chapters > 0 else { return nil }
+        let whole = Int(chapters)
+        return "\(whole) \(whole == 1 ? "chapter" : "chapters")"
     }
 
     private var nativeTitle: String? {

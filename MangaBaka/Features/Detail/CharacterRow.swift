@@ -9,6 +9,13 @@ struct CharacterRow: View {
     let characters: [SeriesCharacter]
     let isLoading: Bool
 
+    /// The portrait the reader tapped, presented as a profile sheet.
+    ///
+    /// Held here rather than in `SeriesDetailView`: the row is the only thing
+    /// that knows which portrait was tapped, and the page has no other use
+    /// for it.
+    @State private var opened: SeriesCharacter?
+
     /// Big enough to recognise a face, small enough that four or five fit
     /// across a phone.
     private static let portrait: CGFloat = 72
@@ -30,7 +37,7 @@ struct CharacterRow: View {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(characters) { character in
-                            portraitCell(character)
+                            cell(character)
                                 .arrives()
                         }
                     }
@@ -40,6 +47,27 @@ struct CharacterRow: View {
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
             }
+            .sheet(item: $opened) { CharacterProfileView(character: $0) }
+        }
+    }
+
+    /// Tappable only when AniList issued the id, because only then is there a
+    /// profile to open: the cast falls back to Shikimori when AniList is
+    /// down, and the two number their characters independently — asking
+    /// AniList about a Shikimori id returns a real profile for the wrong
+    /// person rather than failing. See `CharacterProfileRequest`.
+    ///
+    /// A portrait that does nothing is better than one that opens a stranger,
+    /// and better than one that opens an apology: on a Shikimori day the row
+    /// simply is not tappable, which reads as "these are just pictures".
+    @ViewBuilder
+    private func cell(_ character: SeriesCharacter) -> some View {
+        if CharacterProfileRequest.aniListID(for: character) == nil {
+            portraitCell(character)
+        } else {
+            Button { opened = character } label: { portraitCell(character) }
+                .buttonStyle(.press)
+                .accessibilityHint("Opens this character's profile")
         }
     }
 

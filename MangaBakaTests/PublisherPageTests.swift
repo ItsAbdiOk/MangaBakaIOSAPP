@@ -103,7 +103,7 @@ struct PublisherWiringTests {
         // and the grid pages: Shueisha said "100" when it is thousands.
         #expect(view.contains("async let counted = repository.count(query)"))
         #expect(view.contains("Text((total ?? series.count).formatted())"))
-        #expect(view.contains("hasMore = result.series.count >= query.limit"))
+        #expect(view.contains("hasMore = result.hasMore"))
         #expect(view.contains(".task(id: order) { await load() }"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
         #expect(credits.contains("onOpenPublisher(publishers[0].name)"))

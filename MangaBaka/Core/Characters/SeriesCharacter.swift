@@ -1,14 +1,29 @@
 import Foundation
 
+/// Which tracker issued `SeriesCharacter.id`.
+///
+/// AniList's and Shikimori's character ids are two unrelated numbering
+/// systems that happen to overlap — id 40 is Monkey D. Luffy on one and
+/// somebody else entirely on the other. Nothing about the id itself says
+/// which catalog it came from, so a caller that wants to ask AniList for more
+/// about a character (a profile, a description) must be told explicitly
+/// whether AniList is the catalog that number belongs to. Guessing wrong
+/// does not fail — it returns a real profile for the wrong person.
+enum CharacterSource: String, Equatable, Sendable {
+    case aniList
+    case shikimori
+}
+
 /// One character in a series.
 ///
-/// **Why Shikimori and not AniList.** AniList was the obvious source and the
-/// one asked for. Its GraphQL API answers every request with HTTP 403 and the
-/// message "The AniList API has been temporarily disabled due to severe
-/// stability issues" — checked repeatedly on 2026-09-10, so not a blip.
-/// Shikimori is already one of MangaBaka's own upstream sources, its id arrives
-/// in every series' `source` block, and it carries names, roles and portraits.
-/// If AniList returns it is the better source, and this type is the seam.
+/// **Why Shikimori as well as AniList.** AniList was the obvious source and
+/// the one asked for, but its GraphQL API spent from at least 2026-09-10
+/// answering every request with HTTP 403 and its own message about being
+/// "temporarily disabled due to severe stability issues." Re-verified live on
+/// 2026-09-12: AniList now answers 200 with real data again. Shikimori stays
+/// as the fallback — it is already one of MangaBaka's own upstream sources,
+/// its id arrives in every series' `source` block, and it carries names,
+/// roles and portraits — for whichever future day AniList goes down again.
 struct SeriesCharacter: Identifiable, Equatable, Sendable {
     let id: Int
     let name: String
@@ -16,6 +31,8 @@ struct SeriesCharacter: Identifiable, Equatable, Sendable {
     /// repeat the first in Russian.
     let role: String?
     let imageURL: URL?
+    /// Which tracker's id space `id` lives in. See `CharacterSource`.
+    let source: CharacterSource
 
     var isMain: Bool { role?.caseInsensitiveCompare("Main") == .orderedSame }
 }
@@ -72,7 +89,8 @@ enum ShikimoriCast {
                 name: name,
                 role: row.roles?.first,
                 // Shikimori's paths are host-relative.
-                imageURL: URL(string: path, relativeTo: baseURL)?.absoluteURL
+                imageURL: URL(string: path, relativeTo: baseURL)?.absoluteURL,
+                source: .shikimori
             )
         }
 

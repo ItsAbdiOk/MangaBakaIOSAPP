@@ -1,14 +1,17 @@
 import Foundation
 
-/// Reads character lists from AniList's GraphQL API.
+/// Reads character lists and profiles from AniList's GraphQL API.
 ///
-/// **This path is currently unverifiable against the live API.** Every request
-/// to `graphql.anilist.co` answers HTTP 403 with AniList's own message, "The
-/// AniList API has been temporarily disabled due to severe stability issues"
-/// (checked repeatedly on 2026-09-10). The query and the decoding here are
-/// written from their published schema and covered by tests against recorded
-/// shapes; they have not been run against a real response. When AniList comes
-/// back, that is the thing to check first.
+/// **Re-verified live on 2026-09-12.** From at least 2026-09-10, every request
+/// to `graphql.anilist.co` answered HTTP 403 with AniList's own message, "The
+/// AniList API has been temporarily disabled due to severe stability issues" —
+/// long enough that the query and decoding below were written and tested only
+/// against recorded shapes, never against a real response. That outage is
+/// over: `POST https://graphql.anilist.co` now answers HTTP 200 with real
+/// character data, checked directly with curl. Recorded here rather than
+/// deleted, because the 403 was real and cost real time, and the next person
+/// to see this client fail should know both that it has failed before and
+/// that failure was not this.
 ///
 /// A fourth API with a fourth set of rules: POST-only GraphQL, a single
 /// endpoint, and errors returned as HTTP 200 with an `errors` array as often as
@@ -180,7 +183,8 @@ actor AniListClient {
                 // "Main", and Shikimori's own casing is what that comparison
                 // was written for.
                 role: edge.role?.capitalized,
-                imageURL: URL(string: image)
+                imageURL: URL(string: image),
+                source: .aniList
             )
         }
         .prefix(limit)
@@ -202,5 +206,174 @@ private extension Optional where Wrapped == URL {
     var unsafeAniListFallback: URL {
         guard let self else { preconditionFailure("Hard-coded AniList URL failed to parse.") }
         return self
+    }
+}
+
+/// The character-profile query, kept in its own extension (rather than in the
+/// actor's own body above) purely to keep `AniListClient`'s type body under
+/// SwiftLint's length cap — `private` members declared in the actor's primary
+/// declaration stay reachable from an extension of the same type in the same
+/// file, so `waitForSlot`, `endpoint`, `session` and `clock` are usable here
+/// exactly as they are above.
+extension AniListClient {
+    /// One character's full profile: name, portrait, the facts AniList
+    /// tracks, and the description. Verified live against character 138789
+    /// (Cha Hae-In) on 2026-09-12 — this is the real response shape, not only
+    /// the published schema.
+    static let profileQuery = """
+    query Profile($id: Int) {
+      Character(id: $id) {
+        id
+        name { full native alternative }
+        image { large medium }
+        description
+        gender
+        age
+        bloodType
+        dateOfBirth { year month day }
+        favourites
+        siteUrl
+      }
+    }
+    """
+
+    struct ProfileResponse: Decodable, Sendable {
+        let data: ProfilePayload?
+        let errors: [GraphQLError]?
+    }
+
+    struct ProfilePayload: Decodable, Sendable {
+        let character: ProfileCharacterNode?
+        /// Same capitalisation trap as `Payload.CodingKeys` above.
+        enum CodingKeys: String, CodingKey { case character = "Character" }
+    }
+
+    struct ProfileCharacterNode: Decodable, Sendable {
+        let id: Int?
+        let name: ProfileName?
+        let image: CharacterImage?
+        let description: String?
+        let gender: String?
+        /// A string, not an Int — AniList documents this field as freeform
+        /// text and sends ranges like "17-18" for characters whose age
+        /// changes across the story.
+        let age: String?
+        let bloodType: String?
+        let dateOfBirth: ProfileDate?
+        let favourites: Int?
+        let siteUrl: String?
+    }
+
+    struct ProfileName: Decodable, Sendable {
+        let full: String?
+        let native: String?
+        let alternative: [String]?
+    }
+
+    struct ProfileDate: Decodable, Sendable {
+        let year: Int?
+        let month: Int?
+        let day: Int?
+    }
+
+    /// Fetches one character's AniList profile.
+    ///
+    /// - Parameter characterID: an id AniList itself issued. The only source
+    ///   of one of these from a `SeriesCharacter` is
+    ///   `CharacterProfileRequest.aniListID(for:)` — a Shikimori-issued id
+    ///   passed here would return a real, wrong person with no sign anything
+    ///   went wrong.
+    func characterProfile(characterID: Int) async throws(APIError) -> CharacterProfile {
+        try await waitForSlot()
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "query": Self.profileQuery,
+            "variables": ["id": characterID]
+        ])
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.transport(underlying: String(describing: error))
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(underlying: "AniList sent a non-HTTP response.")
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            throw APIError.rateLimited(retryAfter: retryAfter)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.server(status: http.statusCode, message: "AniList returned \(http.statusCode).")
+        }
+
+        let decoded: ProfileResponse
+        do {
+            decoded = try JSONDecoder().decode(ProfileResponse.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+
+        // Same trap as the cast query: GraphQL reports failure inside a 200
+        // as often as through a status code.
+        if let errors = decoded.errors, !errors.isEmpty, decoded.data?.character == nil {
+            throw APIError.server(
+                status: http.statusCode,
+                message: errors.compactMap(\.message).first ?? "AniList refused the query."
+            )
+        }
+
+        guard let profile = Self.profile(from: decoded) else {
+            throw APIError.server(status: http.statusCode, message: "AniList knows no such character.")
+        }
+        return profile
+    }
+
+    /// Pure mapping from the decoded response to the display model, kept
+    /// separate from the network call so it is testable against a recorded
+    /// response without standing up a mock session.
+    static func profile(from response: ProfileResponse) -> CharacterProfile? {
+        guard let node = response.data?.character,
+              let id = node.id,
+              let name = node.name?.full,
+              !name.isEmpty
+        else { return nil }
+
+        return CharacterProfile(
+            id: id,
+            fullName: name,
+            nativeName: node.name?.native,
+            alternativeNames: node.name?.alternative ?? [],
+            imageURL: (node.image?.large ?? node.image?.medium).flatMap(URL.init(string:)),
+            gender: node.gender,
+            age: node.age,
+            bloodType: node.bloodType,
+            dateOfBirth: Self.formattedBirthday(node.dateOfBirth),
+            favourites: node.favourites,
+            siteURL: node.siteUrl.flatMap(URL.init(string:)),
+            description: node.description.map(CharacterDescriptionParser.parse)
+        )
+    }
+
+    /// "March 4", or "March" alone when AniList sent a month with no day —
+    /// which it does, for characters whose birthday is known only
+    /// approximately. Nil when there is no month at all: a day with no month
+    /// names nothing, and a bare year answers "how old", which `age` already
+    /// covers.
+    static func formattedBirthday(_ date: ProfileDate?) -> String? {
+        guard let month = date?.month, (1...12).contains(month) else { return nil }
+        let symbols = DateFormatter().monthSymbols ?? []
+        guard symbols.indices.contains(month - 1) else { return nil }
+        let name = symbols[month - 1]
+        guard let day = date?.day, day > 0 else { return name }
+        return "\(name) \(day)"
     }
 }

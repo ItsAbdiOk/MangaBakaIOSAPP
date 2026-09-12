@@ -69,6 +69,36 @@ actor APIClient {
         return payload
     }
 
+    /// The same fetch as `get`, but keeping the envelope's `pagination`
+    /// alongside the payload.
+    ///
+    /// A second method rather than widening `get`'s return type: `get` is
+    /// called all over the app for payloads nobody needs pagination for, and
+    /// changing its signature would touch every one of those call sites for
+    /// nothing. This exists because `next` — nil only on the last page — is
+    /// the API's own end-of-list signal, and it was being decoded and then
+    /// thrown away; callers were instead inferring "more pages exist" from
+    /// how many rows survived a local filter, which undercounts whenever the
+    /// filter drops even one row on a page (see `Pagination.next`'s doc
+    /// comment).
+    func getWithPagination<Payload: Decodable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        as _: Payload.Type = Payload.self
+    ) async throws(APIError) -> (payload: Payload, pagination: Pagination?) {
+        let data = try await rawData(path: path, query: query)
+        let envelope: APIEnvelope<Payload>
+        do {
+            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+        guard let payload = envelope.data else {
+            throw APIError.decoding(underlying: "Successful response carried no `data`.")
+        }
+        return (payload, envelope.pagination)
+    }
+
     /// How many results a query has, without downloading them.
     ///
     /// The API reports the total in its pagination block, so a count costs one

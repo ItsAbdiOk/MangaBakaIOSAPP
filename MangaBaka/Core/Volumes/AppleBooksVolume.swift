@@ -25,6 +25,32 @@ struct AppleBooksVolume: Codable, Identifiable, Sendable, Equatable {
     var cover: Cover {
         Cover(raw: artworkURL, x150: nil, x250: nil, x350: nil, blurhash: nil, width: nil, height: nil)
     }
+
+    /// This volume as a gallery entry, so the store's covers can sit in the
+    /// same fan and the same full-screen gallery as MangaBaka's own.
+    ///
+    /// Apple is the fuller source for most series and that is the whole reason
+    /// it leads: ONE PIECE has 4 English volume covers on MangaBaka's
+    /// `/images`, of 115, while the store sells every volume it carries with
+    /// official art. Nil when the store sent no artwork — a gallery page that
+    /// is a grey rectangle is worse than one fewer page.
+    ///
+    /// Typed "volume" and captioned by number, which is what it is. The entry
+    /// does not say "Apple Books" on it; the volumes shelf further down the
+    /// page is where the store is named and linked.
+    var galleryImage: SeriesImage? {
+        guard artworkURL != nil else { return nil }
+        return SeriesImage(
+            imageID: nil,
+            seriesId: nil,
+            type: "volume",
+            index: String(number),
+            indexNumeric: Double(number),
+            language: nil,
+            contentRating: nil,
+            image: cover
+        )
+    }
 }
 
 /// One row of the iTunes Search API's answer, as it arrives.

@@ -249,7 +249,12 @@ struct PublisherView: View {
         async let counted = repository.count(query)
         let result = await found
         series = result.series
-        hasMore = series.count >= query.limit
+        // The API's own signal (`pagination.next`), not the filtered count:
+        // this list is filtered for `isDiscoverable`/format after the fetch,
+        // so a page with one filtered row made `count >= limit` false and
+        // stopped paging after page one for any publisher common enough to
+        // have one. See FeedResult.hasMore.
+        hasMore = result.hasMore
         if case .staleAfter = result.origin { failed = series.isEmpty }
         total = await counted
         // The directory knows publishers, not people.
@@ -272,6 +277,15 @@ struct PublisherView: View {
         let known = Set(series.map(\.id))
         let additions = result.series.filter { !known.contains($0.id) }
         series.append(contentsOf: additions)
-        hasMore = result.series.count >= query.limit
+        // The API's own signal, not the filtered count — see FeedResult.hasMore.
+        //
+        // Known gap, not a fix: this has no bounded-retry loop like
+        // `SearchModel.loadMore`, and the grid asks for the next page from a
+        // cell's `onAppear`. So a page whose rows are all filtered out adds
+        // no cells, nothing re-triggers, and the list sits short of the end
+        // until the reader scrolls again. Left alone deliberately — a
+        // publisher's list is narrow enough that a wholly filtered page is
+        // rare, and the alternative is a second copy of the search loop.
+        hasMore = result.hasMore
     }
 }

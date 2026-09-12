@@ -4,8 +4,10 @@ import Foundation
 ///
 /// AniList is the preferred source: better portraits, a real relevance sort,
 /// and it is the tracker most of this app's other data is reconciled against.
-/// It is also, as of 2026-09-10, returning HTTP 403 to every request with its
-/// own message about being temporarily disabled.
+/// From at least 2026-09-10 it returned HTTP 403 to every request with its own
+/// message about being temporarily disabled; re-verified live on 2026-09-12
+/// that it now answers normally. `aniListDownUntil` below still exists for
+/// whichever future outage comes next.
 ///
 /// **The fallback is silent by design.** A reader opening a series page has no
 /// stake in which of two trackers answered; a banner saying one is down is a

@@ -180,7 +180,11 @@ private final class SlowPageTwoRepository: StubRepositoryBase, @unchecked Sendab
         let ids = (0..<query.limit).map { base * 1000 + query.page * 100 + $0 }
         return FeedResult(
             series: ids.map { SeriesFactory.make(id: $0, title: "\(query.text ?? "")-\($0)") },
-            origin: .network
+            origin: .network,
+            // Always "there is more" — this stub exists to race a page-two
+            // fetch against a new search, which needs `loadMore` to actually
+            // fire a page-two request rather than being guarded off.
+            hasMore: true
         )
     }
 }
@@ -214,5 +218,38 @@ struct SearchPagingGenerationTests {
         #expect(model.results.count == model.query.limit, "Naruto's page two was appended to bleach")
         #expect(model.results.allSatisfy { $0.id >= 2000 }, "Only bleach's ids may be present")
         #expect(model.query.page == 1, "The page counter must describe the current search")
+    }
+}
+
+/// Tapping a tag on a series page is the same gesture as picking one while
+/// browsing, and must go through the same door.
+@Suite("Opening a tag from a series page")
+struct OpenTagRouteTests {
+    @Test("A tag route produces a tag-filtered query with a stable sort")
+    @MainActor
+    func applyBrowseSetsTagAndSort() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.applyBrowse(tag: "Isekai")
+        #expect(model.query.tags == ["Isekai"])
+        // A sort, not nil: the app pages by asking for the next page and
+        // dropping ids it has seen, so an unsorted query whose order shifts
+        // between requests loses rows.
+        #expect(model.query.sort == "popularity_asc")
+        #expect(!model.query.isEmpty, "an empty query never reaches the network")
+    }
+
+    /// The control: a tag route replaces the previous query rather than
+    /// narrowing it. Arriving from a series page means "show me this tag",
+    /// not "this tag plus whatever was still set".
+    @Test("A tag route drops the text and filters that were already there")
+    @MainActor
+    func applyBrowseReplacesTheQuery() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.text = "one piece"
+        model.query.statuses = ["completed"]
+        model.applyBrowse(tag: "Isekai")
+        #expect(model.query.text == nil)
+        #expect(model.query.statuses.isEmpty)
+        #expect(model.query.tags == ["Isekai"])
     }
 }

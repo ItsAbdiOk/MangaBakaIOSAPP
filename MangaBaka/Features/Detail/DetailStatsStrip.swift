@@ -21,8 +21,13 @@ struct DetailStatsStrip: View {
     var season: Int?
 
     /// Manhwa, manhua and webtoons are published in episodes on a platform,
-    /// not chapters in a magazine, and readers of them say "episode". The
-    /// number is MangaBaka's chapter count either way.
+    /// not chapters in a magazine, and readers of them say "episode".
+    ///
+    /// This no longer renames the count — Abdi asked for "Chapters" everywhere
+    /// (2026-09-12). The number was always MangaBaka's chapter count, so one
+    /// word for it is the honest label and the app now says the same thing on
+    /// the stats strip, the library rows and the catch-up estimate. Still used
+    /// for the "Season" stat, which is genuinely a webtoon idea.
     var isEpisodic: Bool {
         guard let type = series.type?.lowercased() else { return false }
         return ["manhwa", "manhua", "webtoon", "webcomic"].contains(type)
@@ -50,7 +55,7 @@ struct DetailStatsStrip: View {
             out.append(Stat(id: "Season", value: String(season)))
         }
         if let chapters = series.totalChapters, chapters > 0 {
-            out.append(Stat(id: isEpisodic ? "Episodes" : "Chapters", value: String(Int(chapters))))
+            out.append(Stat(id: "Chapters", value: String(Int(chapters))))
         }
         if let volumes = series.finalVolume, volumes > 0 {
             out.append(Stat(id: "Volumes", value: String(Int(volumes))))

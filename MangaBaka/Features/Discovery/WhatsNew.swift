@@ -25,7 +25,7 @@ enum ReleaseNotes {
                 + "and the Japanese edition where your store has none",
             "\"Read in English\": the official platforms carrying a series in your language, "
                 + "marked Free where they are",
-            "Manhwa count in seasons and episodes",
+            "Manhwa show their season beside the chapter count",
             "Your library in iOS search, with covers; and Siri: \"What's due this week in MangaBaka\"",
             "Glossy covers, and each row's colour on the ground behind it",
             "Flags and language names on titles and links",

@@ -168,15 +168,17 @@ final class DiscoverModel {
         let known = Set(rows[index].series.map(\.id))
         let additions = result.series.filter { !known.contains($0.id) }
 
-        guard !additions.isEmpty else {
-            // Nothing new: either the end, or a failure. Either way, stop
-            // asking — repeatedly requesting the same page against a shared
-            // per-IP rate limit costs everyone on the network, not just us.
-            rows[index].hasReachedEnd = true
-            return
-        }
-
-        rows[index].series.append(contentsOf: additions)
+        // The API's own end-of-list signal, now that `feedPage` carries it
+        // (`pagination.next`). A page is filtered locally for
+        // `isDiscoverable`/format after it arrives, so a page can add nothing
+        // while the feed still has thousands behind it — that used to end the
+        // row. A failure also arrives as `hasMore == false`, which stops the
+        // asking, as before: re-requesting into a per-IP rate limit shared
+        // with everyone on the network costs more than a short row.
+        rows[index].hasReachedEnd = !result.hasMore
+        // Advanced even when the page added nothing, so the next scroll asks
+        // for the page after it rather than the same one again.
         rows[index].page = nextPage
+        rows[index].series.append(contentsOf: additions)
     }
 }

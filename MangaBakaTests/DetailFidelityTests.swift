@@ -29,13 +29,15 @@ struct DetailFidelityTests {
         #expect(labels == ["Rating", "Ratings", "Chapters", "Volumes", "Started"])
     }
 
-    /// Manhwa are published in episodes, and a third season numbers them
-    /// from one again — "Season 3 · 212" says what "212 chapters" does not.
-    @Test("A manhwa counts episodes, with its season when the schedule knows it")
+    /// A manhwa still gets its season — a third season numbers from one again,
+    /// so "Season 3 · 212" says what "212" alone does not — but the count
+    /// itself is labelled "Chapters" like everything else, at Abdi's ask
+    /// (2026-09-12). It was always MangaBaka's chapter count.
+    @Test("A manhwa counts chapters, with its season when the schedule knows it")
     func episodesAndSeason() {
         let manhwa = SeriesFactory.make(id: 1, type: "manhwa", totalChapters: 212)
-        #expect(DetailStatsStrip(series: manhwa, season: 3).stats.map(\.label) == ["Season", "Episodes"])
-        #expect(DetailStatsStrip(series: manhwa).stats.map(\.label) == ["Episodes"])
+        #expect(DetailStatsStrip(series: manhwa, season: 3).stats.map(\.label) == ["Season", "Chapters"])
+        #expect(DetailStatsStrip(series: manhwa).stats.map(\.label) == ["Chapters"])
         let manga = SeriesFactory.make(id: 2, type: "manga", totalChapters: 212)
         #expect(DetailStatsStrip(series: manga, season: 3).stats.map(\.label) == ["Chapters"])
     }

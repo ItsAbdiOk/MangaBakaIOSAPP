@@ -54,8 +54,14 @@ struct PaginationTests {
             guard query.page <= totalPages else {
                 return FeedResult(series: [], origin: .network)
             }
-            if repeatsFirstPage { return FeedResult(series: page(1), origin: .network) }
-            return FeedResult(series: page(query.page), origin: .network)
+            // The API's real end-of-list signal: true on every page but the
+            // last, independent of what that page's rows happen to be —
+            // mirrors `pagination.next`, not a count comparison.
+            let hasMore = query.page < totalPages
+            if repeatsFirstPage {
+                return FeedResult(series: page(1), origin: .network, hasMore: hasMore)
+            }
+            return FeedResult(series: page(query.page), origin: .network, hasMore: hasMore)
         }
 
         private func page(_ number: Int) -> [Series] {
@@ -99,19 +105,74 @@ struct PaginationTests {
         #expect(await model.hasMore == false)
     }
 
-    @Test("A short page means the end, so no further request is made")
+    @Test("A genuinely last page never triggers a second request")
     func searchStopsAtEnd() async {
+        // This is the control for the fix: a real last page (no `next`) must
+        // stop pagination on its own signal, not by trying page 2 and
+        // discovering it is empty. Before the fix this page's full 30 rows
+        // would have made `hasMore` true regardless of `totalPages`.
         let repository = PagingRepository(pageSize: 30, totalPages: 1)
         let model = await SearchModel(repository: repository)
         await MainActor.run { model.query = SearchQuery(text: "solo") }
 
         await model.search()
+        #expect(await model.hasMore == false)
         await model.loadMore()
         await model.loadMore()
 
-        // Page 2 is tried once, comes back empty, and is never tried again.
-        #expect(repository.requestedPages == [1, 2])
+        // Page 2 is never requested: the first page already said there is
+        // no more.
+        #expect(repository.requestedPages == [1])
         #expect(await model.hasMore == false)
+    }
+
+    /// A repository shaped like `SeriesRepository.search` actually is: the
+    /// API sends a full page, but local filtering (`isDiscoverable`/format)
+    /// drops some of it before the caller ever sees it. `series.count` on the
+    /// result is therefore smaller than the limit even though the API's own
+    /// pagination said there was more — the exact shape of the "Isekai"
+    /// (7,105 results, capped at 30) bug.
+    private final class LocallyFilteredRepository: StubRepositoryBase, @unchecked Sendable {
+        private(set) var requestedPages: [Int] = []
+
+        override func search(_ query: SearchQuery) async -> FeedResult {
+            requestedPages.append(query.page)
+            guard query.page <= 2 else {
+                return FeedResult(series: [], origin: .network, hasMore: false)
+            }
+            let start = (query.page - 1) * 100
+            // 25 rows survive out of a limit of 30 — as if 5 were filtered —
+            // on both pages, while the API still reports a next page for
+            // page 1.
+            let survivors = (start..<(start + 25)).map {
+                SeriesFactory.make(id: $0, title: "S\($0)")
+            }
+            return FeedResult(series: survivors, origin: .network, hasMore: query.page < 2)
+        }
+    }
+
+    /// This is the test that must fail without the fix: counting survivors
+    /// against `query.limit` (30) makes `25 >= 30` false on page one, so the
+    /// old code set `hasMore = false` and `loadMore()` never asked for page
+    /// two — permanently capping every tag whose page ever drops one row.
+    @Test("A page short of the limit still pages on, when the API says there is more")
+    func loadMoreContinuesPastALocallyFilteredPage() async {
+        let repository = LocallyFilteredRepository()
+        let model = await SearchModel(repository: repository)
+        await MainActor.run { model.query = SearchQuery(tags: ["Isekai"]) }
+
+        await model.search()
+        #expect(await model.results.count == 25)
+        // The assertion that fails before the fix: the API said there is a
+        // next page, so `hasMore` must be true even though this page came up
+        // short of the limit.
+        #expect(await model.hasMore == true)
+
+        await model.loadMore()
+
+        #expect(repository.requestedPages == [1, 2])
+        #expect(await model.results.count == 50, "Page two must be fetched and appended")
+        #expect(await model.hasMore == false, "Page two has no `next`, so pagination stops there")
     }
 
     /// Without the reset, typing a new query after paging to 4 would fetch
@@ -143,14 +204,23 @@ struct PaginationTests {
             )
         }
 
+        /// How many pages the "API" has. The row ends when it runs out, the
+        /// way `pagination.next` going nil ends it in the real one.
+        var pages = 10
+        /// Pages whose every row is filtered out locally before the model sees
+        /// them — the real repository filters for `isDiscoverable` and format
+        /// after the fetch, so this is a page that legitimately arrives empty
+        /// while the feed still has more.
+        var fullyFilteredPages: Set<Int> = []
+
         override func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
             requested.append((feed.cacheKey, page))
             guard feed.supportsPaging else { return FeedResult(series: [], origin: .network) }
             let start = (page - 1) * 20
-            return FeedResult(
-                series: (start..<(start + 20)).map { SeriesFactory.make(id: $0, title: "A\($0)") },
-                origin: .network
-            )
+            let rows = fullyFilteredPages.contains(page)
+                ? []
+                : (start..<(start + 20)).map { SeriesFactory.make(id: $0, title: "A\($0)") }
+            return FeedResult(series: rows, origin: .network, hasMore: page < pages)
         }
     }
 
@@ -169,6 +239,45 @@ struct PaginationTests {
         #expect(await model.rows.first { $0.id == trending }?.series.count == 40)
         // Rising has no page parameter at all, so it is never requested.
         #expect(repository.requested.map(\.key) == ["discover/trending"])
+    }
+
+    /// The Discover half of the same bug the search half had: the row decided
+    /// it had reached the end whenever a page contributed no new series. A
+    /// page whose every row is filtered out locally does exactly that while
+    /// the feed still has thousands behind it.
+    @Test("A page filtered down to nothing does not end the row")
+    func filteredPageIsNotTheEnd() async {
+        let repository = RowPagingRepository()
+        repository.fullyFilteredPages = [2]
+        let model = await DiscoverModel(repository: repository)
+        await model.load()
+
+        let trending = FeedKind.trending.cacheKey
+        await model.loadMore(trending)
+        #expect(await model.rows.first { $0.id == trending }?.hasReachedEnd == false)
+
+        // And the row goes on growing once a page has rows again: 20 from the
+        // first load, nothing from the filtered page 2, 20 from page 3.
+        await model.loadMore(trending)
+        #expect(await model.rows.first { $0.id == trending }?.series.count == 40)
+        #expect(repository.requested.map(\.page) == [2, 3], "page 2 must not be asked for twice")
+    }
+
+    /// The control: when the API really is out of pages, the row stops.
+    @Test("The last page ends the row")
+    func lastPageEndsTheRow() async {
+        let repository = RowPagingRepository()
+        repository.pages = 2
+        let model = await DiscoverModel(repository: repository)
+        await model.load()
+
+        let trending = FeedKind.trending.cacheKey
+        await model.loadMore(trending)
+        #expect(await model.rows.first { $0.id == trending }?.hasReachedEnd == true)
+
+        let asked = repository.requested.count
+        await model.loadMore(trending)
+        #expect(repository.requested.count == asked, "an ended row must not ask again")
     }
 
     /// A refresh replaces the row's contents. Leaving the page counter behind

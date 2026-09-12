@@ -297,8 +297,18 @@ struct RootView: View {
                 toasts.show("Added to the mix")
             },
             onOpenTag: { tag in
-                searchModel?.query = SearchQuery(tags: [tag])
-                Task { await searchModel?.search() }
+                // `applyBrowse`, not a raw assignment plus `search()`. Tapping
+                // a tag is the same gesture as picking one on the browse
+                // screen, and that method is what it is for: it remembers the
+                // text it applied so the field's own change observer does not
+                // schedule a second, identical request 300ms later (two calls
+                // per tap against a 30 req/min budget shared with everyone on
+                // the same network — see `SearchModel.queryDidChange`), it
+                // cancels any keystroke debounce already pending, and it sets
+                // a stable sort. The sort matters beyond tidiness: without one
+                // the API is free to reorder between pages, and this app pages
+                // by asking for page 2 and dropping ids it has already seen.
+                searchModel?.applyBrowse(tag: tag)
                 selection = .search
             },
             onOpenSchedule: {

@@ -241,6 +241,47 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         titles?.first { $0.traits.contains("native") }?.language
     }
 
+    /// The language a series was originally published in, inferred from its
+    /// type when the titles do not say.
+    ///
+    /// `nativeLanguage` reads the title marked "native", which is the better
+    /// answer because it is the series' own data — but plenty of series carry
+    /// no native title at all, and a reader still knows perfectly well that a
+    /// manhwa is Korean. Only the three types whose language is actually
+    /// implied by the word are listed: "oel" is English-original by
+    /// definition and "other" says nothing, so both stay nil.
+    var impliedLanguage: String? {
+        switch type?.lowercased() {
+        case "manga": "ja"
+        case "manhwa": "ko"
+        case "manhua": "zh"
+        default: nil
+        }
+    }
+
+    /// The cover languages worth showing on the series page: English, and the
+    /// language the series was drawn in. Nil means show everything.
+    ///
+    /// Asked for by Abdi (2026-09-12) — the fan at the top of a series page
+    /// was showing every edition MangaBaka holds, so a popular series led with
+    /// a wall of covers a reader here cannot read. English is the edition most
+    /// readers of this app recognise from a shop; the native one is the cover
+    /// the book actually had.
+    ///
+    /// Measured against the live API on 2026-09-12: Solo Leveling (3397) has
+    /// 24 covers on `/v1/series/3397/images` — 10 English, 4 Korean, 7 "pt"
+    /// and 3 "pt-br". This rule keeps 14 and drops 10, so well over a third of
+    /// that fan was Portuguese.
+    ///
+    /// Novels are exempt, at his ask: they are the type whose editions are
+    /// most often the only art there is, so narrowing them risks leaving a
+    /// page with nothing to show.
+    var coverLanguages: Set<String>? {
+        guard type?.lowercased() != "novel" else { return nil }
+        guard let own = nativeLanguage ?? impliedLanguage else { return nil }
+        return ["en", own.lowercased()]
+    }
+
     /// Whether this series answers to a name the reader typed.
     ///
     /// Every title the series carries, not just the displayed one. A library
