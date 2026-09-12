@@ -169,3 +169,62 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
   presents.
 - ~~Small and unglamorous~~ — all settled 2026-09-11 (`de7b802`; P-F12 by
   `2f78286`).
+
+---
+
+## Done 2026-09-12
+
+- **Cover galleries narrowed to readable languages** — `89033ae`. English plus
+  the series' own language; novels exempt. Solo Leveling keeps 14 of 24 covers.
+- **Tag pages no longer stop at 30** — `89033ae`. Not the tag route at all:
+  `SeriesRepository.search` filters rows locally, and every pager inferred "more
+  pages exist" from survivor count, so one filtered row killed pagination
+  forever. `Pagination.next` had been modelled, decoded, and never read.
+- **Apple + Google volume shelf** — `5ef96ac`, then `d0faf61` removed the Google
+  API key in favour of the anonymous quota. Apple wins every collision; Google
+  only fills numbers Apple lacks. Expect Google to return nothing most of the
+  time: the shared quota was exhausted when measured.
+- **Character profiles, with Shikimori when AniList is down** — `5ef96ac`,
+  translated on-device before display.
+- **Reading links held to an allowlist** — `633ef61`. 132 measured hosts;
+  unrecognised hosts are hidden outright. Guideline 5.2.3.
+- **`pornographic` removed, `erotica` gated** — `a3656dd`. See the amendment in
+  `designs/app-feature-spec.md`.
+- **Webtoons release feeds** — `d3adf24`, `f1ba553`, `4963d13`, `c31fce4`. The
+  first source here that publishes real release dates. See
+  `release-sources-2026-09-12.md`.
+- **TestFlight build 64 crash fixed** — `3e603ca`. The Translation framework's
+  download prompt was being raised from inside a sheet.
+
+## Next, in the order I would do it
+
+1. **Wire the release section to the detail page.** Everything behind it exists
+   and is tested — `WebtoonsFeedClient`, `ReleaseSummary`, `ReleaseSource`,
+   `TranslationGap` — and none of it is on screen. `Series` carries no links, so
+   the caller has to be the detail page, where `extras.links` exists. The header
+   names the platform, like the volumes shelf does.
+2. **Offer the translation language-pack download from outside a sheet.** The
+   crash fix means a reader without the ru→en pack now silently gets no character
+   description and is never asked. Settings is the obvious home.
+3. **Naver adapter**, for the Korean original's `totalCount`, `finished` and
+   hiatus comparison. 172 series in the library, and it is the only way to learn
+   the source has stopped while the translation is still running.
+4. **GigaViewer and Tapas adapters**, behind one `ReleaseSource` protocol so the
+   per-platform differences stay in the adapters. Enabled per publisher — check
+   before assuming a host answers.
+5. **18+ age rating in App Store Connect**, and confirm which tier applies now
+   that Apple has moved to 13+/16+/18+.
+6. **App Store screenshots without real manga covers.** Nothing exists yet, so
+   nothing is wrong yet; the constraint applies to the icon and promo text too.
+
+## Explicitly not doing
+
+- **Link unfurling / scraping Open Graph and JSON-LD** for metadata. Tested and
+  it does not carry what it was claimed to — see `release-sources-2026-09-12.md`.
+  It would also cost a dependency, a privacy story, and ongoing breakage to fetch
+  data the app already has.
+- **Blurring mature covers behind a toggle.** Those covers are filtered
+  server-side and never downloaded unless the reader opts in, so a blur is
+  redundant for the default reader and pointless for one who chose otherwise.
+  Revisit only if a reviewer says otherwise.
+

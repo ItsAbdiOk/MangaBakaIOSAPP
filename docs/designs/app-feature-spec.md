@@ -43,6 +43,30 @@ Three coherent options:
 **DECIDED: B.** Default is `safe` + `suggestive`. `erotica` and `pornographic`
 are excluded unless the reader turns them on in Settings.
 
+**AMENDED 2026-09-12 — `pornographic` is not offered at all.** Option B as
+written above shipped, and then came off. App Review guideline 1.1.4 bans overtly
+sexual material, and a default-off toggle is not a defence: a reviewer who can
+turn it on is a reviewer who sees it, and the penalty for that is removal rather
+than a rejection you fix and resubmit. So the enum a reader chooses from is now
+`safe`, `suggestive`, `erotica` — three values, not four — and no request the app
+makes can ask for the fourth.
+
+`erotica` stays, because "sex, not explicit" is the line Apple actually draws,
+and it is now behind the deliberate opt-in this section always called for: an
+alert naming the consequence and the age, on the way in only. `requiresOptIn`
+had existed unread since the setting was first written, so Explicit had been a
+single tap like any other switch.
+
+The API still returns `pornographic`, so it is still named once in the code, in
+`ContentPreferences.apiRatings`. That is deliberate and load-bearing: the
+question "what has the reader NOT opted into" drives which tag *names* are kept
+out of recommender captions, and deriving that list from the reader's three
+choices would have quietly stopped hiding the fourth.
+
+The 17+ consequence below is unchanged — mature content is still reachable — but
+note Apple has since moved to 13+/16+/18+ tiers, so confirm which applies before
+filling in App Store Connect.
+
 Consequences to design and build for:
 - The app is rated 17+ regardless, because the content is reachable.
 - The opt-in must be deliberate: a Settings toggle with plain language about

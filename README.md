@@ -7,8 +7,30 @@ Design and rationale: [`docs/designs/discovery-first-mangabaka-client.md`](docs/
 
 ## Status
 
-Early scaffold. The discovery feed loads live from the public API; the
-on-device cache, swipe stack and library sync are not built yet.
+In development, and well past scaffold. Discovery feeds, search and tag/author
+browsing, the on-device cache, the swipe stack, library sync, release schedules
+and character profiles are all built, with around a thousand tests over them.
+Not submitted to the App Store.
+
+## Where the data comes from
+
+- **MangaBaka** — the catalogue. Most of it is public; your library needs a token.
+- **Apple Books** (iTunes Search) — volume covers, prices and store links.
+- **Google Books** — covers for volume numbers Apple does not carry, and nothing
+  else. Unauthenticated, so it often returns nothing and the shelf simply shows
+  Apple's.
+- **AniList**, with **Shikimori** as a fallback — character profiles. Shikimori's
+  Russian is translated on-device before it is shown.
+- **MangaUpdates** — release history, which is what release estimates are built
+  from.
+- **Webtoons and Naver** — official per-series feeds, the only source here that
+  publishes real release dates rather than letting them be inferred. See
+  `docs/release-sources-2026-09-12.md`.
+
+No analytics, no telemetry, no third-party tracking. Nothing is reported
+anywhere. No manga content is hosted, cached or served by this app — it is a
+catalogue and a tracker, and every reading link points at an official platform
+on a checked allowlist.
 
 ## Requirements
 
