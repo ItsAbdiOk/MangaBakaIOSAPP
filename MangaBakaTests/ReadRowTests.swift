@@ -9,9 +9,12 @@ import Testing
 /// tappytoon, WebNovel — not Piccoma in Japanese or Delitoon in French.
 @Suite("Read in your language")
 struct ReadRowTests {
+    /// A real licensed platform by default. A `webplatform` link is held to
+    /// `ReadingPlatforms` now, so a fictional host never reaches the row and
+    /// these language expectations would all read as empty.
     private func link(
         _ name: String, type: String = "webplatform", language: String? = "en",
-        url: String = "https://example.com/title"
+        url: String = "https://manta.net/en/series/1"
     ) -> SeriesLink {
         SeriesLink(id: name, url: URL(string: url), name: name, nameDisplay: name,
                    type: type, language: language)
@@ -45,7 +48,7 @@ struct ReadRowTests {
         let links = [
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100020"),
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100079"),
-            link("Crunchyroll"),
+            link("Crunchyroll", url: "https://crunchyroll.com/x"),
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100140")
         ]
         let readable = SeriesLink.readable(links, in: "en")

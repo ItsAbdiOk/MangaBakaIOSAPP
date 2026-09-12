@@ -28,6 +28,17 @@ struct SeriesLink: Codable, Identifiable, Equatable, Sendable {
     /// a payment sheet, a shortcut — with none of the deliberation a normal
     /// web link implies. Only http and https are opened.
     var safeURL: URL? { url.flatMap(SafeLink.web) }
+
+    /// Whether this link may be offered as somewhere to read the series.
+    ///
+    /// Only `webplatform` links make that claim, and only those are held to
+    /// the allowlist — see `ReadingPlatforms` for why an unrecognised host is
+    /// hidden outright rather than shown without a tap target. A link of any
+    /// other kind is not a reading link and is judged on its scheme alone.
+    var isOfferableToRead: Bool {
+        guard type == Purpose.webplatform.rawValue else { return safeURL != nil }
+        return ReadingPlatforms.allows(safeURL)
+    }
 }
 
 extension SeriesLink {
@@ -70,10 +81,14 @@ extension SeriesLink {
     /// dropped — MangaBaka's data is community-maintained and its vocabulary
     /// can grow, and a new kind appearing should not make a link vanish.
     ///
-    /// `safeURL` filters throughout. These URLs come from other people, and an
-    /// arbitrary scheme can trigger another installed app.
+    /// `isOfferableToRead` filters throughout: it is `safeURL` for every kind
+    /// of link, plus the reading allowlist for the `webplatform` ones. These
+    /// URLs come from other people — an arbitrary scheme can trigger another
+    /// installed app, and an unrecognised reading platform is the 5.2.3 risk
+    /// `ReadingPlatforms` exists for. A hidden link leaves no gap: the group
+    /// itself disappears when nothing in it survives.
     static func grouped(_ links: [SeriesLink]) -> [Group] {
-        let usable = links.filter { $0.safeURL != nil }
+        let usable = links.filter(\.isOfferableToRead)
         var groups = Purpose.allCases.compactMap { purpose -> Group? in
             let matching = usable.filter { $0.type == purpose.rawValue }
             return matching.isEmpty ? nil : Group(heading: purpose.heading, links: matching)
@@ -144,8 +159,10 @@ struct SeriesRelationship: Codable, Identifiable, Equatable, Sendable {
 extension SeriesLink {
     /// The official reading platforms carrying the series in one language.
     ///
-    /// Only `webplatform` links: a publisher's shop or a wiki is not somewhere
-    /// to read. Only the reader's language: series 3397 lists thirteen
+    /// Only `webplatform` links on the `ReadingPlatforms` allowlist: a
+    /// publisher's shop or a wiki is not somewhere to read, and a host nobody
+    /// recognises is not somewhere this app will send anyone. Only the
+    /// reader's language: series 3397 lists thirteen
     /// platforms in seven languages, and a reader in English wants the four
     /// that are, not Piccoma in Japanese. The API's own order is kept.
     ///
@@ -165,7 +182,7 @@ extension SeriesLink {
         var seen: Set<String> = []
         return links.filter {
             guard $0.type == Purpose.webplatform.rawValue,
-                  $0.safeURL != nil,
+                  $0.isOfferableToRead,
                   primarySubtag($0.language ?? "") == wanted
             else { return false }
             return seen.insert($0.name ?? $0.title).inserted

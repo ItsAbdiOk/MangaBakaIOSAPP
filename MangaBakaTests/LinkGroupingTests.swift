@@ -11,10 +11,14 @@ import Foundation
 /// platforms and nothing saying which was which.
 @Suite("Link grouping")
 struct LinkGroupingTests {
+    /// A real licensed platform by default, not `example.com`: a
+    /// `webplatform` link now has to clear `ReadingPlatforms` before it is
+    /// shown at all, so a fictional host would be filtered and every
+    /// expectation about grouping would be testing the allowlist instead.
     private func link(
         _ id: String,
         type: String?,
-        url: String = "https://example.com"
+        url: String = "https://tapas.io/series/1"
     ) -> SeriesLink {
         SeriesLink(
             id: id, url: URL(string: url), name: id, nameDisplay: id,
