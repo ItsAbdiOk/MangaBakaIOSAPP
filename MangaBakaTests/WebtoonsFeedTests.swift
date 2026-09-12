@@ -152,12 +152,45 @@ struct WebtoonsFeedURLTests {
             .absoluteString == "https://www.webtoons.com/en/fantasy/tower-of-god/rss?title_no=95")
     }
 
-    /// MangaBaka stores its French, Spanish, Thai, Indonesian and German
-    /// Webtoons links with the genre and slug replaced by "-". Webtoons keys
-    /// the feed on title_no but still refuses a wrong path — measured: 500.
-    @Test("A placeholder link yields nothing rather than a broken request")
+    /// MangaBaka stores most of its Webtoons links with the genre and slug
+    /// replaced by "-" — 84% of a 118-series sample of the real library. Those
+    /// are not feed URLs directly; they are recovered by `lookupURL` below.
+    @Test("A placeholder link is not a feed URL on its own")
     func placeholderLinksRejected() {
         #expect(url("https://www.webtoons.com/-/-/-/list?title_no=5188") == nil)
+    }
+
+    /// The recovery, and the reason the feature is worth more than a sixth of
+    /// the library. Webtoons keys the page on title_no alone and redirects to
+    /// the canonical path, correcting the language on the way: 5188 lands on
+    /// /fr/, 7620 on /id/ (measured 2026-09-12).
+    @Test("A placeholder link becomes a lookup that the redirect resolves")
+    func placeholderBecomesLookup() throws {
+        let link = try #require(URL(string: "https://www.webtoons.com/-/-/-/list?title_no=5188"))
+        let lookup = try #require(WebtoonsFeed.lookupURL(for: link))
+        #expect(lookup.absoluteString == "https://www.webtoons.com/en/x/y/list?title_no=5188")
+
+        // What the redirect lands on, and what it is worth once it does.
+        let landed = try #require(
+            URL(string: "https://www.webtoons.com/fr/fantasy/estatedeveloper/list?title_no=5188")
+        )
+        #expect(WebtoonsFeed.feedURL(fromResolved: landed)?.absoluteString
+                == "https://www.webtoons.com/fr/fantasy/estatedeveloper/rss?title_no=5188")
+    }
+
+    /// A link that already works needs no redirect, so it must not ask for one.
+    @Test("A real link is never sent for lookup")
+    func realLinksNeedNoLookup() throws {
+        let link = try #require(
+            URL(string: "https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95")
+        )
+        #expect(WebtoonsFeed.lookupURL(for: link) == nil)
+    }
+
+    @Test("A placeholder with no series number cannot be looked up")
+    func lookupNeedsASeriesNumber() throws {
+        let link = try #require(URL(string: "https://www.webtoons.com/-/-/-/list"))
+        #expect(WebtoonsFeed.lookupURL(for: link) == nil)
     }
 
     @Test("Only Webtoons links, and only ones naming a series")

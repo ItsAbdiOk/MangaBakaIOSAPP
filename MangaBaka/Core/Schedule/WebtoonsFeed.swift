@@ -54,15 +54,10 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
     /// 404s or 500s when the genre and slug in the path are wrong, verified by
     /// getting exactly that wrong twice (2026-09-12).
     ///
-    /// Returns nil for MangaBaka's placeholder links. Its French, Spanish,
-    /// Thai, Indonesian and German entries are stored literally as
-    /// `webtoons.com/-/-/-/list?title_no=5188`, and a `-` in the path is not a
-    /// slug the feed will answer to. English and Traditional Chinese links
-    /// carry real slugs and work.
+    /// Returns nil for MangaBaka's placeholder links — see `lookupURL`, which
+    /// recovers them.
     static func feedURL(for link: URL) -> URL? {
-        guard let host = link.host()?.lowercased(),
-              host == "webtoons.com" || host.hasSuffix(".webtoons.com"),
-              link.path().contains("/list"),
+        guard isWebtoons(link), link.path().contains("/list"),
               !link.path().contains("/-/")
         else { return nil }
         var components = URLComponents(url: link, resolvingAgainstBaseURL: false)
@@ -73,6 +68,44 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
             .queryItems?.filter { $0.name == "title_no" }
         guard components?.queryItems?.isEmpty == false else { return nil }
         return components?.url
+    }
+
+    /// A URL that redirects to the series' canonical page, for links whose path
+    /// is a placeholder.
+    ///
+    /// **Measured 2026-09-12, and it changes what this feature is worth.** Only
+    /// 16% of the Webtoons links in a 118-series sample of Abdi's library carry
+    /// a real slug; the other 84% are stored as `/-/-/-/list?title_no=N`. Taken
+    /// at face value that leaves five of every six series with no schedule.
+    ///
+    /// Webtoons ignores the genre and the slug entirely and keys the page on
+    /// `title_no`, redirecting to the canonical path — and it corrects the
+    /// *language* segment too: `title_no=5188` sent to `/en/x/y/` lands on
+    /// `/fr/fantasy/estatedeveloper/`, and 7620 on `/id/drama/...`. So one
+    /// redirect recovers the real path for any placeholder, and the language
+    /// comes back right rather than forced to English.
+    ///
+    /// `en` here is a placeholder of our own, not a preference: the segment has
+    /// to be a valid language for the redirect to happen at all, and whichever
+    /// one is sent, the destination is the edition Webtoons actually has.
+    static func lookupURL(for link: URL) -> URL? {
+        guard isWebtoons(link), link.path().contains("/-/"),
+              let number = seriesNumber(in: link)
+        else { return nil }
+        return URL(string: "https://www.webtoons.com/en/x/y/list?title_no=\(number)")
+    }
+
+    /// The feed URL for a page the redirect landed on.
+    static func feedURL(fromResolved resolved: URL) -> URL? { feedURL(for: resolved) }
+
+    private static func isWebtoons(_ url: URL) -> Bool {
+        guard let host = url.host()?.lowercased() else { return false }
+        return host == "webtoons.com" || host.hasSuffix(".webtoons.com")
+    }
+
+    private static func seriesNumber(in link: URL) -> String? {
+        URLComponents(url: link, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "title_no" }?.value
     }
 
     /// Parses an RSS document.

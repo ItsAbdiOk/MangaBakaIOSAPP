@@ -36,14 +36,13 @@ actor WebtoonsFeedClient {
     /// has a cadence estimated from release history, and this only ever
     /// replaces it with something better.
     func feed(for links: [SeriesLink], seriesID: Int) async -> WebtoonsFeed? {
-        guard let url = links.lazy.compactMap({ $0.safeURL })
-            .compactMap(WebtoonsFeed.feedURL(for:)).first
-        else { return nil }
-
+        let candidates = links.compactMap(\.safeURL)
         // Versioned like the other caches: a parser change must not be
         // outlived by a week of entries read under the old rules.
-        let key = "v1-\(seriesID)"
+        let key = "v2-\(seriesID)"
         if let cached = readCache(key) { return cached }
+
+        guard let url = await resolveFeedURL(candidates) else { return nil }
 
         let wait = spacing.claim(now: clock.now)
         if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
@@ -61,6 +60,30 @@ actor WebtoonsFeedClient {
         else { return nil }
         writeCache(key, feed)
         return feed
+    }
+
+    /// A usable feed URL, following one redirect where the stored link is a
+    /// placeholder.
+    ///
+    /// Direct links are tried first so the common case costs no extra request.
+    /// The redirect is only spent when there is nothing else, and it is worth
+    /// spending: 84% of the Webtoons links measured in Abdi's library are
+    /// placeholders, so without this the feature reaches one series in six.
+    /// See `WebtoonsFeed.lookupURL`.
+    private func resolveFeedURL(_ candidates: [URL]) async -> URL? {
+        if let direct = candidates.compactMap(WebtoonsFeed.feedURL(for:)).first { return direct }
+
+        guard let lookup = candidates.compactMap(WebtoonsFeed.lookupURL(for:)).first
+        else { return nil }
+
+        let wait = spacing.claim(now: clock.now)
+        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        // URLSession follows redirects itself, so the landing page's URL is
+        // what comes back on the response — the body is discarded.
+        guard let (_, response) = try? await session.data(from: lookup),
+              let resolved = response.url
+        else { return nil }
+        return WebtoonsFeed.feedURL(fromResolved: resolved)
     }
 
     // MARK: - Cache
