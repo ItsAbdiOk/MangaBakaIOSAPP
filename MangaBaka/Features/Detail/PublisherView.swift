@@ -16,7 +16,15 @@ import SwiftUI
 /// list always comes from the search, and the record decorates it when
 /// the directory knows the name.
 struct PublisherView: View {
+    /// Whose page: a publisher or studio (the API's `publisher=`), or a
+    /// creator (`staff=`). Same page, different search key; the directory
+    /// record only exists for publishers.
+    enum Kind: Hashable {
+        case publisher, author
+    }
+
     let name: String
+    var kind: Kind = .publisher
     let catalogue: CatalogueService
     let repository: any SeriesRepositoryProtocol
     @Binding var path: [Series]
@@ -220,7 +228,11 @@ struct PublisherView: View {
     }
 
     private var query: SearchQuery {
-        var query = SearchQuery(publisher: name)
+        var query = SearchQuery()
+        switch kind {
+        case .publisher: query.publisher = name
+        case .author: query.staff = name
+        }
         query.sort = order.rawValue
         query.page = page
         return query
@@ -235,13 +247,14 @@ struct PublisherView: View {
         page = 1
         async let found = repository.search(query)
         async let counted = repository.count(query)
-        async let record = catalogue.findPublisher(named: name)
         let result = await found
         series = result.series
         hasMore = series.count >= query.limit
         if case .staleAfter = result.origin { failed = series.isEmpty }
         total = await counted
-        if detail == nil, let id = await record?.publisherID {
+        // The directory knows publishers, not people.
+        if kind == .publisher, detail == nil,
+           let id = await catalogue.findPublisher(named: name)?.publisherID {
             detail = await catalogue.publisher(id: id)
         }
         isLoading = false

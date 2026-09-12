@@ -78,6 +78,14 @@ final class StackModel {
 
     private var reasons: [Int: String] = [:]
 
+    /// Orders each fresh batch by the reader's own tags before it joins the
+    /// queue, so a blend or a random draw leads with what they are likeliest
+    /// to want. Ported from the sibling Tags Gen project's tag ranker. Not
+    /// applied to the profile recommender's batches: MangaBaka already
+    /// ranked those, with reasons of its own. Set once from RootView; nil or
+    /// empty is a no-op.
+    var ranker: TasteRanker?
+
     /// Covers already saved, newest first, for the strip under the card.
     private(set) var saved: [Series] = []
 
@@ -210,7 +218,19 @@ final class StackModel {
     /// topped itself up, which is constantly.
     private func append(_ series: [Series]) {
         let known = Set(queue.map(\.id))
-        queue.append(contentsOf: series.filter { !known.contains($0.id) })
+        var fresh = series.filter { !known.contains($0.id) }
+        if let ranker, !ranker.isEmpty, source != .yourProfile {
+            fresh = ranker.rank(fresh) { $0 }
+            // "Shares Regression, Action with what you read": the ranker's
+            // matches, where the source had no reason of its own.
+            for item in fresh where reasons[item.id] == nil {
+                let shared = ranker.reasons(for: item)
+                if !shared.isEmpty {
+                    reasons[item.id] = "Shares \(shared.joined(separator: ", ")) with what you read"
+                }
+            }
+        }
+        queue.append(contentsOf: fresh)
     }
 
     /// Empties the stack and starts again from nothing.

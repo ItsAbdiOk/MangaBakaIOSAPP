@@ -23,6 +23,10 @@ struct SearchQuery: Sendable, Equatable, Codable {
     /// answers 1,265 of 304,096 and every row really is theirs, while a
     /// nonsense publisher answers 0 rather than being ignored.
     var publisher: String?
+    /// A creator's name, as the series credits it. The API's `staff`
+    /// parameter: `staff=Yoshihiro Togashi` answers 16 series, all his
+    /// (verified live 2026-09-11). Behind the author page.
+    var staff: String?
     var limit = 30
     /// 1-based, as the API counts. `/v2/series/search` accepts up to page 100.
     var page = 1
@@ -38,6 +42,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
         (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
             && sort == nil && tags.isEmpty && (publisher ?? "").isEmpty
+            && (staff ?? "").isEmpty
     }
 
     /// What is narrowing the results besides the typed text.
@@ -51,6 +56,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
         types.count + statuses.count + tags.count
             + (minimumRating == nil ? 0 : 1)
             + ((publisher ?? "").isEmpty ? 0 : 1)
+            + ((staff ?? "").isEmpty ? 0 : 1)
     }
 
     /// Everything except the typed text, cleared.
@@ -78,6 +84,9 @@ struct SearchQuery: Sendable, Equatable, Codable {
         if let sort { items.append(URLQueryItem(name: "sort_by", value: sort)) }
         if let minimumRating {
             items.append(URLQueryItem(name: "rating_lower", value: String(minimumRating)))
+        }
+        if let staff, !staff.isEmpty {
+            items.append(URLQueryItem(name: "staff", value: staff))
         }
         if let publisher, !publisher.isEmpty {
             items.append(URLQueryItem(name: "publisher", value: publisher))

@@ -29,7 +29,8 @@ extension RootView {
                             },
                             onOpenSettings: { showsSettings = true },
                             onOpenStack: { selection = .stack },
-                            onSave: saveLibraryChange
+                            onSave: saveLibraryChange,
+                            continuations: continuations
                         )
                             .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                             .navigationDestination(item: $openShelf) { shelf in
@@ -203,5 +204,18 @@ extension RootView {
             library: walk.entries,
             libraryFailure: scheduled.libraryFailure ?? walk.failure
         )
+    }
+
+    /// Writes a change to the reader's real library, then re-reads so the
+    /// screen shows what the server now holds rather than what was typed.
+    func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
+        do {
+            try await library.update(seriesId: seriesId, change: change)
+        } catch {
+            return error.userFacingMessage
+        }
+        await session.library.reload()
+        openShelf = session.library.shelves.first { $0.state == openShelf?.state }
+        return nil
     }
 }

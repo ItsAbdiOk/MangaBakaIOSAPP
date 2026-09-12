@@ -16,7 +16,12 @@ struct DetailCredits: View {
     /// Opens a publisher's or studio's page. The row is tappable when set;
     /// with several names, a sheet asks which.
     var onOpenPublisher: ((String) -> Void)?
+    /// Opens a creator's page from the Story & art / Art rows. Abdi,
+    /// 2026-09-11: "what else is this studio/author working on" is a way to
+    /// find the next series; a person is the other half of that.
+    var onOpenAuthor: ((String) -> Void)?
     @State private var isChoosingPublisher = false
+    @State private var isChoosingAuthor = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
     /// Rows the reader has opened. Publishers is the one that needs it — a
@@ -115,6 +120,13 @@ struct DetailCredits: View {
                 .padding(.horizontal, 14)
                 .contentShape(Rectangle())
                 .onTapGesture {
+                    if row.id == "Story & art" || row.id == "Art", let onOpenAuthor {
+                        let names = creators(for: row)
+                        if names.count == 1 { onOpenAuthor(names[0]) } else if !names.isEmpty {
+                            isChoosingAuthor = true
+                        }
+                        return
+                    }
                     if row.id.hasPrefix("Publisher"), let onOpenPublisher,
                        let publishers = series.publishers, !publishers.isEmpty {
                         // One name opens straight away; several ask which.
@@ -128,8 +140,11 @@ struct DetailCredits: View {
                     guard row.isExpandable else { return }
                     Motion.run(.snappy(duration: 0.2)) { toggle(row) }
                 }
-                .accessibilityAddTraits(opensPublisher(row) ? .isButton : [])
-                .accessibilityHint(opensPublisher(row) ? "Opens the publisher's page" : "")
+                .accessibilityAddTraits(opensPublisher(row) || opensAuthor(row) ? .isButton : [])
+                .accessibilityHint(
+                    opensPublisher(row) ? "Opens the publisher's page"
+                        : opensAuthor(row) ? "Opens the creator's page" : ""
+                )
                 .padding(.vertical, 12)
                 .background(Palette.surface)
                 .overlay(alignment: .bottom) {
@@ -142,6 +157,11 @@ struct DetailCredits: View {
         .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         .hairlineBorder(Palette.hairline, radius: Metrics.radiusCard)
         .padding(.horizontal, Metrics.gutter)
+        .confirmationDialog("Which creator?", isPresented: $isChoosingAuthor, titleVisibility: .visible) {
+            ForEach(allCreators, id: \.self) { name in
+                Button(name) { onOpenAuthor?(name) }
+            }
+        }
         .confirmationDialog(
             "Which publisher?", isPresented: $isChoosingPublisher, titleVisibility: .visible
         ) {
@@ -153,6 +173,29 @@ struct DetailCredits: View {
 
     private func opensPublisher(_ row: Row) -> Bool {
         row.id.hasPrefix("Publisher") && onOpenPublisher != nil
+    }
+
+    private func opensAuthor(_ row: Row) -> Bool {
+        (row.id == "Story & art" || row.id == "Art") && onOpenAuthor != nil && !creators(for: row).isEmpty
+    }
+
+    /// The names behind a credits row: authors for "Story & art", artists
+    /// for "Art". Trimmed and de-duplicated, since the API repeats a name
+    /// that is both.
+    func creators(for row: Row) -> [String] {
+        let names = row.id == "Art" ? (series.artists ?? []) : (series.authors ?? [])
+        var seen: Set<String> = []
+        return names.map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
+    /// Every distinct creator on the series, for the sheet when a row names
+    /// more than one.
+    private var allCreators: [String] {
+        var seen: Set<String> = []
+        return ((series.authors ?? []) + (series.artists ?? []))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
     }
 
     /// "Ize Press (Yen Press) · English", "REDICE STUDIO · Original".

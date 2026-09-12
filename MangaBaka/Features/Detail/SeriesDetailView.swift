@@ -18,6 +18,8 @@ struct SeriesDetailView: View {
     var appleBooks: AppleBooksClient?
     /// Opens a publisher's or studio's page from the credits.
     var onOpenPublisher: ((String) -> Void)?
+    /// Opens a creator's page — everything they wrote or drew.
+    var onOpenAuthor: ((String) -> Void)?
     /// The reader's content filter, so an explicit tag name is not shown to
     /// someone who filtered explicit content — a tag is rated independently of
     /// its series.
@@ -91,7 +93,9 @@ struct SeriesDetailView: View {
                 }
                 CharacterRow(characters: cast, isLoading: isCastLoading)
                 tagSection
-                DetailCredits(series: shown, onOpenPublisher: onOpenPublisher)
+                DetailCredits(
+                    series: shown, onOpenPublisher: onOpenPublisher, onOpenAuthor: onOpenAuthor
+                )
                 volumesShelf
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(

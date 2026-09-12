@@ -47,6 +47,11 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// Every cover the series has, filtered to what the reader has allowed.
     func images(for seriesId: Int) async -> [SeriesImage]
 
+    /// A series' formal relationships: sequels, spin-offs, the source it was
+    /// adapted from. Nil on failure, distinct from an empty list, which is a
+    /// real answer ("no relationships").
+    func relationships(for seriesId: Int) async -> [SeriesRelationship]?
+
     /// Replaces the content filter and discards every cached feed.
     ///
     /// The discard is the point: a cached feed was fetched under the previous
@@ -343,6 +348,12 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// or its gallery is open, and the case worth covering is going back and
     /// forward between them — which used to refetch 58 KB every time.
     var cachedImages: [Int: [SeriesImage]] = [:]
+
+    /// Relationships, per series, for as long as the app is running. Not the
+    /// disk cache: this is for the library row re-reading the same handful of
+    /// finished series' relationships every time it appears, not for surviving
+    /// a relaunch.
+    var cachedRelationships: [Int: [SeriesRelationship]] = [:]
 
     init(
         client: APIClient,
@@ -671,6 +682,19 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // would make a dropped connection stick for six hours.
         if fresh != SeriesExtras() { try? writeDetailCache(fresh, for: seriesId) }
         return fresh
+    }
+
+    /// Same endpoint `extras(for:)` folds in as one of six concurrent reads,
+    /// exposed on its own for callers that want only this — the library row
+    /// asks for it for up to eight finished series and does not want the
+    /// other five requests each time.
+    func relationships(for seriesId: Int) async -> [SeriesRelationship]? {
+        if let cached = cachedRelationships[seriesId] { return cached }
+        guard let fetched: [SeriesRelationship] = try? await client.get(
+            "/v1/series/\(seriesId)/relationships"
+        ) else { return nil }
+        cachedRelationships[seriesId] = fetched
+        return fetched
     }
 
     private func fetchExtras(for seriesId: Int) async -> SeriesExtras {

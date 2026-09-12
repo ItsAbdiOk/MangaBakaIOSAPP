@@ -124,12 +124,16 @@ struct ReadingInsightsView: View {
             """
         ) {
             ForEach(derived.waiting.prefix(8)) { item in
-                row(item, trailing: "\(item.waiting) behind")
+                row(item, trailing: "\(item.waiting) behind", showEstimate: true)
             }
         }
     }
 
-    private func row(_ item: ReadingInsights.Behind, trailing: String) -> some View {
+    private func row(
+        _ item: ReadingInsights.Behind,
+        trailing: String,
+        showEstimate: Bool = false
+    ) -> some View {
         Button {
             guard let series = item.series else { return }
             zoomRoute?.source = ZoomRoute.id("insights", series.id)
@@ -149,7 +153,7 @@ struct ReadingInsightsView: View {
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
-                    Text(progressLine(item))
+                    Text(progressLine(item, showEstimate: showEstimate))
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
@@ -166,10 +170,18 @@ struct ReadingInsightsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func progressLine(_ item: ReadingInsights.Behind) -> String {
+    private func progressLine(_ item: ReadingInsights.Behind, showEstimate: Bool = false) -> String {
         let read = Int(item.entry.progressChapter ?? 0)
         let total = Int(item.series?.totalChapters ?? 0)
-        return "\(item.entry.state.title) · ch \(read) of \(total)"
+        var line = "\(item.entry.state.title) · ch \(read) of \(total)"
+        // "Waiting for you" only: a filter, not a promise — see ReadingTime.
+        // Left off "It finished without telling you" on purpose, the caller
+        // controls that via `showEstimate`.
+        if showEstimate,
+           let estimate = ReadingTime.label(chapters: Double(item.waiting), type: item.series?.type) {
+            line += " · \(estimate)"
+        }
+        return line
     }
 
     // MARK: - What you like

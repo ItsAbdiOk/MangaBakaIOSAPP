@@ -16,6 +16,10 @@ struct LibraryView: View {
     private let onOpenStack: () -> Void
     /// Saves an edit made from a row; returns a message when it failed.
     private let onSave: (Int, LibraryChange) async -> String?
+    // Optional: LibraryModel has no repository of its own to build this from
+    // (it talks to `LibraryProviding`, not `SeriesRepositoryProtocol`), so the
+    // caller builds one and hands it in. The row hides itself when this is nil.
+    private let continuations: ContinuationsModel?
     @State private var editing: LibraryEntry?
 
     init(
@@ -28,7 +32,8 @@ struct LibraryView: View {
         onOpenShelf: @escaping (LibraryEntry.State) -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenStack: @escaping () -> Void,
-        onSave: @escaping (Int, LibraryChange) async -> String? = { _, _ in nil }
+        onSave: @escaping (Int, LibraryChange) async -> String? = { _, _ in nil },
+        continuations: ContinuationsModel? = nil
     ) {
         self.model = model
         _path = path
@@ -40,6 +45,7 @@ struct LibraryView: View {
         self.onOpenSettings = onOpenSettings
         self.onOpenStack = onOpenStack
         self.onSave = onSave
+        self.continuations = continuations
     }
 
     var body: some View {
@@ -123,6 +129,16 @@ struct LibraryView: View {
                         tasteCard
                         wrappedCard
                         PickBackUp(entries: model.inProgress, path: $path)
+                        if let continuations {
+                            ContinuationsRow(
+                                items: continuations.items,
+                                isLoading: continuations.isLoading,
+                                path: $path
+                            )
+                            .task(id: model.entries.map(\.id)) {
+                                await continuations.load(entries: model.entries)
+                            }
+                        }
                     }
 
                     LibraryList(model: model, path: $path, onEdit: { editing = $0 })

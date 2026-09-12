@@ -52,6 +52,32 @@ struct PublisherPageTests {
         #expect(SortOrder.label(for: "popularity_desc") == nil)
     }
 
+    /// `staff=` is the API's creator filter: Togashi answers 16 series, all
+    /// his (live, 2026-09-11). The same page serves both, by search key.
+    @Test("A creator page searches by staff; a publisher page by publisher")
+    func kinds() {
+        var byStaff = SearchQuery()
+        byStaff.staff = "Yoshihiro Togashi"
+        #expect(byStaff.queryItems.contains(URLQueryItem(name: "staff", value: "Yoshihiro Togashi")))
+        #expect(!byStaff.isEmpty)
+        #expect(byStaff.activeFilterCount == 1)
+    }
+
+    /// The credits rows name people the API repeats — an author who is also
+    /// the artist — once each.
+    @Test("The credits rows' creators are trimmed and distinct")
+    @MainActor
+    func creators() {
+        let series = SeriesFactory.make(
+            id: 1, authors: ["Chu-Gong ", "Chu-Gong"], artists: ["Seong-Rak Jang", "DUBU"]
+        )
+        let credits = DetailCredits(series: series)
+        let story = credits.rows.first { $0.id == "Story & art" }
+        let art = credits.rows.first { $0.id == "Art" }
+        #expect(story.map(credits.creators(for:)) == ["Chu-Gong"])
+        #expect(art.map(credits.creators(for:)) == ["Seong-Rak Jang", "DUBU"])
+    }
+
     @Test("The choice sheet labels a publisher with its role")
     func choiceLabel() {
         #expect(DetailCredits.choiceLabel(.init(name: "REDICE STUDIO", type: "Original", note: nil))
@@ -67,7 +93,11 @@ struct PublisherWiringTests {
     @Test("The page lists series from search, and the credits row opens it")
     func wiring() throws {
         let view = try SourceTree.read("MangaBaka/Features/Detail/PublisherView.swift")
-        #expect(view.contains("var query = SearchQuery(publisher: name)"))
+        // One page, two search keys: `publisher=` for a studio, `staff=` for a
+        // person. The publisher-only directory lookup is skipped for a creator.
+        #expect(view.contains("case .publisher: query.publisher = name"))
+        #expect(view.contains("case .author: query.staff = name"))
+        #expect(view.contains("if kind == .publisher, detail == nil,"))
         #expect(view.contains("query.sort = order.rawValue"))
         // The header is the count endpoint's total, not the page's length,
         // and the grid pages: Shueisha said "100" when it is thousands.

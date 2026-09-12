@@ -66,9 +66,23 @@ struct TagPickerSheet: View {
         .task {
             let search = TagSearch(catalogue: catalogue)
             self.search = search
-            tags = await catalogue.tags(limit: 500).filter(\.isUsable)
-            sortedCounts = TagBreadth.sortedCounts(of: tags)
-            search.loaded = tags
+
+            // Bundled first, so the sheet opens instantly and offline; the
+            // network answer replaces it below once it lands.
+            let bundled = TagTaxonomy.bundled().filter(\.isUsable)
+            if !bundled.isEmpty {
+                tags = bundled
+                sortedCounts = TagBreadth.sortedCounts(of: tags)
+                search.loaded = tags
+                isLoading = false
+            }
+
+            let fetched = await catalogue.tags(limit: 500).filter(\.isUsable)
+            if !fetched.isEmpty {
+                tags = fetched
+                sortedCounts = TagBreadth.sortedCounts(of: tags)
+                search.loaded = tags
+            }
             isLoading = false
         }
         .onChange(of: query) { _, new in search?.update(query: new) }

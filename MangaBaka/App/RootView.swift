@@ -37,6 +37,8 @@ struct RootView: View {
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
     @State private var whatsNew = WhatsNewState()
+    /// "More of what you finished" on the Library screen; see Continuations.
+    @State var continuations: ContinuationsModel?
     /// A publisher or studio page, pushed from any series page. See
     /// `PublisherRoute`: the paths are [Series], so this rides beside them.
     @State var openPublisher: PublisherRoute?
@@ -244,9 +246,13 @@ struct RootView: View {
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
             if discoverModel == nil { discoverModel = DiscoverModel(repository: repository) }
+            if continuations == nil { continuations = ContinuationsModel(repository: repository) }
             if stackModel == nil {
                 stackModel = StackModel(repository: repository, shelf: shelf, library: library)
             }
+            // The reader's tags, for ordering the stack's blends. After the
+            // models exist, and off the launch path: it walks the library.
+            stackModel?.ranker = await taste.ranker()
         }
         .tint(Palette.accent)
         .preferredColorScheme(.dark)
@@ -271,19 +277,6 @@ struct RootView: View {
         }
     }
 
-    /// Writes a change to the reader's real library, then re-reads so the
-    /// screen shows what the server now holds rather than what was typed.
-    func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
-        do {
-            try await library.update(seriesId: seriesId, change: change)
-        } catch {
-            return error.userFacingMessage
-        }
-        await session.library.reload()
-        openShelf = session.library.shelves.first { $0.state == openShelf?.state }
-        return nil
-    }
-
     func detail(_ series: Series, path: Binding<[Series]>) -> some View {
         SeriesDetailView(
             series: series,
@@ -294,7 +287,8 @@ struct RootView: View {
             characters: characters,
             taste: taste,
             appleBooks: appleBooks,
-            onOpenPublisher: { openPublisher = PublisherRoute(name: $0) },
+            onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
+            onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),
             path: path,
             onUseAsSeed: { series in
@@ -320,7 +314,8 @@ struct RootView: View {
         // series it lists pushes back onto the same path.
         .navigationDestination(item: $openPublisher) { route in
             PublisherView(
-                name: route.name, catalogue: catalogue, repository: repository, path: path
+                name: route.name, kind: route.kind, catalogue: catalogue,
+                repository: repository, path: path
             )
         }
         // Grows out of the cover that was tapped. Every screen that pushes a
@@ -350,8 +345,9 @@ struct RootView: View {
     }
 }
 
-/// A publisher or studio to open, by the name a series gives it.
+/// A publisher, studio or creator to open, by the name a series gives it.
 struct PublisherRoute: Hashable, Identifiable {
     let name: String
-    var id: String { name }
+    let kind: PublisherView.Kind
+    var id: String { "\(kind)-\(name)" }
 }

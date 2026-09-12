@@ -110,6 +110,16 @@ actor TasteProfile {
         return local.union(genres)
     }
 
+    /// The reader's tag affinities as a ranker, for ordering a list by how
+    /// much each series shares with what they read. Empty — and so a no-op —
+    /// for a reader with no library. Sixty tags rather than the highlight's
+    /// thirty: a ranker wants the long tail, a highlight would drown in it.
+    func ranker() async -> TasteRanker {
+        _ = await favouredTagIDs()   // fills the ledger from the library first
+        let affinities = (try? await ledger?.favoured(limit: 60)) ?? []
+        return TasteRanker(affinities: affinities)
+    }
+
     /// Counts a series the app has just decoded in full, if the reader has it.
     ///
     /// The library's own payload may carry no tags — see `TasteLedger.absorb`.
