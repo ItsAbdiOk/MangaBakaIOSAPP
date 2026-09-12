@@ -61,6 +61,7 @@
 		2A9DCDB8422BE3C201505F5D /* TokenStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B635CF8C6B502E06A44CFEB /* TokenStatus.swift */; };
 		2BDF53BD65744006506FD17E /* DataUseSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6884B5544D0A7F8048EEB483 /* DataUseSection.swift */; };
 		2BFA1DA46A0BA5356E4DC99A /* ShelfStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9097F42ABA9FEE8097956C /* ShelfStore.swift */; };
+		2C6E565E86166C30F02BBC45 /* knight-only-lives-today.rss in Resources */ = {isa = PBXBuildFile; fileRef = B75CB3B3B8E98C1C0792F8E6 /* knight-only-lives-today.rss */; };
 		2D9486A31DC173C395B75D3F /* InlineSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 533409A4F8D0EB72D1B0A569 /* InlineSearchTests.swift */; };
 		2E42C9CDB5D6CDB788FD592D /* DynamicTypeRampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5871F1B8DE1BC69E170E8C /* DynamicTypeRampTests.swift */; };
 		2EAE470F7F27AFD57FCCF6B4 /* SearchAndMixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EF948E62761E7CFD4F55CB3 /* SearchAndMixTests.swift */; };
@@ -103,6 +104,7 @@
 		4A1A5C78A36C773EBE2306C3 /* Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE022EC45BBE2B43323AB02D /* Metrics.swift */; };
 		4C22CA15C16523F3B59F0607 /* DesignTokenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E023571EE66E5639E011F2E /* DesignTokenTests.swift */; };
 		4CE146E3B4B756F7CE67B5D5 /* SearchLens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 752C2EA256480712974801AD /* SearchLens.swift */; };
+		4D7998AC01302BB4F05EBE2E /* WebtoonsFeedClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF296919686E594B5FBF4408 /* WebtoonsFeedClient.swift */; };
 		4FC9E86E9DAA0BB8D1DD83D8 /* ReleaseReminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A8D3BCD8148B31B3704CF4 /* ReleaseReminders.swift */; };
 		4FF0CF490B98AA4B04B8736D /* CharacterProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E8C8A52C1C84ED97201B336 /* CharacterProfileView.swift */; };
 		526712F36FBA6C77E212EEE2 /* CharacterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2D007D87EC856BF1844D85 /* CharacterService.swift */; };
@@ -177,6 +179,7 @@
 		8CACCD1E9989C61766C9D965 /* ReadingInsightsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836A9F8935EAEF0CF104FAB3 /* ReadingInsightsTests.swift */; };
 		8CD0996F5A07416E481A43CA /* LibraryControlTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC3D895CA9F68D2138AB518 /* LibraryControlTests.swift */; };
 		8DBACA32C469B6924684BB26 /* EditionLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27528C8CB9D09CF26C0DC273 /* EditionLabelTests.swift */; };
+		909C7E7EEB715A87863860B2 /* WebtoonsFeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5043918BC6969E8FB430450 /* WebtoonsFeedTests.swift */; };
 		90E969A30611E9EA5F9ABE2C /* StackResetMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAA2F8621089C8D5656B1A86 /* StackResetMenu.swift */; };
 		917284221B336A62B0532DEB /* ReadRowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 271F8830C1A31D58653A812E /* ReadRowTests.swift */; };
 		921DBEB63FED7F72BA3AB287 /* BrowseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC42EC577D0B00F110637E3C /* BrowseModel.swift */; };
@@ -309,6 +312,7 @@
 		F5A9A5941311071FDD28A8B4 /* DetailBarTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 943CF006C11C838FC7CE40B1 /* DetailBarTitle.swift */; };
 		F6953E1E4C6AA0B7D585ED6F /* BlurHashTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45258C08149205EE5C59A6D4 /* BlurHashTests.swift */; };
 		F6A03246A02A42975CAAFEB1 /* MotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B8B7FA2FBA55E5CF997803 /* MotionTests.swift */; };
+		F6F48EB3CA5C775F7C37E7A0 /* WebtoonsFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C1164A49767B752497D31D /* WebtoonsFeed.swift */; };
 		F71909684F55A83CF1F1AF55 /* DetailEditions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F952957023054D9978308C80 /* DetailEditions.swift */; };
 		F77D4D027E43A7C4476F1CCB /* WrappedShapes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15B36426A7957C85A06324F /* WrappedShapes.swift */; };
 		F78F2160ABEAFD6990B6B42B /* RowAmbient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 041C172955F06A976D976B11 /* RowAmbient.swift */; };
@@ -324,6 +328,7 @@
 		FED4BE9B85B862E4DD39B937 /* DetailSynopsis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99B0478C5E79631F422DE74E /* DetailSynopsis.swift */; };
 		FEE6DE9A15A6E7F11F298F4C /* TasteLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993B8D3586A29ADBAA8F53E3 /* TasteLedger.swift */; };
 		FF55EE20B9F331E45A8D6074 /* ContinuationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9C104D5892FD70862085FF /* ContinuationsTests.swift */; };
+		FF6442A241FCD9D1609956E2 /* WebtoonsEpisode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A5DD6670797FA992BE40102 /* WebtoonsEpisode.swift */; };
 		FFE8036ADF7EBF35B553021B /* TasteProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0E5C3645601A4E1DAF73E0 /* TasteProfileTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -418,6 +423,7 @@
 		371500B2BF112ED5E2BCBB7D /* ReadingInsights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingInsights.swift; sourceTree = "<group>"; };
 		393F3EB0A9124C162DCF6CE2 /* StateFamilyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateFamilyTests.swift; sourceTree = "<group>"; };
 		399518B257BDBF63D3D7AFC3 /* BlendDNAView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendDNAView.swift; sourceTree = "<group>"; };
+		3A5DD6670797FA992BE40102 /* WebtoonsEpisode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebtoonsEpisode.swift; sourceTree = "<group>"; };
 		3A6C7BDE02EF1D5618DBBF97 /* StackSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackSaveTests.swift; sourceTree = "<group>"; };
 		3B477C4A8ED2D572DEB4DB6F /* SeriesDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesDetailView.swift; sourceTree = "<group>"; };
 		3B5B05A9EDC8D3E828F63A28 /* ReadingWrappedYearTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingWrappedYearTests.swift; sourceTree = "<group>"; };
@@ -577,10 +583,12 @@
 		AE4CAD5968791AD6892AD695 /* RateLimitGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitGate.swift; sourceTree = "<group>"; };
 		AF1D9EA1F3939E7C7446C07E /* APIErrorPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIErrorPresentationTests.swift; sourceTree = "<group>"; };
 		AF2656EA0D03D2020A3CEA2E /* SearchIdleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchIdleView.swift; sourceTree = "<group>"; };
+		B0C1164A49767B752497D31D /* WebtoonsFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebtoonsFeed.swift; sourceTree = "<group>"; };
 		B1FD451073954E6CA5C84566 /* LensCounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LensCounts.swift; sourceTree = "<group>"; };
 		B3C87ABF44B1865390945EC3 /* DueThisWeekTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DueThisWeekTests.swift; sourceTree = "<group>"; };
 		B4932E6E6F3B857A8C32EB67 /* SourceTestGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceTestGuardTests.swift; sourceTree = "<group>"; };
 		B6B651B119131E572907BC7F /* WhatsNewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewTests.swift; sourceTree = "<group>"; };
+		B75CB3B3B8E98C1C0792F8E6 /* knight-only-lives-today.rss */ = {isa = PBXFileReference; path = "knight-only-lives-today.rss"; sourceTree = "<group>"; };
 		B7DBE3E420D937FD31EBA3D4 /* SeriesImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesImage.swift; sourceTree = "<group>"; };
 		BB59EF6E9F6BAFBB79F5BC68 /* ResultsEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsEnvelope.swift; sourceTree = "<group>"; };
 		BD80FA82C8DB0C1F8B36440D /* BlendDNA.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendDNA.swift; sourceTree = "<group>"; };
@@ -621,6 +629,7 @@
 		D33D23182CCFB7A9D323BE3F /* PublisherBrowseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublisherBrowseTests.swift; sourceTree = "<group>"; };
 		D3FC9C9B2A1550237869828B /* ReadingPlatforms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPlatforms.swift; sourceTree = "<group>"; };
 		D415288B124FBF25503ED220 /* EmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyState.swift; sourceTree = "<group>"; };
+		D5043918BC6969E8FB430450 /* WebtoonsFeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebtoonsFeedTests.swift; sourceTree = "<group>"; };
 		D564875BE933BC0CE67A5303 /* LibraryListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryListTests.swift; sourceTree = "<group>"; };
 		D5D3FE445F9E2CE6FB5E85A3 /* PublisherBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublisherBrowser.swift; sourceTree = "<group>"; };
 		D6B91785E00F8D12AB160993 /* SeriesRepository+Paging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SeriesRepository+Paging.swift"; sourceTree = "<group>"; };
@@ -649,6 +658,7 @@
 		ECDC6890749C1997497BEE11 /* SeriesRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesRepositoryTests.swift; sourceTree = "<group>"; };
 		EE257CD51DA39AFFD611379A /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
 		EF224B95D6171608E734DE78 /* Glass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		EF296919686E594B5FBF4408 /* WebtoonsFeedClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebtoonsFeedClient.swift; sourceTree = "<group>"; };
 		EF36BE6EA6EABBE7C55354F5 /* MangaUpdatesSpacingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaUpdatesSpacingTests.swift; sourceTree = "<group>"; };
 		EFD1D4C8F09AFDC84B2CD496 /* NetworkLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLedger.swift; sourceTree = "<group>"; };
 		F141EBED1BB1027BEE234AE7 /* TapTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapTarget.swift; sourceTree = "<group>"; };
@@ -722,6 +732,9 @@
 				3BF9FF4C8FA8E99AD6AA2588 /* ReleaseSchedule.swift */,
 				3CD1F7809A8C1FB835D61ADF /* SeasonReading.swift */,
 				F719B87D935EE7F86C0A2B5A /* UpcomingWork.swift */,
+				3A5DD6670797FA992BE40102 /* WebtoonsEpisode.swift */,
+				B0C1164A49767B752497D31D /* WebtoonsFeed.swift */,
+				EF296919686E594B5FBF4408 /* WebtoonsFeedClient.swift */,
 			);
 			path = Schedule;
 			sourceTree = "<group>";
@@ -790,6 +803,7 @@
 			isa = PBXGroup;
 			children = (
 				DA80EE3FE0BAFFD883C3E1CA /* control.json */,
+				B75CB3B3B8E98C1C0792F8E6 /* knight-only-lives-today.rss */,
 				FAFBD039E636AD1D47EAE31A /* library.json */,
 				7F8D61B24CD0D96F100A6584 /* mix.json */,
 				71998B36D08E3ED54E1F4FCD /* rising.json */,
@@ -1097,6 +1111,7 @@
 				600C791232B0DECF24B31AFF /* TasteRankerTests.swift */,
 				DE7CD2A019D8632465F3518A /* TrackerAgreementTests.swift */,
 				7AB259A093AF7EF8B8AD1036 /* URLProtocolStub.swift */,
+				D5043918BC6969E8FB430450 /* WebtoonsFeedTests.swift */,
 				B6B651B119131E572907BC7F /* WhatsNewTests.swift */,
 				AB31715F3498511F3FA97399 /* WireNullabilityTests.swift */,
 				297D8FB18ECA0DB885C9D8B6 /* WrappedFixtures.swift */,
@@ -1459,6 +1474,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				419BEF328CDCDDA07952ED80 /* control.json in Resources */,
+				2C6E565E86166C30F02BBC45 /* knight-only-lives-today.rss in Resources */,
 				56F19DE496ED401E2AD60C56 /* library.json in Resources */,
 				36B5E92EF048998AE6C4A9ED /* mix.json in Resources */,
 				36EE0D59969208E71A0896B4 /* rising.json in Resources */,
@@ -1666,6 +1682,9 @@
 				DF9B62750FA0D1206C79662E /* Typography.swift in Sources */,
 				B4DAA7E2D5545FEE7A1B2F95 /* UpcomingWork.swift in Sources */,
 				DE8D396DDEF4D9AC69750641 /* VolumesSection.swift in Sources */,
+				FF6442A241FCD9D1609956E2 /* WebtoonsEpisode.swift in Sources */,
+				F6F48EB3CA5C775F7C37E7A0 /* WebtoonsFeed.swift in Sources */,
+				4D7998AC01302BB4F05EBE2E /* WebtoonsFeedClient.swift in Sources */,
 				9D41D800B90550225040283D /* WhatsNew.swift in Sources */,
 				F77D4D027E43A7C4476F1CCB /* WrappedShapes.swift in Sources */,
 				D47E6A4ECAF9E8ADCF122FB9 /* WrappedView.swift in Sources */,
@@ -1799,6 +1818,7 @@
 				A282DEB6A04940F2CAA472B6 /* TasteRankerTests.swift in Sources */,
 				68A30B96DEEAE09CB01939CC /* TrackerAgreementTests.swift in Sources */,
 				3C94B283F8FC82FC97CCB9DC /* URLProtocolStub.swift in Sources */,
+				909C7E7EEB715A87863860B2 /* WebtoonsFeedTests.swift in Sources */,
 				949FC94470687F59D3372629 /* WhatsNewTests.swift in Sources */,
 				FE45C64EFE4949E7F85108CC /* WireNullabilityTests.swift in Sources */,
 				370FBB842D9098300AD30CD4 /* WrappedFixtures.swift in Sources */,

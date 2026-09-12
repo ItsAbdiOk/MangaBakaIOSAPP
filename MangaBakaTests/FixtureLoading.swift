@@ -8,7 +8,18 @@ enum Fixture {
         guard let url = Bundle(for: BundleToken.self)
             .url(forResource: name, withExtension: "json")
         else {
-            throw FixtureError.missing(name)
+            throw FixtureError.missing("\(name).json")
+        }
+        return try Data(contentsOf: url)
+    }
+
+    /// Loads a bundled fixture with any extension, for the sources that do not
+    /// speak JSON — Webtoons publishes RSS.
+    static func data(_ name: String, extension ext: String) throws -> Data {
+        guard let url = Bundle(for: BundleToken.self)
+            .url(forResource: name, withExtension: ext)
+        else {
+            throw FixtureError.missing("\(name).\(ext)")
         }
         return try Data(contentsOf: url)
     }
@@ -23,7 +34,7 @@ enum Fixture {
         case missing(String)
         var description: String {
             switch self {
-            case let .missing(name): "Fixture \(name).json is not in the test bundle."
+            case let .missing(name): "Fixture \(name) is not in the test bundle."
             }
         }
     }
