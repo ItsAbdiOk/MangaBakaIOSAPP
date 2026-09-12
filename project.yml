@@ -73,6 +73,11 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         MB_PAT: $(MB_PAT)
         MB_API_BASE_URL: $(MB_API_BASE_URL)
+        # Google Books, for volume covers Apple Books does not carry. Resolves
+        # to empty in any build without Configs/Secrets.xcconfig — so on a
+        # device or TestFlight build the Settings field is the only way a key
+        # arrives, which is exactly what GoogleBooksSection exists for.
+        MB_GOOGLE_BOOKS_KEY: $(MB_GOOGLE_BOOKS_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka
