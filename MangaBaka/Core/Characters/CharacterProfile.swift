@@ -29,6 +29,36 @@ struct CharacterProfile: Equatable, Sendable {
     let favourites: Int?
     let siteURL: URL?
     let description: CharacterDescription?
+    /// Which tracker answered this profile. AniList descriptions are already
+    /// English; Shikimori's are Russian and must be translated before this
+    /// profile's description is ever shown — see `CharacterDescriptionTranslator`.
+    let source: CharacterSource
+
+    /// Russian text must never reach the screen untranslated (Abdi's rule,
+    /// 2026-09-12). AniList's own description needs no such gate.
+    var requiresTranslation: Bool { source == .shikimori }
+
+    /// A copy with the description swapped out, used once translation
+    /// finishes (or is given up on) so the rest of the profile — portrait,
+    /// names, facts — never has to be reloaded to show a different
+    /// description.
+    func withDescription(_ description: CharacterDescription?) -> CharacterProfile {
+        CharacterProfile(
+            id: id,
+            fullName: fullName,
+            nativeName: nativeName,
+            alternativeNames: alternativeNames,
+            imageURL: imageURL,
+            gender: gender,
+            age: age,
+            bloodType: bloodType,
+            dateOfBirth: dateOfBirth,
+            favourites: favourites,
+            siteURL: siteURL,
+            description: description,
+            source: source
+        )
+    }
 
     /// The facts worth a row each, in the order the profile screen shows
     /// them. Omits anything AniList did not send — every field above came
@@ -51,6 +81,12 @@ struct CharacterDescription: Equatable, Sendable {
     enum Span: Equatable, Sendable {
         case plain(String)
         case bold(String)
+        /// Shikimori's `[i]...[/i]`. AniList has no italic markup of its own,
+        /// so this case is only ever produced by `ShikimoriDescriptionParser`
+        /// — added rather than folded into `.bold`, because collapsing the
+        /// two would render an aside as if it were emphasised the same way a
+        /// field label is.
+        case italic(String)
         case link(text: String, url: URL)
     }
 
@@ -193,10 +229,27 @@ enum CharacterDescriptionParser {
 /// else). A character whose cast row was answered by Shikimori carries a
 /// Shikimori id in `SeriesCharacter.id`, and asking AniList for a profile
 /// with it would return a real, wrong person with no sign anything went
-/// wrong. This function is the only place that is allowed to turn a
-/// `SeriesCharacter` into an AniList character id.
+/// wrong. These two functions are the only place allowed to turn a
+/// `SeriesCharacter` into an id sent to either service — each hands back an
+/// id only for the service that actually issued it, never the other one.
 enum CharacterProfileRequest {
     static func aniListID(for character: SeriesCharacter) -> Int? {
         character.source == .aniList ? character.id : nil
+    }
+
+    /// A Shikimori profile is now real (see `ShikimoriDescriptionParser` and
+    /// `ShikimoriClient.characterProfile`), so a Shikimori-sourced character's
+    /// own id is a valid request — just never to AniList's endpoint.
+    static func shikimoriID(for character: SeriesCharacter) -> Int? {
+        character.source == .shikimori ? character.id : nil
+    }
+
+    /// Whether tapping this character's portrait has anywhere to go. True for
+    /// every character today, since `CharacterSource` has exactly two cases
+    /// and both now have a profile — kept as its own function rather than
+    /// inlined so `CharacterRow` never has to reason about which source means
+    /// what.
+    static func isProfileAvailable(for character: SeriesCharacter) -> Bool {
+        aniListID(for: character) != nil || shikimoriID(for: character) != nil
     }
 }

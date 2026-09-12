@@ -42,6 +42,7 @@ struct SettingsView: View {
                 BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)
                 RemindersSection(reminders: reminders, onChange: onRemindersChanged)
                 HistorySection(history: history)
+                GoogleBooksSection()
                 DataUseSection(taste: taste)
                 AttributionSection()
             }

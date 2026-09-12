@@ -206,9 +206,9 @@ struct AppleVolumesRowTests {
             id: 1, number: 1, title: "x", artworkURL: nil, storeURL: nil,
             price: nil, formattedPrice: nil, releaseDate: nil
         )
-        #expect(AppleVolumesRow(volumes: [volume], expected: 27).countLine == "1 of 27")
-        #expect(AppleVolumesRow(volumes: [volume], expected: 1).countLine == "1")
-        #expect(AppleVolumesRow(volumes: [volume], expected: nil).countLine == "1")
+        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: 27).countLine == "1 of 27")
+        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: 1).countLine == "1")
+        #expect(AppleVolumesRow(volumes: VolumeShelf.merge(apple: [volume], google: []), expected: nil).countLine == "1")
     }
 
     /// The phone showed MangaBaka's seven One Piece editions with no hint
@@ -235,7 +235,10 @@ struct AppleVolumesRowTests {
     @Test("The store's shelf replaces MangaBaka's editions, never joins them")
     func replaces() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
-        let either = "if appleVolumes.isEmpty {\n            VolumesSection(\n"
+        // `shelf`, not `appleVolumes`: the shelf is now Apple's volumes plus
+        // any number only Google has (VolumeShelf.merge). The rule this pins
+        // is unchanged — one shelf or the other, never both at once.
+        let either = "if shelf.isEmpty {\n            VolumesSection(\n"
         #expect(source.contains(either))
         #expect(source.contains("volumes: extras.volumes,"))
     }

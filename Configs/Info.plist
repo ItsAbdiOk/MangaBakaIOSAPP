@@ -24,6 +24,8 @@
 	<false/>
 	<key>MB_API_BASE_URL</key>
 	<string>$(MB_API_BASE_URL)</string>
+	<key>MB_GOOGLE_BOOKS_KEY</key>
+	<string>$(MB_GOOGLE_BOOKS_KEY)</string>
 	<key>MB_PAT</key>
 	<string>$(MB_PAT)</string>
 	<key>UIApplicationSceneManifest</key>

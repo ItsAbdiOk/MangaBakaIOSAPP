@@ -359,8 +359,55 @@ extension AniListClient {
             dateOfBirth: Self.formattedBirthday(node.dateOfBirth),
             favourites: node.favourites,
             siteURL: node.siteUrl.flatMap(URL.init(string:)),
-            description: node.description.map(CharacterDescriptionParser.parse)
+            description: node.description.map(CharacterDescriptionParser.parse),
+            source: .aniList
         )
+    }
+
+    /// The cheapest real request AniList will answer, asking for `id` alone
+    /// off the same `Media(id:, type:)` shape as `query` and `profileQuery`
+    /// above. Two things were tried and rejected first, both confirmed live
+    /// with curl on 2026-09-12: a bare `Page { pageInfo { total } }` came
+    /// back HTTP 400 ("No field provided"), and `Media(id: 1, ...)` came
+    /// back HTTP 404 ("Not Found.") because id 1 is not a real manga — either
+    /// would report a perfectly healthy AniList as down on every launch. Id
+    /// 30013 is One Piece, real and long-lived, and returns HTTP 200.
+    static let healthCheckQuery = "query { Media(id: 30013, type: MANGA) { id } }"
+
+    /// Whether AniList is answering at all right now.
+    ///
+    /// Throws exactly the way `characters` and `characterProfile` do:
+    /// `.server` for a refusal AniList itself sent, `.transport` for a
+    /// network failure that says nothing about AniList, so the caller can
+    /// apply the same "only a refusal counts as an outage" rule it already
+    /// applies elsewhere.
+    func healthCheck() async throws(APIError) {
+        try await waitForSlot()
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["query": Self.healthCheckQuery])
+
+        let response: URLResponse
+        do {
+            (_, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.transport(underlying: String(describing: error))
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(underlying: "AniList sent a non-HTTP response.")
+        }
+        // A body-level GraphQL error is not checked here: this call only
+        // asks "is AniList refusing us at the transport level", the same
+        // question a 403 outage answers. A malformed query would be our own
+        // bug, not an outage, and would recur on every launch rather than
+        // clearing itself in fifteen minutes.
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.server(status: http.statusCode, message: "AniList returned \(http.statusCode).")
+        }
     }
 
     /// "March 4", or "March" alone when AniList sent a month with no day —

@@ -11,8 +11,24 @@ import Security
 /// `ThisDeviceOnly` keeps it out of iCloud Keychain and off device backups: a
 /// token that syncs is a token that leaks somewhere its owner did not expect.
 struct TokenStore: Sendable {
-    private let service = "org.mangabaka.pat"
+    /// Which secret this store holds. Parameterised rather than copied when a
+    /// second secret arrived (the Google Books key): the Keychain query, the
+    /// `ThisDeviceOnly` accessibility and the delete-on-empty behaviour are
+    /// the parts worth getting right once.
+    private let service: String
     private let account = "default"
+
+    /// The personal access token, which is what this held before there was
+    /// anything else.
+    static let patService = "org.mangabaka.pat"
+    /// The Google Books API key. A quota identifier rather than a credential —
+    /// it reaches no account — but it is still the reader's to keep off
+    /// backups and out of iCloud, and it costs nothing to store it the same way.
+    static let googleBooksService = "org.mangabaka.googlebooks"
+
+    init(service: String = TokenStore.patService) {
+        self.service = service
+    }
 
     /// Reads the stored token, or `nil` when there is none.
     func read() -> String? {

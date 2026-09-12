@@ -98,6 +98,30 @@ actor CharacterService {
     func clearOutageMemory() {
         aniListDownUntil = nil
     }
+
+    /// Checks AniList once, at app launch, so the first series page opened
+    /// does not pay AniList's own timeout before falling back to Shikimori.
+    ///
+    /// Abdi: "we can check if anilist is down at the start of the app and
+    /// have shikimori take over if its not responding." Fire-and-forget from
+    /// the caller's side — see `AppServices`/`RootView` wiring — so a slow or
+    /// hanging AniList never delays the first screen drawing.
+    ///
+    /// Same rule as `characters(aniListID:shikimoriID:limit:)`: only a
+    /// refusal AniList itself sent counts as an outage. A transport failure
+    /// here says the network was unavailable at launch, not that AniList is
+    /// down — priming the outage memory from that would hide a working
+    /// AniList behind a phone that was still connecting to Wi-Fi.
+    func primeAniListHealth() async {
+        guard !aniListIsDown else { return }
+        do {
+            try await aniList.healthCheck()
+        } catch {
+            if case .server = error {
+                aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
+            }
+        }
+    }
 }
 
 /// Where a series' ids live in MangaBaka's own response, so the view layer does

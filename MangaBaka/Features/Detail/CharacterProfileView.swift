@@ -1,11 +1,9 @@
 import SwiftUI
+import Translation
 
-/// A character's full AniList profile: portrait, names, the facts AniList
-/// tracks, and a cleaned description.
-///
-/// **Entry point only — not wired up here.** `CharacterRow.swift` and
-/// `SeriesDetailView.swift` are being edited elsewhere in parallel, so this
-/// view is self-contained and ready to present as a sheet:
+/// A character's full profile: portrait, names, the facts the source tracks,
+/// and a cleaned description — from AniList, or from Shikimori when AniList
+/// issued this character's id (see `CharacterProfileRequest`).
 ///
 /// ```swift
 /// .sheet(item: $tappedCharacter) { character in
@@ -13,26 +11,50 @@ import SwiftUI
 /// }
 /// ```
 ///
-/// Whether the portrait should even be tappable for a Shikimori-sourced
-/// character is a decision for whoever wires the tap — this view handles
-/// that case gracefully either way (see `LoadState.unavailable`), so gating
-/// the tap is an optional refinement, not a requirement.
+/// **Shikimori's description is Russian.** It is translated on-device before
+/// this view ever shows it, and if translation is unavailable, still
+/// downloading, or fails, the description is dropped rather than shown in
+/// Russian — see `beginShowing` and `translateIfNeeded`. Nothing else about
+/// the profile waits on that: the portrait, names and facts render as soon as
+/// Shikimori answers.
 struct CharacterProfileView: View {
     let character: SeriesCharacter
     /// Injectable for previews and tests; defaults to a real client in the app.
     var aniList: AniListClient = AniListClient()
+    /// Injectable for previews and tests; defaults to a real client in the app.
+    var shikimori: ShikimoriClient = ShikimoriClient()
 
     @State private var state: LoadState = .loading
+    /// Set once a Shikimori profile with a real description has loaded, and
+    /// consumed the first time `.translationTask` hands back a session.
+    /// Holding the description here, not the whole profile, means a second
+    /// translation attempt (a config change) can never re-translate an
+    /// already-translated result.
+    @State private var pendingTranslation: CharacterDescription?
+    @State private var translationConfiguration: TranslationSession.Configuration?
     @Environment(\.dismiss) private var dismiss
+
+    /// Russian is the only source language this view ever asks the
+    /// Translation framework about — Shikimori's site language, verified
+    /// live on 2026-09-12 against every description fetched during this work.
+    private static let sourceLanguage = Locale.Language(languageCode: "ru")
+    private static let targetLanguage = Locale.Language(languageCode: "en")
+    /// How long a translation is allowed to run before the profile is shown
+    /// without its description. A guess: long enough for an already-installed
+    /// language pack to translate a short paragraph, short enough that a
+    /// reader who declines the system's download prompt is not left staring
+    /// at a spinner for it.
+    private static let translationTimeout: TimeInterval = 10
 
     enum LoadState {
         case loading
         case loaded(CharacterProfile)
         case failed(APIError)
-        /// The cast row answered from Shikimori, whose id cannot be used to
-        /// ask AniList for anything — see `CharacterProfileRequest`. Not an
-        /// error: nothing went wrong, there is simply no AniList profile for
-        /// this character to show.
+        /// Neither source issued this character's id. Not reachable today —
+        /// `CharacterSource` has exactly two cases and both now have a
+        /// profile path — kept because `CharacterProfileRequest` returning
+        /// nil for both is a real possibility the type system allows, and
+        /// this view should not force-unwrap its way past it.
         case unavailable
     }
 
@@ -53,6 +75,9 @@ struct CharacterProfileView: View {
             }
         }
         .task { await load() }
+        .translationTask(translationConfiguration) { session in
+            await translateIfNeeded(session: session)
+        }
     }
 
     @ViewBuilder
@@ -75,31 +100,92 @@ struct CharacterProfileView: View {
             Image(systemName: "person.crop.circle.badge.questionmark")
                 .font(.system(size: 34, weight: .regular))
                 .foregroundStyle(Palette.textTertiary)
-            Text("No AniList profile")
+            Text("No profile")
                 .typeSubsectionHeader()
                 .foregroundStyle(Palette.textPrimary)
-            Text("""
-            This character's cast entry came from a different tracker, \
-            which doesn't carry a full profile.
-            """)
-            .typeSubtitle()
-            .foregroundStyle(Palette.textSecondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 40)
+            Text("Nothing knows this character by this id.")
+                .typeSubtitle()
+                .foregroundStyle(Palette.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 40)
         }
         .padding(.top, 60)
     }
 
     private func load() async {
-        guard let aniListID = CharacterProfileRequest.aniListID(for: character) else {
-            state = .unavailable
+        if let aniListID = CharacterProfileRequest.aniListID(for: character) {
+            do {
+                state = .loaded(try await aniList.characterProfile(characterID: aniListID))
+            } catch {
+                state = .failed(error)
+            }
             return
         }
+        if let shikimoriID = CharacterProfileRequest.shikimoriID(for: character) {
+            do {
+                await beginShowing(try await shikimori.characterProfile(characterID: shikimoriID))
+            } catch {
+                state = .failed(error)
+            }
+            return
+        }
+        state = .unavailable
+    }
+
+    /// Shows everything about a freshly-loaded profile except a description
+    /// that still needs translating — the portrait and facts have nothing to
+    /// wait on, and Abdi's rule ("just make sure shikimori is being
+    /// translated before the user sees it") only concerns the description.
+    private func beginShowing(_ profile: CharacterProfile) async {
+        guard profile.requiresTranslation, let description = profile.description, !description.isEmpty else {
+            state = .loaded(profile)
+            return
+        }
+        state = .loaded(profile.withDescription(nil))
+
+        // Checked before ever setting `translationConfiguration`: an
+        // unsupported language pair should never trigger `.translationTask`
+        // at all, let alone its system download prompt.
+        let availability = await LanguageAvailability().status(
+            from: Self.sourceLanguage, to: Self.targetLanguage
+        )
+        guard availability != .unsupported else { return }
+
+        pendingTranslation = description
+        translationConfiguration = TranslationSession.Configuration(
+            source: Self.sourceLanguage, target: Self.targetLanguage
+        )
+    }
+
+    /// Runs once a translation session is ready — which, per Apple's own
+    /// framework, may itself be after the system has prompted the reader to
+    /// download the ru→en language pack. If that never resolves, times out,
+    /// or the session refuses, the description stays dropped: showing the
+    /// Russian original is the one outcome ruled out, and there is no
+    /// "view original" escape hatch.
+    private func translateIfNeeded(session: TranslationSession) async {
+        guard let description = pendingTranslation, case let .loaded(profile) = state else { return }
+        pendingTranslation = nil
+
+        // Awaited directly, with no watchdog task. An earlier version raced
+        // a timeout task against the translation, but the closure had to
+        // capture the `TranslationSession` SwiftUI hands this view — which is
+        // non-Sendable, so sending it into a `Task` is a hard error under
+        // Swift 6.
+        //
+        // Nothing is lost. `beginShowing` has already put the profile on
+        // screen without its description, so a translation that never
+        // finishes and one that times out produce exactly the same thing the
+        // reader sees: the portrait, the names and the facts, and no
+        // description. Nothing is blocked waiting on this.
         do {
-            state = .loaded(try await aniList.characterProfile(characterID: aniListID))
+            let translated = try await CharacterDescriptionTranslator.translate(
+                description, using: SystemDescriptionTranslator(session: session)
+            )
+            state = .loaded(profile.withDescription(translated))
         } catch {
-            state = .failed(error)
+            // Left as `profile.withDescription(nil)`, already showing.
         }
     }
 }
@@ -124,7 +210,7 @@ private struct CharacterProfileContent: View {
                 descriptionSection(description)
             }
             if let siteURL = profile.siteURL {
-                aniListLink(siteURL)
+                sourceLink(siteURL, source: profile.source)
             }
         }
     }
@@ -250,17 +336,20 @@ private struct CharacterProfileContent: View {
         .accessibilityHint("Reveals it")
     }
 
-    private func aniListLink(_ url: URL) -> some View {
-        Link(destination: url) {
+    /// "View on AniList" or "View on Shikimori" — whichever source actually
+    /// answered this profile, since both now can.
+    private func sourceLink(_ url: URL, source: CharacterSource) -> some View {
+        let name = source == .aniList ? "AniList" : "Shikimori"
+        return Link(destination: url) {
             HStack(spacing: 5) {
-                Text("View on AniList")
+                Text("View on \(name)")
                     .typeCTA()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(Palette.accent)
         }
-        .accessibilityLabel("Open this character's AniList page")
+        .accessibilityLabel("Open this character's \(name) page")
         .padding(.horizontal, Metrics.gutter)
     }
 
@@ -283,6 +372,10 @@ private struct CharacterProfileContent: View {
             case let .bold(string):
                 var part = AttributedString(string)
                 part.inlinePresentationIntent = .stronglyEmphasized
+                out += part
+            case let .italic(string):
+                var part = AttributedString(string)
+                part.inlinePresentationIntent = .emphasized
                 out += part
             case let .link(linkText, url):
                 var part = AttributedString(linkText)

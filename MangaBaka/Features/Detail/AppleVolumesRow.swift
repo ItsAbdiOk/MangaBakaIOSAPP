@@ -1,16 +1,20 @@
 import SwiftUI
 
-/// The series' volumes on Apple Books: official covers, the price, and a
-/// spine that opens the book to buy.
+/// The series' volumes: official covers, Apple's price where there is one,
+/// and a spine that opens the book.
 ///
-/// Shown in place of MangaBaka's own editions row when the store carries the
+/// Shown in place of MangaBaka's own editions row when a store carries the
 /// series, because it is the fuller set — ONE PIECE has 8 editions on
 /// MangaBaka and 4 images, and over a hundred volumes on Apple Books — and
-/// the covers are the publisher's. When the store carries fewer than the
-/// series has (`expected`, MangaBaka's `final_volume`), the header says so
-/// rather than pretending the shelf is complete.
+/// the covers are the publisher's. When the shelf has fewer than the series
+/// has (`expected`, MangaBaka's `final_volume`), the header says so rather
+/// than pretending it is complete.
+///
+/// The shelf is Apple's volumes plus any number only Google has; see
+/// `VolumeShelf.merge`. The header names whichever stores contributed, which
+/// is also how Google's content gets the attribution their terms require.
 struct AppleVolumesRow: View {
-    let volumes: [AppleBooksVolume]
+    let volumes: [ShelfVolume]
     /// The series' final volume number, when it has ended.
     let expected: Int?
     /// Set when the shelf is another store's edition; nil for the reader's own.
@@ -35,7 +39,7 @@ struct AppleVolumesRow: View {
                         .typeChip()
                         .foregroundStyle(Palette.textMuted)
                     Spacer(minLength: 0)
-                    Text(edition == .japanese ? "Japanese edition · Apple Books" : "Apple Books")
+                    Text(sourceLabel)
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
@@ -51,12 +55,12 @@ struct AppleVolumesRow: View {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(volumes) { volume in
                             Button {
-                                if let url = volume.storeURL { openURL(url) }
+                                if let url = volume.link { openURL(url) }
                             } label: {
                                 spine(volume)
                             }
                             .buttonStyle(.press)
-                            .disabled(volume.storeURL == nil)
+                            .disabled(volume.link == nil)
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -77,7 +81,14 @@ struct AppleVolumesRow: View {
         return "\(volumes.count)"
     }
 
-    private func spine(_ volume: AppleBooksVolume) -> some View {
+    /// "Apple & Google Books" when both put a volume on the shelf. The
+    /// Japanese note keeps its own wording, since that shelf is Apple's alone.
+    private var sourceLabel: String {
+        if edition == .japanese { return "Japanese edition · Apple Books" }
+        return VolumeShelf.attribution(for: volumes) ?? "Apple Books"
+    }
+
+    private func spine(_ volume: ShelfVolume) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             CoverImage(
                 cover: volume.cover,
@@ -102,7 +113,9 @@ struct AppleVolumesRow: View {
             ["Volume \(volume.number)", edition == nil ? volume.formattedPrice : nil]
                 .compactMap { $0 }.joined(separator: ", ")
         )
-        .accessibilityHint("Opens it in Apple Books")
+        .accessibilityHint(
+            volume.source == .googleBooks ? "Opens it on Google Books" : "Opens it in Apple Books"
+        )
         .accessibilityAddTraits(.isButton)
     }
 }

@@ -21,6 +21,10 @@ struct AppServices {
     let schedule: ReleaseScheduleService
     let characters = CharacterService()
     let appleBooks = AppleBooksClient()
+    /// Fills volume gaps Apple does not carry. Its key is resolved per request
+    /// — Settings first, then the build — so a key typed on the phone works
+    /// without a relaunch. See `GoogleBooksKey`.
+    let googleBooks = GoogleBooksClient()
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore

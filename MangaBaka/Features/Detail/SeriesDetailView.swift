@@ -16,6 +16,9 @@ struct SeriesDetailView: View {
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
+    /// Fills volume gaps Apple does not carry. Nil in a build with no Google
+    /// Books key, which is every Release build — see Secrets.example.xcconfig.
+    var googleBooks: GoogleBooksClient?
     /// Opens a publisher's or studio's page from the credits.
     var onOpenPublisher: ((String) -> Void)?
     /// Opens a creator's page — everything they wrote or drew.
@@ -35,6 +38,8 @@ struct SeriesDetailView: View {
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
     @State var appleVolumes: [AppleBooksVolume] = []
+    /// Only the numbers Apple is missing; see `VolumeShelf.merge`.
+    @State var googleVolumes: [GoogleBooksVolume] = []
     /// The store was asked and did not answer — distinct from "asked, and it
     /// has none", which shows MangaBaka's editions with no note.
     @State var appleUnreachable = false

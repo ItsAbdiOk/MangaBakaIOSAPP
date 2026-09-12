@@ -55,7 +55,8 @@ struct CoverOrderTests {
     func appleLeadsAndFrontIsDropped() {
         let mine = [mangaBakaCover(10), mangaBakaCover(11), mangaBakaCover(12)]
         let ordered = SeriesDetailView.gallery(
-            mangaBaka: mine, apple: [volume(3), volume(1), volume(2)], front: mine[1], languages: nil
+            mangaBaka: mine, apple: [volume(3), volume(1), volume(2)], google: [],
+            front: mine[1], languages: nil
         )
         #expect(ordered.map(\.indexNumeric) == [1, 2, 3, 10, 12])
         #expect(ordered.prefix(3).allSatisfy { $0.image.raw?.host() == "example.com" })
@@ -66,14 +67,16 @@ struct CoverOrderTests {
     @Test("No Apple volumes leaves MangaBaka's own order alone")
     func noStoreIsUnchanged() {
         let mine = [mangaBakaCover(10), mangaBakaCover(11)]
-        let ordered = SeriesDetailView.gallery(mangaBaka: mine, apple: [], front: mine[0], languages: nil)
+        let ordered = SeriesDetailView.gallery(
+            mangaBaka: mine, apple: [], google: [], front: mine[0], languages: nil
+        )
         #expect(ordered.map(\.indexNumeric) == [11])
     }
 
     @Test("Volumes are ordered by number, however the store sent them")
     func appleCoversAreOrdered() {
         let ordered = SeriesDetailView.gallery(
-            mangaBaka: [], apple: [volume(3), volume(1), volume(2)], front: nil, languages: nil
+            mangaBaka: [], apple: [volume(3), volume(1), volume(2)], google: [], front: nil, languages: nil
         )
         #expect(ordered.map(\.indexNumeric) == [1, 2, 3])
     }
@@ -90,7 +93,7 @@ struct CoverOrderTests {
             mangaBakaCover(5, language: "es")
         ]
         let ordered = SeriesDetailView.gallery(
-            mangaBaka: mine, apple: [], front: nil, languages: ["en", "ko"]
+            mangaBaka: mine, apple: [], google: [], front: nil, languages: ["en", "ko"]
         )
         #expect(ordered.map(\.indexNumeric) == [1, 2])
     }
@@ -101,7 +104,7 @@ struct CoverOrderTests {
     func regionalTagsMatch() {
         let mine = [mangaBakaCover(1, language: "zh-hans"), mangaBakaCover(2, language: "en-GB")]
         let ordered = SeriesDetailView.gallery(
-            mangaBaka: mine, apple: [], front: nil, languages: ["en", "zh"]
+            mangaBaka: mine, apple: [], google: [], front: nil, languages: ["en", "zh"]
         )
         #expect(ordered.map(\.indexNumeric) == [1, 2])
     }
@@ -112,7 +115,7 @@ struct CoverOrderTests {
     func unlabelledCoversSurvive() {
         let ordered = SeriesDetailView.gallery(
             mangaBaka: [mangaBakaCover(9, language: nil)],
-            apple: [volume(1)],
+            apple: [volume(1)], google: [],
             front: nil,
             languages: ["en", "ja"]
         )
@@ -124,7 +127,7 @@ struct CoverOrderTests {
     func noRuleKeepsEverything() {
         let mine = [mangaBakaCover(1, language: "pt-br"), mangaBakaCover(2, language: "id")]
         let ordered = SeriesDetailView.gallery(
-            mangaBaka: mine, apple: [], front: nil, languages: nil
+            mangaBaka: mine, apple: [], google: [], front: nil, languages: nil
         )
         #expect(ordered.map(\.indexNumeric) == [1, 2])
     }
@@ -167,5 +170,78 @@ struct CoverLanguageTests {
     @Test("A native title wins over the type's implication")
     func nativeTitleWins() {
         #expect(series(type: "manga", nativeLanguage: "ko").coverLanguages == ["en", "ko"])
+    }
+}
+
+/// Apple's volumes plus the numbers only Google has. See `VolumeShelf`.
+@Suite("Merging two stores onto one shelf")
+struct VolumeShelfTests {
+    private func apple(_ number: Int) -> AppleBooksVolume {
+        AppleBooksVolume(
+            id: number, number: number, title: "Vol. \(number)",
+            artworkURL: URL(string: "https://apple.example/\(number).jpg"),
+            storeURL: URL(string: "https://books.apple.com/\(number)"),
+            price: 6.99, formattedPrice: "£6.99", releaseDate: nil
+        )
+    }
+
+    private func google(_ number: Int, art: Bool = true) -> GoogleBooksVolume {
+        GoogleBooksVolume(
+            id: "g\(number)", number: number, title: "Vol. \(number)", language: "en",
+            thumbnailURL: art ? URL(string: "https://books.google.example/\(number).jpg") : nil,
+            pageURL: URL(string: "https://books.google.com/about/\(number)")
+        )
+    }
+
+    /// Abdi's own example: Apple has 1–13, Google has 1–15, so the shelf is
+    /// Apple's 13 with Google's 14 and 15 added at the end.
+    @Test("Apple's volumes lead and Google only fills the numbers Apple lacks")
+    func googleFillsGapsOnly() {
+        let shelf = VolumeShelf.merge(
+            apple: (1...13).map(apple), google: (1...15).map { google($0) }
+        )
+        #expect(shelf.map(\.number) == Array(1...15))
+        #expect(shelf.filter { $0.source == .googleBooks }.map(\.number) == [14, 15])
+        // The overlap stays Apple's: its art is 600px against Google's upscale,
+        // and only Apple's spine carries a price.
+        #expect(shelf.prefix(13).allSatisfy { $0.source == .appleBooks })
+        #expect(shelf[0].formattedPrice == "£6.99")
+        #expect(shelf[13].formattedPrice == nil)
+    }
+
+    /// The control: a series Apple carries completely comes out untouched.
+    @Test("Google adds nothing when Apple already has every volume")
+    func noGapsMeansNoGoogle() {
+        let shelf = VolumeShelf.merge(apple: (1...5).map(apple), google: (1...5).map { google($0) })
+        #expect(shelf.allSatisfy { $0.source == .appleBooks })
+        #expect(VolumeShelf.needsGoogle(apple: (1...5).map(apple), expected: 5) == false)
+    }
+
+    /// A running series has no final volume, so there is always possibly more.
+    @Test("A gap, or an unknown total, is what makes Google worth asking")
+    func needsGoogleRule() {
+        #expect(VolumeShelf.needsGoogle(apple: (1...3).map(apple), expected: 5))
+        #expect(VolumeShelf.needsGoogle(apple: [apple(1), apple(3)], expected: 3))
+        #expect(VolumeShelf.needsGoogle(apple: (1...3).map(apple), expected: nil))
+        #expect(VolumeShelf.needsGoogle(apple: [], expected: 5))
+    }
+
+    @Test("A Google volume with no artwork never reaches the shelf")
+    func artworklessGoogleIsDropped() {
+        let shelf = VolumeShelf.merge(apple: [apple(1)], google: [google(2, art: false), google(3)])
+        #expect(shelf.map(\.number) == [1, 3])
+    }
+
+    /// The header has to name Google wherever Google's covers are shown —
+    /// their branding terms require the attribution, not just the link.
+    @Test("The header names whichever stores actually contributed")
+    func attributionNamesBoth() {
+        let both = VolumeShelf.merge(apple: [apple(1)], google: [google(2)])
+        #expect(VolumeShelf.attribution(for: both) == "Apple & Google Books")
+        #expect(VolumeShelf.attribution(for: VolumeShelf.merge(apple: [apple(1)], google: []))
+                == "Apple Books")
+        #expect(VolumeShelf.attribution(for: VolumeShelf.merge(apple: [], google: [google(1)]))
+                == "Google Books")
+        #expect(VolumeShelf.attribution(for: []) == nil)
     }
 }

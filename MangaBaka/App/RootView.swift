@@ -20,6 +20,7 @@ struct RootView: View {
     let schedule: ReleaseScheduleService
     let characters: CharacterService
     let appleBooks: AppleBooksClient
+    let googleBooks: GoogleBooksClient
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -95,6 +96,14 @@ struct RootView: View {
             .environment(\.zoomNamespace, coverTransition)
             .environment(\.zoomRoute, zoomRoute)
             .task { await startSession() }
+            // Primes `characters`' outage memory before any series page asks
+            // for a cast, so the first one opened does not pay AniList's own
+            // timeout before falling back to Shikimori. Its own detached
+            // task, not folded into `startSession()`: that function's own
+            // awaits (reminders, then Spotlight) are sequential, and this
+            // check has no bearing on either — chaining it in front of them
+            // would make a slow AniList delay work that does not depend on it.
+            .task { await characters.primeAniListHealth() }
             // A library series tapped in Spotlight. The page opens in the
             // Library tab, which is where the reader's state on it lives.
             // "Open <series>" from Siri or Shortcuts; see IntentBridge.
@@ -287,6 +296,7 @@ struct RootView: View {
             characters: characters,
             taste: taste,
             appleBooks: appleBooks,
+            googleBooks: googleBooks,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),

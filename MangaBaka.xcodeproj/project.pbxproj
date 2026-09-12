@@ -315,6 +315,16 @@
 		DA30BAB8080940B2AE3C2B37 /* CharacterProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8894BC45725D46E5A204EB0F /* CharacterProfileView.swift */; };
 		ABF717B755FD40C197CEAD6E /* CharacterProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0377B3F11BBE448C97B06DED /* CharacterProfileTests.swift */; };
 		76B8F5A628124E2C901F95C0 /* CoverOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 343139B7ABF54F7AAD093C44 /* CoverOrderTests.swift */; };
+		8F29CDEEE3494A72A7E2B230 /* CharacterDescriptionTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62287D1730F24DC7AC93FB06 /* CharacterDescriptionTranslator.swift */; };
+		FA79E36A58AA4E9886930392 /* ShikimoriDescriptionParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D2A964F22B4A56A4F9E643 /* ShikimoriDescriptionParser.swift */; };
+		69576B4FD12C4E87B760657D /* GoogleBooksClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099E66AD802C425CB0AB2FF8 /* GoogleBooksClient.swift */; };
+		5CDBF9D3B352418982B440FE /* GoogleBooksKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = D78A55A7D33749C680804DDD /* GoogleBooksKey.swift */; };
+		6671DD07F49A464FA1BCB799 /* GoogleBooksVolume.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488A55D1A7A64C948D937BD2 /* GoogleBooksVolume.swift */; };
+		FF57E22BE2F24A038CD9C746 /* ShelfVolume.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C198891A5614B289FA64524 /* ShelfVolume.swift */; };
+		6AAB7D8332014590A71E7FB8 /* GoogleBooksSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3FD8F1DD0724FC8824BF2C0 /* GoogleBooksSection.swift */; };
+		7CDCA30D5D9E47378F22F727 /* CharacterHealthCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D75373A7B044B83BBC05D75 /* CharacterHealthCheckTests.swift */; };
+		DEBC0DAECA4A44C9A64B7FC8 /* GoogleBooksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 446B87B3607B4ECABF599185 /* GoogleBooksTests.swift */; };
+		440AD0CB1E5F48139A336D1D /* ShikimoriCharacterProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17847E8F79D3464DB84F89E4 /* ShikimoriCharacterProfileTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -655,6 +665,16 @@
 		8894BC45725D46E5A204EB0F /* CharacterProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterProfileView.swift; sourceTree = "<group>"; };
 		0377B3F11BBE448C97B06DED /* CharacterProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterProfileTests.swift; sourceTree = "<group>"; };
 		343139B7ABF54F7AAD093C44 /* CoverOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverOrderTests.swift; sourceTree = "<group>"; };
+		62287D1730F24DC7AC93FB06 /* CharacterDescriptionTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterDescriptionTranslator.swift; sourceTree = "<group>"; };
+		D5D2A964F22B4A56A4F9E643 /* ShikimoriDescriptionParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShikimoriDescriptionParser.swift; sourceTree = "<group>"; };
+		099E66AD802C425CB0AB2FF8 /* GoogleBooksClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksClient.swift; sourceTree = "<group>"; };
+		D78A55A7D33749C680804DDD /* GoogleBooksKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksKey.swift; sourceTree = "<group>"; };
+		488A55D1A7A64C948D937BD2 /* GoogleBooksVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksVolume.swift; sourceTree = "<group>"; };
+		6C198891A5614B289FA64524 /* ShelfVolume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfVolume.swift; sourceTree = "<group>"; };
+		B3FD8F1DD0724FC8824BF2C0 /* GoogleBooksSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksSection.swift; sourceTree = "<group>"; };
+		7D75373A7B044B83BBC05D75 /* CharacterHealthCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterHealthCheckTests.swift; sourceTree = "<group>"; };
+		446B87B3607B4ECABF599185 /* GoogleBooksTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleBooksTests.swift; sourceTree = "<group>"; };
+		17847E8F79D3464DB84F89E4 /* ShikimoriCharacterProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShikimoriCharacterProfileTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -971,6 +991,9 @@
 		9601F9FF505DB84191E7A799 /* MangaBakaTests */ = {
 			isa = PBXGroup;
 			children = (
+				17847E8F79D3464DB84F89E4 /* ShikimoriCharacterProfileTests.swift */,
+				446B87B3607B4ECABF599185 /* GoogleBooksTests.swift */,
+				7D75373A7B044B83BBC05D75 /* CharacterHealthCheckTests.swift */,
 				343139B7ABF54F7AAD093C44 /* CoverOrderTests.swift */,
 				0377B3F11BBE448C97B06DED /* CharacterProfileTests.swift */,
 				24279BDA9CD5554CD460F717 /* Fixtures */,
@@ -1151,6 +1174,10 @@
 		C221B33DD4FC91A556E1E20D /* Volumes */ = {
 			isa = PBXGroup;
 			children = (
+				6C198891A5614B289FA64524 /* ShelfVolume.swift */,
+				488A55D1A7A64C948D937BD2 /* GoogleBooksVolume.swift */,
+				D78A55A7D33749C680804DDD /* GoogleBooksKey.swift */,
+				099E66AD802C425CB0AB2FF8 /* GoogleBooksClient.swift */,
 				0AAEEB4C0F6AA44F0370319A /* AppleBooksClient.swift */,
 				224F5212A854F4072B32EEEB /* AppleBooksVolume.swift */,
 			);
@@ -1160,6 +1187,8 @@
 		C3422E64346CBE703BCCA93D /* Characters */ = {
 			isa = PBXGroup;
 			children = (
+				D5D2A964F22B4A56A4F9E643 /* ShikimoriDescriptionParser.swift */,
+				62287D1730F24DC7AC93FB06 /* CharacterDescriptionTranslator.swift */,
 				6ECC784D016B4EC2BCDC3DA2 /* CharacterProfile.swift */,
 				5BA5BA539B9FDC738A9AC3A9 /* AniListClient.swift */,
 				3E2D007D87EC856BF1844D85 /* CharacterService.swift */,
@@ -1217,6 +1246,7 @@
 		CEE5AD03CD8404B7319BDC77 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				B3FD8F1DD0724FC8824BF2C0 /* GoogleBooksSection.swift */,
 				8A1AB8BDD50F66D46DAFB81E /* AccountCard.swift */,
 				01793EAAC53AAA2FAB34EB59 /* AttributionSection.swift */,
 				7A0314F382E8E346F4F99B36 /* BlockedTagsSection.swift */,
@@ -1442,6 +1472,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6AAB7D8332014590A71E7FB8 /* GoogleBooksSection.swift in Sources */,
+				FF57E22BE2F24A038CD9C746 /* ShelfVolume.swift in Sources */,
+				6671DD07F49A464FA1BCB799 /* GoogleBooksVolume.swift in Sources */,
+				5CDBF9D3B352418982B440FE /* GoogleBooksKey.swift in Sources */,
+				69576B4FD12C4E87B760657D /* GoogleBooksClient.swift in Sources */,
+				FA79E36A58AA4E9886930392 /* ShikimoriDescriptionParser.swift in Sources */,
+				8F29CDEEE3494A72A7E2B230 /* CharacterDescriptionTranslator.swift in Sources */,
 				DA30BAB8080940B2AE3C2B37 /* CharacterProfileView.swift in Sources */,
 				9ABAB05070D84143B7B94455 /* SeriesRepository+Paging.swift in Sources */,
 				34159532472E496B9ACC4F9A /* CharacterProfile.swift in Sources */,
@@ -1659,6 +1696,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				440AD0CB1E5F48139A336D1D /* ShikimoriCharacterProfileTests.swift in Sources */,
+				DEBC0DAECA4A44C9A64B7FC8 /* GoogleBooksTests.swift in Sources */,
+				7CDCA30D5D9E47378F22F727 /* CharacterHealthCheckTests.swift in Sources */,
 				76B8F5A628124E2C901F95C0 /* CoverOrderTests.swift in Sources */,
 				ABF717B755FD40C197CEAD6E /* CharacterProfileTests.swift in Sources */,
 				7A987A3AF44B426997FA5891 /* APIClientTests.swift in Sources */,

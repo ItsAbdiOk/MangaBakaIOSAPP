@@ -51,23 +51,26 @@ struct CharacterRow: View {
         }
     }
 
-    /// Tappable only when AniList issued the id, because only then is there a
-    /// profile to open: the cast falls back to Shikimori when AniList is
-    /// down, and the two number their characters independently — asking
-    /// AniList about a Shikimori id returns a real profile for the wrong
-    /// person rather than failing. See `CharacterProfileRequest`.
+    /// Tappable whenever there is a profile to open — AniList's own, or now
+    /// Shikimori's (see `ShikimoriClient.characterProfile` and
+    /// `CharacterProfileRequest`). Both sources number their characters
+    /// independently, so the id sent to either service always comes from
+    /// `CharacterProfileRequest`, which only ever returns an id to the
+    /// service that issued it — never AniList's endpoint asked with a
+    /// Shikimori id, or the reverse.
     ///
-    /// A portrait that does nothing is better than one that opens a stranger,
-    /// and better than one that opens an apology: on a Shikimori day the row
-    /// simply is not tappable, which reads as "these are just pictures".
+    /// A portrait that does nothing is better than one that opens a stranger:
+    /// `isProfileAvailable` is kept as its own check, rather than assumed
+    /// true, so a future third source with no profile path still falls back
+    /// to reading as "just a picture" instead of opening one.
     @ViewBuilder
     private func cell(_ character: SeriesCharacter) -> some View {
-        if CharacterProfileRequest.aniListID(for: character) == nil {
-            portraitCell(character)
-        } else {
+        if CharacterProfileRequest.isProfileAvailable(for: character) {
             Button { opened = character } label: { portraitCell(character) }
                 .buttonStyle(.press)
                 .accessibilityHint("Opens this character's profile")
+        } else {
+            portraitCell(character)
         }
     }
 

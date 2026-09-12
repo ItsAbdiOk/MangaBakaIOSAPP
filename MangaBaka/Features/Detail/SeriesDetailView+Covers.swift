@@ -21,6 +21,7 @@ extension SeriesDetailView {
         Self.gallery(
             mangaBaka: covers,
             apple: appleVolumes,
+            google: googleVolumes,
             front: preferred,
             languages: shown.coverLanguages
         )
@@ -36,6 +37,7 @@ extension SeriesDetailView {
     nonisolated static func gallery(
         mangaBaka: [SeriesImage],
         apple: [AppleBooksVolume],
+        google: [GoogleBooksVolume],
         front: SeriesImage?,
         languages: Set<String>?
     ) -> [SeriesImage] {
@@ -45,8 +47,17 @@ extension SeriesDetailView {
         // actually buy in their own store, which is the reason they were put
         // at the front of this list in the first place, and the store sends no
         // language field to filter them by.
+        // Apple's run, then any volume number only Google has, then the rest.
+        // Same rule as the shelf below the fold (`VolumeShelf.merge`): Apple
+        // wins every number they share, so the 800px store art is never
+        // replaced by Google's upscaled thumbnail.
+        let appleNumbers = Set(apple.map(\.number))
         let store = apple.sorted { $0.number < $1.number }.compactMap(\.galleryImage)
-        return store + rest
+        let filled = google
+            .filter { !appleNumbers.contains($0.number) }
+            .sorted { $0.number < $1.number }
+            .compactMap(\.galleryImage)
+        return store + filled + rest
     }
 
     /// Prefix-matched, because the wire carries regional tags — "pt-br" is

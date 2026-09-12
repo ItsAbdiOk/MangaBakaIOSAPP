@@ -190,3 +190,123 @@ private extension Optional where Wrapped == URL {
         return self
     }
 }
+
+/// The character-profile fetch, kept in its own extension purely to keep
+/// `ShikimoriClient`'s type body under SwiftLint's length cap — same reason
+/// `AniListClient`'s profile query lives in an extension of its own. `private`
+/// members declared on the actor above (`baseURL`, `session`, `clock`,
+/// `waitForSlot`) stay reachable from here because this extension is in the
+/// same file.
+extension ShikimoriClient {
+    /// One character's own page: name, portrait, the few facts Shikimori
+    /// actually sends, and a Russian description with BBCode markup — none
+    /// of which is translated here. Translation is a separate, fallible step
+    /// the view layer runs afterwards (`CharacterDescriptionTranslator`), so
+    /// this function can be tested against a recorded response without
+    /// standing up the Translation framework.
+    ///
+    /// Verified live against character id 40 (Monkey D. Luffy) on
+    /// 2026-09-12 with curl — this is the real response shape.
+    struct Profile: Decodable, Sendable {
+        struct Image: Decodable, Sendable {
+            let original: String?
+            let preview: String?
+        }
+        let id: Int?
+        /// Already romaji ("Luffy Monkey D."). Never translated — see
+        /// `CharacterProfile.requiresTranslation`, which only ever gates the
+        /// description.
+        let name: String?
+        let russian: String?
+        let japanese: String?
+        /// Comma-separated aliases, e.g. "Mugiwara, Straw Hat".
+        let altname: String?
+        /// Host-relative, e.g. "/characters/40-luffy-monkey-d".
+        let url: String?
+        let image: Image?
+        /// Russian, with Shikimori's own BBCode markup — see
+        /// `ShikimoriDescriptionParser`.
+        let description: String?
+    }
+
+    /// - Parameter characterID: an id Shikimori itself issued. The only
+    ///   source of one of these from a `SeriesCharacter` is
+    ///   `CharacterProfileRequest.shikimoriID(for:)` — an AniList-issued id
+    ///   passed here would return a real, wrong person with no sign anything
+    ///   went wrong, the same hazard `aniListID(for:)` guards against in the
+    ///   other direction.
+    func characterProfile(characterID: Int) async throws(APIError) -> CharacterProfile {
+        try await waitForSlot()
+
+        var request = URLRequest(url: baseURL.appending(path: "/api/characters/\(characterID)"))
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.transport(underlying: String(describing: error))
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.")
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            throw APIError.rateLimited(retryAfter: retryAfter)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.server(status: http.statusCode, message: "Shikimori returned \(http.statusCode).")
+        }
+
+        let decoded: Profile
+        do {
+            decoded = try JSONDecoder().decode(Profile.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+
+        guard let profile = Self.profile(from: decoded, baseURL: baseURL) else {
+            throw APIError.decoding(underlying: "Shikimori sent a character with no id or name.")
+        }
+        return profile
+    }
+
+    /// Pure mapping from the decoded response to the display model, kept
+    /// separate from the network call so it is testable against a recorded
+    /// response without a mock session.
+    static func profile(from response: Profile, baseURL: URL) -> CharacterProfile? {
+        guard let id = response.id, let name = response.name, !name.isEmpty else { return nil }
+
+        let imagePath = response.image?.original ?? response.image?.preview
+        let siteURLPath = response.url
+
+        return CharacterProfile(
+            id: id,
+            fullName: name,
+            nativeName: response.japanese,
+            // Comma-separated in Shikimori's own field; AniList sends these
+            // as an array, so this is the one place that shape has to be
+            // produced by hand to fit the shared model.
+            alternativeNames: (response.altname ?? "")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty },
+            imageURL: imagePath.flatMap { URL(string: $0, relativeTo: baseURL)?.absoluteURL },
+            // Shikimori's character endpoint carries none of these — nothing
+            // is guessed in their place; `CharacterProfile.facts` already
+            // omits whatever the source did not send.
+            gender: nil,
+            age: nil,
+            bloodType: nil,
+            dateOfBirth: nil,
+            favourites: nil,
+            siteURL: siteURLPath.flatMap { URL(string: $0, relativeTo: baseURL)?.absoluteURL },
+            description: response.description.map { ShikimoriDescriptionParser.parse($0) },
+            source: .shikimori
+        )
+    }
+}
