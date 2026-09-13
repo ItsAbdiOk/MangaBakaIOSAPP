@@ -75,10 +75,19 @@ struct AppleVolumesRow: View {
     /// "15" when the store has them all or the series has not ended;
     /// "15 of 27 on Apple Books" when it has and the store is behind.
     var countLine: String {
-        if let expected, expected > volumes.count {
+        if let expected, !Self.covers(volumes, through: expected) {
             return "\(volumes.count) of \(expected)"
         }
         return "\(volumes.count)"
+    }
+
+    /// Whether the shelf holds every number from 1 to `expected` — a count
+    /// alone can't tell "1-15" from "1-14 and 30": both are 15 volumes, but
+    /// only one of them is the series (S12, 2026-09-13).
+    nonisolated static func covers(_ volumes: [ShelfVolume], through expected: Int) -> Bool {
+        guard expected > 0 else { return true }
+        let have = Set(volumes.map(\.number))
+        return (1...expected).allSatisfy(have.contains)
     }
 
     /// "Apple & Google Books" when both put a volume on the shelf. The

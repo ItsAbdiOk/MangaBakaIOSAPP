@@ -50,14 +50,19 @@ actor GoogleBooksClient {
     func volumes(for series: Series, language: String? = nil) async -> [GoogleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         // Versioned like Apple's cache key: a matcher change must not be
-        // outlived by a week of answers made under the old rule.
-        let key = "v1-\(series.id)-\(language ?? "any")"
+        // outlived by a week of answers made under the old rule. v2: routed
+        // through the shared `AppleBooksMatch.matchedVolumes` and now
+        // filters on `language` instead of decoding it and never reading it
+        // (T3/F15, 2026-09-13).
+        let key = "v2-\(series.id)-\(language ?? "any")"
         if let cached = readCache(key) { return cached }
 
         guard let items = await search(query) else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
         let isNovel = series.type?.lowercased().contains("novel") ?? false
-        let matched = GoogleBooksMatch.volumes(in: items, titles: titles, isNovel: isNovel)
+        let matched = GoogleBooksMatch.volumes(
+            in: items, titles: titles, isNovel: isNovel, language: language
+        )
         writeCache(key, matched)
         return matched
     }
@@ -73,8 +78,11 @@ actor GoogleBooksClient {
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "q", value: "intitle:\"\(term)\""),
-            // Apple's needs 200 to find a long-running series among mixed
-            // editions; Google ranks similarly, so the same margin is used.
+            // Google's documented per-request maximum (T11) — there is no
+            // larger page to ask for the way Apple's `limit=200` is; a
+            // long-running series with mixed editions may need a
+            // `startIndex` follow-up page, not implemented (low priority
+            // while the anonymous quota is already exhausted).
             URLQueryItem(name: "maxResults", value: "40"),
             URLQueryItem(name: "printType", value: "books")
         ]

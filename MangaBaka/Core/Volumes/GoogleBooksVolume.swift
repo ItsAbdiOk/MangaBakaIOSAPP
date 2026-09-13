@@ -66,36 +66,43 @@ struct GoogleBooksItem: Decodable, Sendable, Equatable {
 
 /// Which results are volumes of *this* series, and nothing else.
 ///
-/// Mirrors `AppleBooksMatch` deliberately rather than writing a second,
-/// looser matcher: Google's results mix editions and spin-offs the same way
-/// Apple's do — "(comic)" and "(novel)" interleaved, "Solo Leveling:
-/// Ragnarok" beside "Solo Leveling" (verified live, 2026-09-12, q=intitle:
-/// "solo leveling", 300 totalItems). A wrong cover under "Volume 3" is worse
-/// than an empty spine here too.
+/// Runs through `AppleBooksMatch.matchedVolumes`, the same rank-then-match
+/// rule Apple's catalogue uses, rather than a second, looser matcher of its
+/// own: Google's results mix editions and spin-offs the same way Apple's do
+/// — "(comic)" and "(novel)" interleaved, "Solo Leveling: Ragnarok" beside
+/// "Solo Leveling" (verified live, 2026-09-12, q=intitle: "solo leveling",
+/// 300 totalItems). A wrong cover under "Volume 3" is worse than an empty
+/// spine here too, and a rule fixed on Apple's morning bug (tagged editions
+/// ranked first, an untagged row not filling a gap) had neither fix here
+/// until it was extracted (T3/F15, 2026-09-13).
 enum GoogleBooksMatch {
-    /// One volume per number — the first result for it — sorted by number.
+    /// One volume per number, ranked and matched exactly as Apple's are.
+    /// - Parameter language: the reader's language; an item confidently in
+    ///   another is not theirs, whatever a title match says. Google decodes
+    ///   `volumeInfo.language` on every item, so — unlike Apple's blurb
+    ///   guess — this is a plain equality check; an item with no language at
+    ///   all is kept rather than guessed at.
     static func volumes(
-        in items: [GoogleBooksItem], titles: [String], isNovel: Bool
+        in items: [GoogleBooksItem], titles: [String], isNovel: Bool, language: String? = nil
     ) -> [GoogleBooksVolume] {
-        let wanted = Set(titles.map(AppleBooksMatch.normalise).filter { !$0.isEmpty })
-        guard !wanted.isEmpty else { return [] }
-        var byNumber: [Int: GoogleBooksVolume] = [:]
-        for item in items {
-            guard let parts = AppleBooksMatch.split(item.volumeInfo.title),
-                  wanted.contains(AppleBooksMatch.normalise(parts.title))
-            else { continue }
-            if let tag = parts.tag, tag.contains("novel") != isNovel { continue }
-            guard byNumber[parts.number] == nil else { continue }
-            byNumber[parts.number] = GoogleBooksVolume(
-                id: item.id,
-                number: parts.number,
-                title: item.volumeInfo.title,
-                language: item.volumeInfo.language,
-                thumbnailURL: largeThumbnail(item.volumeInfo.imageLinks),
-                pageURL: SafeLink.web(item.volumeInfo.canonicalVolumeLink ?? item.volumeInfo.infoLink)
-            )
+        let matched = AppleBooksMatch.matchedVolumes(
+            in: items, nameOf: \.volumeInfo.title, titles: titles, isNovel: isNovel
+        ) { item, _ in
+            guard let language, let itemLanguage = item.volumeInfo.language else { return true }
+            return itemLanguage == language
         }
-        return byNumber.values.sorted { $0.number < $1.number }
+        return matched.map { entry in
+            GoogleBooksVolume(
+                id: entry.item.id,
+                number: entry.parts.number,
+                title: entry.item.volumeInfo.title,
+                language: entry.item.volumeInfo.language,
+                thumbnailURL: largeThumbnail(entry.item.volumeInfo.imageLinks),
+                pageURL: SafeLink.web(
+                    entry.item.volumeInfo.canonicalVolumeLink ?? entry.item.volumeInfo.infoLink
+                )
+            )
+        }.sorted { $0.number < $1.number }
     }
 
     /// Google's `thumbnail` is 128x184 and `http://`, not `https://` — ATS

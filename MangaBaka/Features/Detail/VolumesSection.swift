@@ -72,7 +72,7 @@ struct VolumesSection: View {
             Text(volume.label)
                 .typeCardTitle()
                 .foregroundStyle(Palette.textPrimary)
-            if let year = volume.date.map({ Calendar.current.component(.year, from: $0) }) {
+            if let year = volume.date.map(Self.spineYear(for:)) {
                 Text(String(year))
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
@@ -84,10 +84,33 @@ struct VolumesSection: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// The volume's release year, read in UTC.
+    ///
+    /// `SeriesWork.date` parses a release date ("2021-01-01") as UTC
+    /// midnight for exactly this reason — reading it back with the
+    /// device's own zone rolls a 1 January release onto 31 December of the
+    /// previous year for every reader west of UTC (S2, 2026-09-13).
+    /// Release dates are UTC midnight on the wire, so the style carries the
+    /// zone rather than the device's — `.timeZone(.gmt)` is a *symbol* that
+    /// prints the zone, not a setting; the zone is set on the style itself.
+    nonisolated static var utcMonthYear: Date.FormatStyle {
+        Date.FormatStyle(timeZone: .gmt).month(.wide).year()
+    }
+
+    nonisolated static var utcDayMonthYear: Date.FormatStyle {
+        Date.FormatStyle(timeZone: .gmt).day().month(.wide).year()
+    }
+
+    nonisolated static func spineYear(for date: Date) -> Int {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return utc.component(.year, from: date)
+    }
+
     private func accessibilityLabel(_ volume: SeriesWork.Volume) -> String {
         var parts = [volume.label]
         if let date = volume.date {
-            parts.append(date.formatted(.dateTime.month(.wide).year()))
+            parts.append(date.formatted(Self.utcMonthYear))
         }
         if volume.editions.count > 1 {
             parts.append("\(volume.editions.count) editions")
@@ -148,7 +171,10 @@ struct VolumeSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let date = volume.date {
-                    Text(date.formatted(.dateTime.day().month(.wide).year()))
+                    // `.timeZone(.gmt)`: `date` is UTC midnight (S2) — the
+                    // device zone would print 31 December for a 1 January
+                    // release west of UTC.
+                    Text(date.formatted(VolumesSection.utcDayMonthYear))
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textMuted)
                 }

@@ -19,6 +19,12 @@ struct AppleBooksMatchTests {
 
     /// The live GB answer for "solo leveling", 2026-09-11, reduced: comics,
     /// novels of the same name, and the Ragnarok sequel.
+    ///
+    /// Result 7, "Solo Leveling Volume 3", carries no tag at all — the same
+    /// shape as an untagged novel edition. Once the comic shelf has tagged
+    /// "(comic)" rows of its own (results 1, 3, 5, 6), an untagged row must
+    /// not fill a number gap on it (T4), so volume 3 is absent here even
+    /// though result 7 parses fine on its own.
     @Test("The series' own comic volumes, one per number, in order; nothing else")
     func strictMatch() {
         let results = [
@@ -28,13 +34,35 @@ struct AppleBooksMatchTests {
             result(4, "Solo Leveling: Ragnarok, Vol. 1 (comic)"),
             result(5, "Solo Leveling, Vol. 2 (comic)"),
             result(6, "Solo Leveling, Vol. 8 (comic)", price: 4.99), // a second listing
-            result(7, "Solo Leveling Volume 3"),
+            result(7, "Solo Leveling Volume 3"), // untagged — dropped by T4, see above
             result(8, "Something Else, Vol. 4 (comic)")
         ]
         let volumes = AppleBooksMatch.volumes(in: results, titles: ["Solo Leveling"], isNovel: false)
-        #expect(volumes.map(\.number) == [1, 2, 3, 8])
-        #expect(volumes.map(\.id) == [1, 5, 7, 3], "The first listing of a number wins")
+        #expect(volumes.map(\.number) == [1, 2, 8])
+        #expect(volumes.map(\.id) == [1, 5, 3], "The first listing of a number wins")
         #expect(volumes[0].artworkURL?.absoluteString.hasSuffix("600x600bb.jpg") == true)
+    }
+
+    /// T4: an untagged row must not fill a number gap the comic's own
+    /// tagged rows leave — Square Enix's "01 (Manga)"…"16 (Manga)" run is
+    /// missing "03", and an untagged "Volume 3" (the shape J-Novel Club's
+    /// own bare early novels take) must not sit on the comic's shelf in its
+    /// place.
+    ///
+    /// Before this fix: `comic.map(\.number)` included `3`, sourced from
+    /// the untagged row, because `if let tag = parts.tag` skipped the
+    /// kind check entirely when there was no tag to check.
+    @Test("An untagged row cannot fill a gap in a shelf that already has tagged editions")
+    func untaggedRowDoesNotFillGap() {
+        let results = [
+            result(1, "The Apothecary Diaries 01 (Manga)"),
+            result(2, "The Apothecary Diaries 02 (Manga)"),
+            // No "03 (Manga)" — the gap an untagged row must not fill.
+            result(3, "The Apothecary Diaries 16 (Manga)"),
+            result(4, "The Apothecary Diaries: Volume 3")
+        ]
+        let comic = AppleBooksMatch.volumes(in: results, titles: ["The Apothecary Diaries"], isNovel: false)
+        #expect(comic.map(\.number) == [1, 2, 16], "volume 3 stays absent, not the novel's cover")
     }
 
     /// The live GB answer for "The Apothecary Diaries", 2026-09-13, reduced.
@@ -129,11 +157,73 @@ struct AppleBooksMatchTests {
         #expect(marker.isEmpty)
     }
 
+    /// T1: Kodansha writes the bare Japanese number in brackets rather than
+    /// after a space — 0 of 34 Attack on Titan volumes matched the
+    /// whitespace-then-digits shape the fallback was built from (Shueisha's
+    /// ONE PIECE, above). Half- and full-width parentheses both occur.
+    @Test("The Japanese store's bracketed bare numbering (Kodansha)")
+    func bareNumberingWithBrackets() {
+        let results = [
+            result(1, "進撃の巨人 (1)"),
+            result(2, "進撃の巨人(34)"),
+            result(3, "進撃の巨人（12）") // full-width parentheses
+        ]
+        let bare = AppleBooksMatch.volumes(in: results, titles: ["進撃の巨人"], isNovel: false, numbering: .bare)
+        #expect(bare.map(\.number) == [1, 12, 34])
+        #expect(bare.map(\.id) == [1, 3, 2])
+    }
+
     @Test("A novel series takes the novels and leaves the comics")
     func novels() {
         let results = [result(1, "Solo Leveling, Vol. 1 (comic)"), result(2, "Solo Leveling, Vol. 1 (novel)")]
         let volumes = AppleBooksMatch.volumes(in: results, titles: ["Solo Leveling"], isNovel: true)
         #expect(volumes.map(\.id) == [2])
+    }
+
+    /// T8/F5: a comic tagged "(Graphic Novel)" is a comic, not a novel — the
+    /// word "novel" alone is not enough. `AppleBooksMatch.isNovelTag` is the
+    /// one place this is decided, shared with Google's matcher (T3).
+    @Test("\"(Graphic Novel)\" reads as a comic, not a novel")
+    func graphicNovelIsAComic() {
+        #expect(AppleBooksMatch.isNovelTag("graphic novel") == false)
+        #expect(AppleBooksMatch.isNovelTag("light novel") == true)
+        let results = [result(1, "Watchmen, Vol. 1 (Graphic Novel)")]
+        let comic = AppleBooksMatch.volumes(in: results, titles: ["Watchmen"], isNovel: false)
+        #expect(comic.map(\.id) == [1])
+        let novel = AppleBooksMatch.volumes(in: results, titles: ["Watchmen"], isNovel: true)
+        #expect(novel.isEmpty)
+    }
+
+    /// F3: the fixture above is one publisher per rule. Seven Seas puts the
+    /// kind bracket *before* the marker; VIZ appends a subtitle *after* the
+    /// number. Both were rejected outright by the pattern the morning of
+    /// 2026-09-13 fixed for Square Enix's shape alone.
+    @Test("Seven Seas' leading bracket and VIZ's trailing subtitle both parse")
+    func sevenSeasAndVIZShapes() {
+        let sevenSeas = AppleBooksMatch.split("Mushoku Tensei: Jobless Reincarnation (Manga) Vol. 1")
+        #expect(sevenSeas?.title == "Mushoku Tensei: Jobless Reincarnation")
+        #expect(sevenSeas?.number == 1)
+        #expect(sevenSeas?.tag == "manga")
+
+        let viz = AppleBooksMatch.split("Naruto, Vol. 1: Uzumaki Naruto")
+        #expect(viz?.title == "Naruto")
+        #expect(viz?.number == 1)
+
+        // Still rejected: the subtitle sitting *between* the title and the
+        // marker is a different series, not a dropped trailing subtitle.
+        let ragnarok = AppleBooksMatch.split("Solo Leveling: Ragnarok, Vol. 1")
+        #expect(ragnarok?.title != "Solo Leveling")
+    }
+
+    /// F4: `split` correctly reads the number out of an omnibus title, but
+    /// the shelf must still reject it — a "Deluxe" collects three volumes
+    /// into one, so it is not volume 12 of the plain series.
+    @Test("A deluxe/omnibus edition is not a numbered volume of the plain series")
+    func deluxeEditionIsNotAPlainVolume() {
+        #expect(AppleBooksMatch.split("Berserk Deluxe Volume 12")?.number == 12)
+        let results = [result(1, "Berserk Deluxe Volume 12")]
+        let shelf = AppleBooksMatch.volumes(in: results, titles: ["Berserk"], isNovel: false)
+        #expect(shelf.isEmpty, "\"Berserk Deluxe\" must not appear on the plain \"Berserk\" shelf")
     }
 
     /// The store lists ONE PIECE as "One Piece, Vol. 1"; the alternative
@@ -187,6 +277,36 @@ struct AppleBooksClientTests {
         for expected in ["term=Solo%20Leveling", "media=ebook", "entity=ebook", "country=GB", "limit=200"] {
             #expect(url.contains(expected), Comment(rawValue: expected))
         }
+    }
+
+    /// T9: a strict `.iso8601` `Date` on `releaseDate` — a field nothing on
+    /// screen reads — used to fail the whole envelope's decode over one row
+    /// with a fractional second, sinking all 200 results to "Apple Books
+    /// couldn't be reached". Before the fix (`releaseDate: Date?` with
+    /// `decoder.dateDecodingStrategy = .iso8601`), this would fail with:
+    /// `volumes == nil` — one bad date rejected the other 199 good rows.
+    @Test("A 200-row envelope with one odd release date still decodes in full")
+    func oneOddReleaseDateDoesNotSinkTheEnvelope() async throws {
+        let rows: [[String: Any]] = (1...200).map { number in
+            // Row 143 is the one the reviewer measured live: a fractional-
+            // second timestamp `.iso8601` (no fractional-seconds option)
+            // rejects outright.
+            let date = number == 143 ? "2026-09-13T10:00:00.123Z" : "2021-02-16T08:00:00Z"
+            return [
+                "trackId": number,
+                "trackName": "Solo Leveling, Vol. \(number) (comic)",
+                "artistName": "Chu-Gong",
+                "releaseDate": date
+            ]
+        }
+        let envelope = try JSONSerialization.data(withJSONObject: ["resultCount": 200, "results": rows])
+        URLProtocolStub.setHandler { _ in .respond(.init(body: envelope)) }
+        defer { URLProtocolStub.reset() }
+        let client = makeClient(clock: TestClock())
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
+
+        let volumes = await client.volumes(for: series, country: "gb")
+        #expect(volumes?.count == 200, "one odd date must not sink the other 199 rows")
     }
 
     @Test("A second look inside a week costs no request; after a week it does")
@@ -245,6 +365,25 @@ struct AppleVolumesRowTests {
         #expect(row(volume, expected: nil).countLine == "1")
     }
 
+    /// S12: `countLine` used to compare a count with a number
+    /// (`expected > volumes.count`), so a 15-volume shelf numbered 1-14 and
+    /// 30 — missing volume 15 itself — read as complete because the *count*
+    /// already matched `expected`. Before the fix this line would have
+    /// read: `#expect(built.countLine == "15")`.
+    @Test("The count admits a gap even when the total already matches")
+    @MainActor
+    func countLineChecksCoverage() {
+        let numbers = Array(1...14) + [30]
+        let volumes = numbers.map {
+            AppleBooksVolume(
+                id: $0, number: $0, title: "x", artworkURL: nil, storeURL: nil,
+                price: nil, formattedPrice: nil, releaseDate: nil
+            )
+        }
+        let built = AppleVolumesRow(volumes: VolumeShelf.merge(apple: volumes, google: []), expected: 15)
+        #expect(built.countLine == "15 of 15", "15 numbered volumes, but volume 15 itself is missing")
+    }
+
     /// The phone showed MangaBaka's seven One Piece editions with no hint
     /// of the store, and it was not possible to tell a failed request from
     /// a build without the feature. Now a failure says so.
@@ -275,5 +414,27 @@ struct AppleVolumesRowTests {
         let either = "if shelf.isEmpty {\n            VolumesSection(\n"
         #expect(source.contains(either))
         #expect(source.contains("volumes: extras.volumes,"))
+    }
+}
+
+/// S2: `SeriesWork.date` parses a release date as UTC midnight on purpose —
+/// reading it back through the device's own calendar rolls a 1 January
+/// release onto 31 December of the previous year for every reader west of
+/// UTC. Before the fix, `VolumesSection` read the year with
+/// `Calendar.current.component(.year, from:)`, so on a device set to
+/// America/Los_Angeles this control would have read 2020, not 2021.
+@Suite("Volume spine year")
+struct VolumesSectionSpineYearTests {
+    @Test("The spine year is read in UTC, not the device's own zone")
+    func spineYearIsUTC() {
+        let utcMidnight = Date(timeIntervalSince1970: 1_609_459_200) // 2021-01-01T00:00:00Z
+        #expect(VolumesSection.spineYear(for: utcMidnight) == 2021)
+
+        // Control: this is the failure the fix guards against — the same
+        // instant read through a negative-offset zone, which is what
+        // `Calendar.current` would do on a US West Coast phone.
+        var losAngeles = Calendar(identifier: .gregorian)
+        losAngeles.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .current
+        #expect(losAngeles.component(.year, from: utcMidnight) == 2020)
     }
 }

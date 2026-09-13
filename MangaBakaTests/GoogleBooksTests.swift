@@ -47,6 +47,48 @@ struct GoogleBooksMatchTests {
         #expect(volumes.map(\.id) == ["2"])
     }
 
+    /// T3/F15: before this shared matcher, Google's own `volumes` had
+    /// neither of Apple's morning fixes. An untagged "Volume 1" ranked
+    /// ahead of "01 (Manga)" by the store's own relevance order used to win
+    /// as first-seen; now tagged editions are ranked first, whichever
+    /// store answered.
+    @Test("A tagged edition beats an untagged one ranked first, same as Apple's")
+    func taggedEditionRankedFirst() {
+        let items = [
+            item("1", "The Apothecary Diaries: Volume 1"), // untagged, ranked first by the store
+            item("2", "The Apothecary Diaries 01 (Manga)")
+        ]
+        let comic = GoogleBooksMatch.volumes(in: items, titles: ["The Apothecary Diaries"], isNovel: false)
+        #expect(comic.map(\.id) == ["2"], "the tagged (Manga) edition wins, not whichever came first")
+    }
+
+    /// T3/F15: `language` was decoded onto every item and never filtered
+    /// on, so a foreign edition could fill a gap on an English shelf with
+    /// no way to reject it.
+    @Test("An item in another language is rejected when a language is asked for")
+    func languageFilter() {
+        let items = [
+            item("1", "Solo Leveling, Vol. 1 (comic)", language: "fr"),
+            item("2", "Solo Leveling, Vol. 2 (comic)", language: "en"),
+            item("3", "Solo Leveling, Vol. 3 (comic)", language: nil) // unknown: kept, not guessed at
+        ]
+        let volumes = GoogleBooksMatch.volumes(
+            in: items, titles: ["Solo Leveling"], isNovel: false, language: "en"
+        )
+        #expect(volumes.map(\.number) == [2, 3])
+    }
+
+    /// T8/F5: a comic tagged "(Graphic Novel)" is a comic, not a novel —
+    /// the same rule as Apple's, since both now share `isNovelTag`.
+    @Test("\"(Graphic Novel)\" reads as a comic, not a novel")
+    func graphicNovelIsAComic() {
+        let items = [item("1", "Watchmen, Vol. 1 (Graphic Novel)")]
+        let comic = GoogleBooksMatch.volumes(in: items, titles: ["Watchmen"], isNovel: false)
+        #expect(comic.map(\.id) == ["1"])
+        let novel = GoogleBooksMatch.volumes(in: items, titles: ["Watchmen"], isNovel: true)
+        #expect(novel.isEmpty)
+    }
+
     /// The control: "Solo Leveling, Vol. 1 (comic)" from Ize Press had no
     /// `imageLinks` at all in the live answer (2026-09-12) — a matched
     /// volume with no artwork must still produce no gallery entry, not a

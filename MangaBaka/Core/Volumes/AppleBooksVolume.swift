@@ -20,7 +20,12 @@ struct AppleBooksVolume: Codable, Identifiable, Sendable, Equatable {
     let price: Double?
     /// "£6.99", in the store's own formatting.
     let formattedPrice: String?
-    let releaseDate: Date?
+    /// Raw, undecoded ("2021-02-16T08:00:00Z" or a fractional-second
+    /// variant) and unread by anything on screen — kept as a string on
+    /// purpose. A strict `.iso8601` `Date` here sank the whole 200-row
+    /// answer for one odd row (T9, 2026-09-13); nothing reads this field,
+    /// so nothing should be able to fail decoding it.
+    let releaseDate: String?
 
     var cover: Cover {
         Cover(raw: artworkURL, x150: nil, x250: nil, x350: nil, blurhash: nil, width: nil, height: nil)
@@ -67,7 +72,8 @@ struct AppleBooksResult: Decodable, Sendable, Equatable {
     let trackViewUrl: URL?
     let price: Double?
     let formattedPrice: String?
-    let releaseDate: Date?
+    /// String, not `Date` — see `AppleBooksVolume.releaseDate`.
+    let releaseDate: String?
 }
 
 /// Which results are volumes of *this* series, and nothing else.
@@ -100,51 +106,102 @@ enum AppleBooksMatch {
         language: String? = nil,
         numbering: Numbering = .marker
     ) -> [AppleBooksVolume] {
-        let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
-        guard !wanted.isEmpty else { return [] }
         let surnames = creators.compactMap { $0.split(separator: " ").last.map { normalise(String($0)) } }
             .filter { $0.count >= 3 }
-        var byNumber: [Int: AppleBooksVolume] = [:]
+        let matched = matchedVolumes(
+            in: results, nameOf: \.trackName, titles: titles, isNovel: isNovel, numbering: numbering
+        ) { result, _ in
+            if !surnames.isEmpty {
+                let credit = normalise(result.artistName ?? "")
+                guard surnames.contains(where: { credit.contains($0) }) else { return false }
+            }
+            if let language, let blurb = languageOf(result.description), blurb != language { return false }
+            return true
+        }
+        return matched.map { entry in
+            AppleBooksVolume(
+                id: entry.item.trackId,
+                number: entry.parts.number,
+                title: entry.item.trackName,
+                artworkURL: entry.item.artworkUrl100.flatMap(enlarge),
+                storeURL: entry.item.trackViewUrl.flatMap(SafeLink.web),
+                price: entry.item.price,
+                formattedPrice: entry.item.formattedPrice,
+                releaseDate: entry.item.releaseDate
+            )
+        }.sorted { $0.number < $1.number }
+    }
+
+    /// One item ranked and matched to a volume number, before its store
+    /// builds a volume out of it. Shared so a rule fixed on one catalogue
+    /// (Apple's) is fixed on every catalogue that reuses this (Google's) —
+    /// T3/F15, 2026-09-13.
+    struct Matched<Item> {
+        let item: Item
+        let parts: Parts
+    }
+
+    /// The shared matcher behind both `AppleBooksMatch.volumes` and
+    /// `GoogleBooksMatch.volumes`: title match, tagged-editions-first
+    /// ranking, one volume per number, and the untagged-gap-filler guard
+    /// (T4). `extraFilter` is where a store's own checks (creator credit,
+    /// blurb language, catalogue language) plug in.
+    static func matchedVolumes<Item>(
+        in items: [Item],
+        nameOf: (Item) -> String,
+        titles: [String],
+        isNovel: Bool,
+        numbering: Numbering = .marker,
+        extraFilter: (Item, Parts) -> Bool = { _, _ in true }
+    ) -> [Matched<Item>] {
+        let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
+        guard !wanted.isEmpty else { return [] }
         // Two passes, tagged editions first. Store relevance order put "The
         // Apothecary Diaries: Volume 1" (the light novel, untagged) ahead of
         // "The Apothecary Diaries 01 (Manga)", so first-seen-wins showed the
         // novel's cover on the comic's shelf (Abdi's phone, 2026-09-13). An
         // edition that says what it is outranks one that does not.
-        let ranked = results.enumerated().sorted { lhs, rhs in
-            let (lhsTagged, rhsTagged) = (isTagged(lhs.element), isTagged(rhs.element))
+        let ranked = items.enumerated().sorted { lhs, rhs in
+            let lhsTagged = isTagged(nameOf(lhs.element), numbering)
+            let rhsTagged = isTagged(nameOf(rhs.element), numbering)
             return lhsTagged != rhsTagged ? lhsTagged : lhs.offset < rhs.offset
         }.map(\.element)
-        for result in ranked {
-            guard let parts = split(result.trackName, numbering: numbering),
-                  wanted.contains(normalise(parts.title))
+        var byNumber: [Int: Matched<Item>] = [:]
+        // Set only while building the comic shelf (`isNovel == false`): an
+        // untagged row is normally a light novel's own bare early numbering
+        // (J-Novel Club tags only from volume 7 on; 1-6 are bare "Volume N"),
+        // so once the comic shelf has a tagged edition of its own, an
+        // untagged row must not fill a number the comic hasn't reached
+        // (T4). The novel shelf keeps accepting its own untagged rows —
+        // that bare numbering is the normal case there, not the leak.
+        // Marker numbering only: in the Japanese store a "tag" is an edition
+        // word (モノクロ版), and "ONE PIECE 2" without one is the same comic,
+        // not a novel leaking in.
+        var comicShelfHasTaggedEdition = false
+        for item in ranked {
+            let name = nameOf(item)
+            guard let parts = split(name, numbering: numbering), wanted.contains(normalise(parts.title))
             else { continue }
-            if let tag = parts.tag, isNovelTag(tag) != isNovel { continue }
-            if !surnames.isEmpty {
-                let credit = normalise(result.artistName ?? "")
-                guard surnames.contains(where: { credit.contains($0) }) else { continue }
+            if let tag = parts.tag {
+                guard isNovelTag(tag) == isNovel else { continue }
+                if !isNovel { comicShelfHasTaggedEdition = true }
+            } else if !isNovel && comicShelfHasTaggedEdition && numbering == .marker {
+                continue
             }
-            if let language, let blurb = languageOf(result.description), blurb != language { continue }
+            guard extraFilter(item, parts) else { continue }
             guard byNumber[parts.number] == nil else { continue }
-            byNumber[parts.number] = AppleBooksVolume(
-                id: result.trackId,
-                number: parts.number,
-                title: result.trackName,
-                artworkURL: result.artworkUrl100.flatMap(enlarge),
-                storeURL: result.trackViewUrl.flatMap(SafeLink.web),
-                price: result.price,
-                formattedPrice: result.formattedPrice,
-                releaseDate: result.releaseDate
-            )
+            byNumber[parts.number] = Matched(item: item, parts: parts)
         }
-        return byNumber.values.sorted { $0.number < $1.number }
+        return byNumber.values.sorted { $0.parts.number < $1.parts.number }
     }
 
-    private static func isTagged(_ result: AppleBooksResult) -> Bool {
-        split(result.trackName)?.tag != nil
+    private static func isTagged(_ name: String, _ numbering: Numbering) -> Bool {
+        split(name, numbering: numbering)?.tag != nil
     }
 
-    /// "(novel)", "(Light Novel)" → a novel; "(comic)", "(Manga)" → not.
-    private static func isNovelTag(_ tag: String) -> Bool { tag.contains("novel") }
+    /// "(novel)", "(Light Novel)" → a novel; "(comic)", "(Manga)",
+    /// "(Graphic Novel)" → not (T8/F5: "novel" alone is not enough).
+    static func isNovelTag(_ tag: String) -> Bool { tag.contains("novel") && !tag.contains("graphic") }
 
     struct Parts: Equatable {
         let title: String
@@ -169,34 +226,54 @@ enum AppleBooksMatch {
     /// bracketed kind follows the number: Square Enix's "The Apothecary
     /// Diaries 01 (Manga)" (GB store, 2026-09-13). The bracket is what
     /// makes a bare number safe to read as a volume; "Kingdom 2" alone
-    /// could be a sequel's title.
+    /// could be a sequel's title. The kind bracket may also come *before*
+    /// the marker — Seven Seas' "Mushoku Tensei: Jobless Reincarnation
+    /// (Manga) Vol. 1" (GB store, 2026-09-13) — and the store may append a
+    /// subtitle after the number, dropped rather than parsed: VIZ's
+    /// "Naruto, Vol. 1: Uzumaki Naruto" (F3).
     static func split(_ name: String, numbering: Numbering = .marker) -> Parts? {
         switch numbering {
         case .marker:
             guard let match = name.wholeMatch(of: pattern) else { return nil }
-            guard let digits = match.output.2 ?? match.output.3, let number = Int(digits) else { return nil }
-            let tag = match.output.4.map { $0.lowercased() }
+            guard let digits = match.output.3 ?? match.output.4, let number = Int(digits) else { return nil }
+            let tag = (match.output.2 ?? match.output.5).map { $0.lowercased() }
             return Parts(title: String(match.output.1), number: number, tag: tag)
         case .bare:
             guard let match = name.wholeMatch(of: barePattern) else { return nil }
-            guard let number = Int(match.output.3) else { return nil }
+            guard let digits = match.output.3 ?? match.output.4, let number = Int(digits) else { return nil }
             return Parts(title: String(match.output.1), number: number, tag: match.output.2.map(String.init))
         }
-    }
-
-    // swiftlint:disable:next large_tuple
-    private static var barePattern: Regex<(Substring, Substring, Substring?, Substring)> {
-        // Title, an optional edition word (モノクロ版 monochrome, カラー版
-        // colour, 新装版 new edition, 完全版 complete), then the number.
-        /^(.+?)\s+(?:(モノクロ版|カラー版|新装版|完全版)\s*)?(\d+)\s*$/
     }
 
     // Built per call: a Regex is not Sendable, so it cannot be a static
     // constant. Cheap enough — the store answers at most 200 names.
     // swiftlint:disable:next large_tuple
-    private static var pattern: Regex<(Substring, Substring, Substring?, Substring?, Substring?)> {
-        /^(.+?)[,:]?\s+(?:(?:vol\.?|volume|#)\s*(\d+)|(\d+)(?=\s*\())\s*(?:\(([^)]+)\))?\s*$/.ignoresCase()
+    private static var barePattern: Regex<(Substring, Substring, Substring?, Substring?, Substring?)> {
+        // Title, an optional edition word (モノクロ版 monochrome, カラー版
+        // colour, 新装版 new edition, 完全版 complete), then a bare number —
+        // Shueisha's "呪術廻戦 30". Or, with no edition word, the number in
+        // parentheses (half- or full-width): Kodansha's "進撃の巨人 (1)" and
+        // "進撃の巨人(34)" — 0 of 34 Attack on Titan volumes matched the
+        // whitespace-then-bare-digits shape alone (T1, 2026-09-13; the
+        // fixture at the time was ONE PIECE, Shueisha's shape only).
+        /^(.+?)(?:\s+(?:(モノクロ版|カラー版|新装版|完全版)\s*)?(\d+)|\s*[（(](\d+)[)）])\s*$/
     }
+
+    private static var pattern: PatternMatch {
+        // 1 title, 2 a kind bracket before the marker (Seven Seas), 3/4 the
+        // number (marker word or bare-before-bracket), 5 a kind bracket
+        // after the number (the common case), and a trailing "[,:] subtitle"
+        // dropped rather than captured — VIZ's "Naruto, Vol. 1: Uzumaki
+        // Naruto" (F3, 2026-09-13).
+        // swiftlint:disable:next line_length
+        /^(.+?)[,:]?\s+(?:\(([^)]+)\)\s+)?(?:(?:vol\.?|volume|#)\s*(\d+)|(\d+)(?=\s*\())\s*(?:\(([^)]+)\))?(?:[,:]\s*.+)?\s*$/
+            .ignoresCase()
+    }
+
+    // swiftlint:disable large_tuple
+    private typealias PatternMatch =
+        Regex<(Substring, Substring, Substring?, Substring?, Substring?, Substring?)>
+    // swiftlint:enable large_tuple
 
     /// The language a blurb is written in, as a primary subtag ("fr"), or
     /// nil when there is no blurb or the recogniser is not sure.

@@ -40,8 +40,10 @@ actor AppleBooksClient {
     ) async -> [AppleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         // Versioned: a match rule that tightens must not be outlived by a
-        // week of cached answers made under the looser one.
-        let key = "v4-\(series.id)-\(country.lowercased())-\(language ?? "any")"
+        // week of cached answers made under the looser one. v5: the
+        // tagged-vs-untagged and bracket-before-marker rules changed again
+        // (T1/F3/T4, 2026-09-13).
+        let key = "v5-\(series.id)-\(country.lowercased())-\(language ?? "any")"
         if let cached = readCache(key) { return cached }
 
         guard let results = await search(query, country: country) else { return nil }
@@ -62,7 +64,7 @@ actor AppleBooksClient {
     /// must be the title with a bare number, the way that store writes it.
     func japaneseVolumes(for series: Series) async -> [AppleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
-        let key = "v4-\(series.id)-jp-ja-bare"
+        let key = "v5-\(series.id)-jp-ja-bare"
         if let cached = readCache(key) { return cached }
 
         guard let results = await search(query, country: "jp") else { return nil }
@@ -103,9 +105,11 @@ actor AppleBooksClient {
             return nil
         }
         guard (200..<300).contains(http.statusCode) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(Envelope.self, from: data).results
+        // No `.dateDecodingStrategy` needed: `releaseDate` decodes as a
+        // plain `String` now (T9) — a strict `.iso8601` `Date` here used to
+        // fail the whole 200-row envelope over one row with a fractional
+        // second or a missing zone, for a field nothing reads.
+        return try? JSONDecoder().decode(Envelope.self, from: data).results
     }
 
     // MARK: - Cache
