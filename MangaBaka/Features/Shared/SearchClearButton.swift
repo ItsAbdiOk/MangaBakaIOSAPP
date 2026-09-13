@@ -15,26 +15,35 @@ struct SearchClearButton: View {
     /// re-runs its query, the tag picker does not.
     var onClear: (() -> Void)?
 
+    private var hasQuery: Bool { !text.trimmingCharacters(in: .whitespaces).isEmpty }
+
     var body: some View {
-        if !text.trimmingCharacters(in: .whitespaces).isEmpty {
-            Button {
-                text = ""
-                onClear?()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    // textMuted, not textQuaternary: the latter measured 2.52:1
-                    // and this is the control a reader reaches for when a long
-                    // query is wrong.
-                    .foregroundStyle(Palette.textMuted)
-                    // A 16pt glyph is a 16pt target. The tap area is widened to
-                    // the platform minimum without the icon growing; it was
-                    // 30pt, fourteen under, beside the file that sets 44.
-                    .frame(width: Metrics.tapTarget, height: Metrics.tapTarget)
-                    .contentShape(Rectangle())
+        Group {
+            if hasQuery {
+                Button {
+                    text = ""
+                    onClear?()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        // textMuted, not textQuaternary: the latter measured 2.52:1
+                        // and this is the control a reader reaches for when a long
+                        // query is wrong.
+                        .foregroundStyle(Palette.textMuted)
+                        // A 16pt glyph is a 16pt target. The tap area is widened to
+                        // the platform minimum without the icon growing; it was
+                        // 30pt, fourteen under, beside the file that sets 44.
+                        .frame(width: Metrics.tapTarget, height: Metrics.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.press)
+                .accessibilityLabel("Clear search")
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
-            .buttonStyle(.press)
-            .accessibilityLabel("Clear search")
         }
+        // Keyed on `hasQuery` rather than `text` itself: every keystroke is a
+        // change to `text`, and this button's own appearance only ever
+        // depends on the one boolean crossing.
+        .animation(Motion.reduced(Motion.snappy), value: hasQuery)
     }
 }

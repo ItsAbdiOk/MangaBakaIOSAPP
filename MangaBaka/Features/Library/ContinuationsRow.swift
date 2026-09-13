@@ -53,6 +53,7 @@ struct ContinuationsRow: View {
                         ForEach(items) { item in
                             Button {
                                 zoomRoute?.source = ZoomRoute.id(Self.rowID, item.series.id)
+                                zoomRoute?.neighbours = items.map(\.series)
                                 path.append(item.series)
                             } label: {
                                 CoverCard(
@@ -64,6 +65,7 @@ struct ContinuationsRow: View {
                             .zoomSource(Self.rowID, item.series.id)
                             .buttonStyle(.press)
                             .arrives()
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)

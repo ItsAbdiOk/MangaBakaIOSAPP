@@ -19,8 +19,8 @@ struct BlockedTagsSection: View {
     var body: some View {
         SettingsSection(title: "Blocked tags", caption: caption) {
             FlowLayout(spacing: 7) {
-                ForEach(blockedTags.blocked.tags) { tag in
-                    chip(tag)
+                ForEach(Array(blockedTags.blocked.tags.enumerated()), id: \.element.id) { index, tag in
+                    chip(tag).arrives(index: index)
                 }
                 addControl
             }

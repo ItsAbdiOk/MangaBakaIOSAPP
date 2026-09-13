@@ -11,6 +11,7 @@ import SwiftUI
 struct InlineSearchField: View {
     let prompt: String
     @Binding var text: String
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 9) {
@@ -18,6 +19,7 @@ struct InlineSearchField: View {
                 .font(.system(.subheadline, weight: .medium))
                 .foregroundStyle(Palette.textMuted)
             TextField(prompt, text: $text)
+                .focused($isFocused)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .typeBody()
@@ -33,6 +35,15 @@ struct InlineSearchField: View {
         .background(Palette.surfaceField, in: RoundedRectangle(
             cornerRadius: 13, style: .continuous
         ))
+        .overlay {
+            // The ring itself, not the hairline below, answers focus:
+            // scroll-linked's own spring (`Motion.glide`, fully damped) reads
+            // as the field settling into place rather than snapping to it.
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(Palette.accent, lineWidth: isFocused ? 1.5 : 0)
+                .opacity(isFocused ? 1 : 0)
+        }
+        .animation(Motion.reduced(Motion.glide), value: isFocused)
         .hairlineBorder(Palette.hairline, radius: 13)
     }
 }

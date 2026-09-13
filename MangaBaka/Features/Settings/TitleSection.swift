@@ -20,7 +20,7 @@ struct TitleSection: View {
         ) {
             SettingsCard {
                 ForEach(Array(TitlePreference.allCases.enumerated()), id: \.element) { index, option in
-                    row(option)
+                    row(option).arrives(index: index)
                     if index < TitlePreference.allCases.count - 1 { SettingsDivider() }
                 }
             }

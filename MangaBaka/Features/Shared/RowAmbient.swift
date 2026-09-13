@@ -50,6 +50,13 @@ struct RowAmbient: View {
             .padding(.horizontal, -Metrics.gutter)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+            // A row keeps its identity while its series changes underneath
+            // it — paging, a filter narrowing the feed — so without this the
+            // ground cut straight from one row's colour to the next's. The
+            // mean tends to move gradually as covers page in, which is
+            // exactly what a slow ambient cross-fade should track rather
+            // than a scroll-linked one.
+            .animation(Motion.reduced(Motion.glide), value: colour)
         }
     }
 

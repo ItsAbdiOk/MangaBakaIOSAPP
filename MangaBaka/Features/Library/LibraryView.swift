@@ -54,7 +54,7 @@ struct LibraryView: View {
                 .overlay(alignment: .trailing) {
                     if model.showsJumpIndex {
                         JumpIndex(targets: model.jumpTargets) { id in
-                            Motion.run(.snappy(duration: 0.25)) {
+                            Motion.run(Motion.snappy) {
                                 scroller.scrollTo(id, anchor: .top)
                             }
                         }

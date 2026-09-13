@@ -223,14 +223,25 @@ private struct CharacterProfileContent: View {
     /// surprising behaviour, not the safe one.
     @State private var revealedSpoilers: Set<Int> = []
 
+    /// This sheet's own reading order, for `.arrives(index:)` below — the
+    /// same idea `SeriesDetailView.Section` gives the series page, at the
+    /// scale of one profile: portrait and facts lead, then the description,
+    /// then everywhere else the character shows up.
+    private enum Section: Int {
+        case header, facts, description, voiceActors, appearances, sourceLink
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
-            header
+            CharacterProfileHeader(profile: profile)
+                .arrives(index: Section.header.rawValue)
             if !profile.facts.isEmpty {
                 factsTable
+                    .arrives(index: Section.facts.rawValue)
             }
             if let description = profile.description, !description.isEmpty {
                 descriptionSection(description)
+                    .arrives(index: Section.description.rawValue)
             } else if let descriptionNote {
                 Text(descriptionNote)
                     .typeSmallMeta()
@@ -240,12 +251,15 @@ private struct CharacterProfileContent: View {
             }
             if !profile.voiceActors.isEmpty {
                 voiceActorsSection
+                    .arrives(index: Section.voiceActors.rawValue)
             }
             if !profile.appearances.isEmpty {
                 appearancesSection
+                    .arrives(index: Section.appearances.rawValue)
             }
             if let siteURL = profile.siteURL {
                 sourceLink(siteURL, source: profile.source)
+                    .arrives(index: Section.sourceLink.rawValue)
             }
         }
     }
@@ -341,45 +355,6 @@ private struct CharacterProfileContent: View {
                 .strokeBorder(Palette.border, lineWidth: 0.5)
         )
         .accessibilityElement(children: .combine)
-    }
-
-    private var header: some View {
-        VStack(spacing: 10) {
-            AsyncImage(url: profile.imageURL) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Palette.imagePlaceholder
-            }
-            .frame(width: 132, height: 132)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
-                    .strokeBorder(Palette.border, lineWidth: 0.5)
-            )
-            .copyableArtwork(profile.imageURL, noun: "portrait")
-
-            VStack(spacing: 4) {
-                Text(profile.fullName)
-                    .typeDetailHeroTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                    .multilineTextAlignment(.center)
-
-                if let native = profile.nativeName, !native.isEmpty {
-                    Text(native)
-                        .typeSubtitle()
-                        .foregroundStyle(Palette.textSecondary)
-                }
-                if !profile.alternativeNames.isEmpty {
-                    Text(profile.alternativeNames.joined(separator: " · "))
-                        .typeFootnote()
-                        .foregroundStyle(Palette.textMuted)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, Metrics.gutter)
     }
 
     /// The same label-left, value-right, hairline-between-rows table
@@ -513,5 +488,65 @@ private struct CharacterProfileContent: View {
             }
         }
         return out
+    }
+}
+
+/// The portrait and names at the top of a profile — its own type so
+/// `CharacterProfileContent` stays under the lint's body-length ceiling, and
+/// because the portrait's "has this loaded yet" state has no reason to live
+/// anywhere but next to the one image that uses it.
+private struct CharacterProfileHeader: View {
+    let profile: CharacterProfile
+    /// Flips once the portrait's `AsyncImage` phase reports `.success` — see
+    /// `appearsSoftly(when:)` below.
+    @State private var isPortraitReady = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // The placeholder tone sits underneath, unaffected by
+            // `appearsSoftly` — that only governs the image layer above it,
+            // so the loading cue itself doesn't fade out with nothing to
+            // replace it, the same layering `DetailBackdrop` uses for its
+            // own ambient-to-image handover.
+            ZStack {
+                Palette.imagePlaceholder
+                AsyncImage(url: profile.imageURL) { phase in
+                    if case let .success(image) = phase {
+                        image.resizable().scaledToFill()
+                            .onAppear { isPortraitReady = true }
+                    }
+                }
+                .appearsSoftly(when: isPortraitReady)
+            }
+            .frame(width: 132, height: 132)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                    .strokeBorder(Palette.border, lineWidth: 0.5)
+            )
+            .copyableArtwork(profile.imageURL, noun: "portrait")
+
+            VStack(spacing: 4) {
+                Text(profile.fullName)
+                    .typeDetailHeroTitle()
+                    .foregroundStyle(Palette.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                if let native = profile.nativeName, !native.isEmpty {
+                    Text(native)
+                        .typeSubtitle()
+                        .foregroundStyle(Palette.textSecondary)
+                }
+                if !profile.alternativeNames.isEmpty {
+                    Text(profile.alternativeNames.joined(separator: " · "))
+                        .typeFootnote()
+                        .foregroundStyle(Palette.textMuted)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Metrics.gutter)
     }
 }

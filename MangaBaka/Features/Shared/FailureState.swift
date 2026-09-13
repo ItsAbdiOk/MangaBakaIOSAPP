@@ -60,6 +60,7 @@ struct FailureState: View {
         VStack(spacing: 0) {
             StateMark(symbol: error.symbolName)
                 .padding(.bottom, 20)
+                .arrives(index: 0)
 
             Text(error.headline)
                 .typeSubsectionHeader()

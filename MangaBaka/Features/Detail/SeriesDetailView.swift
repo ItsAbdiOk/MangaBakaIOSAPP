@@ -113,6 +113,28 @@ struct SeriesDetailView: View {
     @State var cadenceFailure: APIError?
     @State var isCadenceLoading = false
     @State private var isLoading = true
+    /// How far the page has scrolled, fed to `DetailBackdrop` for its
+    /// parallax — see `DetailBackdrop.parallaxOffset`. Tracked here, not in
+    /// the backdrop itself, because the backdrop sits in `.background` on
+    /// this `ScrollView`, outside the content whose geometry
+    /// `onScrollGeometryChange` reports.
+    @State private var scrollOffset: CGFloat = 0
+
+    /// Where a section sits in the page's arrival choreography — see
+    /// `sectionIndex(for:)`. The mockup's own order (the comment on `body`),
+    /// named so `.arrives(index:)` at each call site reads as "this section,
+    /// in this order" rather than a bare integer nobody can trace back to
+    /// the layout.
+    enum Section: Int, CaseIterable {
+        case stats, synopsis, cast, tags, credits, releases, volumes, editions, onwardRows, categories,
+             trackers
+    }
+
+    /// A section's place in the stagger, tested in `DetailMotionTests`
+    /// rather than only eyeballed on a device — a index typo here staggers
+    /// the wrong section without changing anything a screenshot would catch
+    /// at a glance.
+    nonisolated static func sectionIndex(for section: Section) -> Int { section.rawValue }
 
     /// The page-level fact worth a `StaleBar`: the six-way `extras` fetch, or
     /// either onward feed, answered from a stale cache or not at all. A
@@ -186,23 +208,31 @@ struct SeriesDetailView: View {
                 // links is a screen and a half further down.
                 ReadRow(links: extras.links)
                 DetailStatsStrip(series: shown, year: extras.year, season: cadence?.season)
+                    .arrives(index: Self.sectionIndex(for: .stats))
                 if let description = shown.description, !description.isEmpty {
                     DetailSynopsis(text: Self.prose(from: description))
+                        .arrives(index: Self.sectionIndex(for: .synopsis))
                 }
                 CharacterRow(
                     characters: cast, isLoading: isCastLoading, failure: castFailure,
                     retry: { await loadCast() }
                 )
+                .arrives(index: Self.sectionIndex(for: .cast))
                 tagSection
+                    .arrives(index: Self.sectionIndex(for: .tags))
                 DetailCredits(
                     series: shown, onOpenPublisher: onOpenPublisher, onOpenAuthor: onOpenAuthor
                 )
+                .arrives(index: Self.sectionIndex(for: .credits))
                 ReleaseSection(
                     report: releases, isLoading: isReleasesLoading, links: extras.links,
                     retry: { await loadReleases() }
                 )
+                .arrives(index: Self.sectionIndex(for: .releases))
                 volumesShelf
+                    .arrives(index: Self.sectionIndex(for: .volumes))
                 DetailEditions(editions: extras.editions)
+                    .arrives(index: Self.sectionIndex(for: .editions))
                 DetailOnwardRows(
                     relationships: extras.relationships,
                     similar: similar,
@@ -215,11 +245,14 @@ struct SeriesDetailView: View {
                     onRetryAlsoLike: { await loadAlsoLike() },
                     path: $path
                 )
+                .arrives(index: Self.sectionIndex(for: .onwardRows))
                 TrackerScores(series: shown)
+                    .arrives(index: Self.sectionIndex(for: .trackers))
                 DetailCategories(
                     categories: categories, isLoading: isCategoriesLoading,
                     failure: categoriesFailure, onRetry: loadCategories
                 )
+                .arrives(index: Self.sectionIndex(for: .categories))
                 readElsewhere
                 newsSection
                 provenance
@@ -227,8 +260,13 @@ struct SeriesDetailView: View {
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top
+        } action: { _, travelled in
+            scrollOffset = travelled
+        }
         .background(alignment: .top) {
-            DetailBackdrop(cover: shown.cover)
+            DetailBackdrop(cover: shown.cover, scrollOffset: scrollOffset)
                 .background(Palette.ground)
                 .ignoresSafeArea()
         }

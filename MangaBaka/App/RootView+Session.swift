@@ -325,7 +325,13 @@ extension RootView {
 }
 
 extension RootView {
-    func detail(_ series: Series, path: Binding<[Series]>) -> some View {
+    /// One series page, from a push that named only that series.
+    ///
+    /// Split out of `detail(_:path:neighbours:)` so that function can choose,
+    /// with a plain `if`, between this and a `SeriesPager` wrapping several —
+    /// a `@ViewBuilder` `if`/`else` needs both branches to be built the same
+    /// way, and this is that shared way.
+    private func detailPage(_ series: Series, path: Binding<[Series]>) -> SeriesDetailView {
         SeriesDetailView(
             series: series,
             repository: repository,
@@ -367,9 +373,44 @@ extension RootView {
                 showsSchedule = true
             }
         )
+    }
+
+    /// A series page, and — when the row that pushed it had siblings —
+    /// the ability to swipe sideways to the next or previous one.
+    ///
+    /// `neighbours` defaults to `[]`, and fewer than two neighbours renders
+    /// exactly the plain `detailPage` this function always returned: no
+    /// existing call site changes behaviour until a row actually starts
+    /// passing its siblings. None does yet — see this feature's report for
+    /// the one-line change each row's push would need.
+    func detail(_ series: Series, path: Binding<[Series]>, neighbours: [Series] = []) -> some View {
+        // The row that pushed this series recorded its siblings on the zoom
+        // route; a push from anywhere else (a link, Siri, a related row that
+        // did not record) pages nowhere. Only trusted when the series is
+        // actually in the list — a stale row from an earlier tap is not this
+        // page's row.
+        let siblings = neighbours.isEmpty && zoomRoute.neighbours.contains(where: { $0.id == series.id })
+            ? zoomRoute.neighbours
+            : neighbours
+        return Group {
+            if siblings.count > 1 {
+                SeriesPager(items: siblings, selected: .constant(series)) { neighbour in
+                    detailPage(neighbour, path: path)
+                }
+            } else {
+                detailPage(series, path: path)
+            }
+        }
         // Opening the page is what counts as having viewed it. Recorded here
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
+        //
+        // Records only the series the push named, not whichever one the
+        // reader has since swiped to inside the pager — `SeriesPager` holds
+        // its own current selection internally (see its `selected` binding
+        // above, a fixed `.constant` here since nothing outside the pager
+        // needs to read it yet). Recording every page swiped past is a
+        // reasonable next step but not one this task asked for.
         .task { await session.recentlyViewed.record(series) }
         // The publisher page, pushed on whichever stack this page is in. A
         // series it lists pushes back onto the same path.
@@ -382,7 +423,9 @@ extension RootView {
         // Grows out of the cover that was tapped. Every screen that pushes a
         // series marks its covers with `.zoomSource`; a route that did not
         // falls through to the ordinary push, which is what an unmatched id
-        // already does.
+        // already does. A pager's neighbour pages were never the tapped
+        // cover, so they fall through the same way — only the page the
+        // reader actually tapped into can zoom.
         .navigationTransition(.zoom(sourceID: zoomRoute.source ?? "none", in: coverTransition))
     }
 }

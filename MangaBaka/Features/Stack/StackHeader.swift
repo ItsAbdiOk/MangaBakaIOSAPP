@@ -11,6 +11,12 @@ struct StackHeader: View {
     let provenance: String
     /// False once the reader has dragged a card. See `StackHint`.
     let showsInstruction: Bool
+    /// `StackModel.todayProgress`, for the streak ring next to the counter.
+    let todayAnswered: Int
+    let todayDealt: Int
+    /// Where a saved card should land, for the counter's own half of the
+    /// save-flight `matchedGeometryEffect` — see `StackView`.
+    let saveFlightNamespace: Namespace.ID
     let onReset: () async -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -28,6 +34,7 @@ struct StackHeader: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 title
                 Spacer(minLength: 0)
+                StackStreakRing(answered: todayAnswered, dealt: todayDealt)
                 count
                 StackResetMenu(onReset: onReset)
             }
@@ -68,7 +75,56 @@ struct StackHeader: View {
                 .foregroundStyle(Palette.textMuted)
         }
         .fixedSize()
+        // The save-flight ghost card lands here: a near-invisible anchor
+        // sharing the flight's id so `matchedGeometryEffect` has somewhere
+        // in the header to resolve to. `isSource` keeps this anchor's own
+        // natural (tiny) frame fixed as the destination, rather than letting
+        // the much larger card impose its size back onto the counter.
+        .background {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .matchedGeometryEffect(id: StackView.saveFlightID, in: saveFlightNamespace, isSource: true)
+        }
+        // Rewards the reader for saving, not for the counter simply having a
+        // value: fires once the flight lands, alongside `Haptics.success`.
+        .celebrates(on: savedCount)
+        .haptic(Haptics.success, onEach: savedCount)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(savedCount) saved")
+    }
+}
+
+/// How far through today's stack the reader has gotten — answered ÷ dealt,
+/// from `StackModel.todayProgress`. Purely a mood ring: `dealt` is a guess
+/// at a day's worth of cards (`StackModel.dailyGoal`), not a real quota, so
+/// this never blocks or scolds, it just fills.
+private struct StackStreakRing: View {
+    let answered: Int
+    let dealt: Int
+
+    private var fraction: Double {
+        guard dealt > 0 else { return 0 }
+        return min(1, Double(answered) / Double(dealt))
+    }
+
+    private var isComplete: Bool { fraction >= 1 }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Palette.hairline, lineWidth: 2.5)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(Palette.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(Motion.reduced(Motion.settle), value: fraction)
+        }
+        .frame(width: 20, height: 20)
+        .celebrates(on: isComplete)
+        .haptic(Haptics.success, on: isComplete)
+        // The number itself is read out by the saved counter next to it;
+        // this ring repeats the same fact visually and would only be noise
+        // to VoiceOver.
+        .accessibilityHidden(true)
     }
 }

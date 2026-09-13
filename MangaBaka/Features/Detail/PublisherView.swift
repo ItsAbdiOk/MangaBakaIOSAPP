@@ -306,6 +306,7 @@ extension PublisherView {
                 ForEach(series) { item in
                     Button {
                         zoomRoute?.source = ZoomRoute.id("publisher", item.id)
+                        zoomRoute?.neighbours = series
                         path.append(item)
                     } label: {
                         CoverCard(

@@ -72,23 +72,32 @@ struct VolumesSection: View {
 
                 if isCheckingStore {
                     CoverSkeletonRow(count: 3, width: Metrics.coverSeedWidth)
+                        .transition(.blurReplace)
                 } else if !volumes.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                            ForEach(volumes) { volume in
+                            ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                                 Button { opened = volume } label: {
                                     spine(volume)
                                 }
-                                .buttonStyle(.press)
+                                .buttonStyle(.press(haptic: .selection))
+                                .arrives(index: index)
+                                .enterScale()
                             }
                         }
                         .padding(.horizontal, Metrics.gutter)
                     }
                     .scrollIndicators(.hidden)
+                    .transition(.blurReplace)
                 }
                 // Zero volumes, not checking, and a note: the header alone
                 // says why (gap 21) — no empty row of spines to draw.
             }
+            // The skeleton and the real shelf swap under this one animation
+            // rather than popping: "Checking Apple Books…" is itself content
+            // (gap 22, see `isCheckingStore`'s doc comment), so its own exit
+            // deserves the same care its arrival got.
+            .animation(Motion.reduced(Motion.settle), value: isCheckingStore)
             .sheet(item: $opened) { volume in
                 VolumeSheet(volume: volume)
                     .presentationDetents([.medium, .large])

@@ -16,8 +16,10 @@ struct FormatSection: View {
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 SettingsCard {
-                    ForEach(FormatPreferences.Format.allCases, id: \.rawValue) { format in
-                        row(format)
+                    ForEach(
+                        Array(FormatPreferences.Format.allCases.enumerated()), id: \.element.rawValue
+                    ) { index, format in
+                        row(format).arrives(index: index)
                         if format != FormatPreferences.Format.allCases.last {
                             SettingsDivider()
                         }

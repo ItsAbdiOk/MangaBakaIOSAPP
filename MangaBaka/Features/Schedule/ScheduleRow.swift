@@ -47,6 +47,14 @@ struct ScheduleRow: View {
             Rectangle().fill(Palette.hairline).frame(height: 0.5)
         }
         .accessibilityElement(children: .combine)
+        // A gap that firms up into a real rhythm — `.loose` becoming
+        // `.likely` — is the estimate turning into something closer to a
+        // confirmed date, and gets a one-off pulse. `.celebrates(on:)` fires
+        // on any change to this row's identity-scoped trigger, so the same
+        // reversal (rare — confidence does not often get worse) would pulse
+        // too; there is no way to know direction without state this
+        // stateless row does not keep. Flagged: unverified without a device.
+        .celebrates(on: Self.isConfirmed(work.cadence))
     }
 
     @ViewBuilder
@@ -83,6 +91,13 @@ struct ScheduleRow: View {
                 .typeFootnote()
                 .foregroundStyle(Palette.textMuted)
         }
+    }
+
+    /// Whether this row currently reads as a confirmed rhythm rather than an
+    /// estimate — a regular-enough gap (`Cadence.Confidence.likely`), not
+    /// merely a guess (`.loose`) or no cadence at all yet.
+    nonisolated static func isConfirmed(_ cadence: Cadence?) -> Bool {
+        cadence?.confidence == .likely
     }
 
     static func stateText(_ cadence: Cadence, isLate: Bool, now: Date) -> String {

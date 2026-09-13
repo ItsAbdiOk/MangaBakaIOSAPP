@@ -41,6 +41,7 @@ struct FilterSheet: View {
                         }
                     }
                 }
+                .arrives(index: 0)
 
                 section("Status") {
                     FlowLayout {
@@ -51,6 +52,7 @@ struct FilterSheet: View {
                         }
                     }
                 }
+                .arrives(index: 1)
 
                 section("Sort") {
                     FlowLayout {
@@ -61,16 +63,20 @@ struct FilterSheet: View {
                         }
                     }
                 }
+                .arrives(index: 2)
 
                 if catalogue != nil {
                     section("Tags") {
                         tagRow
                     }
+                    .arrives(index: 3)
                 }
 
                 ratingSection
+                    .arrives(index: 4)
 
                 yearSection
+                    .arrives(index: 5)
 
                 if let preferOffline {
                     section("Offline") {
@@ -90,6 +96,7 @@ struct FilterSheet: View {
                         }
                         .tint(Palette.accent)
                     }
+                    .arrives(index: 6)
                 }
 
                 HStack(spacing: Metrics.gapChips) {
@@ -228,8 +235,10 @@ struct FilterSheet: View {
                 .background(isOn ? Palette.accent : Palette.surfaceChip)
                 .clipShape(Capsule())
                 .tapTarget()
+                .animation(Motion.reduced(Motion.snappy), value: isOn)
         }
         .buttonStyle(.press)
+        .haptic(Haptics.selection, on: isOn)
     }
 
     private func toggle(_ collection: inout [String], _ value: String) {

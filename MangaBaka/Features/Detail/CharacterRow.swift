@@ -50,41 +50,56 @@ struct CharacterRow: View {
     private static let radius: CGFloat = 16
 
     var body: some View {
-        switch Self.state(characters: characters, isLoading: isLoading, failure: failure) {
-        case .hidden:
-            EmptyView()
-        case .loading:
-            placeholders
-        case let .failed(error):
-            VStack(alignment: .leading, spacing: 11) {
-                Text("Characters")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-                InlineFailure(error: error, retry: retry)
-            }
-        case .list:
-            VStack(alignment: .leading, spacing: 11) {
-                Text("Characters")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(characters) { character in
-                            cell(character)
-                                .arrives()
-                        }
-                    }
-                    .padding(.horizontal, Metrics.gutter)
-                    .scrollTargetLayout()
+        let state = Self.state(characters: characters, isLoading: isLoading, failure: failure)
+        Group {
+            switch state {
+            case .hidden:
+                EmptyView()
+            case .loading:
+                placeholders
+                    .transition(.blurReplace)
+            case let .failed(error):
+                VStack(alignment: .leading, spacing: 11) {
+                    Text("Characters")
+                        .typeDetailSectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(.horizontal, Metrics.gutter)
+                    InlineFailure(error: error, retry: retry)
                 }
-                .scrollIndicators(.hidden)
-                .scrollTargetBehavior(.viewAligned)
+                .transition(.blurReplace)
+            case .list:
+                VStack(alignment: .leading, spacing: 11) {
+                    Text("Characters")
+                        .typeDetailSectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(.horizontal, Metrics.gutter)
+
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                            ForEach(characters) { character in
+                                cell(character)
+                                    .arrives()
+                                    .enterScale()
+                            }
+                        }
+                        .padding(.horizontal, Metrics.gutter)
+                        .scrollTargetLayout()
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollTargetBehavior(.viewAligned)
+                }
+                .sheet(item: $opened) { character in
+                    CharacterProfileView(character: character)
+                        .presentationBackground(.ultraThinMaterial)
+                }
+                .transition(.blurReplace)
             }
-            .sheet(item: $opened) { CharacterProfileView(character: $0) }
         }
+        // The skeleton, a failure, and the real cast all swap under one
+        // `Motion.settle` rather than popping — the row's own "content
+        // arrived" moment, distinct from `.arrives()` on each portrait
+        // (which fires once the row itself is already the branch on screen).
+        .animation(Motion.reduced(Motion.settle), value: state)
     }
 
     /// Tappable whenever there is a profile to open — AniList's own, or now

@@ -40,7 +40,9 @@ extension LibraryView {
             .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
-        .buttonStyle(.press)
+        // The card's press is the choice — there is no separate commit that
+        // follows, unlike a chip that opens a sheet first.
+        .buttonStyle(.press(haptic: Haptics.selection))
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 22)
     }
@@ -59,7 +61,7 @@ extension LibraryView {
                 subtitle: "What you finished, and what makes your library yours"
             )
         }
-        .buttonStyle(.press)
+        .buttonStyle(.press(haptic: Haptics.selection))
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 10)
     }
@@ -128,7 +130,7 @@ extension LibraryView {
             .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
         }
-        .buttonStyle(.press)
+        .buttonStyle(.press(haptic: Haptics.selection))
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, Metrics.gapCovers)
     }

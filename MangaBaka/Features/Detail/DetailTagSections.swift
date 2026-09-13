@@ -77,7 +77,11 @@ struct DetailTagSections: View {
         ).count
 
         return Button {
-            Motion.run(.snappy(duration: 0.24)) { showsAllGroups.toggle() }
+            // `.settle`, not `.snappy`: this brings a whole run of new
+            // sections onto the page rather than answering one tap, the same
+            // distinction the motion brief draws between a toggle and
+            // content arriving.
+            Motion.run(.settle) { showsAllGroups.toggle() }
         } label: {
             HStack(spacing: 6) {
                 Text(showsAllGroups ? "Fewer tags" : "\(remaining) more tag groups")
@@ -110,7 +114,7 @@ struct DetailTagSections: View {
                 Spacer(minLength: 0)
                 if hidden > 0 || isExpanded {
                     Button {
-                        Motion.run(.snappy(duration: 0.22)) { toggle(group.name) }
+                        Motion.run(.settle) { toggle(group.name) }
                     } label: {
                         Text(isExpanded ? "Less" : "+\(hidden)")
                             .typeChip()
@@ -121,8 +125,9 @@ struct DetailTagSections: View {
             }
 
             FlowLayout(spacing: Metrics.gapChips) {
-                ForEach(visible) { tag in
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, tag in
                     chip(tag)
+                        .arrives(index: index)
                 }
                 if spoilerCount > 0, !spoilersShown {
                     spoilerToggle(group.name, count: spoilerCount)
@@ -190,7 +195,9 @@ struct DetailTagSections: View {
             // "CORE" that nobody would look up the meaning of.
             .opacity(opacity(for: tag))
         }
-        .buttonStyle(.press)
+        // A tap here is a choice — which tag to search by — the same
+        // vocabulary a chip or a star gets elsewhere per `Haptics.selection`.
+        .buttonStyle(.press(haptic: .selection))
         .accessibilityLabel(accessibilityLabel(tag, isMine: isMine))
         .accessibilityHint("Search for this tag")
     }

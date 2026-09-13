@@ -282,7 +282,7 @@ struct DetailTags: View {
     var body: some View {
         if !tags.isEmpty {
             FlowLayout(spacing: Metrics.gapChips) {
-                ForEach(visible, id: \.self) { tag in
+                ForEach(Array(visible.enumerated()), id: \.element) { index, tag in
                     let isMine = TagOrdering.isFavoured(tag, favoured: favoured)
                     Button { onOpen(tag) } label: {
                         Text(tag)
@@ -301,12 +301,17 @@ struct DetailTags: View {
                                 lineWidth: 0.5
                             ))
                     }
-                    .buttonStyle(.press)
+                    // A tap is a choice of tag to search by — `.selection`,
+                    // same as the richer `DetailTagSections` chip.
+                    .buttonStyle(.press(haptic: .selection))
+                    .arrives(index: index)
                     .accessibilityLabel(isMine ? "\(tag), one of your interests" : tag)
                     .accessibilityHint("Search for this tag")
                 }
                 if hiddenCount > 0, !isExpanded {
-                    Button { isExpanded = true } label: {
+                    Button {
+                        Motion.run(.settle) { isExpanded = true }
+                    } label: {
                         Text("+\(hiddenCount) more")
                             .typeChip()
                             .foregroundStyle(Palette.accent)

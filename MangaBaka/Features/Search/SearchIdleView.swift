@@ -44,7 +44,7 @@ struct SearchIdleView: View {
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
                 Button(isEditing ? "Done" : "Edit") {
-                    Motion.run(.snappy(duration: 0.2)) { isEditing.toggle() }
+                    Motion.run(Motion.snappy) { isEditing.toggle() }
                 }
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
@@ -77,6 +77,9 @@ struct SearchIdleView: View {
                             .typeSmallMeta()
                             .foregroundStyle(Palette.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
+                            // "1,204 now" rolls once a live count answers,
+                            // rather than cutting from the filter summary.
+                            .countsNotCuts()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -100,7 +103,7 @@ struct SearchIdleView: View {
                 Button {
                     counts.invalidate(lens.id)
                     let name = lens.name
-                    Motion.run(.snappy(duration: 0.2)) { lenses.delete(id: lens.id) }
+                    Motion.run(Motion.snappy) { lenses.delete(id: lens.id) }
                     // Deleting a lens used to give no sign it happened (gap
                     // 54). Decision 3 reserves a confirmation dialog for the
                     // two truly irreversible actions elsewhere ("Remove

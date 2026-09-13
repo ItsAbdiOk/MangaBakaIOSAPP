@@ -158,6 +158,48 @@ final class StackModel {
     /// What the header counts.
     var savedCount: Int { saved.count }
 
+    /// A guess at a day's worth of cards, for the streak ring's denominator.
+    /// Nothing in the product states a real daily limit — this is decorative
+    /// progress, not a quota the reader is held to; the ring simply reads
+    /// full once they have gotten through roughly this many.
+    static let dailyGoal = 20
+    /// How many reactions (saved or skipped) fall on today's calendar day,
+    /// refreshed after every reaction. Read by the header's streak ring via
+    /// `todayProgress`.
+    private(set) var todayAnswered = 0
+    /// `(answered, dealt)` for the streak ring: how far through a day's
+    /// worth of cards the reader is. `dealt` is `Self.dailyGoal`, not a real
+    /// count of cards actually shown — the app does not track "shown but not
+    /// yet answered" anywhere, so this is answered-against-a-target rather
+    /// than answered-against-dealt in the literal sense.
+    var todayProgress: (answered: Int, dealt: Int) { (todayAnswered, Self.dailyGoal) }
+
+    /// How many of `timestamps` fall within `now`'s local calendar day.
+    ///
+    /// Pure so it can be tested without a database: `StackModel` reads the
+    /// device's own `Calendar` and clock, `ShelfStore.reactionTimestamps()`
+    /// supplies the raw dates, this is just the bucketing. Resets at local
+    /// midnight — a guess: nothing in the brief says "today" should follow
+    /// the reader's local calendar day rather than, say, a rolling 24h
+    /// window, but a rolling window is a stranger fact to explain in a UI
+    /// that already says "today's stack" everywhere else.
+    nonisolated static func countToday(
+        _ timestamps: [Date], now: Date, calendar: Calendar = .current
+    ) -> Int {
+        let startOfDay = calendar.startOfDay(for: now)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return 0 }
+        return timestamps.count { $0 >= startOfDay && $0 < endOfDay }
+    }
+
+    /// Re-derives `todayAnswered` from the shelf's own timestamps. Called on
+    /// load and after every reaction rather than incremented in place, so a
+    /// reset (which clears the shelf) or a reaction that failed to record
+    /// cannot leave the ring out of step with what actually persisted.
+    private func refreshTodayProgress(now: Date = Date()) async {
+        let timestamps = (try? await shelf.reactionTimestamps()) ?? []
+        todayAnswered = Self.countToday(timestamps, now: now)
+    }
+
     /// The cover peeking in from the left: the last one reacted to, so the
     /// stack reads as a sequence with a behind and an ahead.
     private(set) var previous: Series?
@@ -209,6 +251,7 @@ final class StackModel {
 
     func loadIfNeeded() async {
         await refreshSaved()
+        await refreshTodayProgress()
         guard queue.isEmpty else { return }
         await refill()
     }
@@ -370,6 +413,10 @@ final class StackModel {
             }
         }
 
+        // Every reaction — saved or skipped — moves the streak ring, whether
+        // or not it also reached the library.
+        await refreshTodayProgress()
+
         if queue.count <= 2 { await refill() }
     }
 
@@ -407,8 +454,14 @@ final class StackModel {
         }
     }
 
-    // MARK: - Profile recommendations
+}
 
+// MARK: - Profile recommendations and seeds
+//
+// Split from the class's own body only to stay under `type_body_length` —
+// an extension in the same file still resolves `private` against
+// `StackModel`'s own stored properties.
+extension StackModel {
     /// Whether the profile recommender is usable for this reader.
     ///
     /// A typed throw rather than `try?` into `nil`: `recommendationStatus()`

@@ -91,14 +91,53 @@ struct WrappedView: View {
                 } else {
                     if let year = facts.year, year.isWorthShowing {
                         yearCard(year)
-                        if let busiest = facts.busiest { busiestCard(busiest) }
+                            .arrives(index: 0)
+                            .arrivalHaptic(index: 0)
+                            // The headline card: the one moment on this screen
+                            // that is a reward rather than information, so it
+                            // gets the celebration bounce and `.success` — see
+                            // `Motion.celebrate`'s own doc comment on why that
+                            // is reserved for one-off rewards. Keyed on
+                            // `hasComputed` flipping true, which is exactly
+                            // when this card first has something to show.
+                            .celebrates(on: hasComputed)
+                            .sensoryFeedback(Haptics.success, trigger: hasComputed)
+                        if let busiest = facts.busiest {
+                            busiestCard(busiest)
+                                .arrives(index: 1)
+                                .arrivalHaptic(index: 1)
+                        }
                     }
-                    if let sprint = facts.sprint { sprintCard(sprint) }
-                    if !facts.signatures.isEmpty { signatureCard }
-                    if let critic = facts.critic { criticCard(critic) }
-                    if let longest = facts.longest { longestCard(longest) }
-                    if !facts.creators.isEmpty { creatorsCard }
-                    if !facts.formats.isEmpty { formatsCard }
+                    if let sprint = facts.sprint {
+                        sprintCard(sprint)
+                            .arrives(index: 2)
+                            .arrivalHaptic(index: 2)
+                    }
+                    if !facts.signatures.isEmpty {
+                        signatureCard
+                            .arrives(index: 3)
+                            .arrivalHaptic(index: 3)
+                    }
+                    if let critic = facts.critic {
+                        criticCard(critic)
+                            .arrives(index: 4)
+                            .arrivalHaptic(index: 4)
+                    }
+                    if let longest = facts.longest {
+                        longestCard(longest)
+                            .arrives(index: 5)
+                            .arrivalHaptic(index: 5)
+                    }
+                    if !facts.creators.isEmpty {
+                        creatorsCard
+                            .arrives(index: 6)
+                            .arrivalHaptic(index: 6)
+                    }
+                    if !facts.formats.isEmpty {
+                        formatsCard
+                            .arrives(index: 7)
+                            .arrivalHaptic(index: 7)
+                    }
                     provenance
                 }
             }
@@ -180,7 +219,7 @@ extension WrappedView {
 
     private func yearCard(_ year: ReadingWrapped.Year) -> some View {
         card("This year") {
-            headline("\(year.finished.count)", "series finished")
+            headlineCounting(year.finished.count, "series finished", index: 0)
             detail("\(year.chapters.formatted()) chapters, give or take what you logged.")
             if year.coverage < 0.6 {
                 // The honesty line. A finish date is set when a series is
@@ -204,7 +243,7 @@ extension WrappedView {
 
     private func sprintCard(_ sprint: ReadingWrapped.Sprint) -> some View {
         card("Fastest read") {
-            headline("\(sprint.perDay)", "chapters a day")
+            headlineCounting(sprint.perDay, "chapters a day", index: 2)
             detail("""
             \(sprint.entry.series?.displayTitle ?? "A series") — \
             \(sprint.chapters.formatted()) chapters in \
@@ -225,6 +264,7 @@ extension WrappedView {
                         Text("\(Int(signature.lift.rounded()))×")
                             .typeDetailSectionHeader()
                             .foregroundStyle(Palette.accent)
+                            .countsNotCuts()
                     }
                 }
             }
@@ -270,6 +310,22 @@ extension WrappedView {
         critic.gap < 0 ? disliked.first : loved.first
     }
 
+    /// The number a headline stat shows partway through its count-up, at
+    /// `progress` from 0 (just landed) to 1 (settled on `target`). Rounded
+    /// rather than truncated so the very last visible frame before `1` reads
+    /// as one digit short of the truth rather than several — a truncated
+    /// count from, say, 41 to a target of 42 sits on 41 for the whole
+    /// animation and never visibly moves.
+    ///
+    /// `progress` outside 0...1 is clamped rather than trusted: the caller
+    /// (`CountUpNumber`) derives it from elapsed wall-clock time minus a
+    /// stagger delay, which is negative before the delay has elapsed and can
+    /// run past 1 on a dropped frame.
+    nonisolated static func countUp(progress: Double, target: Int) -> Int {
+        let clamped = min(max(progress, 0), 1)
+        return Int((Double(target) * clamped).rounded())
+    }
+
     private func longestCard(_ longest: LibraryEntry) -> some View {
         card("Still going") {
             headline(longest.series?.displayTitle ?? "A series", "")
@@ -294,6 +350,7 @@ extension WrappedView {
                         Text("\(creator.count)")
                             .typeSmallMeta()
                             .foregroundStyle(Palette.textMuted)
+                            .countsNotCuts()
                     }
                 }
             }
@@ -312,6 +369,7 @@ extension WrappedView {
                         Text("\(slice.count)")
                             .typeSmallMeta()
                             .foregroundStyle(Palette.textMuted)
+                            .countsNotCuts()
                     }
                 }
             }

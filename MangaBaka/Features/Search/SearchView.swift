@@ -4,7 +4,10 @@ import SwiftUI
 struct SearchView: View {
     @Bindable var model: SearchModel
     @Binding var path: [Series]
-    @Environment(\.zoomRoute) private var zoomRoute
+    // Not `private`: `resultsGrid` reaches this from `SearchEmptyState.swift`
+    // (moved there for the lint's type-length ceiling, alongside the empty
+    // state it sits next to), and `private` is file-scoped in Swift.
+    @Environment(\.zoomRoute) var zoomRoute
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
     /// Opens the genre and tag browser.
@@ -22,7 +25,9 @@ struct SearchView: View {
 
     @State private var showFilters = false
 
-    private let columns = Array(
+    // Not `private`: `resultsGrid` (moved to `SearchEmptyState.swift`) reads
+    // this too.
+    let columns = Array(
         repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
         count: 3
     )
@@ -56,6 +61,11 @@ struct SearchView: View {
                 .padding(.horizontal, Metrics.gutter + 2)
 
                 content
+                    // Typing swaps skeleton/results/empty/failure for one
+                    // another; blur-replacing them inside one spring means a
+                    // new query never flashes to a blank screen between the
+                    // two — see `ContentKind`.
+                    .animation(Motion.reduced(Motion.settle), value: contentKind)
             }
             .padding(.top, Metrics.scrollTopInset)
             .padding(.bottom, Metrics.scrollBottomInset)
@@ -171,7 +181,7 @@ struct SearchView: View {
                 .typeSubsectionHeader()
                 .foregroundStyle(Palette.textPrimary)
                 .countsNotCuts()
-                .animation(Motion.reduced(.snappy(duration: 0.25)), value: heading)
+                .animation(Motion.reduced(Motion.snappy), value: heading)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -215,9 +225,15 @@ struct SearchView: View {
         )
     }
 
+    // `ContentKind`, its pure decision function, and the computed property
+    // that reads it off `model` all live in `SearchEmptyState.swift` — moved
+    // there for the lint's type-length ceiling on this file, next to the
+    // other `SearchView` logic already split out for the same reason.
+
     @ViewBuilder
     private var content: some View {
-        if model.query.isEmpty {
+        switch contentKind {
+        case .idle:
             SearchIdleView(
                 lenses: lenses,
                 counts: counts,
@@ -229,25 +245,31 @@ struct SearchView: View {
                     Task { await model.apply(SearchQuery(text: term)) }
                 }
             )
-        } else if model.isSearching {
+        case .skeleton:
             // The shape of the answer, not a spinner: the grid the results
             // will fill, shimmering, so nothing jumps when they land.
             CoverSkeletonGrid()
-        } else if let failure = model.failure, model.results.isEmpty {
+                .transition(.blurReplace)
+        case .failure:
             // Nothing to show and the ask failed outright — a full failure
             // screen (gap 7). Search is the one screen decision 4 names for
             // an automatic retry: it is the one place the reader is sitting
             // there waiting on exactly this answer, unlike a background row
             // elsewhere that ticks without retrying itself.
-            FailureState(
-                error: failure,
-                retry: { await model.search() },
-                autoRetry: true
-            )
-        } else if model.results.isEmpty {
+            if let failure = model.failure {
+                FailureState(
+                    error: failure,
+                    retry: { await model.search() },
+                    autoRetry: true
+                )
+                .transition(.blurReplace)
+            }
+        case .empty:
             emptyState
-        } else {
+                .transition(.blurReplace)
+        case .results:
             grid
+                .transition(.blurReplace)
         }
     }
 
@@ -257,23 +279,29 @@ struct SearchView: View {
             // failure — the last good results stay on screen, under a bar
             // naming why they might be stale, rather than the grid vanishing
             // out from under the reader on every throttled keystroke (gap 7).
-            if let failure = model.failure {
-                StaleBar(
-                    headline: failure.headline,
-                    detail: failure.countdown ?? failure.userFacingMessage,
-                    retry: { await model.search() }
-                )
-                .padding(.bottom, 12)
-            } else if case let .offlineIndex(builtDate) = model.origin {
-                // No retry closure: retrying is what the reader already did by
-                // switching "Browse offline" off, or what happens on its own
-                // the next time a search succeeds against the network.
-                StaleBar(
-                    headline: "From the offline index (built \(OfflineIndexDateLabel.short(builtDate)))",
-                    detail: "Top 20,000 series, covers load when you're back."
-                )
-                .padding(.bottom, 12)
+            Group {
+                if let failure = model.failure {
+                    StaleBar(
+                        headline: failure.headline,
+                        detail: failure.countdown ?? failure.userFacingMessage,
+                        retry: { await model.search() }
+                    )
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                } else if case let .offlineIndex(builtDate) = model.origin {
+                    // No retry closure: retrying is what the reader already
+                    // did by switching "Browse offline" off, or what
+                    // happens on its own the next time a search succeeds
+                    // against the network.
+                    StaleBar(
+                        headline: "From the offline index (built \(OfflineIndexDateLabel.short(builtDate)))",
+                        detail: "Top 20,000 series, covers load when you're back."
+                    )
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .animation(Motion.reduced(Motion.settle), value: model.failure)
             resultsGrid
             if model.isLoadingMore {
                 ProgressView()
@@ -299,42 +327,8 @@ struct SearchView: View {
         }
     }
 
-    private var resultsGrid: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-            ForEach(model.results) { series in
-                Button {
-                    zoomRoute?.source = ZoomRoute.id("search", series.id)
-                    path.append(series)
-                } label: {
-                    CoverCard(
-                        series: series,
-                        width: 111,
-                        radius: Metrics.radiusCoverGrid,
-                        meta: DiscoverView.meta(for: series)
-                    )
-                }
-                .zoomSource("search", series.id)
-                .buttonStyle(.press)
-                // Two rows from the bottom, so the next page is usually there
-                // before the reader arrives rather than after.
-                .onAppear {
-                    guard shouldPrefetch(series) else { return }
-                    Task { await model.loadMore() }
-                }
-            }
-        }
-        .padding(.horizontal, Metrics.gutter)
-    }
-
-    /// Six results is two rows of the three-column grid.
-    private static let prefetchDistance = 6
-
-    private func shouldPrefetch(_ series: Series) -> Bool {
-        guard model.hasMore, !model.isLoadingMore,
-              let index = model.results.firstIndex(where: { $0.id == series.id })
-        else { return false }
-        return index >= model.results.count - Self.prefetchDistance
-    }
+    // `resultsGrid`, `shouldPrefetch` and `prefetchDistance` moved to
+    // `SearchEmptyState.swift` for the lint's type-length ceiling.
 
     // Internal, not private: the empty state lives in its own file for the
     // lint's ceiling. See SearchEmptyState.swift.

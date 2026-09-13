@@ -30,8 +30,9 @@ struct AnnouncedSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 heading
                 VStack(spacing: 8) {
-                    ForEach(works) { work in
+                    ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
                         row(work)
+                            .arrives(index: index)
                     }
                 }
             }

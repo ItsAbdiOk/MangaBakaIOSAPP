@@ -11,6 +11,7 @@ struct CoverGallery: View {
     @State private var scrolledIndex: Int?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.zoomNamespace) private var zoomNamespace
 
     init(series: Series, frontCover: Cover, images: [SeriesImage], startAt: Int = 0) {
         self.series = series
@@ -62,6 +63,21 @@ struct CoverGallery: View {
             }
         }
         .preferredColorScheme(.dark)
+        // Best-effort matched-geometry close: scales this screen back down
+        // onto the fan's front cover instead of sliding away underneath it,
+        // the same `ZoomRoute` id the cover marked itself with in
+        // `CoverStack`. No-op wherever no namespace is in the environment —
+        // UNVERIFIED on a device: `.navigationTransition(.zoom)` is
+        // documented for a pushed destination, and this is a
+        // `fullScreenCover`; the main session should watch this open and
+        // close on the simulator before trusting it.
+        .modifier(GalleryZoomTransition(
+            namespace: zoomNamespace, sourceID: ZoomRoute.id("gallery", series.id)
+        ))
+        // Left-edge swipe to leave, same as any other screen presented over
+        // the series page rather than pushed onto it — a fullScreenCover has
+        // no built-in drag-to-dismiss the way a sheet does.
+        .edgeSwipeToDismiss()
     }
 
     /// How far a card leans, shrinks and fades at a given scroll phase.
@@ -165,6 +181,25 @@ struct CoverGallery: View {
         if let own = pages[safe: index]?.caption { return own }
         guard pages.count > 1 else { return "Cover" }
         return "\(index + 1) of \(pages.count)"
+    }
+}
+
+/// `.navigationTransition(.zoom)`, or nothing where no namespace is in the
+/// environment — the same identity fallback `ZoomSourceMark` (`ZoomRoute.swift`)
+/// uses on the source side, kept here as its own type because the two
+/// branches return different view types and a `ViewModifier`'s `body` can
+/// hold that `if`/`else` where a chained `.navigationTransition(_:)` call
+/// could not (it takes a non-optional `Namespace.ID`).
+private struct GalleryZoomTransition: ViewModifier {
+    let namespace: Namespace.ID?
+    let sourceID: String
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            content.navigationTransition(.zoom(sourceID: sourceID, in: namespace))
+        } else {
+            content
+        }
     }
 }
 
@@ -321,6 +356,12 @@ struct CoverStack: View {
                     .shadow(color: .black.opacity(0.65), radius: 20, y: 18)
             }
             .buttonStyle(.press)
+            // Best-effort: lets the gallery scale in from this exact cover
+            // rather than sliding up over it, via `.navigationTransition(.zoom)`
+            // on `CoverGallery` below — a no-op (`ZoomSourceMark`) wherever no
+            // `zoomNamespace` is in the environment, same as every other
+            // `.zoomSource` call site.
+            .zoomSource("gallery", series.id)
             .copyableArtwork(frontCover.raw ?? frontCover.x350, noun: "cover")
             .accessibilityLabel(series.displayTitle.map { "Cover art for \($0)" } ?? "Cover art")
             .accessibilityHint("Opens it full screen")

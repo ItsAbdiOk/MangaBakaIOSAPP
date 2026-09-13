@@ -83,6 +83,18 @@ actor ShelfStore {
         }
     }
 
+    /// Every reaction's timestamp, saved or skipped, unsorted.
+    ///
+    /// For `StackModel.todayProgress`, which buckets these by calendar day —
+    /// no new store for "today's count", since `addedAt` (this device's own
+    /// clock at the moment of the swipe, see `record` above) already carries
+    /// exactly the fact a daily count needs.
+    func reactionTimestamps() throws -> [Date] {
+        try database.writer.read { db in
+            try Date.fetchAll(db, sql: "SELECT addedAt FROM shelfEntry")
+        }
+    }
+
     /// The most recently reacted-to series, newest first, capped at `limit`.
     ///
     /// For `StackModel`'s profile-exclusion list, which travels in the URL

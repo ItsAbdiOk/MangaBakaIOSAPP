@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The blurred, over-saturated wash the mockup puts behind a series page, so
 /// the page takes its colour from the artwork instead of sitting on flat
@@ -22,8 +23,72 @@ struct DetailBackdrop: View {
     /// How tall the wash is. Beyond the hero it is solid ground anyway, and
     /// blurring a full-page image costs more the taller it is.
     var height: CGFloat = 420
+    /// How far the page has scrolled, for the few points of parallax below —
+    /// see `parallaxOffset`. Passed in rather than read here: this view sits
+    /// in `.background` on the ScrollView itself (see the type doc comment),
+    /// outside the scrolled content, where `.parallax()` from
+    /// `MotionModifiers` — built on `.scrollTransition`, which only ever
+    /// fires for a view inside the scrolled content — cannot reach it.
+    var scrollOffset: CGFloat = 0
 
     @Environment(\.displayScale) private var displayScale
+    /// Flips once the AsyncImage phase reports `.success` — see
+    /// `appearsSoftly(when:)` on the image layer below.
+    @State private var isImageReady = false
+
+    /// A few points of drift against scroll, capped at 6pt per the motion
+    /// brief — past that a wash this large stopped reading as depth and
+    /// started reading as misregistration, the same ceiling `.parallax()`
+    /// itself enforces. Nil movement under Reduce Motion.
+    /// `isReduced` is injectable, the same reasoning `Motion.reduced` gives
+    /// its own parameter: `DetailMotionTests` pins the clamp and the sign
+    /// without depending on this machine's own accessibility settings.
+    nonisolated static func parallaxOffset(
+        scrollOffset: CGFloat, amount: CGFloat = 6, isReduced: Bool = Motion.isReduced
+    ) -> CGFloat {
+        guard !isReduced else { return 0 }
+        // A GUESS: the wash drifts at 5% of the foreground's own scroll
+        // distance, clamped to `amount` — enough to read as a background
+        // plane moving slower than the content in front of it, not enough
+        // that a long scroll drags it visibly off its own image.
+        return max(-amount, min(amount, scrollOffset * -0.05))
+    }
+
+    /// The colour the wash shows before its own blurred cover has finished
+    /// loading — the DC term of the cover's BlurHash, boosted the same way
+    /// `RowAmbient.tint` lifts a row's averaged colour off grey. Returned as
+    /// HSB components rather than a `Color` so `DetailMotionTests` can
+    /// assert on it without resolving a `Color` value.
+    ///
+    /// Duplicated from `RowAmbient` rather than shared: that type takes a
+    /// row of `Series` and averages several covers, and it lives in
+    /// `Features/Shared`, outside this batch's file list — there is nowhere
+    /// this batch can put a helper both files would reach.
+    struct AmbientTint: Equatable, Sendable {
+        var hue: Double
+        var saturation: Double
+        var brightness: Double
+    }
+
+    nonisolated static func ambientTint(for cover: Cover) -> AmbientTint? {
+        guard let hash = cover.blurhash, let average = BlurHash.averageColour(of: hash) else {
+            return nil
+        }
+        let colour = UIColor(red: average.red, green: average.green, blue: average.blue, alpha: 1)
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
+        colour.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
+        return AmbientTint(
+            hue: hue,
+            saturation: min(1, saturation * 2.2 + 0.2),
+            brightness: max(brightness, 0.7)
+        )
+    }
+
+    private var ambientColour: Color? {
+        Self.ambientTint(for: cover).map {
+            Color(hue: $0.hue, saturation: $0.saturation, brightness: $0.brightness)
+        }
+    }
 
     /// `scale` before `blur` — blurring first leaves the edges transparent and
     /// the corners of the page read as lighter than the middle.
@@ -34,11 +99,29 @@ struct DetailBackdrop: View {
             // placeholder would paint a grey rectangle behind the hero on a
             // slow connection rather than nothing.
             let url = cover.url(forHeight: proxy.size.height, scale: displayScale)
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-                    .accessibilityIgnoresInvertColors()
-            } placeholder: {
-                Color.clear
+            ZStack {
+                // The ambient tint, always in place under the image layer —
+                // it is what a reader sees for however long the network
+                // takes, in place of the flat ground the wash used to have
+                // nothing else to fall back to.
+                // No `.opacity` of its own: the whole `ZStack` (this tint and
+                // the image both) gets `Self.opacity` together, below, so
+                // the handover from one to the other doesn't change the
+                // wash's overall strength.
+                if let ambientColour {
+                    ambientColour
+                }
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFill()
+                            .accessibilityIgnoresInvertColors()
+                            .onAppear { isImageReady = true }
+                    default:
+                        Color.clear
+                    }
+                }
+                .appearsSoftly(when: isImageReady)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .scaleEffect(Self.scale)
@@ -58,6 +141,7 @@ struct DetailBackdrop: View {
                 )
             }
             .clipped()
+            .offset(y: Self.parallaxOffset(scrollOffset: scrollOffset))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

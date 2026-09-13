@@ -102,6 +102,7 @@ struct DetailOnwardRows: View {
                             .zoomSource("related", relation.series.id)
                             .buttonStyle(.press)
                             .arrives()
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -118,54 +119,62 @@ struct DetailOnwardRows: View {
         _ title: String, _ rawItems: [Series], failure: APIError?, retry: (() async -> Void)?
     ) -> some View {
         let items = Self.deduplicated(rawItems)
-        switch Self.onwardRowState(items: items, isLoading: isLoading, failure: failure) {
-        case .hidden:
-            EmptyView()
-        case .loading:
-            VStack(alignment: .leading, spacing: 11) {
-                header(title)
-                HStack(spacing: Metrics.gapCovers) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous)
-                            .fill(Palette.imagePlaceholder)
-                            .frame(
-                                width: Metrics.coverDetailRowWidth,
-                                height: Metrics.coverDetailRowWidth / Metrics.coverAspect
-                            )
-                    }
-                }
-                .padding(.horizontal, Metrics.gutter)
-            }
-        case let .failed(error):
-            VStack(alignment: .leading, spacing: 11) {
-                header(title)
-                InlineFailure(error: error, retry: retry)
-            }
-        case .list:
-            VStack(alignment: .leading, spacing: 11) {
-                header(title)
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(items) { item in
-                            Button {
-                                zoomRoute?.source = ZoomRoute.id(title, item.id)
-                                path.append(item)
-                            } label: {
-                                CoverCard(series: item, width: Metrics.coverDetailRowWidth)
-                            }
-                            .buttonStyle(.press)
-                            .zoomSource(title, item.id)
-                            .arrives()
+        let state = Self.onwardRowState(items: items, isLoading: isLoading, failure: failure)
+        Group {
+            switch state {
+            case .hidden:
+                EmptyView()
+            case .loading:
+                VStack(alignment: .leading, spacing: 11) {
+                    header(title)
+                    HStack(spacing: Metrics.gapCovers) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous)
+                                .fill(Palette.imagePlaceholder)
+                                .frame(
+                                    width: Metrics.coverDetailRowWidth,
+                                    height: Metrics.coverDetailRowWidth / Metrics.coverAspect
+                                )
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
-                    .scrollTargetLayout()
                 }
-                .scrollIndicators(.hidden)
-                .scrollTargetBehavior(.viewAligned)
+                .transition(.blurReplace)
+            case let .failed(error):
+                VStack(alignment: .leading, spacing: 11) {
+                    header(title)
+                    InlineFailure(error: error, retry: retry)
+                }
+                .transition(.blurReplace)
+            case .list:
+                VStack(alignment: .leading, spacing: 11) {
+                    header(title)
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                            ForEach(items) { item in
+                                Button {
+                                    zoomRoute?.source = ZoomRoute.id(title, item.id)
+                                    path.append(item)
+                                } label: {
+                                    CoverCard(series: item, width: Metrics.coverDetailRowWidth)
+                                }
+                                .buttonStyle(.press)
+                                .zoomSource(title, item.id)
+                                .arrives()
+                                .enterScale()
+                            }
+                        }
+                        .padding(.horizontal, Metrics.gutter)
+                        .scrollTargetLayout()
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollTargetBehavior(.viewAligned)
+                }
+                .rowAmbient(items)
+                .transition(.blurReplace)
             }
-            .rowAmbient(items)
         }
+        .animation(Motion.reduced(Motion.settle), value: state)
     }
 
     /// "Similar by description": nearest neighbours by embedding, after the
@@ -191,6 +200,7 @@ struct DetailOnwardRows: View {
                             .buttonStyle(.press)
                             .zoomSource("Similar by description", item.id)
                             .arrives()
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)

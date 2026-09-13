@@ -229,7 +229,7 @@ struct SeedPickerSheet: View {
         // Not disabled when the seeds are full: this row might be one of them,
         // and tapping it is how you take it back out. A disabled row would also
         // fade its own title, which is how the Safe content row lost its label.
-        .buttonStyle(.press)
+        .buttonStyle(.press(haptic: Haptics.selection))
         .opacity(isFull && !isSeed ? 0.4 : 1)
         .allowsHitTesting(!(isFull && !isSeed))
     }

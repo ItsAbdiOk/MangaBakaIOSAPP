@@ -210,4 +210,50 @@ struct ReadingWrappedTests: WrappedFixtures {
         ]
         #expect(ReadingWrapped.creators(in: entries).map(\.label) == ["Chugong"])
     }
+
+    // MARK: - Count-up
+
+    /// The pure decision behind `CountUpNumber`: what to show partway
+    /// through a headline stat's count-up animation, at 0 (just landed),
+    /// 0.5 (halfway) and 1 (settled) — the three points the motion brief
+    /// asks for explicitly.
+    @Test("A headline number counts up from 0 to its target")
+    func countUpProgresses() {
+        #expect(WrappedView.countUp(progress: 0, target: 42) == 0)
+        #expect(WrappedView.countUp(progress: 0.5, target: 42) == 21)
+        #expect(WrappedView.countUp(progress: 1, target: 42) == 42)
+    }
+
+    @Test("Progress outside 0...1 is clamped, not trusted")
+    func countUpClampsProgress() {
+        // `CountUpNumber` derives progress from elapsed time minus a stagger
+        // delay, which is negative before the delay has passed and can run
+        // past 1 on a dropped frame — neither should read as a number outside
+        // the card's own range.
+        #expect(WrappedView.countUp(progress: -0.4, target: 42) == 0)
+        #expect(WrappedView.countUp(progress: 1.8, target: 42) == 42)
+    }
+
+    @Test("A count-up rounds rather than truncates")
+    func countUpRounds() {
+        // At 90% of a target of 10, truncating would still show 9 — visually
+        // indistinguishable from "stuck" for the last tenth of the animation.
+        // Rounding shows 10 slightly early, which reads as arriving, not stalling.
+        #expect(WrappedView.countUp(progress: 0.96, target: 10) == 10)
+    }
+
+    // MARK: - Arrival haptic latch
+
+    @Test("An arrival haptic fires once, never again for the same card")
+    func arrivalHapticFiresOnce() {
+        // `#expect` captures its expression in an autoclosure, where a
+        // mutating call on a captured var is not allowed — so fire first.
+        var latch = ArrivalHapticLatch()
+        let first = latch.fireOnce()
+        let second = latch.fireOnce()
+        let third = latch.fireOnce()
+        #expect(first, "the first arrival should fire")
+        #expect(!second, "a second call for the same card must not fire again")
+        #expect(!third, "and neither should a third")
+    }
 }

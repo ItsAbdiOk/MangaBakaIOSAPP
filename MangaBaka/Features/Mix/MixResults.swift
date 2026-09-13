@@ -108,6 +108,7 @@ struct MixResults: View {
                 ForEach(model.results) { recommendation in
                     Button {
                         zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
+                        zoomRoute?.neighbours = model.results.map(\.series)
                         path.append(recommendation.series)
                     } label: {
                         card(recommendation)
@@ -118,8 +119,12 @@ struct MixResults: View {
             }
         }
         .padding(.horizontal, Metrics.gutter)
-        .opacity(dimmed ? 0.45 : 1)
-        .animation(Motion.reduced(.default), value: dimmed)
+        // 0.6, not the 0.45 a plain disabled fade would use: a re-blend
+        // keeps the previous grid readable while it dims, since it is still
+        // the best answer the reader has until the new one lands.
+        .opacity(dimmed ? 0.6 : 1)
+        .transition(.blurReplace)
+        .animation(Motion.reduced(Motion.glide), value: dimmed)
         .disabled(dimmed)
     }
 

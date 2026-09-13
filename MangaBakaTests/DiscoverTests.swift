@@ -307,3 +307,30 @@ struct WhatsNewFirstRunTests {
         #expect(state.isDue(hasCompletedOnboarding: true) == true)
     }
 }
+
+/// The stagger index a row's arrival animation runs at — its position among
+/// `model.rows`, so the first row leads. `ForEach`'s own `enumerated()` is
+/// what actually drives `DiscoverView.rowView(_:index:)`; this is the same
+/// assignment pulled out pure per the motion brief (rule 10), since this
+/// project has no ViewInspector to drive the rendered row list directly.
+@MainActor
+@Suite("Discover row arrival order")
+struct DiscoverRowArrivalTests {
+    private let rows = [
+        DiscoverModel.Row(kind: .rising, title: "Rising this week", more: "7 days"),
+        DiscoverModel.Row(kind: .hiddenGems, title: "Hidden gems", more: "See all"),
+        DiscoverModel.Row(kind: .trending, title: "Trending", more: "7d · 30d")
+    ]
+
+    @Test("Each row's index is its position in the row list")
+    func indexIsPosition() {
+        #expect(DiscoverView.arrivalIndex(forRowID: rows[0].id, in: rows) == 0)
+        #expect(DiscoverView.arrivalIndex(forRowID: rows[1].id, in: rows) == 1)
+        #expect(DiscoverView.arrivalIndex(forRowID: rows[2].id, in: rows) == 2)
+    }
+
+    @Test("An id that is not in the list arrives first rather than crashing")
+    func missingIDArrivesFirst() {
+        #expect(DiscoverView.arrivalIndex(forRowID: "not-a-real-row", in: rows) == 0)
+    }
+}

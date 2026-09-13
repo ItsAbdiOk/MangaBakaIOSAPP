@@ -49,7 +49,15 @@ private struct ScrollEdgeScrim: ViewModifier {
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, offset in
-                travelled = offset
+                // `Motion.glide` — fully damped, no overshoot — rather than
+                // a bare assignment: the scrim used to snap to each scroll
+                // sample, which reads as flicker over the twelve points it
+                // has to travel. A guess: this is scroll-linked but not
+                // itself a drag-follow, so it gets a curve rather than
+                // `.interactive`.
+                withAnimation(Motion.reduced(Motion.glide)) {
+                    travelled = offset
+                }
             }
             .overlay(alignment: .top) { scrim }
     }

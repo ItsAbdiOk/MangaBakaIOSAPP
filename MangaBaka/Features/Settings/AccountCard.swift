@@ -47,6 +47,11 @@ struct AccountCard: View {
                     .progressViewStyle(.linear)
                     .tint(Palette.accent)
                     .padding(.top, 12)
+                    // The spinner leaving and the status line replacing it
+                    // are the same transition, per the motion brief — a
+                    // blur-replace rather than a plain cut so "checking" and
+                    // its answer read as one continuous card, not two.
+                    .transition(.blurReplace)
             }
 
             Text(explanation)
@@ -54,6 +59,8 @@ struct AccountCard: View {
                 .foregroundStyle(Palette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
+                .transition(.blurReplace)
+                .id(headline)
 
             actions
                 .padding(.top, 14)
@@ -66,6 +73,13 @@ struct AccountCard: View {
             RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                 .strokeBorder(borderColour, lineWidth: status.isRejection ? 1 : 0.5)
         )
+        .animation(Motion.reduced(Motion.settle), value: status)
+        // The one real "connect an account" success in this app — onboarding's
+        // own "Connect an account" only defers to here, since the actual
+        // token has not been entered yet when that button is tapped. See
+        // `OnboardingView`'s report note.
+        .celebrates(on: isSignedIn)
+        .sensoryFeedback(Haptics.success, trigger: isSignedIn)
         .task {
             guard focusOnAppear else { return }
             // One run loop: focusing during the sheet's own presentation
@@ -113,6 +127,15 @@ struct AccountCard: View {
 
     private var borderColour: Color {
         status.isRejection ? Palette.accentEdge : Palette.border
+    }
+
+    /// The trigger for the card's one reward moment: a token that has just
+    /// been confirmed working. Not fired on first appearance already
+    /// `.signedIn` (a cached check, or a relaunch) — only a *change* into
+    /// this state celebrates, the same rule `CelebratesModifier` already
+    /// applies to every other trigger it watches.
+    private var isSignedIn: Bool {
+        if case .signedIn = status { true } else { false }
     }
 
     private var dot: Color {

@@ -44,7 +44,10 @@ struct DataUseSection: View {
 
                 if !slowest.isEmpty {
                     Button {
-                        Motion.run(.snappy(duration: 0.22)) { isExpanded.toggle() }
+                        // `Motion.settle`: a disclosure is content arriving
+                        // (or leaving), the same category sheets and lists
+                        // assembling already use — not a tap being answered.
+                        Motion.run(Motion.settle) { isExpanded.toggle() }
                     } label: {
                         Text(isExpanded ? "Hide the detail" : "The eight slowest")
                             .typeInstruction()
@@ -58,7 +61,7 @@ struct DataUseSection: View {
                         // and the list quietly discredits itself.
                         SettingsCard {
                             ForEach(Array(slowest.enumerated()), id: \.offset) { index, row in
-                                endpointRow(row)
+                                endpointRow(row).arrives(index: index)
                                 if index < slowest.count - 1 { SettingsDivider() }
                             }
                         }

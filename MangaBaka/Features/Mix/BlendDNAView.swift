@@ -19,6 +19,10 @@ struct BlendDNAView: View {
     let onToggle: (Int) -> Void
     let onReset: () -> Void
 
+    /// Shared between every chip so a re-blend moves the ones that survive
+    /// rather than removing and re-inserting them in a new order.
+    @Namespace private var chipTransition
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Eyebrow(text: "Blend DNA")
@@ -33,6 +37,14 @@ struct BlendDNAView: View {
                 }
             }
             .padding(.top, 10)
+            // Re-blending changes which strands are present and how they're
+            // ordered; `matchedGeometryEffect` on each chip (below) plus this
+            // spring is what turns that into chips sliding to new positions
+            // rather than the whole row cutting to a new one.
+            .animation(
+                Motion.reduced(Motion.settle),
+                value: (dna.strands.map(\.tagId) + excludedStrands.map(\.tagId))
+            )
 
             changeSummary
                 .padding(.top, 16)
@@ -83,6 +95,7 @@ struct BlendDNAView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.press)
+        .matchedGeometryEffect(id: strand.tagId, in: chipTransition)
         .accessibilityLabel("\(strand.name), \(Self.percent(strand.weight)) of the blend")
         .accessibilityValue(isOff ? "Excluded" : "Included")
         .accessibilityHint(isOff ? "Double tap to include" : "Double tap to exclude")
@@ -162,6 +175,35 @@ struct BlendDNAView: View {
             ))
             .hairlineBorder(Palette.border, radius: 18)
         }
+    }
+
+    /// Which strand ids entered, left, or moved between two chip orderings.
+    ///
+    /// Pure so the reorder a re-blend produces has a test without rendering
+    /// `FlowLayout`/`matchedGeometryEffect` (this project has no
+    /// ViewInspector) — `moved` is what actually decides whether the spring
+    /// above has anything to animate.
+    struct Diff: Equatable {
+        let entered: Set<Int>
+        let left: Set<Int>
+        let moved: Set<Int>
+    }
+
+    nonisolated static func diff(from old: [Int], to new: [Int]) -> Diff {
+        let oldSet = Set(old)
+        let newSet = Set(new)
+        let entered = newSet.subtracting(oldSet)
+        let left = oldSet.subtracting(newSet)
+        // "Moved" is a change in order among the survivors, not a change of
+        // absolute index: dropping the second of three shifts the third's
+        // index without it having moved past anything.
+        let oldSurvivors = old.filter(newSet.contains)
+        let newSurvivors = new.filter(oldSet.contains)
+        var moved: Set<Int> = []
+        for id in newSurvivors where oldSurvivors.firstIndex(of: id) != newSurvivors.firstIndex(of: id) {
+            moved.insert(id)
+        }
+        return Diff(entered: entered, left: left, moved: moved)
     }
 
     private var headline: String {

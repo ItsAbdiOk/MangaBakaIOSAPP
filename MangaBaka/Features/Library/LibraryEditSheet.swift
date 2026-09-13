@@ -101,6 +101,8 @@ struct LibraryEditSheet: View {
                     .accessibilityAddTraits(state == option ? [.isButton, .isSelected] : .isButton)
                 }
             }
+            // The chosen chip fills rather than cuts to its new colour.
+            .animation(Motion.reduced(Motion.snappy), value: state)
         }
     }
 
@@ -137,7 +139,10 @@ struct LibraryEditSheet: View {
                             cornerRadius: Metrics.radiusCard, style: .continuous
                         ))
                 }
-                .buttonStyle(.press)
+                // `Haptics.tick` per tap — the same feel `LibraryControl`'s own
+                // +1 gives, so the two routes to the same edit do not feel
+                // like two different controls.
+                .buttonStyle(.press(haptic: Haptics.tick))
                 .accessibilityLabel("Add one chapter")
             }
             // L3: an unparsable field used to become `nil` here too, which

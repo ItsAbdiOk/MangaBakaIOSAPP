@@ -208,7 +208,9 @@ extension MixView {
                 )
                 .overlay(Capsule().strokeBorder(Palette.border, lineWidth: isSelected ? 0 : 0.5))
                 .tapTarget()
+                .animation(Motion.reduced(Motion.snappy), value: isSelected)
         }
+        .haptic(Haptics.selection, on: isSelected)
     }
 
     // MARK: Blend

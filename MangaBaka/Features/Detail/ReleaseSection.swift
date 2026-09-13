@@ -51,22 +51,31 @@ struct ReleaseSection: View {
     }
 
     var body: some View {
-        switch Self.sectionState(report: report, isLoading: isLoading) {
-        case .hidden:
-            EmptyView()
-        case .loading:
-            if Self.isMatched(links: links) { loadingSkeleton }
-        case let .failed(error):
-            VStack(alignment: .leading, spacing: 11) {
-                Text("Releases")
-                    .typeDetailSectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, Metrics.gutter)
-                InlineFailure(error: error, retry: retry)
+        let state = Self.sectionState(report: report, isLoading: isLoading)
+        Group {
+            switch state {
+            case .hidden:
+                EmptyView()
+            case .loading:
+                if Self.isMatched(links: links) {
+                    loadingSkeleton
+                        .transition(.blurReplace)
+                }
+            case let .failed(error):
+                VStack(alignment: .leading, spacing: 11) {
+                    Text("Releases")
+                        .typeDetailSectionHeader()
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(.horizontal, Metrics.gutter)
+                    InlineFailure(error: error, retry: retry)
+                }
+                .transition(.blurReplace)
+            case .shown:
+                content
+                    .transition(.blurReplace)
             }
-        case .shown:
-            content
         }
+        .animation(Motion.reduced(Motion.settle), value: state)
     }
 
     @ViewBuilder

@@ -26,7 +26,10 @@ final class ToastCentre {
     }
 
     private(set) var message: String?
-    private var kind: Kind = .success
+    // `private(set)`, not `private`: the overlay reads this to choose between
+    // `Haptics.success` and `Haptics.warning` — a plain `.success` unconditionally
+    // for both kinds is how a failed write buzzed the same as one that landed.
+    private(set) var kind: Kind = .success
     private var dismissal: Task<Void, Never>?
     /// When the current toast should stop protecting itself from replacement.
     /// Only set for `.failure` — a `.success` toast has never needed this,
@@ -79,10 +82,25 @@ final class ToastCentre {
             self?.protectedUntil = nil
         }
     }
+
+    /// The reader swiping a toast away early. Distinct from the timeout
+    /// above only in that it is deliberate, so it clears the same way a
+    /// `.failure`'s protection included — a swipe is at least as clear a
+    /// signal as time running out.
+    func dismiss() {
+        dismissal?.cancel()
+        message = nil
+        protectedUntil = nil
+    }
 }
 
 private struct ToastOverlay: ViewModifier {
     let centre: ToastCentre
+    /// A swipe-down far enough to count as "dismiss this" rather than a
+    /// stray drag. 40pt is a guess, generous enough that a reader aiming
+    /// roughly downward at the capsule does not have to be precise.
+    private static let dismissThreshold: CGFloat = 40
+    @State private var dragOffset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
@@ -100,19 +118,48 @@ private struct ToastOverlay: ViewModifier {
                     // Above the tab bar, not behind it. The mockup puts it at
                     // 104px from the bottom, which is the bar plus its inset.
                     .padding(.bottom, Metrics.scrollBottomInset)
+                    .offset(y: max(0, dragOffset))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    // Never intercepts a tap: it is a statement, not a control,
-                    // and a reader reaching for the tab bar while one is up
-                    // must not hit it instead.
-                    .allowsHitTesting(false)
+                    // Trades away the old "never intercepts a tap" —
+                    // `.allowsHitTesting(false)` — for the swipe-down this
+                    // batch adds: a gesture needs hit testing on. The toast
+                    // now sits over the tab bar for its 2-4s window rather
+                    // than passing taps through to it, which is a real
+                    // regression on whatever's directly underneath; flagged
+                    // for the main session to judge on a device against how
+                    // often a toast is actually up when a reader reaches for
+                    // the bar.
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                guard value.translation.height > 0 else { return }
+                                dragOffset = value.translation.height
+                            }
+                            .onEnded { value in
+                                if value.translation.height > Self.dismissThreshold {
+                                    centre.dismiss()
+                                }
+                                withAnimation(Motion.reduced(Motion.snappy)) { dragOffset = 0 }
+                            }
+                    )
                     .accessibilityAddTraits(.isStaticText)
             }
         }
-        .animation(Motion.reduced(.snappy(duration: 0.28)), value: centre.message)
-        // A toast is the confirmation that an action worked. It appears near
-        // the bottom of a screen the reader may not be looking at, so the tap
-        // gets an answer even when the text does not.
-        .sensoryFeedback(.success, trigger: centre.message) { _, new in new != nil }
+        // Settles in — content arriving — and leaves with the quicker,
+        // answering-a-gesture spring: a toast that lingered on the way out
+        // as long as it did on the way in read as reluctant to go.
+        .animation(centre.message != nil ? Motion.reduced(Motion.settle) : Motion.reduced(Motion.snappy),
+                   value: centre.message)
+        // A toast is the confirmation that an action worked, or the warning
+        // that it didn't — it appears near the bottom of a screen the reader
+        // may not be looking at, so the tap gets an answer even when the
+        // text does not. The two kinds do not share one feel.
+        .sensoryFeedback(Haptics.success, trigger: centre.message) { _, new in
+            new != nil && centre.kind == .success
+        }
+        .sensoryFeedback(Haptics.warning, trigger: centre.message) { _, new in
+            new != nil && centre.kind == .failure
+        }
     }
 }
 

@@ -6,23 +6,42 @@ import SwiftUI
 /// point of drag, a 92pt commit threshold, and badge opacity tied to |dx| / 80
 /// so the decision is legible before the reader lets go.
 struct StackView: View {
+    /// Shared between this card and `StackHeader`'s counter anchor so a
+    /// saved card can `matchedGeometryEffect` its way there. A `static let`
+    /// rather than a literal at each call site, so the two halves of the
+    /// flight can never drift out of sync by a typo.
+    static let saveFlightID = "stack.saveFlightTarget"
+
     @State private var model: StackModel
     @Binding private var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
+    @Namespace private var saveFlightNamespace
 
     @State private var drag: CGSize = .zero
     @State private var hint = StackHint()
-    /// What the last committed swipe was, and how many have happened.
-    ///
-    /// The count is what makes the trigger fire twice for two saves in a row —
-    /// the kind alone would not change, so the second save would be silent.
-    @State private var lastCommit: (kind: ShelfEntry.Kind, count: Int)?
     /// Bumped when a drag falls short and the card settles back. A cancelled
     /// swipe should feel cancelled; see `Haptics`.
     @State private var settles = 0
     /// Commit counts, for the symbol bounces on the two circles.
     @State private var saves = 0
     @State private var skips = 0
+    /// Bumped each time the drag crosses `commitThreshold` — a latch via
+    /// `StackGesture.crossedThreshold`, not a level, so holding the card past
+    /// the line ticks once rather than buzzing every frame.
+    @State private var thresholdTicks = 0
+    /// The series flying toward the saved counter, and how far into that
+    /// flight it is. Non-nil only for the ~duration of `Motion.celebrate`
+    /// after a save commits; see `beginSaveFlight`.
+    @State private var flightSeries: Series?
+    @State private var flightArrived = false
+    /// True for one `Motion.settle` beat after a new card becomes current,
+    /// while it rises and un-rotates from the deck. Reset by the same
+    /// `onChange` that clears the drag offset.
+    @State private var cardArriving = false
+    /// Whether the very first card of this screen's lifetime has faded in
+    /// over the loading skeleton yet. One-shot: every card after the first
+    /// arrives via `cardArriving`'s rise instead, not this fade.
+    @State private var firstCardArrived = false
     /// Guards "Deal another now" (gap 12, FAILURES-SUMMARY.md K3): it used to
     /// call `resetStack()` directly and erase every local save with no
     /// confirmation and no toast, unlike the header's own reset. Behind the
@@ -36,6 +55,9 @@ struct StackView: View {
 
     private let commitThreshold: CGFloat = 92
     private let rotationPerPoint: Double = 0.012
+    /// A guess: past this, rotation stopped reading as a card tipping and
+    /// started reading as it spinning.
+    private let rotationCap: Double = 8
     private let badgeDivisor: CGFloat = 80
 
     init(
@@ -72,8 +94,21 @@ struct StackView: View {
         .background(Palette.ground)
         .task { await model.loadIfNeeded() }
         // The queue advanced: whatever offset the thrown card had belongs to
-        // the card that has gone, not the one now on top.
-        .onChange(of: model.current?.id) { _, _ in resetThrow() }
+        // the card that has gone, not the one now on top. The new card on
+        // top rises and un-rotates from the deck instead, per `cardArriving`
+        // — except the very first card of this screen's lifetime, which
+        // fades in over the loading skeleton instead (`firstCardArrived`).
+        .onChange(of: model.current?.id) { oldValue, newValue in
+            resetThrow()
+            guard newValue != nil else { return }
+            guard firstCardArrived else {
+                firstCardArrived = true
+                return
+            }
+            guard oldValue != nil, !reduceMotion else { return }
+            cardArriving = true
+            Motion.run(Motion.settle) { cardArriving = false }
+        }
     }
 
     // MARK: - Header
@@ -82,15 +117,25 @@ struct StackView: View {
         StackHeader(
             savedCount: model.savedCount,
             provenance: model.caption,
-            showsInstruction: !hint.hasDragged
+            showsInstruction: !hint.hasDragged,
+            todayAnswered: model.todayProgress.answered,
+            todayDealt: model.todayProgress.dealt,
+            saveFlightNamespace: saveFlightNamespace
         ) {
             let succeeded = await model.resetStack()
             onConfirm(succeeded ? "The stack has been reset" : "Couldn't reset — try again")
         }
     }
 
-    // MARK: - Cards
+}
 
+// MARK: - Cards, gesture, and reactions
+//
+// Split from the type's own body only to stay under `type_body_length` —
+// `private` here still resolves against `StackView`'s own private state,
+// since an extension in the same file shares its enclosing type's private
+// access.
+extension StackView {
     @ViewBuilder
     private var cardArea: some View {
         ZStack {
@@ -103,19 +148,27 @@ struct StackView: View {
 
                 card(current)
                     .offset(drag)
-                    .rotationEffect(.degrees(drag.width * rotationPerPoint))
+                    .rotationEffect(.degrees(cardRotation))
+                    // The new card rises 8pt and un-rotates from a 2° tilt as
+                    // it becomes current, so the deck reads as a physical
+                    // stack settling rather than a swap. Suppressed while a
+                    // drag is in progress or the flight overlay is standing
+                    // in for this card (`flightSeries != nil`), and identity
+                    // under Reduce Motion via `Motion.reduced` inside `run`.
+                    .offset(y: cardArriving ? 8 : 0)
+                    .opacity(flightSeries != nil ? 0 : 1)
+                    .appearsSoftly(when: firstCardArrived)
                     .gesture(dragGesture)
                     // The stack is the one screen driven entirely by a gesture,
-                    // so it is the one that most needs to answer the thumb. A
-                    // save lands heavier than a skip because keeping something
-                    // is the decision worth feeling.
-                    .sensoryFeedback(trigger: lastCommit?.count ?? 0) { _, _ in
-                        switch lastCommit?.kind {
-                        case .saved: Haptics.committed
-                        case .skipped: .impact(flexibility: .soft, intensity: 0.6)
-                        case nil: nil
-                        }
-                    }
+                    // so it is the one that most needs to answer the thumb.
+                    // `skips`/`saves` bump in `react` itself — the one path
+                    // shared by the drag, the buttons and the VoiceOver
+                    // actions — so all three trigger points feel the same.
+                    // A save's own reward haptic fires from the counter it
+                    // flies to instead (`StackHeader`), keyed off the count
+                    // that actually persisted rather than the gesture alone.
+                    .haptic(Haptics.selection, onEach: skips)
+                    .haptic(Haptics.tick, onEach: thresholdTicks)
                     .haptic(Haptics.settled, onEach: settles)
                     .onTapGesture { open(current) }
                     .zoomSource("stack", current.id)
@@ -142,6 +195,33 @@ struct StackView: View {
                     .accessibilityHidden(true)
             } else {
                 emptyState
+            }
+
+            // A saved card shrinks and travels here instead of being thrown
+            // off screen — a save is a keep, not a dismissal. Sits above the
+            // real card (which fades out for the duration, see `card`'s
+            // opacity binding) so the two never double-render the cover.
+            if let flightSeries {
+                CoverImage(
+                    cover: flightSeries.cover,
+                    width: Metrics.stackCardWidth,
+                    radius: Metrics.radiusStackCard
+                )
+                    .frame(
+                        width: Metrics.stackCardWidth,
+                        height: Metrics.stackCardWidth / Metrics.coverAspect
+                    )
+                    // `isSource: false`: this ghost's geometry is the one
+                    // that should be overridden to interpolate toward the
+                    // header's anchor, not the other way around — with both
+                    // sides defaulting to `true` the match is ambiguous and
+                    // the flight can resolve backwards (the tiny anchor
+                    // stretching to card size instead of the card shrinking).
+                    .matchedGeometryEffect(id: Self.saveFlightID, in: saveFlightNamespace, isSource: false)
+                    .scaleEffect(flightArrived ? 0.05 : 1)
+                    .opacity(flightArrived ? 0 : 1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .frame(height: (model.current != nil || model.isLoading) ? Metrics.stackArea : nil)
@@ -183,6 +263,7 @@ struct StackView: View {
                 bordered: true
             )
                 .opacity(drag.width < 0 ? badgeStrength : 0)
+                .animation(Motion.reduced(Motion.glide), value: badgeStrength)
                 .padding(16)
         }
         .overlay(alignment: .topTrailing) {
@@ -193,12 +274,22 @@ struct StackView: View {
                 bordered: false
             )
                 .opacity(drag.width > 0 ? badgeStrength : 0)
+                .animation(Motion.reduced(Motion.glide), value: badgeStrength)
                 .padding(16)
         }
     }
 
     private var badgeStrength: Double {
         Double(min(abs(drag.width) / badgeDivisor, 1))
+    }
+
+    /// Drag rotation, capped at `rotationCap`, plus the deck's own 2° tilt
+    /// while a new card is arriving (`cardArriving`) — the two never overlap
+    /// in practice since a drag only ever acts on a settled card, but adding
+    /// rather than switching keeps this a single, always-correct expression.
+    private var cardRotation: Double {
+        let dragRotation = min(max(Double(drag.width) * rotationPerPoint, -rotationCap), rotationCap)
+        return dragRotation + (cardArriving ? 2 : 0)
     }
 
     private var dragGesture: some Gesture {
@@ -212,7 +303,14 @@ struct StackView: View {
                 // Only claim the gesture once it is clearly horizontal.
                 guard abs(value.translation.width) >= abs(value.translation.height)
                 else { return }
+                let previousWidth = drag.width
                 drag = value.translation
+                // One tick per crossing, not one per frame past it — see
+                // `StackGesture.crossedThreshold`.
+                let crossed = StackGesture.crossedThreshold(
+                    previous: previousWidth, current: drag.width, threshold: commitThreshold
+                )
+                if crossed { thresholdTicks += 1 }
             }
             .onEnded { value in
                 let dx = value.translation.width
@@ -225,14 +323,16 @@ struct StackView: View {
                     return
                 }
                 let kind: ShelfEntry.Kind = dx > 0 ? .saved : .skipped
-                lastCommit = (kind, (lastCommit?.count ?? 0) + 1)
                 hint.markDragged()
-                // A card thrown the width of the screen is a lot of motion.
-                // With Reduce Motion on, it simply goes.
-                if reduceMotion {
-                    drag = .zero
-                } else {
-                    Motion.run(.easeOut(duration: 0.22)) { drag.width = dx > 0 ? 700 : -700 }
+                // A skip tips and slides out on its own spring; a save has
+                // no throw of its own — the card fades as `react` starts the
+                // fly-to-counter overlay instead (see `beginSaveFlight`).
+                if kind == .skipped {
+                    if reduceMotion {
+                        drag = .zero
+                    } else {
+                        Motion.run(Motion.snappy) { drag.width = dx > 0 ? 700 : -700 }
+                    }
                 }
                 Task {
                     await react(kind)
@@ -251,12 +351,41 @@ struct StackView: View {
     /// missed by one of them. Said after the save has landed, because only
     /// then does the model know whether it reached the library.
     private func react(_ kind: ShelfEntry.Kind) async {
-        if kind == .saved { saves += 1 } else { skips += 1 }
+        if kind == .saved {
+            saves += 1
+            // Captured before `model.react` advances the queue: by the time
+            // that returns, `model.current` is already the next card.
+            if let series = model.current { beginSaveFlight(series) }
+        } else {
+            skips += 1
+        }
         await model.react(kind)
         // `shouldConfirmSave` is false only when the local shelf write itself
         // failed — confirming "Saved here" for that write used to be
         // unconditional (gap 36, FAILURES-SUMMARY.md K8).
         if kind == .saved, model.shouldConfirmSave { onConfirm(model.saveConfirmation) }
+    }
+
+    /// Shrinks the card and sends it toward the saved counter instead of
+    /// throwing it off screen: a save is a keep, not a dismissal, so it
+    /// travels to where the kept thing now lives. Pairs with the
+    /// `matchedGeometryEffect` anchor in `StackHeader`'s counter and its own
+    /// `.celebrates`/`Haptics.success` there.
+    ///
+    /// The 550ms hold is a guess, chosen to sit inside the 600ms reward
+    /// budget (`CelebratesModifier`'s own doc comment) alongside
+    /// `Motion.celebrate`'s spring — unverified on a device; flagged for the
+    /// main session to time and shorten if the whole flight runs long.
+    private func beginSaveFlight(_ series: Series) {
+        guard !reduceMotion else { return }
+        flightSeries = series
+        flightArrived = false
+        Motion.run(Motion.celebrate) { flightArrived = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(550))
+            flightSeries = nil
+            flightArrived = false
+        }
     }
 
     /// The card's offset is reset the moment the queue advances, not when

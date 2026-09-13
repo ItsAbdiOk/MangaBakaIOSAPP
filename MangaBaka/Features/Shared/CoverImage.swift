@@ -13,6 +13,15 @@ struct CoverImage: View {
     /// What VoiceOver reads. Cover art carries the title visually, so without
     /// this a reader using VoiceOver hears nothing at all.
     var accessibilityText: String = "Cover art"
+    /// Called once after the real artwork (not the BlurHash) has finished
+    /// loading, whether that came from cache or the network. Rows use this to
+    /// chain their own arrival to the cover's rather than guessing at a delay.
+    var onLoaded: (() -> Void)?
+    /// The long-press quick actions this cover offers, or nil for none. Left
+    /// nil at nearly every call site on purpose — `.coverQuickActions(_:)` is
+    /// itself inert when nil, so nothing about this view changes for the
+    /// screens that do not pass anything here.
+    var quickActions: CoverQuickActions.Actions?
 
     @Environment(\.displayScale) private var displayScale
 
@@ -26,69 +35,134 @@ struct CoverImage: View {
     }
 
     @State private var loaded: UIImage?
+    /// Whether the real image should be visible. Kept separate from `loaded`
+    /// so the two can disagree on purpose: the image can already be decoded
+    /// and waiting one runloop tick before `appearsSoftly(when:)` is allowed
+    /// to animate it in — see `load()`.
+    @State private var isReady = false
 
     private var url: URL? { cover.url(forHeight: height, scale: displayScale) }
 
     var body: some View {
-        content
-            // The label the property has always documented, finally applied.
-            // `accessibilityText` was declared, commented ("without this a
-            // reader using VoiceOver hears nothing at all"), and passed in at
-            // every call site — and never reached the view. Every bare
-            // CoverImage, which is what the swipe stack, the detail hero and
-            // the mix seed slots all draw, announced nothing. Found by
-            // Periphery reporting the property as assigned and never read.
-            //
-            // A card that wraps this in its own accessibility element still
-            // wins, so nothing is read twice.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityText)
-            .accessibilityAddTraits(.isImage)
-            // Keyed on the URL so a recycled row loads its new cover rather
-            // than keeping the old one. `.task` also re-runs when the view
-            // reappears, which is what makes a failed cover retry on scroll-back
-            // instead of staying broken for the life of the screen.
-            //
-            // The state is reset before the fetch, not only after it. Keying
-            // the task decides when the load runs; it does not touch `loaded`,
-            // so a view that kept its identity across a cover change — the
-            // stack's card, handed a new series every swipe — drew the old
-            // artwork for a whole round trip and skipped the BlurHash
-            // placeholder that exists for exactly that gap.
-            .task(id: url) {
-                loaded = CoverStore.shared.cached(url)
-                guard loaded == nil else { return }
-                loaded = await CoverStore.shared.image(for: url)
+        ZStack {
+            background
+            if let loaded {
+                Image(uiImage: loaded)
+                    .resizable()
+                    .scaledToFill()
+                    // Cover art is a photograph, not UI: Smart Invert must
+                    // leave it alone. Nothing in the app opted out before, so
+                    // a reader using it saw every cover as a negative.
+                    .accessibilityIgnoresInvertColors()
+                    // The gloss arrives with the artwork it belongs to, not
+                    // the placeholder underneath — folded into the same
+                    // `appearsSoftly` fade rather than its own, so the two
+                    // can never drift out of sync.
+                    .overlay { CoverGloss(radius: radius) }
+                    .appearsSoftly(when: isReady)
             }
+        }
+        .modifier(CoverFrame(width: width, height: height, radius: radius))
+        .coverQuickActions(quickActions)
+        // The label the property has always documented, finally applied.
+        // `accessibilityText` was declared, commented ("without this a
+        // reader using VoiceOver hears nothing at all"), and passed in at
+        // every call site — and never reached the view. Every bare
+        // CoverImage, which is what the swipe stack, the detail hero and
+        // the mix seed slots all draw, announced nothing. Found by
+        // Periphery reporting the property as assigned and never read.
+        //
+        // A card that wraps this in its own accessibility element still
+        // wins, so nothing is read twice.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(.isImage)
+        // Keyed on the URL so a recycled row loads its new cover rather
+        // than keeping the old one. `.task` also re-runs when the view
+        // reappears, which is what makes a failed cover retry on scroll-back
+        // instead of staying broken for the life of the screen.
+        .task(id: url) {
+            await load()
+        }
     }
 
     @ViewBuilder
-    private var content: some View {
-        if let loaded {
-            Image(uiImage: loaded)
-                .resizable()
-                .scaledToFill()
-                .modifier(CoverFrame(width: width, height: height, radius: radius))
-                // Cover art is a photograph, not UI: Smart Invert must leave
-                // it alone. Nothing in the app opted out before, so a reader
-                // using it saw every cover as a negative.
-                .accessibilityIgnoresInvertColors()
-        } else if let blur = blurPlaceholder {
-            // The API ships a BlurHash with every cover, so the placeholder can
-            // carry the artwork's real colours. A loading grid then looks like
-            // the grid it is about to become rather than a wall of grey.
+    private var background: some View {
+        // The API ships a BlurHash with every cover, so the placeholder can
+        // carry the artwork's real colours. A loading grid then looks like
+        // the grid it is about to become rather than a wall of grey. No
+        // gloss here — see the doc comment on `body`.
+        if let blur = blurPlaceholder {
             Image(uiImage: blur)
                 .resizable()
-                .modifier(CoverFrame(width: width, height: height, radius: radius))
                 .accessibilityIgnoresInvertColors()
         } else {
             Palette.imagePlaceholder
-                .modifier(CoverFrame(width: width, height: height, radius: radius))
         }
+    }
+
+    /// Loads the cover and decides whether its arrival should cross-fade over
+    /// the placeholder or simply appear.
+    ///
+    /// The state is reset before the fetch, not only after it. Keying the
+    /// task decides when the load runs; it does not touch `loaded`, so a view
+    /// that kept its identity across a cover change — the stack's card,
+    /// handed a new series every swipe — drew the old artwork for a whole
+    /// round trip and skipped the BlurHash placeholder that exists for
+    /// exactly that gap.
+    private func load() async {
+        isReady = false
+        let cached = CoverStore.shared.cached(url)
+        loaded = cached
+        guard cached == nil else {
+            // Already in memory: appearing at once is correct here, not a
+            // shortcut. A fade on a cache hit while scrolling reads as
+            // flicker, not polish — see `shouldFade(loadDuration:)`.
+            isReady = true
+            onLoaded?()
+            return
+        }
+
+        let start = Date()
+        guard let image = await CoverStore.shared.image(for: url) else { return }
+        loaded = image
+        onLoaded?()
+
+        guard Self.shouldFade(loadDuration: Date().timeIntervalSince(start)) else {
+            isReady = true
+            return
+        }
+        // Deferred a tick so the placeholder-only frame above this actually
+        // commits before `isReady` flips — setting both in the same pass
+        // would let the image arrive already fully visible, with nothing for
+        // `appearsSoftly` to cross-fade from.
+        Task { @MainActor in
+            isReady = true
+        }
+    }
+
+    /// The line between "arrived instantly" and "arrived, and should be seen
+    /// arriving". `cacheHitThreshold` is A GUESS: one frame at 60Hz, about
+    /// 16ms, is roughly the fastest a round trip through `CoverStore.image`
+    /// can go without the caller ever perceiving a gap — and it is exactly
+    /// what happens when `URLCache` answers the request instead of the
+    /// network, without `CoverImage` needing to know that happened. Below the
+    /// threshold, fading in would read as a flicker mid-scroll; at or above
+    /// it, the placeholder was genuinely on screen first and the fade reads
+    /// as the cover arriving rather than a glitch.
+    nonisolated static let cacheHitThreshold: TimeInterval = 0.016
+
+    /// Pure so it can be tested without a device or a network: the reader's
+    /// eye is standing in for a fixed number, and the number is a guess.
+    nonisolated static func shouldFade(loadDuration: TimeInterval) -> Bool {
+        loadDuration >= cacheHitThreshold
     }
 }
 
-/// The frame every cover shares.
+/// The frame every cover shares: size, corner and shadow. No gloss here — the
+/// gloss belongs to the artwork, not the frame around it, so it lives on the
+/// image layer in `CoverImage.body` and fades in with it instead of showing
+/// over a placeholder that has not loaded yet.
 private struct CoverFrame: ViewModifier {
     let width: CGFloat
     let height: CGFloat
@@ -107,7 +181,6 @@ private struct CoverFrame: ViewModifier {
         .frame(width: width, height: height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-        .overlay { CoverGloss(radius: radius) }
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
     }
 }

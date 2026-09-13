@@ -34,6 +34,6 @@ struct Eyebrow: View {
             .foregroundStyle(color)
             // "49 ESTIMATED OF 55 IN SCOPE" counts up as a measurement lands.
             .countsNotCuts()
-            .animation(Motion.reduced(.snappy(duration: 0.25)), value: text)
+            .animation(Motion.reduced(Motion.snappy), value: text)
     }
 }

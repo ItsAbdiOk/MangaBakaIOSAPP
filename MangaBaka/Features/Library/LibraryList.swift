@@ -38,11 +38,20 @@ struct LibraryList: View {
                 )
                 .padding(.top, 20)
             }
-            ForEach(model.listed) { entry in
+            ForEach(Array(model.listed.enumerated()), id: \.element.id) { index, entry in
                 row(entry)
+                    // Capped at 6 (`Motion.stagger`'s own cap) so a 900-row
+                    // library assembles rather than queuing its last rows
+                    // seconds behind its first.
+                    .arrives(index: index)
+                    .transition(.blurReplace)
             }
         }
         .padding(.horizontal, Metrics.gutter)
+        // A filter, a shape-bar tap or a sort change all reshape this list;
+        // this is what makes rows leaving and arriving read as one list
+        // resettling rather than a screen cut to a different one.
+        .animation(Motion.reduced(Motion.settle), value: model.listed.map(\.id))
     }
 
     private var header: some View {
@@ -93,6 +102,7 @@ struct LibraryList: View {
                 return
             }
             zoomRoute?.source = ZoomRoute.id("library", series.id)
+            zoomRoute?.neighbours = model.listed.compactMap(\.series)
             path.append(series)
         } label: {
             HStack(spacing: 12) {
@@ -103,6 +113,7 @@ struct LibraryList: View {
                         radius: 5,
                         accessibilityText: series.displayTitle ?? "Cover art"
                     )
+                    .enterScale()
                 } else {
                     // An entry whose series did not come back with it. Rare,
                     // and a blank of the right size keeps the row's rhythm
@@ -258,6 +269,10 @@ struct JumpIndex: View {
                 Text(target.letter)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(index == activeIndex ? Palette.accent : Palette.textTertiary)
+                    // 1.3 is a guess: enough for a 10pt glyph to visibly pop
+                    // under a finger sliding fast down the rail.
+                    .scaleEffect(index == activeIndex ? 1.3 : 1)
+                    .animation(Motion.reduced(Motion.snappy), value: activeIndex)
                     .frame(width: 20, height: 13)
             }
         }

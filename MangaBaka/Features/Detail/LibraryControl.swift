@@ -154,6 +154,21 @@ final class LibraryControlModel {
         }
         entry = .some(nil)
     }
+
+    /// Whether a state change from `old` to `new` is the reader finishing a
+    /// series, worth the one-shot checkmark and `Haptics.success` — versus
+    /// every other write, which only gets `Haptics.committed`.
+    ///
+    /// `old == nil` is deliberately excluded: that is the control's own
+    /// first look at an entry (`load()` populating `entry` for the first
+    /// time, or `add(state:)` creating one), not a reader finishing
+    /// something mid-session. Without the guard, opening a series page for a
+    /// title already marked Completed on the website would celebrate on
+    /// first render — the checkmark exists to mark a transition, not a fact.
+    nonisolated static func shouldCelebrate(old: LibraryEntry.State?, new: LibraryEntry.State?) -> Bool {
+        guard let old else { return false }
+        return new == .completed && old != .completed
+    }
 }
 
 /// The control itself. Renders nothing until the library has answered, because
@@ -164,6 +179,15 @@ struct LibraryControl: View {
     @State private var model: LibraryControlModel
     @State private var isEditing = false
     @State private var isChoosingState = false
+    /// The last state this control actually saw, set once `load()` (or a
+    /// write) settles — the baseline `shouldCelebrate` compares against, kept
+    /// outside the model because it is a view-level "what did we last show",
+    /// not library data.
+    @State private var lastKnownState: LibraryEntry.State?
+    /// Bumped once per genuine "just finished" transition. Drives both the
+    /// checkmark's one-shot trim and `Haptics.success`, so neither can fire
+    /// on a re-render — only `onChange` below ever touches it.
+    @State private var completionPulse = 0
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     init(series: Series, library: any LibraryProviding, store: LibraryModel) {
@@ -193,11 +217,31 @@ struct LibraryControl: View {
             // library" with no account to add it to is the bug this
             // replaces.
         }
-        .task { await model.load() }
+        // The chosen state's chip (the "saved" row swapping in for the "Add"
+        // button, and the chip's own label changing) answers the tap rather
+        // than cutting to it.
+        .animation(Motion.reduced(Motion.snappy), value: model.current?.state)
+        .task {
+            await model.load()
+            // Seeds the baseline *after* the first load lands, not before —
+            // so the transition load() itself performs (nil to whatever the
+            // server already has) is never mistaken for the reader finishing
+            // something just now.
+            lastKnownState = model.current?.state
+        }
         // Adding a series, changing its state or advancing a chapter all write
         // to the reader's real account over the network. The tap and the result
         // are seconds apart, and until now nothing marked the moment it landed.
-        .sensoryFeedback(.success, trigger: model.current?.state)
+        // `Haptics.committed` marks the write itself; `Haptics.success` below
+        // is reserved for the one case that is a reward rather than a receipt.
+        .sensoryFeedback(Haptics.committed, trigger: model.current?.state) { old, _ in old != nil }
+        .sensoryFeedback(Haptics.success, trigger: completionPulse)
+        .onChange(of: model.current?.state) { _, new in
+            if LibraryControlModel.shouldCelebrate(old: lastKnownState, new: new) {
+                completionPulse += 1
+            }
+            lastKnownState = new
+        }
         .sensoryFeedback(.error, trigger: model.failure) { _, new in new != nil }
         // Gap 109: a failure used to sit in the row forever in faint 12pt
         // type, with nothing to clear it and no spinner distinguishing a
@@ -260,6 +304,9 @@ struct LibraryControl: View {
                 HStack(spacing: 8) {
                     Text(entry.state.title)
                         .typeCTA()
+                    if entry.state == .completed {
+                        CompletionCheckmark(trigger: completionPulse)
+                    }
                     if let rating = entry.rating {
                         Text("· " + String(Int(wholeOrClamped: (rating / 20).rounded())) + "★")
                             .typeSmallMeta()
@@ -301,6 +348,10 @@ struct LibraryControl: View {
                                 Text(nextChapter(entry))
                                     .font(.system(size: 9, weight: .semibold))
                                     .opacity(0.75)
+                                    // The number this button will land on rolls
+                                    // rather than cutting, same as every other
+                                    // figure on screen that can change.
+                                    .countsNotCuts()
                             }
                         }
                     }
@@ -311,10 +362,49 @@ struct LibraryControl: View {
                         in: RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                     )
                 }
-                .buttonStyle(.press)
+                // `Haptics.tick` on the tap itself — the reader felt the finger
+                // move a number, distinct from `Haptics.committed` above, which
+                // marks the write that tap kicked off actually landing.
+                .buttonStyle(.press(haptic: Haptics.tick))
                 .disabled(model.isWorking)
                 .accessibilityLabel("Read one more chapter")
             }
+        }
+    }
+}
+
+/// The checkmark that draws itself once beside "Completed" — a `Path`
+/// stroked from nothing to whole on `Motion.celebrate`, not a glyph that
+/// simply appears. Keyed on `trigger` (`LibraryControl`'s `completionPulse`,
+/// bumped only by a genuine `LibraryControlModel.shouldCelebrate` result), so
+/// re-rendering this view — a parent re-laying-out, Dynamic Type changing —
+/// never redraws it: only a real transition into Completed bumps `trigger`.
+///
+/// Reduce Motion draws the full mark at once rather than skipping it: the
+/// checkmark itself is information (this entry is Completed), unlike the
+/// scale bounce `.celebrates(on:)` gives up entirely under the setting.
+private struct CompletionCheckmark: View {
+    let trigger: Int
+    @State private var trim: CGFloat = 1
+
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: 5))
+            path.addLine(to: CGPoint(x: 4, y: 9))
+            path.addLine(to: CGPoint(x: 11, y: 0))
+        }
+        .trim(from: 0, to: trim)
+        .stroke(Palette.positive, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        .frame(width: 11, height: 9)
+        .accessibilityHidden(true)
+        .onChange(of: trigger) { _, new in
+            guard new > 0 else { return }
+            guard !Motion.isReduced else {
+                trim = 1
+                return
+            }
+            trim = 0
+            withAnimation(Motion.celebrate) { trim = 1 }
         }
     }
 }

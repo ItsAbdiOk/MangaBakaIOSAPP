@@ -20,18 +20,35 @@ struct DetailBarTitle: ViewModifier {
     /// How far the hero has to travel before its own title is gone. Measured
     /// against the hero on an iPhone 16 Pro rather than picked: the title sits
     /// beside the cover, and the bar's copy should arrive as it leaves.
-    static let heroTitleTravel: CGFloat = 150
+    nonisolated static let heroTitleTravel: CGFloat = 150
 
-    @State private var heroTitleIsHidden = false
+    /// 0 while the hero title is fully on screen, 1 once it has travelled
+    /// out. A continuous value, not a flip: the bar's copy fades in over the
+    /// last `crossfadeSpan` points of the hero's travel, so the handover
+    /// reads as one title moving rather than two cutting.
+    @State private var crossfade: CGFloat = 0
+
+    /// How many points of travel the fade takes. A guess: long enough to
+    /// read as a fade at scroll speed, short enough that the bar copy is
+    /// solid by the time the hero is gone.
+    nonisolated static let crossfadeSpan: CGFloat = 60
+
+    /// Maps travel to 0…1, finishing exactly at `heroTitleTravel`.
+    nonisolated static func crossfadeProgress(travelled: CGFloat) -> CGFloat {
+        let start = heroTitleTravel - crossfadeSpan
+        return min(max((travelled - start) / crossfadeSpan, 0), 1)
+    }
+
+    private var heroTitleIsHidden: Bool { crossfade >= 1 }
 
     func body(content: Content) -> some View {
         content
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, travelled in
-                let hidden = travelled > Self.heroTitleTravel
-                if hidden != heroTitleIsHidden {
-                    Motion.run(.easeOut(duration: 0.2)) { heroTitleIsHidden = hidden }
+                let progress = Self.crossfadeProgress(travelled: travelled)
+                if progress != crossfade {
+                    Motion.run(.glide) { crossfade = progress }
                 }
             }
             .navigationTitle(title)
@@ -58,7 +75,7 @@ struct DetailBarTitle: ViewModifier {
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
-                        .opacity(heroTitleIsHidden ? 1 : 0)
+                        .opacity(crossfade)
                         // Announcing a title the reader cannot see would make
                         // VoiceOver read the same words twice on this screen.
                         .accessibilityHidden(!heroTitleIsHidden)

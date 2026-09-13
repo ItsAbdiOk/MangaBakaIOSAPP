@@ -185,9 +185,11 @@ extension ScheduleView {
                 Text("\(max(model.progress.total - model.progress.done, 0)) left")
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
+                    .countsNotCuts()
             }
             ProgressView(value: model.progress.fraction)
                 .tint(Palette.accent)
+                .animation(Motion.reduced(Motion.glide), value: model.progress.fraction)
                 .padding(.top, 10)
             Text("""
             Results appear as they land. Leaving the screen does not lose \
@@ -311,11 +313,12 @@ extension ScheduleView {
                 .padding(.top, 4)
 
             VStack(spacing: 0) {
-                ForEach(group.works) { work in
+                ForEach(Array(group.works.enumerated()), id: \.element.id) { index, work in
                     ScheduleRow(work: work) {
                         zoomRoute?.source = ZoomRoute.id("schedule", work.series.id)
                         path.append(work.series)
                     }
+                    .arrives(index: index)
                 }
             }
             .padding(.top, 8)

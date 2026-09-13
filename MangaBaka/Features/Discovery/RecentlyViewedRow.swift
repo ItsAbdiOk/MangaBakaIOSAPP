@@ -58,7 +58,10 @@ struct RecentlyViewedRow: View {
     var body: some View {
         if model.isWorthShowing {
             VStack(alignment: .leading, spacing: 11) {
+                // Above every API row (see `DiscoverView`), so it arrives
+                // first in the stagger.
                 SectionHeader(title: "Recently viewed")
+                    .arrives(index: 0)
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
@@ -69,6 +72,7 @@ struct RecentlyViewedRow: View {
                             .buttonStyle(.press)
                             .zoomSource("recent", series.id)
                             .arrives()
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
@@ -77,6 +81,9 @@ struct RecentlyViewedRow: View {
                 .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
             }
+            // A guess, matching the API rows below it: drifts a few points
+            // against the ground as the page scrolls.
+            .parallax(4)
         }
     }
 }

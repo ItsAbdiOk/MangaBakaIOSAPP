@@ -49,8 +49,9 @@ struct DiscoverView: View {
     /// would be ambiguous. The row is part of the key, and the tapped id is
     /// recorded here because the destination is built afterwards and has no
     /// other way to know which cover the reader actually touched.
-    private func open(_ series: Series, from row: String) {
+    private func open(_ series: Series, from row: String, siblings: [Series] = []) {
         zoomRoute?.source = ZoomRoute.id(row, series.id)
+        zoomRoute?.neighbours = siblings
         path.append(series)
     }
 
@@ -87,6 +88,8 @@ struct DiscoverView: View {
                                 .padding(.horizontal, Metrics.gutter + 18)
                         }
                     }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(Motion.reduced(Motion.settle), value: model.staleDetail)
                 }
 
                 // Above the stack shortcut, once, after an update. Not
@@ -94,16 +97,22 @@ struct DiscoverView: View {
                 // sits on is the point.
                 if let whatsNew, whatsNew.isDue(hasCompletedOnboarding: hasCompletedOnboarding) {
                     WhatsNewCard(release: ReleaseNotes.current) {
-                        Motion.run(.snappy(duration: 0.25)) { whatsNew.dismiss() }
+                        Motion.run(Motion.snappy) { whatsNew.dismiss() }
                     }
                     .padding(.top, 16)
+                    // First appearance rises in on `Motion.settle` (see
+                    // `.arrives`); dismissing it — wrapped in
+                    // `Motion.run(Motion.snappy)` above — removes it in the
+                    // same animated transaction, so the sections below rise
+                    // to fill the gap rather than jump.
+                    .arrives(index: 0)
                 }
 
                 // Above the API's rows because it is the only one built from
                 // what this reader actually did.
                 if let recentlyViewed {
                     RecentlyViewedRow(model: recentlyViewed) {
-                        open($0, from: "recent")
+                        open($0, from: "recent", siblings: recentlyViewed.series)
                     }
                 }
 
@@ -130,8 +139,10 @@ struct DiscoverView: View {
             await model.load(forceRefresh: true)
             refreshes += 1
         }
-        // The rows are new; say so without a toast.
-        .haptic(Haptics.refreshed, onEach: refreshes)
+        // The rows are new; say so without a toast. Bumped only once `load`
+        // has actually returned, so this fires when the feed lands, not when
+        // the reader's pull gesture starts — see `Motion` rule 6.
+        .haptic(Haptics.settled, onEach: refreshes)
         .task { await model.load() }
         .task { await recentlyViewed?.load() }
         .task { await pulse?.load() }
@@ -151,6 +162,9 @@ struct DiscoverView: View {
             Text(todayLine)
                 .typeSubtitle()
                 .foregroundStyle(Palette.textSecondary)
+                // "1,284 series cached" rolls as the count changes on
+                // refresh rather than cutting to the new figure.
+                .countsNotCuts()
         }
         .padding(.horizontal, Metrics.gutter)
     }
@@ -176,6 +190,12 @@ struct DiscoverView: View {
                     .foregroundStyle(Palette.accent)
                     .padding(.trailing, Metrics.gutter)
             }
+            // The tested pure decision (`arrivalIndex`) is this row's own
+            // position among `model.rows` — the same thing `ForEach` above
+            // hands every other row-keyed lookup in this file (`open`,
+            // `prefetchCovers`), so there is one source of truth for "which
+            // row is this" rather than a second index threaded in parallel.
+            .arrives(index: Self.arrivalIndex(forRowID: row.id, in: model.rows))
 
             if row.isLoading && row.series.isEmpty {
                 CoverSkeletonRow()
@@ -191,44 +211,7 @@ struct DiscoverView: View {
                     .foregroundStyle(Palette.textMuted)
                     .padding(.horizontal, Metrics.gutter)
             } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(row.series) { series in
-                            Button { open(series, from: row.id) } label: {
-                                CoverCard(series: series, meta: Self.meta(for: series))
-                            }
-                            .buttonStyle(.press)
-                            // The detail page grows out of this cover rather
-                            // than sliding in over it, which is what makes the
-                            // tap read as opening the thing you touched.
-                            .zoomSource(row.id, series.id)
-                            .arrives()
-                            // Fetch when the reader reaches the run-up to the
-                            // end, not the end itself: by the time the last
-                            // card is visible it is already too late to load
-                            // without a visible stall.
-                            .onAppear {
-                                prefetchCovers(after: series, in: row)
-                                guard shouldPrefetch(series, in: row) else { return }
-                                Task { await model.loadMore(row.id) }
-                            }
-                        }
-
-                        if row.isLoadingMore {
-                            ProgressView()
-                                .tint(Palette.textTertiary)
-                                .frame(
-                                    width: Metrics.coverRowWidth,
-                                    height: Metrics.coverRowWidth / Metrics.coverAspect
-                                )
-                        }
-                    }
-                    .padding(.horizontal, Metrics.gutter)
-                    .scrollTargetLayout()
-                }
-                .scrollIndicators(.hidden)
-                // A row settles on a card, not between two.
-                .scrollTargetBehavior(.viewAligned)
+                coverScroll(row)
 
                 // A page-2-or-later failure used to read as the end of the
                 // feed with nothing said about it (gap 15) — this is the one
@@ -244,6 +227,56 @@ struct DiscoverView: View {
         }
         // The covers' colour, faintly, on the ground behind them.
         .rowAmbient(row.series)
+        // A guess: the whole row drifts a few points against that tint as
+        // the page scrolls past it, in the outer vertical `ScrollView` —
+        // `.parallax` needs to sit on a subview of the scroll view it
+        // measures against, not inside the row's own horizontal one.
+        .parallax(4)
+    }
+
+    /// The row's own horizontal scroll of covers — split out of `rowView`
+    /// purely for the lint's function-length ceiling; the seam has no other
+    /// meaning.
+    private func coverScroll(_ row: DiscoverModel.Row) -> some View {
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
+                ForEach(row.series) { series in
+                    Button { open(series, from: row.id, siblings: row.series) } label: {
+                        CoverCard(series: series, meta: Self.meta(for: series))
+                    }
+                    .buttonStyle(.press)
+                    // The detail page grows out of this cover rather than
+                    // sliding in over it, which is what makes the tap read
+                    // as opening the thing you touched.
+                    .zoomSource(row.id, series.id)
+                    .arrives()
+                    .enterScale()
+                    // Fetch when the reader reaches the run-up to the end,
+                    // not the end itself: by the time the last card is
+                    // visible it is already too late to load without a
+                    // visible stall.
+                    .onAppear {
+                        prefetchCovers(after: series, in: row)
+                        guard shouldPrefetch(series, in: row) else { return }
+                        Task { await model.loadMore(row.id) }
+                    }
+                }
+
+                if row.isLoadingMore {
+                    ProgressView()
+                        .tint(Palette.textTertiary)
+                        .frame(
+                            width: Metrics.coverRowWidth,
+                            height: Metrics.coverRowWidth / Metrics.coverAspect
+                        )
+                }
+            }
+            .padding(.horizontal, Metrics.gutter)
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        // A row settles on a card, not between two.
+        .scrollTargetBehavior(.viewAligned)
     }
 
     /// Asks for the next few covers before they are on screen.
@@ -260,6 +293,17 @@ struct DiscoverView: View {
             .map { $0.cover.url(forHeight: Metrics.coverRowWidth / Metrics.coverAspect,
                                 scale: displayScale) }
         CoverStore.shared.prefetch(upcoming)
+    }
+
+    /// The arrival stagger index for the row at `id` in `rows`: its position,
+    /// so the first row leads and the rest follow in order. `rowView` calls
+    /// this directly rather than threading a second, parallel index in from
+    /// `ForEach` — pulled out pure so it has a test without rendering the
+    /// view (this project has no ViewInspector). A row id not found (should
+    /// not happen — `rows` and this lookup share one source) arrives first
+    /// rather than force-unwrapping.
+    nonisolated static func arrivalIndex(forRowID id: String, in rows: [DiscoverModel.Row]) -> Int {
+        rows.firstIndex { $0.id == id } ?? 0
     }
 
     /// "Manhwa · 8.6". Each half only when the API supplied it.

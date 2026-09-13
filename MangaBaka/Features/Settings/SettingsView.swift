@@ -115,19 +115,26 @@ struct SettingsView: View {
                     .typeScreenTitle()
                     .foregroundStyle(Palette.textPrimary)
 
-                accountSection
-                TitleSection(revision: $titleRevision)
-                FormatSection(formats: formats)
-                contentSection
-                BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)
+                // `.arrives(index:)` per section, per the motion brief — a
+                // settings screen assembling rather than snapping in whole.
+                // `Motion.arrival` caps its own stagger at 6 steps, so the
+                // eleven sections here do not make the last ones wait
+                // seconds; they simply share the sixth step's delay with
+                // everything past it.
+                accountSection.arrives(index: 0)
+                TitleSection(revision: $titleRevision).arrives(index: 1)
+                FormatSection(formats: formats).arrives(index: 2)
+                contentSection.arrives(index: 3)
+                BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue).arrives(index: 4)
                 RemindersSection(
                     reminders: reminders, onChange: onRemindersChanged, publisherFollows: publisherFollows
                 )
-                HistorySection(history: history)
-                LibraryTransferSection()
-                DataUseSection(taste: taste)
-                TranslationSection()
-                AttributionSection()
+                .arrives(index: 5)
+                HistorySection(history: history).arrives(index: 6)
+                LibraryTransferSection().arrives(index: 7)
+                DataUseSection(taste: taste).arrives(index: 8)
+                TranslationSection().arrives(index: 9)
+                AttributionSection().arrives(index: 10)
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)

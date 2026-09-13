@@ -40,6 +40,7 @@ struct ShelfCard: View {
                     Text(shelf.count.formatted())
                         .typeStatNumber()
                         .foregroundStyle(countColour)
+                        .countsNotCuts()
                     chevron
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -48,6 +49,7 @@ struct ShelfCard: View {
                         Text(shelf.count.formatted())
                             .typeStatNumber()
                             .foregroundStyle(countColour)
+                            .countsNotCuts()
                         chevron
                     }
                 }

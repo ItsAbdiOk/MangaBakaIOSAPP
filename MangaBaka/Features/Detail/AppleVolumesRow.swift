@@ -60,14 +60,16 @@ struct AppleVolumesRow: View {
 
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(volumes) { volume in
+                        ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                             Button {
                                 if let url = volume.link { openURL(url) }
                             } label: {
                                 spine(volume)
                             }
-                            .buttonStyle(.press)
+                            .buttonStyle(.press(haptic: .selection))
                             .disabled(volume.link == nil)
+                            .arrives(index: index)
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)

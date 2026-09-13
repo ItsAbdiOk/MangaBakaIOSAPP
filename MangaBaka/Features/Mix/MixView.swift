@@ -25,6 +25,12 @@ struct MixView: View {
     @State var isPickingTags = false
     @State var isPickingSeed = false
     @State var isNamingLens = false
+    /// Bumped each time a blend run actually lands with results — not on
+    /// every tap of "Blend", and not on a run that comes back empty or
+    /// failed. `.celebrates(on:)` fires on any change to its trigger, so a
+    /// plain `model.results.count` would also fire on a run that cleared the
+    /// grid; this counts only the landings a reward should mark.
+    @State private var landedBlends = 0
 
     static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
 
@@ -167,6 +173,7 @@ struct MixView: View {
                     .padding(.horizontal, Metrics.gutter)
             } else {
                 SectionHeader(title: "From your shelf")
+                    .arrives(index: 0)
                 ScrollView(.horizontal) {
                     HStack(spacing: Metrics.gapCovers) {
                         ForEach(suggestedSeeds) { series in
@@ -179,11 +186,14 @@ struct MixView: View {
                                     radius: Metrics.radiusSeed
                                 )
                             }
+                            .arrives()
+                            .enterScale()
                         }
                     }
                     .padding(.horizontal, Metrics.gutter)
                 }
                 .scrollIndicators(.hidden)
+                .parallax(4)
             }
         }
     }
@@ -192,7 +202,10 @@ struct MixView: View {
 
     private var blendButton: some View {
         Button {
-            Task { await model.run() }
+            Task {
+                await model.run()
+                if !model.results.isEmpty { landedBlends += 1 }
+            }
         } label: {
             Group {
                 if model.isRunning {
@@ -218,6 +231,10 @@ struct MixView: View {
         }
         .disabled(model.seeds.isEmpty || model.isRunning)
         .padding(.horizontal, Metrics.gutter)
+        // A reward, once, when a blend actually lands with results — not a
+        // loop, and not for a run that came back empty.
+        .celebrates(on: landedBlends)
+        .haptic(Haptics.success, onEach: landedBlends)
     }
 
     /// Whether the blend can run. A blend needs at least one seed — the API

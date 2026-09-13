@@ -47,7 +47,14 @@ struct StateAction: View {
                     }
                 }
         }
-        .buttonStyle(.press)
+        // `.wayOut` is this type's own definition of "a retry that might
+        // work" — the press itself is the meaningful choice, with nothing
+        // else marking whether it landed (a retry either shows new content
+        // or shows the same failure again), so it gets a haptic answering the
+        // tap the way `PressStyle`'s own doc comment describes for a
+        // segmented pick. `.fixes` and `.aside` are a definite fix or a plain
+        // link elsewhere — the screen that follows is its own confirmation.
+        .buttonStyle(weight == .wayOut ? .press(haptic: Haptics.selection) : .press)
     }
 
     private var foreground: Color {

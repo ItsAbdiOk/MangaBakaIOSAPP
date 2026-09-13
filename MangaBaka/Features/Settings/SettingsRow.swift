@@ -137,7 +137,10 @@ struct SwitchIndicator: View {
                 .padding(.horizontal, 2)
         }
         .frame(width: Self.trackWidth, height: Self.trackHeight)
-        .animation(Motion.reduced(.snappy(duration: 0.2)), value: isOn)
+        // `Motion.snappy`: a switch is answering a tap, the same category
+        // every other tap/toggle in this app animates with — not a bespoke
+        // duration invented for this one control.
+        .animation(Motion.reduced(Motion.snappy), value: isOn)
         // Every switch in Settings is this view, so every switch confirms
         // its move here. Fires on a change, not on appearance.
         .sensoryFeedback(Haptics.selection, trigger: isOn)

@@ -144,3 +144,51 @@ struct LensCountsQueueTests {
         #expect(counts.counts["a"] == 1)
     }
 }
+
+/// What `SearchView.content` shows, decided in one pure place (mirrors
+/// `MixResults.ResultsState`) so the swap between the idle screen, the
+/// skeleton, a blocking failure, the empty state and the grid — each
+/// `.blurReplace`d inside `Motion.settle` — has a test without rendering the
+/// view (this project has no ViewInspector).
+@Suite("Search content state")
+struct SearchContentKindTests {
+    @Test("An empty query is always idle, even mid-search")
+    func emptyQueryIsIdle() {
+        let kind = SearchView.contentKind(
+            isQueryEmpty: true, isSearching: true, hasBlockingFailure: true, resultsEmpty: true
+        )
+        #expect(kind == .idle)
+    }
+
+    @Test("A search in flight shows the skeleton, not the previous failure or results")
+    func searchingShowsSkeleton() {
+        let kind = SearchView.contentKind(
+            isQueryEmpty: false, isSearching: true, hasBlockingFailure: true, resultsEmpty: true
+        )
+        #expect(kind == .skeleton)
+    }
+
+    @Test("A failure with nothing to show is a blocking failure")
+    func failureWithNoResultsBlocks() {
+        let kind = SearchView.contentKind(
+            isQueryEmpty: false, isSearching: false, hasBlockingFailure: true, resultsEmpty: true
+        )
+        #expect(kind == .failure)
+    }
+
+    @Test("No results and no failure is the empty state")
+    func noResultsNoFailureIsEmpty() {
+        let kind = SearchView.contentKind(
+            isQueryEmpty: false, isSearching: false, hasBlockingFailure: false, resultsEmpty: true
+        )
+        #expect(kind == .empty)
+    }
+
+    @Test("Results present is the grid, even with a non-blocking failure alongside them")
+    func resultsPresentIsGrid() {
+        let kind = SearchView.contentKind(
+            isQueryEmpty: false, isSearching: false, hasBlockingFailure: false, resultsEmpty: false
+        )
+        #expect(kind == .results)
+    }
+}

@@ -57,8 +57,9 @@ struct BrowseView: View {
 
                     tagHeader
                     blockedSummary
-                    ForEach(model.sections, id: \.name) { section in
+                    ForEach(Array(model.sections.enumerated()), id: \.element.name) { index, section in
                         sectionView(section.name, tags: section.tags)
+                            .arrives(index: index)
                     }
                     Text("""
                     Counts dim below 100. Spoiler tags stay hidden until asked for, \
@@ -149,8 +150,9 @@ struct BrowseView: View {
                     )
                     .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
                     .contentShape(Capsule())
+                    .animation(Motion.reduced(Motion.snappy), value: model.showsSpoilers)
             }
-            .buttonStyle(.press)
+            .buttonStyle(.press(haptic: Haptics.selection))
         }
         .padding(.top, Metrics.sectionGap)
     }

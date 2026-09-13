@@ -40,6 +40,17 @@ struct OnboardingView: View {
         }
         .background(Palette.ground.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        // The transition into the app once onboarding finishes: a
+        // blur-replace of the whole cover rather than the system's own
+        // fullScreenCover cross-dissolve. Set here because this file is this
+        // agent's only editable half of the pair the brief describes — the
+        // other half is the `RootView.swift` call site's `onFinish`/
+        // `onConnectAccount` closures, which flip `onboarding.hasCompleted`
+        // (the flag the `fullScreenCover` is keyed on) and are out of this
+        // agent's file scope. Unverified without that half: see this
+        // feature's report for the exact one-line wrap each closure needs
+        // (`Motion.run(Motion.settle) { onboarding.complete() }`).
+        .transition(.blurReplace)
     }
 
     /// The dots, Skip, and Next — one row, so Skip never competes with the
@@ -62,7 +73,10 @@ struct OnboardingView: View {
                 Spacer(minLength: 12)
 
                 Button("Next") {
-                    Motion.run(.snappy(duration: 0.25)) { page += 1 }
+                    // `Motion.settle`, not a bespoke duration: a page turning
+                    // is content arriving, the same category `Motion.settle`
+                    // already covers for sheets — see `Motion.swift`.
+                    Motion.run(Motion.settle) { page += 1 }
                 }
                 .typeRowTitle()
                 .foregroundStyle(Palette.accent)
@@ -347,7 +361,15 @@ private struct AccountPage: View {
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))
             }
-            .buttonStyle(.press)
+            // `.selection`, not `.success`: tapping this button is the choice
+            // itself (whether to connect an account at all), not the
+            // consequence of one — the actual connection only happens later,
+            // in Settings, once a token is entered and checked. That is also
+            // where a real `.success` belongs: `AccountCard` now carries
+            // `.celebrates`/`Haptics.success` for the token check that
+            // actually succeeds. See this file's report for why nothing
+            // plays a success animation here.
+            .buttonStyle(.press(haptic: Haptics.selection))
 
             // A full-width button, not grey text. Refusing is a real choice
             // here, and a choice styled as an afterthought reads as one the app

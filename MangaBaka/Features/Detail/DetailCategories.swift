@@ -51,50 +51,58 @@ struct DetailCategories: View {
     }
 
     var body: some View {
-        switch Self.state(categories: categories, isLoading: isLoading, failure: failure) {
-        case .skeleton:
-            VStack(alignment: .leading, spacing: 11) {
-                header
-                skeleton
-            }
-            .padding(.top, Metrics.sectionGap)
-        case .failed:
-            VStack(alignment: .leading, spacing: 11) {
-                header
-                // `.failed` here is defined as "categories.isEmpty, failure
-                // != nil" — `failure` is force-unwrapped-free by construction,
-                // but spelled with `if let` rather than `!` regardless.
-                if let failure {
-                    InlineFailure(error: failure, retry: onRetry)
+        let state = Self.state(categories: categories, isLoading: isLoading, failure: failure)
+        Group {
+            switch state {
+            case .skeleton:
+                VStack(alignment: .leading, spacing: 11) {
+                    header
+                    skeleton
                 }
-            }
-            .padding(.top, Metrics.sectionGap)
-        case .chips:
-            VStack(alignment: .leading, spacing: 11) {
-                header
-                FlowLayout {
-                    ForEach(shown, id: \.name) { category in
-                        chip(category)
+                .padding(.top, Metrics.sectionGap)
+                .transition(.blurReplace)
+            case .failed:
+                VStack(alignment: .leading, spacing: 11) {
+                    header
+                    // `.failed` here is defined as "categories.isEmpty, failure
+                    // != nil" — `failure` is force-unwrapped-free by construction,
+                    // but spelled with `if let` rather than `!` regardless.
+                    if let failure {
+                        InlineFailure(error: failure, retry: onRetry)
                     }
                 }
-                .padding(.horizontal, Metrics.gutter)
-
-                if Self.showsExpandToggle(count: categories.count) {
-                    StateAction(
-                        title: showingAll ? "Show less" : "Show all \(categories.count)",
-                        weight: .aside
-                    ) {
-                        showingAll.toggle()
+                .padding(.top, Metrics.sectionGap)
+                .transition(.blurReplace)
+            case .chips:
+                VStack(alignment: .leading, spacing: 11) {
+                    header
+                    FlowLayout {
+                        ForEach(Array(shown.enumerated()), id: \.element.name) { index, category in
+                            chip(category)
+                                .arrives(index: index)
+                        }
                     }
                     .padding(.horizontal, Metrics.gutter)
+
+                    if Self.showsExpandToggle(count: categories.count) {
+                        StateAction(
+                            title: showingAll ? "Show less" : "Show all \(categories.count)",
+                            weight: .aside
+                        ) {
+                            Motion.run(.settle) { showingAll.toggle() }
+                        }
+                        .padding(.horizontal, Metrics.gutter)
+                    }
                 }
+                .padding(.top, Metrics.sectionGap)
+                .transition(.blurReplace)
+            case .absent:
+                // Nothing asked yet, or asked and MangaUpdates answered with zero
+                // categories: not a failure, so no row at all.
+                EmptyView()
             }
-            .padding(.top, Metrics.sectionGap)
-        case .absent:
-            // Nothing asked yet, or asked and MangaUpdates answered with zero
-            // categories: not a failure, so no row at all.
-            EmptyView()
         }
+        .animation(Motion.reduced(Motion.settle), value: state)
     }
 
     private var shown: [MangaUpdatesCategories.Category] {
