@@ -6,6 +6,9 @@ import SwiftUI
 struct PickBackUp: View {
     let entries: [LibraryEntry]
     @Binding var path: [Series]
+    /// The library's strip is small; Discover passes the same width as the
+    /// rows under it so the sections read as one family (Abdi, 2026-09-13).
+    var coverWidth: CGFloat = Metrics.coverSavedStripWidth
     @Environment(\.zoomRoute) private var zoomRoute
 
     var body: some View {
@@ -53,7 +56,7 @@ struct PickBackUp: View {
             VStack(alignment: .leading, spacing: 7) {
                 CoverImage(
                     cover: series.cover,
-                    width: Metrics.coverSavedStripWidth,
+                    width: coverWidth,
                     radius: Metrics.radiusCoverRow,
                     accessibilityText: series.displayTitle ?? "Untitled series"
                 )
@@ -79,7 +82,7 @@ struct PickBackUp: View {
                     .typeFootnote()
                     .foregroundStyle(Palette.textMuted)
             }
-            .frame(width: Metrics.coverSavedStripWidth, alignment: .leading)
+            .frame(width: coverWidth, alignment: .leading)
         }
         .buttonStyle(.press)
         .zoomSource("pickup", series.id)

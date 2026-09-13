@@ -13,7 +13,6 @@ struct DiscoverView: View {
     /// Which cover the reader tapped, so the detail page can grow out of that
     /// one. See `open(_:from:)`.
     @Environment(\.zoomRoute) private var zoomRoute
-    private let onOpenStack: () -> Void
     /// The database's pulse, and the reader's own place in it.
     private let pulse: CommunityPulseService?
     private let chaptersRead: Int
@@ -30,8 +29,7 @@ struct DiscoverView: View {
         pulse: CommunityPulseService? = nil,
         chaptersRead: Int = 0,
         whatsNew: WhatsNewState? = nil,
-        hasCompletedOnboarding: Bool = true,
-        onOpenStack: @escaping () -> Void
+        hasCompletedOnboarding: Bool = true
     ) {
         self.whatsNew = whatsNew
         self.hasCompletedOnboarding = hasCompletedOnboarding
@@ -41,7 +39,6 @@ struct DiscoverView: View {
         _path = path
         self.pulse = pulse
         self.chaptersRead = chaptersRead
-        self.onOpenStack = onOpenStack
     }
 
     /// Opens a series, remembering which cover it came from.
@@ -60,17 +57,14 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
-                // The title, its line and the stack shortcut are one group:
-                // Abdi, 2026-09-13, "shrink this section, it takes up too
-                // much space" — the section gap plus the card's own top
-                // padding put 42pt between two things that belong together.
-                VStack(alignment: .leading, spacing: 10) {
-                    header
-                    openTheStack
-                }
+                header
 
+                // The "Open the stack" card that used to sit here is gone
+                // (Abdi, 2026-09-13): the stack has its own tab. What the
+                // reader is part-way through leads instead, at the same
+                // cover width as every row under it.
                 if !inProgress.isEmpty {
-                    PickBackUp(entries: inProgress, path: $path)
+                    PickBackUp(entries: inProgress, path: $path, coverWidth: Metrics.coverRowWidth)
                 }
 
                 // Under the title, above the content, and it scrolls away with
@@ -169,43 +163,6 @@ struct DiscoverView: View {
         let weekday = Date().formatted(.dateTime.weekday(.wide))
         guard model.cachedCount > 0 else { return weekday }
         return "\(weekday) · \(model.cachedCount.formatted()) series cached"
-    }
-
-    /// The mockup opens Discover with a shortcut into the stack.
-    ///
-    /// DEVIATION: its subtitle reads "N left in today's stack". Discover cannot
-    /// know that without duplicating the stack's queue and reaction logic, and
-    /// a wrong number is worse than a plain one, so this says what the control
-    /// does instead.
-    private var openTheStack: some View {
-        Button { onOpenStack() } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Palette.onAccent)
-                    .frame(width: 26, height: 26)
-                    .background(Palette.accent, in: RoundedRectangle(
-                        cornerRadius: 9, style: .continuous
-                    ))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Open the stack")
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                    Text("Swipe covers to find something new")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 10)
-            .background { Glass.floating(RoundedRectangle(
-                cornerRadius: Metrics.radiusCard, style: .continuous
-            )) }
-            .contentShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-        }
-        .buttonStyle(.press)
-        .padding(.horizontal, Metrics.gutter)
     }
 
     @ViewBuilder

@@ -201,8 +201,7 @@ struct RootView: View {
                         pulse: session.pulse,
                         chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries),
                         whatsNew: whatsNew,
-                        hasCompletedOnboarding: onboarding.hasCompleted,
-                        onOpenStack: { selection = .stack }
+                        hasCompletedOnboarding: onboarding.hasCompleted
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
                 }
