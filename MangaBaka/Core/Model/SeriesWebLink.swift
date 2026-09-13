@@ -37,7 +37,15 @@ enum SeriesWebLink {
     /// `/pages/24` — no, that is a page id, not a series) are nil; the
     /// `pages` prefix is excluded by name because it is the one path the site
     /// uses a bare number under that is not a series.
+    /// The app's own scheme, used by the widgets: `mangabaka://series/<id>`.
+    /// Registered in project.yml as CFBundleURLTypes.
+    static let appScheme = "mangabaka"
+
     static func seriesID(from url: URL) -> Int? {
+        if url.scheme?.lowercased() == appScheme {
+            guard url.host()?.lowercased() == "series" else { return nil }
+            return url.pathComponents.filter { $0 != "/" }.lazy.compactMap { Int($0) }.first
+        }
         guard url.host()?.lowercased() == host || url.host()?.lowercased() == "www.\(host)"
         else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }

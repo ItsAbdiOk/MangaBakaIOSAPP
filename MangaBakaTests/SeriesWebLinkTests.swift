@@ -47,7 +47,10 @@ struct SeriesWebLinkWiringTests {
         let detail = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
         #expect(detail.contains("shareURL: SeriesWebLink.url(for: shown)"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
-        let handler = ".onOpenURL { url in\n                guard let id = SeriesWebLink.seriesID(from: url)"
+        // A comment sits between the two lines now (the widgets' own
+        // scheme goes through the same handler).
+        let handler = "guard let id = SeriesWebLink.seriesID(from: url) else { return }"
+        #expect(root.contains(".onOpenURL { url in"))
         #expect(root.contains(handler))
     }
 }

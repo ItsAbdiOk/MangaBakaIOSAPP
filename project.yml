@@ -48,6 +48,10 @@ targets:
     dependencies:
       - package: GRDB
         product: GRDB
+      # Embedded so the widget extension ships inside the app bundle rather
+      # than as a separate install.
+      - target: MangaBakaWidgets
+        embed: true
     configFiles:
       Debug: Configs/Debug.xcconfig
       Release: Configs/Release.xcconfig
@@ -71,6 +75,10 @@ targets:
         # asks an encryption question on EVERY build and stalls an unattended
         # TestFlight pipeline until a human answers it.
         ITSAppUsesNonExemptEncryption: false
+        # The widgets deep-link into a series with mangabaka://series/<id>.
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.abdirahmanmohamed.mangabaka
+            CFBundleURLSchemes: [mangabaka]
         MB_PAT: $(MB_PAT)
         MB_API_BASE_URL: $(MB_API_BASE_URL)
     settings:
@@ -86,6 +94,45 @@ targets:
         # Team "Abdirahman Mohamed". Set here so Xcode and Xcode Cloud resolve
         # signing without anyone picking it from a dropdown by hand.
         DEVELOPMENT_TEAM: 5AF2LBU5A3
+        # The App Group `WidgetSnapshot` writes into and `MangaBakaWidgets`
+        # reads from. Automatic signing adds the App Groups capability to a
+        # local build's profile on its own; Xcode Cloud does not have that
+        # same door — if its first archive fails on entitlements, enable
+        # "App Groups" for this App ID in the developer portal by hand.
+        CODE_SIGN_ENTITLEMENTS: Configs/MangaBaka.entitlements
+
+  # Home Screen widgets: "Due this week" and "Pick back up". Reads
+  # `WidgetSnapshot`'s JSON out of the App Group container the app writes
+  # into after a library walk and a schedule build — this target has no
+  # access to the app's own sandboxed container, database, or `URLCache`.
+  MangaBakaWidgets:
+    type: app-extension
+    platform: iOS
+    # iOS 26 like the app; XcodeGen's app-extension default otherwise picks
+    # the SDK floor, where WidgetKit's SwiftUI APIs are missing.
+    deploymentTarget: "26.0"
+    sources:
+      - path: MangaBakaWidgets
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    info:
+      path: Configs/MangaBakaWidgetsInfo.plist
+      properties:
+        CFBundleDisplayName: MangaBaka Widgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.widgets
+        PRODUCT_NAME: MangaBakaWidgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 5AF2LBU5A3
+        CODE_SIGN_ENTITLEMENTS: Configs/MangaBakaWidgets.entitlements
 
   MangaBakaTests:
     type: bundle.unit-test
