@@ -195,6 +195,7 @@ struct RootView: View {
                 NavigationStack(path: $discoverPath) {
                     DiscoverView(
                         model: discoverModel ?? DiscoverModel(repository: repository),
+                        inProgress: session.library.inProgress,
                         recentlyViewed: session.recentlyViewed,
                         path: $discoverPath,
                         pulse: session.pulse,

@@ -2,6 +2,9 @@ import SwiftUI
 
 /// The Discover screen: several horizontal cover rows under a large title.
 struct DiscoverView: View {
+    /// What the reader is part-way through, shown first — Abdi, 2026-09-13:
+    /// "put this at the top of the discovery page". Empty hides the row.
+    var inProgress: [LibraryEntry] = []
     @State private var model: DiscoverModel
     /// Bumped when a pull-to-refresh lands, for the haptic; see `Haptics`.
     @State private var refreshes = 0
@@ -21,6 +24,7 @@ struct DiscoverView: View {
 
     init(
         model: DiscoverModel,
+        inProgress: [LibraryEntry] = [],
         recentlyViewed: RecentlyViewedModel? = nil,
         path: Binding<[Series]>,
         pulse: CommunityPulseService? = nil,
@@ -32,6 +36,7 @@ struct DiscoverView: View {
         self.whatsNew = whatsNew
         self.hasCompletedOnboarding = hasCompletedOnboarding
         _model = State(initialValue: model)
+        self.inProgress = inProgress
         self.recentlyViewed = recentlyViewed
         _path = path
         self.pulse = pulse
@@ -55,7 +60,18 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
-                header
+                // The title, its line and the stack shortcut are one group:
+                // Abdi, 2026-09-13, "shrink this section, it takes up too
+                // much space" — the section gap plus the card's own top
+                // padding put 42pt between two things that belong together.
+                VStack(alignment: .leading, spacing: 10) {
+                    header
+                    openTheStack
+                }
+
+                if !inProgress.isEmpty {
+                    PickBackUp(entries: inProgress, path: $path)
+                }
 
                 // Under the title, above the content, and it scrolls away with
                 // both. Pinned, it would be a permanent accusation about a
@@ -88,8 +104,6 @@ struct DiscoverView: View {
                     }
                     .padding(.top, 16)
                 }
-
-                openTheStack
 
                 // Above the API's rows because it is the only one built from
                 // what this reader actually did.
@@ -136,7 +150,7 @@ struct DiscoverView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Discover")
                 .typeScreenTitle()
                 .foregroundStyle(Palette.textPrimary)
@@ -184,7 +198,7 @@ struct DiscoverView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 15)
-            .padding(.vertical, 13)
+            .padding(.vertical, 10)
             .background { Glass.floating(RoundedRectangle(
                 cornerRadius: Metrics.radiusCard, style: .continuous
             )) }
@@ -192,7 +206,6 @@ struct DiscoverView: View {
         }
         .buttonStyle(.press)
         .padding(.horizontal, Metrics.gutter)
-        .padding(.top, 16)
     }
 
     @ViewBuilder

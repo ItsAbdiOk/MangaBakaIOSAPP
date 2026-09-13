@@ -70,6 +70,11 @@ struct PickBackUp: View {
                         .frame(height: 3)
                     }
                 }
+                // Clipped to the cover's own corners: the bar used to run
+                // straight across the foot and stick out past the curve, so
+                // it read as a separate object under the picture (Abdi,
+                // 2026-09-13).
+                .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous))
                 Text(Self.chapterLabel(entry))
                     .typeFootnote()
                     .foregroundStyle(Palette.textMuted)

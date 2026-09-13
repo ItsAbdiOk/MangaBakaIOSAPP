@@ -139,16 +139,25 @@ struct CoverGloss: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .overlay(alignment: .top) {
-                LinearGradient(
-                    colors: [.white.opacity(0.6), .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
+            // The rim light is a stroke of the shape itself, fading out down
+            // the sides, so it bends round the corners. It was a straight
+            // 2pt line inset by 0.6 × radius, which cut across the curve and
+            // stuck out as a white bar on every cover (Abdi, 2026-09-13).
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.6), location: 0),
+                            .init(color: .white.opacity(0.35), location: 0.12),
+                            .init(color: .white.opacity(0.35), location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
                 )
-                .frame(height: 2)
-                .padding(.horizontal, radius * 0.6)
             }
-            .overlay { shape.strokeBorder(.white.opacity(0.35), lineWidth: 0.5) }
+            .clipShape(shape)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
