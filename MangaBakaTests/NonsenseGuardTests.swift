@@ -152,10 +152,12 @@ struct PartialDataTests {
             self.failOnPage = failOnPage
         }
 
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
@@ -194,7 +196,9 @@ struct PartialDataTests {
     func emptyRendersAsEmpty() async {
         let model = LibraryModel(library: FailingLibrary(entries: [], failOnPage: 99))
         await model.load()
-        #expect(model.screenState == .noAccount)
+        // With credentials present (the default), an empty walk that
+        // finished cleanly is the real empty state — not "add a token".
+        #expect(model.screenState == .empty)
     }
 
     /// A genuinely empty library still reads as one.
@@ -203,7 +207,6 @@ struct PartialDataTests {
         let model = LibraryModel(library: FailingLibrary(entries: [], failOnPage: 99))
         await model.load()
 
-        #expect(!model.hasAccount)
         #expect(model.isComplete)
         #expect(model.failure == nil)
     }

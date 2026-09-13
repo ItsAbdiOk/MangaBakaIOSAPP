@@ -153,14 +153,102 @@ struct ScheduleServiceTests {
         #expect(cadence.season == 3)
     }
 
+    /// Gap 18: before the fix, a MangaUpdates refusal on the single-series
+    /// path collapsed to `.none` — indistinguishable from "asked and there
+    /// was not enough history". Expected failure before the fix:
+    /// `case .none = result` succeeds instead of `Issue.record` firing, and
+    /// the failure carried no `party`, so the screen would have blamed
+    /// MangaBaka for MangaUpdates' 503.
+    @Test("cadence(for:) reports a failure distinctly from 'too few releases'")
+    func cadenceForReportsFailure() async throws {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 503)) }
+        defer { URLProtocolStub.reset() }
+
+        let series = SeriesFactory.make(
+            id: 1, title: "S1", status: "releasing",
+            source: ["manga_updates": Series.TrackerEntry(id: "abc1", rating: nil, ratingNormalized: nil)]
+        )
+        let database = try AppDatabase.inMemory()
+        let service = ReleaseScheduleService(
+            library: LibrarySnapshot(library: OneEntryLibrary(entries: [])),
+            mangaUpdates: MangaUpdatesClient(
+                baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
+                session: URLProtocolStub.makeSession()
+            ),
+            database: database
+        )
+        let result = await service.cadence(for: series)
+        guard case let .failed(error) = result else {
+            Issue.record("expected .failed, got \(result)")
+            return
+        }
+        #expect(error == .server(status: 503, message: "MangaUpdates returned 503.", party: .mangaUpdates))
+        // Gap 100: MangaUpdates' own party, not MangaBaka's — no status
+        // code leaking into the copy either.
+        let message = error.userFacingMessage
+        #expect(!message.contains { $0.isNumber })
+    }
+
+    /// Gap 99: before the fix, an offline build kept trying every remaining
+    /// series at three seconds each — 55 series is nearly three minutes spent
+    /// re-discovering the same "no network" answer 54 more times. Expected
+    /// failure before the fix: `progress.done` reaches `total` (55) rather
+    /// than stopping at 1, and the loop takes multiple seconds per series
+    /// instead of returning as soon as the first request reports offline.
+    @Test("A build stops at the first offline/rate-limited answer, not the last series")
+    func buildStopsOnGlobalOutage() async throws {
+        URLProtocolStub.setHandler { _ in
+            .fail(URLError(.notConnectedToInternet))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let entries = (1...55).map { id in
+            LibraryEntry(
+                id: id, seriesId: id, state: .reading, progressChapter: 3,
+                progressVolume: nil, rating: nil, note: nil, startDate: nil,
+                finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+                readLink: nil,
+                series: SeriesFactory.make(
+                    id: id, title: "S\(id)", status: "releasing",
+                    source: [
+                        "manga_updates": Series.TrackerEntry(
+                            id: "abc\(id)", rating: nil, ratingNormalized: nil
+                        )
+                    ]
+                )
+            )
+        }
+        let service = ReleaseScheduleService(
+            library: LibrarySnapshot(library: OneEntryLibrary(entries: entries)),
+            mangaUpdates: MangaUpdatesClient(
+                baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
+                session: URLProtocolStub.makeSession()
+            ),
+            database: try AppDatabase.inMemory()
+        )
+        await service.build()
+        // The whole point: this returns almost immediately rather than after
+        // 55 x 3s of throttled retries, because the first offline answer
+        // stops the loop (gap 99).
+        while await service.progress.isRunning {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let progress = await service.progress
+        #expect(progress.done == 1)
+        #expect(progress.total == 55)
+        #expect(progress.failure == .offline)
+    }
+
     private final class OneEntryLibrary: LibraryProviding, @unchecked Sendable {
         let entries: [LibraryEntry]
         init(entry: LibraryEntry) { entries = [entry] }
         init(entries: [LibraryEntry]) { self.entries = entries }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? entries : [] }
         func hiddenTagIDs() async -> Set<Int>? { nil }
         func topGenres() async -> [TopGenre]? { nil }
@@ -170,10 +258,12 @@ struct ScheduleServiceTests {
     }
 
     private final class OfflineLibrary: LibraryProviding, @unchecked Sendable {
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] { throw .offline }
         func hiddenTagIDs() async -> Set<Int>? { nil }

@@ -127,10 +127,10 @@ struct GigaViewerFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 1, title: "カテナチオ")
 
-        let feed = await client.feed(for: series, links: [link])
-        #expect(feed?.source == .gigaViewer)
-        #expect(feed?.sourceName == "Tonari no Young Jump")
-        #expect(feed?.episodes.map(\.number) == [33])
+        let answerResult = await client.feed(for: series, links: [link])
+        #expect(answerResult.feed?.source == .gigaViewer)
+        #expect(answerResult.feed?.sourceName == "Tonari no Young Jump")
+        #expect(answerResult.feed?.episodes.map(\.number) == [33])
     }
 
     @Test("A series absent from the magazine's feed answers nil")
@@ -140,8 +140,8 @@ struct GigaViewerFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 2, title: "Some Other Series")
 
-        let feed = await client.feed(for: series, links: [link])
-        #expect(feed == nil)
+        let answerResult = await client.feed(for: series, links: [link])
+        #expect(answerResult == .answered(nil))
     }
 
     /// F18 (`docs/reviews/tests.md`, 2026-09-13): see the sibling test on
@@ -154,8 +154,12 @@ struct GigaViewerFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 1, title: "カテナチオ")
 
-        let feed = await client.feed(for: series, links: [link])
-        #expect(feed == nil)
+        let answerResult = await client.feed(for: series, links: [link])
+        guard case let .failed(error) = answerResult else {
+            Issue.record("expected .failed, got \(answerResult)")
+            return
+        }
+        #expect(error == .rateLimited(until: nil, party: .gigaViewer))
         #expect(URLProtocolStub.requests.count == 1)
     }
 

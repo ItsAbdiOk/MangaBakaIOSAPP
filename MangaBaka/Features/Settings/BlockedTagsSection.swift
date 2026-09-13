@@ -159,7 +159,7 @@ struct BlockTagPicker: View {
         .task {
             let search = TagSearch(catalogue: catalogue)
             self.search = search
-            tags = await catalogue.tags(limit: 500)
+            tags = await catalogue.tags(limit: 500).value ?? []
             search.loaded = tags
             isLoading = false
         }

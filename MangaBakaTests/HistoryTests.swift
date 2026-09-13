@@ -143,7 +143,7 @@ struct HistoryTests {
         try await history.clear()
 
         #expect(try await history.entries().isEmpty)
-        #expect(try await shelf.entries(.saved).map(\.id) == [1])
+        #expect(try await shelf.entries(.saved).series.map(\.id) == [1])
     }
 
     @Test("The row stays hidden until there are two entries to come back to")

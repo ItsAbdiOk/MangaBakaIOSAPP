@@ -39,7 +39,8 @@ struct DueThisWeekIntent: AppIntent {
             dated: snapshot.dated,
             announced: announced,
             measured: snapshot.measuredAt != nil,
-            now: Date()
+            now: Date(),
+            libraryFailure: snapshot.libraryFailure
         )
         return .result(dialog: "\(answer)")
     }
@@ -57,8 +58,17 @@ enum DueThisWeek {
         announced: [UpcomingWork],
         measured: Bool,
         now: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        /// Gap 105: this used to have no way to hear that the library read
+        /// had failed, so "I don't know" (offline, rate-limited, whatever it
+        /// was) came out of Siri's mouth as the same "Nothing due" a reader
+        /// with a genuinely quiet week would hear — the one answer that is
+        /// actually wrong to give with no library to check.
+        libraryFailure: APIError? = nil
     ) -> String {
+        if let libraryFailure, dated.isEmpty, announced.isEmpty {
+            return "I couldn't read your library. \(libraryFailure.userFacingMessage)"
+        }
         let today = calendar.startOfDay(for: now)
         guard let end = calendar.date(byAdding: .day, value: window, to: today) else { return "" }
 

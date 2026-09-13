@@ -6,9 +6,19 @@ import Testing
 /// `ReleaseFeedService` without any network stand-in.
 private struct StubProvider: ReleaseFeedProvider {
     let source: ReleaseSource
-    let answer: ReleaseFeed?
+    let answer: FeedAnswer
 
-    func feed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? { answer }
+    init(source: ReleaseSource, answer: ReleaseFeed?) {
+        self.source = source
+        self.answer = .answered(answer)
+    }
+
+    init(source: ReleaseSource, answer: FeedAnswer) {
+        self.source = source
+        self.answer = answer
+    }
+
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer { answer }
 }
 
 /// `ReleaseFeedService` is a pure function over its providers' answers, so
@@ -251,5 +261,33 @@ struct ReleaseFeedServiceTests {
         ])
         let report = await service.report(for: series, links: [], now: now)
         #expect(report == .empty)
+    }
+
+    /// Gap 19: before `FeedAnswer` existed, every provider returned
+    /// `ReleaseFeed?`, so "Webtoons had a link and the request failed" and
+    /// "this series has no Webtoons link at all" were both `nil` — a series
+    /// with a real, matched Webtoons link and a dead connection reported the
+    /// same silence as one that was never on Webtoons. Expected failure
+    /// before the fix: this does not compile, because `ReleaseFeedProvider`
+    /// had no `.failed` case to construct a stub with.
+    @Test("A provider that had a link but failed is named in failedSources")
+    func failedProviderIsNamed() async {
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: .failed(.rateLimited(until: nil, party: .webtoons))),
+            StubProvider(source: .naverWebtoon, answer: .notCarried)
+        ])
+        let report = await service.report(for: series, links: [], now: now)
+        #expect(report.failedSources == [.webtoons])
+        #expect(report.summary == .none)
+    }
+
+    @Test("A provider with no link for this series is not in failedSources")
+    func notCarriedProviderIsNotNamed() async {
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: .notCarried),
+            StubProvider(source: .naverWebtoon, answer: .notCarried)
+        ])
+        let report = await service.report(for: series, links: [], now: now)
+        #expect(report.failedSources.isEmpty)
     }
 }

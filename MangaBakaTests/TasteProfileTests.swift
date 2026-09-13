@@ -90,10 +90,12 @@ struct TasteProfileCostTests {
     private final class CountingLibrary: LibraryProviding, @unchecked Sendable {
         let counter = Counter()
 
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
@@ -160,10 +162,12 @@ struct TasteProfileCostTests {
     private final class FlakyLibrary: LibraryProviding, @unchecked Sendable {
         let counter = Counter()
 
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }

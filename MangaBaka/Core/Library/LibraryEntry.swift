@@ -39,6 +39,27 @@ struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
             case .considering, .planToRead, .completed, .dropped: false
             }
         }
+
+        /// Gap 4: a raw value this app does not recognise — a new state added
+        /// on the website before this build knew its name — used to throw out
+        /// of the synthesized `Decodable` conformance. That failure propagated
+        /// past this one row all the way to the array decode of a whole
+        /// `/v1/my/library` page, which is why one odd entry stopped the
+        /// entire library walk with a spinner nothing ever cleared.
+        ///
+        /// Falls back to `.considering` rather than adding an `.other(String)`
+        /// case: this enum is `CaseIterable` and switched on exhaustively in
+        /// `TasteLedger.swift` and `LibraryShape.swift`, both outside this
+        /// batch, and an associated-value case would have needed a matching
+        /// edit in each of them to keep compiling. `.considering` is the
+        /// state closest to "unclassified" the app already has — it tracks no
+        /// progress and counts as neither read nor abandoned in
+        /// `ReadingInsights` — so an unrecognised row degrades to the
+        /// vaguest bucket instead of aborting the page it arrived on.
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = State(rawValue: raw) ?? .considering
+        }
     }
 
     let id: Int
@@ -82,6 +103,39 @@ struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
         case isPrivate
         case readLink
         case series = "Series"
+    }
+}
+
+extension LibraryEntry {
+    /// This entry, with a write's change set applied — mirroring what the
+    /// PATCH the change came from does on the server.
+    ///
+    /// Gap 88/j: a rating used to cost a full re-walk of the library (13
+    /// requests, 24.7 MB on a real account) just to reflect one changed row.
+    /// `LibrarySnapshot.apply(seriesId:change:)` uses this to patch the
+    /// cached copy in place instead.
+    ///
+    /// The double-optional fields (`progressChapter`, `note`, …) carry
+    /// `LibraryChange`'s own distinction straight through: `nil` means the
+    /// reader never touched the field, so the existing value wins; `.some(x)`
+    /// — including `.some(nil)` for an explicit clear — replaces it.
+    func applying(_ change: LibraryChange) -> LibraryEntry {
+        LibraryEntry(
+            id: id,
+            seriesId: seriesId,
+            state: change.state ?? state,
+            progressChapter: change.progressChapter ?? progressChapter,
+            progressVolume: change.progressVolume ?? progressVolume,
+            rating: change.rating ?? rating,
+            note: change.note ?? note,
+            startDate: startDate,
+            finishDate: finishDate,
+            numberOfRereads: numberOfRereads,
+            priority: priority,
+            isPrivate: change.isPrivate ?? isPrivate,
+            readLink: readLink,
+            series: series
+        )
     }
 }
 

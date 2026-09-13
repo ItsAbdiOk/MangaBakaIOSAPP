@@ -9,6 +9,13 @@ import SwiftUI
 struct ContinuationsRow: View {
     let items: [Continuation]
     let isLoading: Bool
+    /// Gap 92: at least one of the last walk's asks failed, rather than the
+    /// row genuinely having nothing to show. Shown as `InlineFailure` under
+    /// the header instead of the row vanishing — the same distinction
+    /// `Fetched<T>` draws everywhere else a section asks and gets nothing
+    /// back versus asks and fails.
+    var hasFailure = false
+    var onRetry: (() async -> Void)?
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
 
@@ -20,6 +27,22 @@ struct ContinuationsRow: View {
                 header
                 CoverSkeletonRow()
                     .padding(.horizontal, Metrics.gutter)
+            }
+            .padding(.top, Metrics.sectionGap)
+        } else if items.isEmpty && hasFailure {
+            VStack(alignment: .leading, spacing: 11) {
+                header
+                // `ContinuationsModel` only knows that at least one
+                // `relationships(for:)` call failed, not why —
+                // `SeriesRepositoryProtocol` swallows the real `APIError`
+                // before it gets here. `.transport` is the one case whose
+                // copy ("The request didn't complete.") claims no specific
+                // cause, so this does not assert "offline" for a failure
+                // that might have been a rate limit or a server error.
+                InlineFailure(
+                    error: .transport(underlying: "continuations", party: .mangaBaka),
+                    retry: onRetry
+                )
             }
             .padding(.top, Metrics.sectionGap)
         } else if !items.isEmpty {

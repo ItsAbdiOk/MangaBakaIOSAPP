@@ -12,6 +12,7 @@ struct LibraryEditSheet: View {
     let onSave: (LibraryChange) async -> String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     @State private var state: LibraryEntry.State
     // Not `private`: L3's test needs to drive this directly, the way
@@ -32,7 +33,7 @@ struct LibraryEditSheet: View {
         // only the rating used to have 12 written back, unasked.
         _chapter = State(initialValue: entry.progressChapter.map(Self.chapterText) ?? "")
         // Stored 0-100, chosen as five steps.
-        _rating = State(initialValue: entry.rating.map { Int(($0 / 20).rounded()) } ?? 0)
+        _rating = State(initialValue: entry.rating.map { Int(wholeOrClamped: ($0 / 20).rounded()) } ?? 0)
         _note = State(initialValue: entry.note ?? "")
         _isPrivate = State(initialValue: entry.isPrivate ?? false)
     }
@@ -108,7 +109,12 @@ struct LibraryEditSheet: View {
             Eyebrow(text: chapterEyebrow)
             HStack(spacing: Metrics.gapChips) {
                 TextField("0", text: $chapter)
-                    .keyboardType(.numberPad)
+                    // Gap 111: `.numberPad` has no decimal point, so a half
+                    // chapter ("12.5") could not be typed at all — only pasted
+                    // or reached through +1 from a whole number. `.decimalPad`
+                    // adds the point (and, on locales that use one, the comma
+                    // `parseChapter` already normalises).
+                    .keyboardType(.decimalPad)
                     .typeBody()
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, 12)
@@ -149,7 +155,7 @@ struct LibraryEditSheet: View {
     /// when there is one.
     private var chapterEyebrow: String {
         guard let total = series.totalChapters, total > 0 else { return "Chapter" }
-        return "Chapter of \(Int(total))"
+        return "Chapter of \(Int(wholeOrClamped: total))"
     }
 
     private var ratingSection: some View {
@@ -247,9 +253,17 @@ struct LibraryEditSheet: View {
         failure = nil
         defer { isSaving = false }
 
+        // Gap 110: Save fires a plain `Task {}`, not a `.task {}` — dismissing
+        // the sheet (Cancel, or a swipe) while it is in flight does not
+        // cancel it, and the outcome used to land on `@State` belonging to a
+        // view nobody was looking at anymore. `ToastCentre` lives above this
+        // sheet, so it still delivers the word either way even after the
+        // sheet itself is gone.
         if let message = await onSave(changes) {
             failure = message
+            toasts?.show(message, kind: .failure)
         } else {
+            toasts?.show("Saved")
             dismiss()
         }
     }
@@ -306,12 +320,25 @@ extension LibraryEditSheet {
     /// plain parse first, then digit-normalises and swaps a decimal comma for
     /// a point before trying again. Only text that still fails both is
     /// reported invalid by `chapterIsInvalid`.
+    ///
+    /// Gap 2: the field had no upper bound, and twenty digits
+    /// ("99999999999999999999") parsed as `1e20` — a value `chapterText`
+    /// could still render without trapping, but only because it routes
+    /// through `Int(exactly:)`. Everything else that reads a chapter number
+    /// off the wire does not, and whether MangaBaka itself stores a number
+    /// that large is unverified (see `Int.init(wholeOrClamped:)`'s doc
+    /// comment) — so the field refuses one rather than sending it. 100,000 is
+    /// **a guess**: no real series is within two orders of magnitude of it,
+    /// so the ceiling only ever catches a mistyped or pasted value.
+    nonisolated static let maximumChapter: Double = 100_000
+
     nonisolated static func parseChapter(_ text: String) -> Double? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        if let value = Double(trimmed) { return value }
+        if let value = Double(trimmed) { return value.magnitude <= maximumChapter ? value : nil }
         let normalized = normalizedDigits(trimmed).replacingOccurrences(of: ",", with: ".")
-        return Double(normalized)
+        guard let value = Double(normalized) else { return nil }
+        return value.magnitude <= maximumChapter ? value : nil
     }
 
     /// Whether the chapter field holds text Save cannot honestly interpret.

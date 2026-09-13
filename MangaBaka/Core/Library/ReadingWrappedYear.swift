@@ -58,10 +58,13 @@ extension ReadingWrapped {
             .filter { $0.state != .dropped }
             .filter { calendar.component(.year, from: $0.finishDate ?? .distantPast) == year }
             .sorted { ($0.finishDate ?? .distantPast) > ($1.finishDate ?? .distantPast) }
+        let chapters = finished.reduce(0) { total, entry in
+            total + Int(wholeOrClamped: ReadingInsights.chaptersCounted(for: entry))
+        }
         return Year(
             year: year,
             finished: finished,
-            chapters: finished.reduce(0) { $0 + Int(ReadingInsights.chaptersCounted(for: $1)) },
+            chapters: chapters,
             dated: dated.count,
             total: entries.count
         )
@@ -153,7 +156,7 @@ extension ReadingWrapped {
             .compactMap { entry -> Sprint? in
                 guard let start = entry.startDate, let finish = entry.finishDate else { return nil }
                 guard finish >= start else { return nil }
-                let chapters = Int(ReadingInsights.chaptersCounted(for: entry))
+                let chapters = Int(wholeOrClamped: ReadingInsights.chaptersCounted(for: entry))
                 guard chapters >= minimumChapters else { return nil }
                 let days = calendar.dateComponents([.day], from: start, to: finish).day ?? 0
                 let sprint = Sprint(

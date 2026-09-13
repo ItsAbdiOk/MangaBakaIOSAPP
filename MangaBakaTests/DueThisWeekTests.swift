@@ -42,6 +42,35 @@ struct DueThisWeekTests {
         )
         #expect(sentence.hasPrefix("One thing due this week: A, "))
     }
+
+    /// Gap 105: this used to have no way to hear that the library read had
+    /// failed, so a reader who asked "what's due" while offline got the same
+    /// "Nothing due in the next 7 days" as one whose week was genuinely
+    /// quiet — the one answer that is actually wrong to give with no library
+    /// to check.
+    /// Expected to fail before the fix with: "Nothing due in the next 7
+    /// days." — no `libraryFailure` parameter existed to say otherwise.
+    @Test("A library that could not be read is said, not silently answered as quiet")
+    func libraryFailureIsNamed() {
+        let sentence = DueThisWeek.sentence(
+            dated: [], announced: [], measured: true, now: now, libraryFailure: .offline
+        )
+        #expect(sentence.hasPrefix("I couldn't read your library."))
+    }
+
+    /// A failure is only worth naming when it actually left nothing to say —
+    /// a library read that failed on a later page but still turned up real
+    /// dated works from the pages that landed should report those, not lead
+    /// with the failure ahead of a real answer.
+    @Test("A library failure is not mentioned when there is a real answer anyway")
+    func libraryFailureIsSilentWhenThereIsSomethingToSay() {
+        let sentence = DueThisWeek.sentence(
+            dated: [work(1, "A", dueIn: 1)], announced: [], measured: true, now: now,
+            libraryFailure: .offline
+        )
+        #expect(!sentence.hasPrefix("I couldn't read your library"))
+        #expect(sentence.contains("A"))
+    }
 }
 
 @Suite("Intents are wired", .enabled(if: SourceTree.isAvailable))

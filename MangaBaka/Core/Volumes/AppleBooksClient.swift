@@ -44,7 +44,7 @@ actor AppleBooksClient {
         // tagged-vs-untagged and bracket-before-marker rules changed again
         // (T1/F3/T4, 2026-09-13).
         let key = "v5-\(series.id)-\(country.lowercased())-\(language ?? "any")"
-        if let cached = readCache(key) { return cached }
+        if let cached = readCache(key) { return cached.volumes }
 
         guard let results = await search(query, country: country) else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
@@ -65,7 +65,7 @@ actor AppleBooksClient {
     func japaneseVolumes(for series: Series) async -> [AppleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         let key = "v5-\(series.id)-jp-ja-bare"
-        if let cached = readCache(key) { return cached }
+        if let cached = readCache(key) { return cached.volumes }
 
         guard let results = await search(query, country: "jp") else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
@@ -82,7 +82,16 @@ actor AppleBooksClient {
 
     private func search(_ term: String, country: String) async -> [AppleBooksResult]? {
         let wait = spacing.claim(now: clock.now)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: `try?` alone swallows cancellation and falls straight
+            // through to firing the request — for a page the reader already
+            // left. Checked once, right after the wait, rather than folded
+            // into the `guard` above: the slot is claimed either way, so a
+            // cancelled wait must still not spend the request that slot paid
+            // for.
+            guard !Task.isCancelled else { return nil }
+        }
 
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         components?.queryItems = [
@@ -99,11 +108,18 @@ actor AppleBooksClient {
         guard let (data, response) = try? await session.data(from: url),
               let http = response as? HTTPURLResponse
         else { return nil }
-        if http.statusCode == 429 || http.statusCode == 403 {
-            // Apple answers an over-limit client with 403 as often as 429.
+        if http.statusCode == 429 {
             spacing.backOff(until: clock.now.addingTimeInterval(60))
             return nil
         }
+        // Gap 73: 403 used to get the same 60s backoff as 429, on the theory
+        // that Apple answers an over-limit client with 403 as often as with
+        // 429. It also answers 403 for a store the requested `country` does
+        // not sell ebooks in — a fact about that one country, not about this
+        // client having asked too much — and backing every future request off
+        // for a minute over that would stall `japaneseVolumes` (a different
+        // country) for a reason that has nothing to do with it. No backoff
+        // here; still nil, same as any other unusable answer.
         guard (200..<300).contains(http.statusCode) else { return nil }
         // No `.dateDecodingStrategy` needed: `releaseDate` decodes as a
         // plain `String` now (T9) — a strict `.iso8601` `Date` here used to
@@ -123,12 +139,21 @@ actor AppleBooksClient {
         cacheDirectory?.appendingPathComponent("\(key).json")
     }
 
-    private func readCache(_ key: String) -> [AppleBooksVolume]? {
+    /// - Returns: the cached volumes and when they were written, or nil when
+    ///   there is nothing usable cached. `storedAt` (gap 72) is read by
+    ///   nothing yet — no caller here needs a value's age today — but the
+    ///   file already carried it and threw it away on every read, which is
+    ///   exactly the shape a future `StaleBar` ("volumes from 6 days ago")
+    ///   needs and could not have been built from `[AppleBooksVolume]?` alone.
+    ///
+    /// Internal rather than `private`, purely so `AppleBooksTests` can assert
+    /// on `storedAt` directly without a caller for it to flow through yet.
+    func readCache(_ key: String) -> (volumes: [AppleBooksVolume], storedAt: Date)? {
         guard let file = file(key), let data = try? Data(contentsOf: file),
               let cached = try? JSONDecoder().decode(Cached.self, from: data),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
-        return cached.volumes
+        return (cached.volumes, cached.storedAt)
     }
 
     private func writeCache(_ key: String, _ volumes: [AppleBooksVolume]) {

@@ -55,7 +55,15 @@ struct ScheduleProgress: Equatable, Sendable {
     var isRunning = false
     var done = 0
     var total = 0
-    var failure: String?
+    /// The real `APIError`, not a flattened string (gap 98) — kept so a
+    /// caller can tell MangaUpdates' own outage apart from MangaBaka's
+    /// (`APIError.party`), and so `.server`'s message goes through
+    /// `userFacingMessage` rather than being trapped in a `String` that
+    /// already lost that distinction. Before this, every failure read as
+    /// "MangaBaka had a problem" even when it was MangaUpdates that answered
+    /// 503 (gap 100), because the party was dropped when the message was
+    /// pre-rendered into a `String` here.
+    var failure: APIError?
 
     var fraction: Double {
         total > 0 ? Double(done) / Double(total) : 0
@@ -290,7 +298,7 @@ actor ReleaseScheduleService {
         // A build over a library that could not be read would measure nothing
         // and report itself finished. Leave it for the next attempt.
         guard scope.failure == nil else {
-            progress.failure = scope.failure?.userFacingMessage
+            progress.failure = scope.failure
             return
         }
         let entries = scope.entries
@@ -311,25 +319,48 @@ actor ReleaseScheduleService {
 
         for entry in todo {
             if Task.isCancelled { return }
-            guard let series = entry.series,
-                  let raw = series.mangaUpdatesID,
-                  let number = MangaUpdatesID.number(from: raw)
-            else {
-                progress.done += 1
-                continue
-            }
+            guard await measureOne(entry) else { return }
+        }
+    }
 
-            do {
-                let releases = try await mangaUpdates.releases(seriesNumber: number)
-                let cadence = Self.measuredCadence(from: releases)
-                try? write(seriesId: series.id, cadence: cadence, failure: nil)
-            } catch {
-                // Recorded as a failure so the next build retries it, rather
-                // than a null cadence, which would read as a settled answer.
-                try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
-                progress.failure = error.userFacingMessage
-            }
+    /// Measures one series and folds the result into `progress`.
+    ///
+    /// - Returns: false when the build should stop entirely — a cancellation,
+    ///   or a global outage (gap 99: `.offline`/`.rateLimited` will refuse
+    ///   every remaining series identically, so the loop above stops rather
+    ///   than spending three seconds rediscovering that 54 more times).
+    ///   True otherwise, including an ordinary per-series `.server`/`.decoding`
+    ///   failure, which does not say anything about the *next* series.
+    private func measureOne(_ entry: LibraryEntry) async -> Bool {
+        guard let series = entry.series,
+              let raw = series.mangaUpdatesID,
+              let number = MangaUpdatesID.number(from: raw)
+        else {
             progress.done += 1
+            return true
+        }
+
+        do {
+            let releases = try await mangaUpdates.releases(seriesNumber: number)
+            let cadence = Self.measuredCadence(from: releases)
+            try? write(seriesId: series.id, cadence: cadence, failure: nil)
+            progress.done += 1
+            return true
+        } catch {
+            guard error != .cancelled else {
+                // The reader signed out or stopped the build — not a failure
+                // to record or report; see `APIError.cancelled`'s own doc
+                // comment on never reaching a screen.
+                return false
+            }
+            // Recorded as a failure so the next build retries it, rather than
+            // a null cadence, which would read as a settled answer.
+            try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
+            progress.failure = error
+            progress.done += 1
+            if case .offline = error { return false }
+            if case .rateLimited = error { return false }
+            return true
         }
     }
 
@@ -343,6 +374,12 @@ actor ReleaseScheduleService {
         case measured(Cadence)
         case none
         case unavailable
+        /// The ask itself failed — distinct from `.none`, which is MangaUpdates
+        /// answering with too little history to estimate from. Before this
+        /// (gap 18) both collapsed to `.none`, so a 503 read on screen exactly
+        /// like "not enough releases yet" (`DetailScheduleBlock`/`DetailHero`,
+        /// batch 2).
+        case failed(APIError)
     }
     /// The cadence for one series, measuring it if it has not been measured.
     ///
@@ -373,7 +410,7 @@ actor ReleaseScheduleService {
             // Recorded as a failure rather than a null cadence, so the next
             // open retries instead of treating an outage as an answer.
             try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
-            return .none
+            return .failed(error)
         }
     }
 

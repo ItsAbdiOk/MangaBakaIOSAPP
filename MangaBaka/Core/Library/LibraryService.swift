@@ -13,8 +13,22 @@ import Foundation
 /// did the queue come from" would otherwise have to go through URL stubbing to
 /// answer a question that has nothing to do with URLs.
 protocol LibraryProviding: Sendable {
-    func recommendationStatus() async -> RecommendationStatus?
-    func recommendations(limit: Int, page: Int, excluding: [Int]) async -> [PersonalRecommendation]
+    /// Whether personalisation is available, and how much it has to work
+    /// with. A typed throw, not an optional: `nil` used to stand for both "no
+    /// token" and "the request failed", and `StackModel` read a failed status
+    /// call as `canUseProfile = false` for the rest of the session — caching
+    /// a network error as a permanent product decision (gap 107,
+    /// FAILURES-SUMMARY.md).
+    func recommendationStatus() async throws(APIError) -> RecommendationStatus
+    /// - Returns: what came back, and — bundled with it rather than fetched
+    ///   and then discarded — the two flags the same envelope already
+    ///   carries alongside `results`: whether the library was too small to
+    ///   personalise from, and whether the profile is stale. `StackModel`
+    ///   used to fetch these from `recommendationStatus()` separately and
+    ///   then throw them away when building the queue, so a cold-start or
+    ///   stale-profile reader saw a silent fallback to saves or random with
+    ///   no caption naming why (gap 108).
+    func recommendations(limit: Int, page: Int, excluding: [Int]) async -> PersonalRecommendations
     func library(page: Int, limit: Int) async -> [LibraryEntry]
 
     /// The same page, keeping the reason it failed, so a caller can tell an
@@ -92,6 +106,23 @@ struct LibraryChange: Equatable, Sendable {
         if let isPrivate { body["is_private"] = isPrivate }
         return body
     }
+}
+
+/// What `/v1/my/series/recommendations` answered, with the two flags the same
+/// envelope carries alongside `results` — see `LibraryProviding.recommendations`.
+struct PersonalRecommendations: Sendable, Equatable {
+    var items: [PersonalRecommendation] = []
+    /// The library is too small to personalise from. Mirrors
+    /// `RecommendationStatus.coldStart`, but this is the value the
+    /// recommendations call itself reported, so a caller that only fetches
+    /// recommendations does not also need to fetch status to know why the
+    /// list is thin.
+    var coldStart = false
+    /// The profile is being rebuilt; `items` is usable but behind.
+    var profileStale = false
+    /// Set when the request itself failed, as opposed to succeeding with a
+    /// genuinely short (or cold-start) list. `[]` used to mean both.
+    var failure: APIError?
 }
 
 actor LibraryService: LibraryProviding {
@@ -177,14 +208,30 @@ actor LibraryService: LibraryProviding {
     }
 
     /// Whether personalisation is available, and how much it has to work with.
-    func recommendationStatus() async -> RecommendationStatus? {
+    ///
+    /// A typed throw rather than `try?` into `nil`: `nil` used to mean both
+    /// "no token" and "the request failed", and the one caller that reads
+    /// this treated a failure as a permanent "no profile" for the rest of the
+    /// session (gap 107, FAILURES-SUMMARY.md).
+    func recommendationStatus() async throws(APIError) -> RecommendationStatus {
         // Bare, not enveloped. See APIClient.getRoot — this endpoint is the
         // reason that method exists.
-        try? await client.getRoot("/v1/my/series/recommendations/status")
+        try await client.getRoot("/v1/my/series/recommendations/status")
     }
 
-    /// Personalised recommendations, or an empty list when the library is too
-    /// small to build a profile from.
+    /// The same envelope `getResults` decodes, kept whole rather than reduced
+    /// to its `results` array — `coldStart`/`profileStale` sit right beside
+    /// them and `getResults` throws both away (gap 108). `getRoot` decodes
+    /// the top level directly, so this mirrors `ResultsEnvelope` rather than
+    /// widening `APIClient` for one caller.
+    private struct RecommendationsEnvelope: Decodable {
+        let results: [PersonalRecommendation]?
+        let coldStart: Bool?
+        let profileStale: Bool?
+    }
+
+    /// Personalised recommendations, with the two flags that explain a short
+    /// or stale list rather than leaving the caller to guess why.
     ///
     /// Built from the reader's whole library rather than from a handful of
     /// seeds, and unlike `mix` it takes `page` and `exclude_ids` — so it can
@@ -199,7 +246,7 @@ actor LibraryService: LibraryProviding {
         limit: Int = 20,
         page: Int = 1,
         excluding excludedIDs: [Int] = []
-    ) async -> [PersonalRecommendation] {
+    ) async -> PersonalRecommendations {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if page > 1 { query.append(URLQueryItem(name: "page", value: String(page))) }
         // Repeated keys. Every list parameter on this API that has been checked
@@ -208,11 +255,19 @@ actor LibraryService: LibraryProviding {
         query += excludedIDs.map { URLQueryItem(name: "exclude_ids", value: String($0)) }
         query += filterQuery
 
-        let results: [PersonalRecommendation]? = try? await client.getResults(
-            "/v1/my/series/recommendations",
-            query: query
-        )
-        return results ?? []
+        do {
+            let envelope: RecommendationsEnvelope = try await client.getRoot(
+                "/v1/my/series/recommendations",
+                query: query
+            )
+            return PersonalRecommendations(
+                items: envelope.results ?? [],
+                coldStart: envelope.coldStart ?? false,
+                profileStale: envelope.profileStale ?? false
+            )
+        } catch {
+            return PersonalRecommendations(failure: error)
+        }
     }
 
     /// Tag ids whose own content rating the reader has not opted into.

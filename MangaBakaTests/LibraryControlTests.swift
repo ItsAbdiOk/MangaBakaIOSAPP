@@ -17,10 +17,12 @@ struct LibraryControlTests {
         private(set) var reads = 0
         var failure: APIError?
 
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
 

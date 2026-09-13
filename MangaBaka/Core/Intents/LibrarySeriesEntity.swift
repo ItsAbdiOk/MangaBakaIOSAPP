@@ -27,28 +27,39 @@ struct LibrarySeriesEntity: AppEntity {
 }
 
 struct LibrarySeriesQuery: EntityStringQuery {
+    /// Gap 106: `all()` swallows the walk's own failure into `[]`, the same
+    /// way `library(page:limit:)` does — so "the library could not be read"
+    /// and "nothing here matches that name" were the same silence to Siri,
+    /// and it said "no match" for both. Throws only when there is nothing
+    /// usable at all (no rows, and a reason there are none); stale rows from
+    /// an earlier successful walk are still searched, the same as everywhere
+    /// else in the app that treats stale content as still useful.
     @MainActor
-    private func entries() async -> [LibraryEntry] {
+    private func entries() async throws -> [LibraryEntry] {
         guard let services = IntentBridge.shared.services else { return [] }
-        return await services.librarySnapshot.all()
+        let result = await services.librarySnapshot.load()
+        if result.entries.isEmpty, let failure = result.failure {
+            throw failure
+        }
+        return result.entries
     }
 
     func entities(for identifiers: [Int]) async throws -> [LibrarySeriesEntity] {
         let wanted = Set(identifiers)
-        return await entries().filter { wanted.contains($0.seriesId) }.map(LibrarySeriesEntity.init)
+        return try await entries().filter { wanted.contains($0.seriesId) }.map(LibrarySeriesEntity.init)
     }
 
     /// The same match the app's own search uses, so a romanised or native
     /// title finds it here too.
     func entities(matching string: String) async throws -> [LibrarySeriesEntity] {
-        await entries()
+        try await entries()
             .filter { $0.series?.matches(string) ?? false }
             .map(LibrarySeriesEntity.init)
     }
 
     /// What Shortcuts offers before anything is typed: what is being read.
     func suggestedEntities() async throws -> [LibrarySeriesEntity] {
-        await entries()
+        try await entries()
             .filter { $0.state == .reading }
             .prefix(10)
             .map(LibrarySeriesEntity.init)

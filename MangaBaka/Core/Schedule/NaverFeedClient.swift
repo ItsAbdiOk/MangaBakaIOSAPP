@@ -32,30 +32,52 @@ actor NaverFeedClient: ReleaseFeedProvider {
         self.cacheDirectory = cacheDirectory
     }
 
-    func feed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
-        guard let titleID = Self.titleID(in: links.compactMap(\.safeURL)) else { return nil }
-        let key = "v1-naver-\(titleID)"
-        if let cached = readCache(key) { return cached }
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer {
+        guard let titleID = Self.titleID(in: links.compactMap(\.safeURL)) else { return .notCarried }
+        // Bumped to v2 alongside Webtoons' v4 (gap 29, commit 5bb36b8): the
+        // same review that changed Webtoons' parser and never-cache-empty
+        // rule touched this feed's shape too (`ReleaseFeed` grew
+        // `source`/`totalCount`/`finished`), and this key never followed —
+        // a v1 file would fail to decode against `Cached`'s current shape
+        // and silently read as "nothing cached" rather than actually being
+        // wrong, but a stale key is still a stale key.
+        let key = "v2-naver-\(titleID)"
+        if let cached = readCache(key) { return .answered(cached) }
 
-        guard let url = Self.endpoint(titleID: titleID) else { return nil }
+        guard let url = Self.endpoint(titleID: titleID) else {
+            return .failed(.decoding(underlying: "Could not build a Naver endpoint URL.", party: .naver))
+        }
 
         let wait = spacing.claim(now: clock.now)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-
-        guard let (data, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse
-        else { return nil }
-        if http.statusCode == 429 {
-            spacing.backOff(until: clock.now.addingTimeInterval(60))
-            return nil
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: see `WebtoonsFeedClient.feed(for:seriesID:)`.
+            guard !Task.isCancelled else { return .failed(.cancelled) }
         }
-        guard (200..<300).contains(http.statusCode), let payload = try? JSONDecoder().decode(
-            Payload.self, from: data
-        ) else { return nil }
+
+        guard let (data, response) = try? await session.data(from: url) else {
+            return .failed(.transport(underlying: "Naver request failed.", party: .naver))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            return .failed(.transport(underlying: "Naver sent a non-HTTP response.", party: .naver))
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            return .failed(.rateLimited(retryAfter: retryAfter, party: .naver))
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            return .failed(.server(
+                status: http.statusCode, message: "Naver returned \(http.statusCode).", party: .naver
+            ))
+        }
+        guard let payload = try? JSONDecoder().decode(Payload.self, from: data) else {
+            return .failed(.decoding(underlying: "Naver feed did not parse.", party: .naver))
+        }
 
         let feed = payload.releaseFeed
         writeCache(key, feed)
-        return feed
+        return .answered(feed)
     }
 
     /// The `titleId` query item off a stored `comic.naver.com/webtoon/list`

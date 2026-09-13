@@ -313,8 +313,12 @@ struct TasteFromSeriesTests {
 /// forgetting test is about the ledger on disk, not about the API.
 private final class NoLibrary: LibraryProviding, @unchecked Sendable {
     func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
-    func recommendationStatus() async -> RecommendationStatus? { nil }
-    func recommendations(limit: Int, page: Int, excluding: [Int]) async -> [PersonalRecommendation] { [] }
+    func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+        throw APIError.offline
+    }
+    func recommendations(limit: Int, page: Int, excluding: [Int]) async -> PersonalRecommendations {
+        PersonalRecommendations()
+    }
     func hiddenTagIDs() async -> Set<Int>? { [] }
     func topGenres() async -> [TopGenre]? { [] }
     func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}

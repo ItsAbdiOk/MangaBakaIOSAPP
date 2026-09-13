@@ -71,7 +71,7 @@ final class MixModel {
     /// A head start for someone who has already used the Stack: their saved
     /// series make honest seeds, since they are things this reader chose.
     func suggestedSeeds() async -> [Series] {
-        (try? await shelf.entries(.saved)) ?? []
+        (try? await shelf.entries(.saved).series) ?? []
     }
 
     func run() async {

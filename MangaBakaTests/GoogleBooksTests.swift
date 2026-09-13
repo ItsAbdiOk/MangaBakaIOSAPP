@@ -244,4 +244,29 @@ struct GoogleBooksClientTests {
         let second = await client.volumes(for: series)
         #expect(second?.count == 1)
     }
+
+    /// Gap 28: `try? await Task.sleep` swallowed cancellation and fell
+    /// through to firing the request anyway. Expected failure before the
+    /// fix: `URLProtocolStub.requests` is non-empty, because the cancelled
+    /// task still spent its claimed slot.
+    @Test("A cancelled wait for a request slot does not fire the request")
+    func cancelledWaitDoesNotFireTheRequest() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling")
+
+        // Claim the only free slot so the next call must wait — that wait is
+        // what gets cancelled below. A different `language` keeps the second
+        // call off the first one's cache entry.
+        let warm = Task { await client.volumes(for: series) }
+        _ = await warm.value
+
+        let task = Task { await client.volumes(for: series, language: "en") }
+        task.cancel()
+        _ = await task.value
+
+        #expect(URLProtocolStub.requests.count == 1, "only the warm-up request should have been sent")
+    }
 }

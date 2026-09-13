@@ -180,4 +180,55 @@ struct ContinuationsTests {
         await model.load(entries: entries)
         #expect(repository.calls == [1])
     }
+
+    /// Repository that always answers nil (a failed `relationships(for:)`
+    /// call), for gap 92.
+    private final class NilRepository: StubRepositoryBase, @unchecked Sendable {
+        private(set) var calls: [Int] = []
+        override func relationships(for seriesId: Int) async -> [SeriesRelationship]? {
+            calls.append(seriesId)
+            return nil
+        }
+    }
+
+    /// Gap 92 (d): a failed `relationships(for:)` used to be silently
+    /// indistinguishable from "no relationships" — `nil` and `[]` both just
+    /// skipped the entry — and the failure was cached as final the same way
+    /// a real, empty answer would be, so an offline session never got to try
+    /// again once the connection came back.
+    /// Expected to fail before the fix with: `repository.calls.count == 1`
+    /// after the second `load` — the old code set `loadedFor` regardless of
+    /// whether every ask actually answered.
+    @Test("A failed ask is retried on the next load, not cached as final")
+    @MainActor
+    func failedAskIsRetriedNotCached() async {
+        let repository = NilRepository()
+        let entries = [entry(1, finishDate: Date(), series: SeriesFactory.make(id: 1))]
+
+        let model = ContinuationsModel(repository: repository)
+        await model.load(entries: entries)
+        #expect(model.items.isEmpty)
+        #expect(model.hasFailure)
+        #expect(repository.calls == [1])
+
+        await model.load(entries: entries)
+        #expect(repository.calls == [1, 1], "the same finished-id set must be asked again after a failure")
+    }
+
+    /// The control: a genuinely empty answer (not a failure) is remembered,
+    /// so a real "nothing to show" does not re-ask every time the screen
+    /// reappears.
+    @Test("A genuinely empty answer is not retried")
+    @MainActor
+    func genuinelyEmptyAnswerIsNotRetried() async {
+        let repository = CountingRepository()
+        let entries = [entry(1, finishDate: Date(), series: SeriesFactory.make(id: 1))]
+
+        let model = ContinuationsModel(repository: repository)
+        await model.load(entries: entries)
+        #expect(!model.hasFailure)
+
+        await model.load(entries: entries)
+        #expect(repository.calls == [1], "an empty-but-successful answer must not be re-asked")
+    }
 }

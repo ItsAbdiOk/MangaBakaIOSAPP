@@ -55,7 +55,7 @@ actor GoogleBooksClient {
         // filters on `language` instead of decoding it and never reading it
         // (T3/F15, 2026-09-13).
         let key = "v2-\(series.id)-\(language ?? "any")"
-        if let cached = readCache(key) { return cached }
+        if let cached = readCache(key) { return cached.volumes }
 
         guard let items = await search(query) else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
@@ -73,7 +73,13 @@ actor GoogleBooksClient {
 
     private func search(_ term: String) async -> [GoogleBooksItem]? {
         let wait = spacing.claim(now: clock.now)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: see the identical check and comment in
+            // `AppleBooksClient.search` — `try?` alone lets a cancelled wait
+            // fall through to firing the request anyway.
+            guard !Task.isCancelled else { return nil }
+        }
 
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         components?.queryItems = [
@@ -110,12 +116,13 @@ actor GoogleBooksClient {
         cacheDirectory?.appendingPathComponent("\(key).json")
     }
 
-    private func readCache(_ key: String) -> [GoogleBooksVolume]? {
+    /// See `AppleBooksClient.readCache` — same gap-72 shape, same reason.
+    private func readCache(_ key: String) -> (volumes: [GoogleBooksVolume], storedAt: Date)? {
         guard let file = file(key), let data = try? Data(contentsOf: file),
               let cached = try? JSONDecoder().decode(Cached.self, from: data),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
-        return cached.volumes
+        return (cached.volumes, cached.storedAt)
     }
 
     private func writeCache(_ key: String, _ volumes: [GoogleBooksVolume]) {

@@ -75,8 +75,23 @@ enum ReadingInsights {
     private static func chaptersLeft(for entry: LibraryEntry) -> Int? {
         guard let total = entry.series?.totalChapters, total > 0 else { return nil }
         guard let read = entry.progressChapter, read > 0 else { return nil }
-        let left = Int(total - read)
+        let left = Int(wholeOrClamped: total - read)
         return left > 0 ? left : nil
+    }
+
+    /// Whether there is enough here to show the screen's content at all,
+    /// rather than a "0 chapters" headline over three empty sections.
+    ///
+    /// Gap 93: `ReadingInsightsView` had no empty state of its own — an
+    /// account with nothing read yet, or one whose library is still on page
+    /// one of a walk, showed the same layout as a real answer, just with
+    /// every number at zero.
+    static func hasAnythingToSay(_ entries: [LibraryEntry]) -> Bool {
+        guard !entries.isEmpty else { return false }
+        return chaptersRead(in: entries) > 0
+            || !waiting(in: entries).isEmpty
+            || !nearlyFinished(in: entries).isEmpty
+            || !verdicts(in: entries).isEmpty
     }
 
     // MARK: - How much you have read
@@ -87,7 +102,7 @@ enum ReadingInsights {
     /// a progress number — finishing something and not ticking the last box is
     /// the ordinary case, and counting it as zero would make the total absurd.
     static func chaptersRead(in entries: [LibraryEntry]) -> Int {
-        entries.reduce(0) { $0 + Int(chaptersCounted(for: $1)) }
+        entries.reduce(0) { $0 + Int(wholeOrClamped: chaptersCounted(for: $1)) }
     }
 
     /// How many chapters one entry contributes to a total.

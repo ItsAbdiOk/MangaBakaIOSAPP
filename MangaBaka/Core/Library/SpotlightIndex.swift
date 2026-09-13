@@ -90,8 +90,8 @@ struct SpotlightIndex: Sendable {
     static func description(for entry: LibraryEntry) -> String {
         var parts = [entry.state.title]
         if entry.state.tracksProgress, let chapter = entry.progressChapter, chapter > 0 {
-            let total = entry.series?.totalChapters.map { " of \(Int($0))" } ?? ""
-            parts.append("chapter \(Int(chapter))\(total)")
+            let total = entry.series?.totalChapters.map { " of \(Int(wholeOrClamped: $0))" } ?? ""
+            parts.append("chapter \(Int(wholeOrClamped: chapter))\(total)")
         }
         if let type = entry.series?.type, !type.isEmpty { parts.append(type.capitalized) }
         return parts.joined(separator: " · ")

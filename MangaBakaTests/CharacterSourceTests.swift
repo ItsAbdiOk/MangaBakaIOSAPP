@@ -2,7 +2,17 @@ import Foundation
 import Testing
 @testable import MangaBaka
 
-/// AniList is the preferred source; Shikimori answers when it cannot.
+/// AniList and Shikimori are unioned, AniList's cast leading.
+///
+/// Abdi, 2026-09-13, verbatim: "if a character is on AniList but not on
+/// Shikimori, use AniList as the default. If it's on Shikimori but AniList
+/// doesn't have that character, make sure you put it." Both sources are asked
+/// concurrently — neither is a fallback for the other any more — and every
+/// Shikimori character that does not fuzzy-match one already in AniList's
+/// list (`CharacterNameMatch`) is appended after it. `SourceOutcome` still
+/// distinguishes "asked and failed" from "asked and had nobody" from "never
+/// asked", the same distinction the old fallback-only design already needed
+/// for `lastOutcome`.
 ///
 /// **The AniList path cannot be verified against the live API.** Every request
 /// to `graphql.anilist.co` returns HTTP 403 with AniList's own message about
@@ -11,95 +21,122 @@ import Testing
 /// response anyone has seen. That is a real limitation and worth re-checking
 /// the day the API comes back: a field named differently from the schema would
 /// pass here and fail there.
+
+/// Shared by both suites below (split apart when the union feature pushed the
+/// original single struct over the type-body-length cap): stub response
+/// builders, a host-routed handler, and a service factory wired to
+/// `URLProtocolStub`.
+func aniListBody(
+    names: [String],
+    role: String = "MAIN",
+    image: String = "https://s4.anilist.co/file/anilistcdn/character/large/b1-x.png"
+) -> Data {
+    let edges = names.enumerated().map { index, name in
+        """
+        {"role": "\(role)",
+         "node": {"id": \(index + 1), "name": {"full": "\(name)"},
+                  "image": {"large": "\(image)", "medium": null}}}
+        """
+    }.joined(separator: ",")
+    return Data("""
+    {"data": {"Media": {"characters": {"edges": [\(edges)]}}}}
+    """.utf8)
+}
+
+func shikimoriBody(names: [String]) -> Data {
+    let rows = names.enumerated().map { index, name in
+        """
+        {"roles": ["Main"],
+         "character": {"id": \(index + 1), "name": "\(name)",
+                       "image": {"x96": "/system/characters/x96/\(index + 1).jpg",
+                                 "preview": null}}}
+        """
+    }.joined(separator: ",")
+    return Data("[\(rows)]".utf8)
+}
+
+/// Routes by host so one stub can serve both APIs in the same test, which is
+/// the only way to prove a request actually reached the second one.
+func route(
+    aniList: @escaping @Sendable () -> URLProtocolStub.Outcome,
+    shikimori: @escaping @Sendable () -> URLProtocolStub.Outcome
+) {
+    URLProtocolStub.setHandler { request in
+        (request.url?.host()?.contains("anilist") == true) ? aniList() : shikimori()
+    }
+}
+
+func characterService(clock: any Clock = SystemClock()) -> CharacterService {
+    let session = URLProtocolStub.makeSession()
+    return CharacterService(
+        aniList: AniListClient(session: session),
+        shikimori: ShikimoriClient(session: session),
+        clock: clock
+    )
+}
+
+/// Counts requests to AniList while answering each with the outcome given.
+final class AniListCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var calls: Int {
+        lock.lock(); defer { lock.unlock() }
+        return count
+    }
+
+    func bump() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        count += 1
+        return count
+    }
+}
+
 @Suite("Character sources", .serialized)
 struct CharacterSourceTests {
-    private func aniListBody(
-        names: [String],
-        role: String = "MAIN",
-        image: String = "https://s4.anilist.co/file/anilistcdn/character/large/b1-x.png"
-    ) -> Data {
-        let edges = names.enumerated().map { index, name in
-            """
-            {"role": "\(role)",
-             "node": {"id": \(index + 1), "name": {"full": "\(name)"},
-                      "image": {"large": "\(image)", "medium": null}}}
-            """
-        }.joined(separator: ",")
-        return Data("""
-        {"data": {"Media": {"characters": {"edges": [\(edges)]}}}}
-        """.utf8)
-    }
+    // MARK: Union
 
-    private func shikimoriBody(names: [String]) -> Data {
-        let rows = names.enumerated().map { index, name in
-            """
-            {"roles": ["Main"],
-             "character": {"id": \(index + 1), "name": "\(name)",
-                           "image": {"x96": "/system/characters/x96/\(index + 1).jpg",
-                                     "preview": null}}}
-            """
-        }.joined(separator: ",")
-        return Data("[\(rows)]".utf8)
-    }
-
-    /// Routes by host so one stub can serve both APIs in the same test, which
-    /// is the only way to prove the fallback actually reached the second one.
-    private func route(
-        aniList: @escaping @Sendable () -> URLProtocolStub.Outcome,
-        shikimori: @escaping @Sendable () -> URLProtocolStub.Outcome
-    ) {
-        URLProtocolStub.setHandler { request in
-            (request.url?.host()?.contains("anilist") == true) ? aniList() : shikimori()
-        }
-    }
-
-    private func service(clock: any Clock = SystemClock()) -> CharacterService {
-        let session = URLProtocolStub.makeSession()
-        return CharacterService(
-            aniList: AniListClient(session: session),
-            shikimori: ShikimoriClient(session: session),
-            clock: clock
-        )
-    }
-
-    /// Counts requests to AniList while answering each with the outcome given.
-    private final class AniListCounter: @unchecked Sendable {
-        private let lock = NSLock()
-        private var count = 0
-        var calls: Int {
-            lock.lock(); defer { lock.unlock() }
-            return count
-        }
-
-        func bump() -> Int {
-            lock.lock(); defer { lock.unlock() }
-            count += 1
-            return count
-        }
-    }
-
-    // MARK: Preference
-
-    @Test("AniList answers when it can, and Shikimori is never asked")
-    func prefersAniList() async {
+    /// Both sources are asked concurrently now — neither is a fallback for
+    /// the other. Before the union (verbatim, Abdi 2026-09-13), Shikimori was
+    /// never asked once AniList answered; expected failure on the old code:
+    /// `URLProtocolStub.requests.count == 1` (Shikimori skipped entirely),
+    /// where this now asserts 2, and the Shikimori-only name still appears.
+    @Test("AniList leads, and Shikimori's unmatched characters are appended")
+    func unionAppendsUnmatchedShikimoriCharacters() async {
         defer { URLProtocolStub.reset() }
         route(
             aniList: { .respond(.init(body: aniListBody(names: ["Jin-woo Sung"]))) },
-            shikimori: { .respond(.init(body: shikimoriBody(names: ["Wrong source"]))) }
+            shikimori: { .respond(.init(body: shikimoriBody(names: ["Igris"]))) }
         )
 
-        let subject = service()
+        let subject = characterService()
         let cast = await subject.characters(aniListID: 105_398, shikimoriID: 121_496)
 
-        #expect(cast.map(\.name) == ["Jin-woo Sung"])
-        #expect(await subject.lastOutcome == .aniList)
-        #expect(URLProtocolStub.requests.count == 1)
+        #expect(cast.characters.map(\.name) == ["Jin-woo Sung", "Igris"])
+        #expect(await subject.lastOutcome == .union)
+        #expect(URLProtocolStub.requests.count == 2)
+        #expect(cast.aniList == .answered)
+        #expect(cast.shikimori == .answered)
     }
 
-    // MARK: Fallback
+    /// The reason for the union: a fuzzy-matched Shikimori character does not
+    /// duplicate the one AniList already contributed.
+    @Test("A Shikimori character that fuzzy-matches an AniList one is not duplicated")
+    func matchedShikimoriCharacterIsNotDuplicated() async {
+        defer { URLProtocolStub.reset() }
+        route(
+            aniList: { .respond(.init(body: aniListBody(names: ["Sung Jin-Woo"]))) },
+            shikimori: { .respond(.init(body: shikimoriBody(names: ["Jinwoo Sung"]))) }
+        )
+
+        let subject = characterService()
+        let cast = await subject.characters(aniListID: 105_398, shikimoriID: 121_496)
+        #expect(cast.characters.map(\.name) == ["Sung Jin-Woo"])
+    }
+
+    // MARK: Fallback (one source failed)
 
     /// The live failure, reproduced: AniList's 403 with its own message.
-    @Test("A disabled AniList falls back to Shikimori")
+    @Test("A disabled AniList's cast is Shikimori's, with AniList's outcome recorded as failed")
     func fallsBackOn403() async {
         defer { URLProtocolStub.reset() }
         route(
@@ -112,17 +149,24 @@ struct CharacterSourceTests {
             shikimori: { .respond(.init(body: shikimoriBody(names: ["Jin-woo Sung"]))) }
         )
 
-        let subject = service()
+        let subject = characterService()
         let cast = await subject.characters(aniListID: 105_398, shikimoriID: 121_496)
 
-        #expect(cast.map(\.name) == ["Jin-woo Sung"])
+        #expect(cast.characters.map(\.name) == ["Jin-woo Sung"])
         #expect(await subject.lastOutcome == .shikimori)
+        guard case .failed = cast.aniList else {
+            Issue.record("expected AniList's outcome to be .failed, got \(cast.aniList)")
+            return
+        }
+        #expect(cast.shikimori == .answered)
+        #expect(!cast.failed, "one source answering is not the same as both failing")
     }
 
     /// GraphQL reports failure inside an HTTP 200 as often as through a status
     /// code. Treating that body as success would show an empty row rather than
-    /// falling back — a silent nothing, which is worse than a visible failure.
-    @Test("A GraphQL error inside a 200 still falls back")
+    /// showing Shikimori's cast — a silent nothing, which is worse than a
+    /// visible failure.
+    @Test("A GraphQL error inside a 200 still yields Shikimori's cast")
     func fallsBackOnGraphQLError() async {
         defer { URLProtocolStub.reset() }
         route(
@@ -134,12 +178,14 @@ struct CharacterSourceTests {
             shikimori: { .respond(.init(body: shikimoriBody(names: ["Fallback"]))) }
         )
 
-        let subject = service()
-        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).map(\.name) == ["Fallback"])
+        let subject = characterService()
+        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).characters.map(\.name) == ["Fallback"])
         #expect(await subject.lastOutcome == .shikimori)
     }
 
-    /// An empty cast is not a better answer than the other source's cast.
+    /// An empty AniList cast is a real answer, not a failure (gap 31) — it
+    /// unions with whatever Shikimori has rather than either blacking out
+    /// AniList or hiding behind a `.server` throw.
     ///
     /// Before the fix (docs/reviews/third-parties.md finding 2, 2026-09-13),
     /// `CharacterService` treated any `.server` error as an outage, so one
@@ -148,16 +194,19 @@ struct CharacterSourceTests {
     /// "AniList must still be asked for a second, unrelated series" —
     /// `URLProtocolStub.requests` would show only the one Shikimori request
     /// for the second call, not one to each host.
-    @Test("An AniList response with no cast falls back, and does not black out AniList")
-    func fallsBackOnEmptyCast() async {
+    @Test("An AniList response with no cast unions with Shikimori's, and does not black out AniList")
+    func emptyAniListCastUnionsWithShikimori() async {
         defer { URLProtocolStub.reset() }
         route(
             aniList: { .respond(.init(body: Data(#"{"data":{"Media":{"characters":{"edges":[]}}}}"#.utf8))) },
             shikimori: { .respond(.init(body: shikimoriBody(names: ["Fallback"]))) }
         )
 
-        let subject = service()
-        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).map(\.name) == ["Fallback"])
+        let subject = characterService()
+        let first = await subject.characters(aniListID: 1, shikimoriID: 2)
+        #expect(first.characters.map(\.name) == ["Fallback"])
+        // An empty cast is a real, successful answer — not a failure.
+        #expect(first.aniList == .answered)
 
         // A second, unrelated series must still ask AniList — the first
         // series having no cast says nothing about whether AniList is up.
@@ -184,13 +233,13 @@ struct CharacterSourceTests {
             return .respond(.init(statusCode: 404, body: Data()))
         }
 
-        let subject = service()
+        let subject = characterService()
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
         _ = await subject.characters(aniListID: 3, shikimoriID: 4)
         #expect(counter.calls == 2, "A 404 is not an outage; the second series must still ask AniList")
     }
 
-    @Test("A network failure falls back")
+    @Test("A network failure still yields Shikimori's cast")
     func fallsBackOnTransportError() async {
         defer { URLProtocolStub.reset() }
         route(
@@ -198,32 +247,35 @@ struct CharacterSourceTests {
             shikimori: { .respond(.init(body: shikimoriBody(names: ["Fallback"]))) }
         )
 
-        let subject = service()
-        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).map(\.name) == ["Fallback"])
+        let subject = characterService()
+        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).characters.map(\.name) == ["Fallback"])
     }
 
-    // MARK: The fallback is silent
+    // MARK: A single failure is silent — nothing to fix, still something to show
 
-    /// The point of the whole arrangement. A reader has no stake in which of
-    /// two trackers answered, so a failure on the preferred source must not
-    /// surface as an error, a banner, or an empty row.
-    @Test("Nothing about the fallback reaches the caller")
-    func fallbackIsSilent() async {
+    /// A reader has no stake in which of two trackers answered a given
+    /// character, so one source failing while the other has something must
+    /// not surface as an error or an empty row — `cast.failed` (batch 2's
+    /// `InlineFailure` trigger) stays false whenever there is something to
+    /// show.
+    @Test("One source failing while the other answers is not reported as failed")
+    func singleFailureIsSilent() async {
         defer { URLProtocolStub.reset() }
         route(
             aniList: { .respond(.init(statusCode: 403, body: Data())) },
             shikimori: { .respond(.init(body: shikimoriBody(names: ["A", "B"]))) }
         )
 
-        // The signature has no error channel at all: there is nowhere for a
-        // failure to be reported to, by construction.
-        let cast = await service().characters(aniListID: 1, shikimoriID: 2)
-        #expect(cast.count == 2)
+        let cast = await characterService().characters(aniListID: 1, shikimoriID: 2)
+        #expect(cast.characters.count == 2)
+        #expect(!cast.failed)
     }
 
-    /// Both down is the one case that shows nothing — and it shows nothing
-    /// rather than an error, for the same reason.
-    @Test("Both sources failing yields an empty cast, not a failure")
+    /// Both down is the one case with a real reason to say something — gap
+    /// 17: `cast.failed` is true only when every source that was asked threw,
+    /// so batch 2's `CharacterRow` can show `InlineFailure` instead of
+    /// quietly having nothing, distinct from the merely-empty case above.
+    @Test("Both sources failing yields an empty cast, reported as failed")
     func bothDown() async {
         defer { URLProtocolStub.reset() }
         route(
@@ -231,282 +283,28 @@ struct CharacterSourceTests {
             shikimori: { .respond(.init(statusCode: 500, body: Data())) }
         )
 
-        let subject = service()
-        #expect(await subject.characters(aniListID: 1, shikimoriID: 2).isEmpty)
+        let subject = characterService()
+        let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
+        #expect(cast.characters.isEmpty)
+        #expect(cast.failed)
         #expect(await subject.lastOutcome == .none)
     }
 
-    // MARK: Not paying for a known outage twice
-
-    /// AniList being disabled is a state that lasts, and a reader should not
-    /// wait for its timeout on every series page they open.
-    @Test("A disabled AniList is not retried for the rest of the session")
-    func outageIsRemembered() async {
+    /// Both sources answering empty is not the same as both failing — batch
+    /// 2 must render an empty section, not `InlineFailure`, for a series
+    /// that genuinely has no cast anywhere.
+    @Test("Both sources answering empty is not reported as failed")
+    func bothEmptyIsNotFailed() async {
         defer { URLProtocolStub.reset() }
         route(
-            aniList: { .respond(.init(statusCode: 403, body: Data())) },
-            shikimori: { .respond(.init(body: shikimoriBody(names: ["X"]))) }
+            aniList: { .respond(.init(body: Data(#"{"data":{"Media":{"characters":{"edges":[]}}}}"#.utf8))) },
+            shikimori: { .respond(.init(body: Data("[]".utf8))) }
         )
 
-        let subject = service()
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        let afterFirst = URLProtocolStub.requests.count
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-
-        // The second call makes one request, not two: Shikimori only.
-        #expect(URLProtocolStub.requests.count == afterFirst + 1)
-    }
-
-    /// A rate limit is about us, not about the service being gone. Remembering
-    /// it as an outage would drop AniList for the session over a burst.
-    @Test("A rate limit does not count as an outage")
-    func rateLimitIsNotAnOutage() async {
-        defer { URLProtocolStub.reset() }
-        nonisolated(unsafe) var aniListCalls = 0
-        URLProtocolStub.setHandler { request in
-            if request.url?.host()?.contains("anilist") == true {
-                aniListCalls += 1
-                return .respond(.init(statusCode: 429, body: Data(), headers: ["Retry-After": "1"]))
-            }
-            return .respond(.init(body: Data("[]".utf8)))
-        }
-
-        let subject = service()
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(aniListCalls == 2)
-    }
-
-    /// A request cancelled because the reader left the page, or one dropped
-    /// packet, says nothing about AniList. Remembering either as an outage
-    /// silently dropped the preferred source for the whole session — the
-    /// reader got worse portraits from then on and nothing ever said why.
-    @Test("A cancelled or dropped request is not an outage")
-    func transportFailureIsNotAnOutage() async {
-        defer { URLProtocolStub.reset() }
-        let counter = AniListCounter()
-        let shikimori = shikimoriBody(names: ["Fallback"])
-        let aniList = aniListBody(names: ["Preferred"])
-        URLProtocolStub.setHandler { request in
-            guard request.url?.host()?.contains("anilist") == true else {
-                return .respond(.init(body: shikimori))
-            }
-            return counter.bump() == 1 ? .fail(URLError(.cancelled)) : .respond(.init(body: aniList))
-        }
-
-        let subject = service()
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(counter.calls == 2, "AniList must be asked again after a transport failure")
-        #expect(cast.map(\.name) == ["Preferred"])
-    }
-
-    /// An outage ends. A session can outlive one — the app stays open across a
-    /// day of reading — so the memory expires rather than lasting the session.
-    @Test("The outage memory expires")
-    func outageMemoryExpires() async {
-        defer { URLProtocolStub.reset() }
-        let counter = AniListCounter()
-        let shikimori = shikimoriBody(names: ["Fallback"])
-        URLProtocolStub.setHandler { request in
-            guard request.url?.host()?.contains("anilist") == true else {
-                return .respond(.init(body: shikimori))
-            }
-            _ = counter.bump()
-            return .respond(.init(statusCode: 403, body: Data()))
-        }
-
-        let clock = TestClock()
-        let subject = service(clock: clock)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(counter.calls == 1, "Inside the window the outage is remembered")
-
-        clock.advance(by: CharacterService.outageMemory + 1)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(counter.calls == 2, "After the window AniList is tried again")
-    }
-
-    // MARK: Skipping a source entirely
-
-    @Test("A series with no AniList id goes straight to Shikimori")
-    func noAniListID() async {
-        defer { URLProtocolStub.reset() }
-        route(
-            aniList: { .respond(.init(statusCode: 500, body: Data())) },
-            shikimori: { .respond(.init(body: shikimoriBody(names: ["Only source"]))) }
-        )
-
-        let subject = service()
-        #expect(await subject.characters(aniListID: nil, shikimoriID: 2).map(\.name) == ["Only source"])
-        #expect(URLProtocolStub.requests.count == 1)
-    }
-
-    @Test("A series with neither id asks nobody")
-    func neitherID() async {
-        defer { URLProtocolStub.reset() }
-        URLProtocolStub.setHandler { _ in .respond(.init(body: Data("[]".utf8))) }
-        #expect(await service().characters(aniListID: nil, shikimoriID: nil).isEmpty)
-        #expect(URLProtocolStub.requests.isEmpty)
-    }
-}
-
-/// AniList's own response shape, decoded. Written from their published schema
-/// rather than from a response, because the API is disabled — see the suite
-/// above.
-@Suite("AniList response shape")
-struct AniListShapeTests {
-    private func decode(_ json: String) -> AniListClient.Response {
-        guard let decoded = try? JSONDecoder()
-            .decode(AniListClient.Response.self, from: Data(json.utf8))
-        else {
-            fatalError("AniList fixture no longer decodes: \(json)")
-        }
-        return decoded
-    }
-
-    /// `Media` is capitalised in a GraphQL response and would otherwise decode
-    /// as absent — the same trap as the library's capitalised `Series` key,
-    /// which cost this app a silent decode failure once already.
-    @Test("The capitalised Media key is decoded")
-    func capitalisedMediaKey() {
-        let response = decode("""
-        {"data":{"Media":{"characters":{"edges":[
-          {"role":"MAIN","node":{"id":1,"name":{"full":"A"},
-           "image":{"large":"https://s4.anilist.co/x.png","medium":null}}}]}}}}
-        """)
-        #expect(response.data?.media?.characters?.edges?.count == 1)
-    }
-
-    /// AniList shouts its roles. The app compares against "Main".
-    @Test("Roles are normalised to the app's casing")
-    func roleCasing() {
-        let response = decode("""
-        {"data":{"Media":{"characters":{"edges":[
-          {"role":"MAIN","node":{"id":1,"name":{"full":"A"},
-           "image":{"large":"https://s4.anilist.co/x.png","medium":null}}},
-          {"role":"SUPPORTING","node":{"id":2,"name":{"full":"B"},
-           "image":{"large":"https://s4.anilist.co/y.png","medium":null}}}]}}}}
-        """)
-        let cast = AniListClient.cast(from: response, limit: 20)
-        #expect(cast.map(\.role) == ["Main", "Supporting"])
-        #expect(cast[0].isMain)
-        #expect(!cast[1].isMain)
-    }
-
-    /// AniList substitutes a default silhouette rather than a null image, the
-    /// same defect Shikimori's `missing_x96.jpg` produces.
-    @Test("The default silhouette is not a portrait")
-    func placeholderDropped() {
-        let response = decode("""
-        {"data":{"Media":{"characters":{"edges":[
-          {"role":"MAIN","node":{"id":1,"name":{"full":"Faceless"},
-           "image":{"large":"https://s4.anilist.co/file/anilistcdn/character/large/default.jpg",
-                    "medium":null}}}]}}}}
-        """)
-        #expect(AniListClient.cast(from: response, limit: 20).isEmpty)
-    }
-
-    @Test("The placeholder is recognised by its path", arguments: [
-        ("https://s4.anilist.co/file/anilistcdn/character/large/default.jpg", true),
-        ("https://s4.anilist.co/file/anilistcdn/character/large/b88-x.png", false)
-    ])
-    func placeholderDetection(_ url: String, _ expected: Bool) {
-        #expect(AniListClient.isPlaceholderPortrait(url) == expected)
-    }
-
-    /// AniList already sorts by [ROLE, RELEVANCE], so the app must not
-    /// re-sort — doing so would discard their relevance ordering, which is
-    /// better than anything the app can compute.
-    @Test("AniList's own order is preserved")
-    func orderPreserved() {
-        let response = decode("""
-        {"data":{"Media":{"characters":{"edges":[
-          {"role":"MAIN","node":{"id":1,"name":{"full":"First"},
-           "image":{"large":"https://s4.anilist.co/a.png","medium":null}}},
-          {"role":"MAIN","node":{"id":2,"name":{"full":"Second"},
-           "image":{"large":"https://s4.anilist.co/b.png","medium":null}}}]}}}}
-        """)
-        #expect(AniListClient.cast(from: response, limit: 20).map(\.name) == ["First", "Second"])
-    }
-
-    /// The query has to ask for MANGA. Without the type filter AniList matches
-    /// an anime with the same id and returns its cast.
-    @Test("The query is scoped to manga and sorted by role")
-    func querySpecifics() {
-        #expect(AniListClient.query.contains("type: MANGA"))
-        #expect(AniListClient.query.contains("sort: [ROLE, RELEVANCE]"))
-    }
-
-    // MARK: Birthday formatting
-
-    /// Before the fix (docs/reviews/third-parties.md finding 14, 2026-09-13),
-    /// the birthday was hand-joined as "\(monthName) \(day)" — always the
-    /// English "month day" order. Expected to fail before the fix with:
-    /// "4 mars" != "mars 4" — a French phone reads day-before-month.
-    @Test("A French locale orders the day before the month")
-    func frenchLocaleOrdersDayFirst() {
-        let date = AniListClient.ProfileDate(year: nil, month: 3, day: 4)
-        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "fr_FR"))
-        #expect(formatted == "4 mars")
-    }
-
-    /// Control: the same date in English keeps the "month day" order the app
-    /// has always shown, so the French case above is proving locale-awareness
-    /// was added, not that formatting broke generally.
-    @Test("An English locale keeps the month before the day")
-    func englishLocaleOrdersMonthFirst() {
-        let date = AniListClient.ProfileDate(year: nil, month: 3, day: 4)
-        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "en_US"))
-        #expect(formatted == "March 4")
-    }
-
-    /// A month with no day — a birthday AniList knows only approximately —
-    /// still has to print something, with no day number attached.
-    @Test("A month with no day prints the month alone")
-    func monthAloneWithNoDay() {
-        let date = AniListClient.ProfileDate(year: nil, month: 3, day: nil)
-        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "en_US"))
-        #expect(formatted == "March")
-    }
-
-    @Test("No month at all prints nothing")
-    func noMonthPrintsNothing() {
-        let yearOnly = AniListClient.ProfileDate(year: 1999, month: nil, day: nil)
-        #expect(AniListClient.formattedBirthday(yearOnly) == nil)
-        #expect(AniListClient.formattedBirthday(nil) == nil)
-    }
-}
-
-/// The ids come out of MangaBaka's own `source` block, where every tracker id
-/// is normalised to a string whatever shape it arrived in.
-@Suite("Tracker ids")
-struct TrackerIDTests {
-    @Test("AniList and Shikimori ids are read from the source block")
-    func readsIDs() throws {
-        let series = try Fixture.decoder().decode(Series.self, from: Data("""
-        {"id": 1, "state": "active", "cover": {},
-         "source": {"anilist": {"id": 105398}, "shikimori": {"id": 121496}}}
-        """.utf8))
-        #expect(series.aniListID == 105_398)
-        #expect(series.shikimoriID == 121_496)
-    }
-
-    /// `anime_planet` sends "solo-leveling". A non-numeric id is not an id this
-    /// can use, and must read as absent rather than crashing or coercing.
-    @Test("A non-numeric tracker id reads as absent")
-    func nonNumericID() throws {
-        let series = try Fixture.decoder().decode(Series.self, from: Data("""
-        {"id": 1, "state": "active", "cover": {},
-         "source": {"anilist": {"id": "not-a-number"}}}
-        """.utf8))
-        #expect(series.aniListID == nil)
-    }
-
-    @Test("A series with no source block has no ids")
-    func noSource() {
-        let series = SeriesFactory.make(id: 1)
-        #expect(series.aniListID == nil)
-        #expect(series.shikimoriID == nil)
+        let cast = await characterService().characters(aniListID: 1, shikimoriID: 2)
+        #expect(cast.characters.isEmpty)
+        #expect(!cast.failed)
+        #expect(cast.aniList == .answered)
+        #expect(cast.shikimori == .answered)
     }
 }

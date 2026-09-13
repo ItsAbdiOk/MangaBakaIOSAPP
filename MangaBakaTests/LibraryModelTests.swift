@@ -140,11 +140,18 @@ struct LibraryModelTests {
         #expect(model.total == 10, "The whole-library count is still the whole library")
     }
 
-    @Test("No entries reads as no account rather than an empty library")
+    /// Gap 84/85/89 (f): this test used to assert the bug — an empty result
+    /// from a real, working token read as "no account", and `.empty` was
+    /// unreachable. Inverted per the batch table: a credentialed reader with
+    /// nothing saved gets the real empty state, not "add a token".
+    /// Expected to fail before the fix with: `screenState == .noAccount`
+    /// (the assertion this replaced: `#expect(!model.hasAccount)`).
+    @Test("No entries with a credential reads as an empty library, not a missing account")
     func noAccount() async throws {
         let model = LibraryModel(library: StubLibrary(entries: []))
         await model.load()
-        #expect(!model.hasAccount)
+        #expect(model.screenState == .empty)
+        #expect(model.hasAccount)
     }
 
     @Test("A library past a thousand entries loads all of it")
@@ -172,7 +179,11 @@ struct LibraryModelTests {
         #expect(!model.isComplete)
     }
 
-    /// A library that actually pages, unlike `StubLibrary`.
+    /// A library that actually pages, unlike `StubLibrary`. Gap 83/88/117's
+    /// tests, which also need real paging, live in
+    /// `LibraryModelPagingTests.swift` alongside a fuller version of this
+    /// stub — split out purely to keep this file under SwiftLint's
+    /// `type_body_length`/`file_length`.
     private final class PagedLibrary: LibraryProviding, @unchecked Sendable {
         let total: Int
         init(total: Int) { self.total = total }
@@ -189,10 +200,12 @@ struct LibraryModelTests {
                 )
             }
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
@@ -207,10 +220,12 @@ struct LibraryModelTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             page == 1 ? entries : []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
@@ -319,10 +334,12 @@ struct LibrarySearchTests {
         let entries: [LibraryEntry]
         init(entries: [LibraryEntry]) { self.entries = entries }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? entries : [] }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
@@ -403,10 +420,12 @@ struct LibraryIndexLetterTests {
         let entries: [LibraryEntry]
         init(entries: [LibraryEntry]) { self.entries = entries }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? entries : [] }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}

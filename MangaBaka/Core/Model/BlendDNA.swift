@@ -55,6 +55,13 @@ struct BlendDNA: Equatable, Sendable {
 struct MixResult: Equatable, Sendable {
     var recommendations: [Recommendation] = []
     var dna: BlendDNA = .empty
+    /// Set when the blend request itself failed — offline, rate-limited, a
+    /// server error — as opposed to succeeding with nothing to recommend.
+    /// `SeriesRepository.mix` used to collapse both into `.empty`, so a
+    /// throttled reader was told "Nothing matched. Try loosening the
+    /// filters." for a request that never reached the server at all (gap 11,
+    /// FAILURES-SUMMARY.md).
+    var failure: APIError?
 
     static let empty = MixResult()
 }

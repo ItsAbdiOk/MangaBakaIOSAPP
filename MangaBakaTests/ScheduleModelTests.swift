@@ -16,10 +16,12 @@ struct ScheduleGroupingTests {
     }
 
     private final class SilentLibrary: LibraryProviding, @unchecked Sendable {
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
@@ -167,9 +169,11 @@ struct ScheduleGroupingTests {
         snapshot.pending = 55
         let model = try model(with: snapshot)
         model.applyForTesting(
-            ScheduleProgress(isRunning: false, done: 55, total: 55, failure: "MangaUpdates returned 503.")
+            ScheduleProgress(isRunning: false, done: 55, total: 55, failure: .server(
+                status: 503, message: "MangaUpdates returned 503.", party: .mangaUpdates
+            ))
         )
-        #expect(model.measurementFailureLine == "55 not measured. MangaUpdates returned 503.")
+        #expect(model.measurementFailureLine == "55 not measured — MangaUpdates had a problem.")
     }
 
     @Test("A finished measurement with nothing left says nothing")
@@ -209,5 +213,126 @@ struct ScheduleGroupingTests {
         snapshot.dated = [work(1, cadence(dueIn: 1)), work(2, cadence(dueIn: 2))]
         snapshot.inScope = 55
         #expect(try model(with: snapshot).scopeLine == "2 estimated of 55 in scope")
+    }
+
+    // MARK: - screenState (gap 95, 96)
+
+    /// Gap 95: a freshly constructed model — the state a cold open is in for
+    /// the instant before `.task { await model.load() }` actually starts —
+    /// used to fall straight through to `firstRunCard`: "0 estimated of 0 in
+    /// scope" and a live Measure button, over two thirds of an empty screen,
+    /// before the first read had even been attempted.
+    /// Expected to fail before the fix with: no `screenState` property
+    /// existed on `ScheduleModel` at all.
+    @Test("A model that has never loaded reads as loading, not empty")
+    func freshModelIsLoading() throws {
+        let model = ScheduleModel(service: try makeService())
+        #expect(model.screenState == .loading)
+    }
+
+    @Test("A loaded, genuinely empty scope reads as empty")
+    func loadedEmptyScopeIsEmpty() throws {
+        #expect(try model(with: ScheduleSnapshot()).screenState == .empty)
+    }
+
+    /// The plain failure case: the library could not be read and there is
+    /// nothing else — no announced content — to show instead.
+    @Test("A library failure with nothing else to show is a failure screen")
+    func libraryFailureWithNothingElseIsFailed() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.libraryFailure = .offline
+        guard case .failed(.offline) = try model(with: snapshot).screenState else {
+            Issue.record("expected .failed(.offline)")
+            return
+        }
+    }
+
+    /// Gap 96: a library measurement failing must not blank a screen that
+    /// still has real, separately-sourced announced content to show — the
+    /// StaleBar names what is missing instead of the whole screen vanishing.
+    /// Expected to fail before the fix with: `screenState == .failed`, and
+    /// `announcedStaleLine == nil` since the property did not exist —
+    /// the announced section this reader could still see was dropped along
+    /// with the estimates that failed to measure.
+    @Test("A library failure with announced content still to show renders as a list")
+    func libraryFailureWithAnnouncedContentIsList() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.libraryFailure = .offline
+        let model = try model(with: snapshot)
+        model.setAnnouncedForTesting([
+            UpcomingWork(
+                id: "w1", seriesId: 42, releaseDate: nil, sequenceString: "3",
+                sequenceNumeric: nil, pages: nil, prices: nil, identifiers: nil,
+                links: nil, collections: nil, countType: nil
+            )
+        ])
+        #expect(model.screenState == .list)
+        let stale = try #require(model.announcedStaleLine)
+        #expect(stale.headline == "Estimates couldn't be measured")
+    }
+
+    /// Gap 97: `ReleaseCalendar.mine(seriesIDs:)` collapses a failure into
+    /// the same empty list a genuinely quiet week produces —
+    /// `announcedFailure` is how `ScheduleModel` still tells them apart, and
+    /// `screenState` must not let an otherwise-empty scope hide it behind a
+    /// whole-screen `.empty`/`.failed` that says nothing about the announced
+    /// section specifically.
+    /// Expected to fail before the fix with: `screenState == .empty` and
+    /// `announcedFailure == nil` — no such property existed, and the section
+    /// simply would not have appeared with no explanation.
+    @Test("An announced-fetch failure still renders as a list, not the whole-screen empty state")
+    func announcedFailureStillRendersAsList() throws {
+        let model = try model(with: ScheduleSnapshot())
+        model.setAnnouncedForTesting([], failure: .offline)
+        #expect(model.screenState == .list)
+        #expect(model.announcedFailure == .offline)
+    }
+
+    /// The measurement failure has to survive all the way to the first-run
+    /// card, not just the scope card that only ever shows once something has
+    /// been measured before.
+    @Test("A first measurement that fails entirely says so on the first-run card's own state")
+    func firstRunMeasurementFailureIsReported() throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.inScope = 55
+        snapshot.pending = 55
+        let model = try model(with: snapshot)
+        model.applyForTesting(
+            ScheduleProgress(isRunning: false, done: 0, total: 55, failure: .offline)
+        )
+        #expect(model.hasNeverMeasured, "measuredAt is still nil — nothing ever succeeded")
+        #expect(model.measurementFailureLine == "55 not measured — You're offline.")
+    }
+}
+
+/// `AnnouncedSection` opens the series a row names (gap 101) and never opens
+/// a publisher link outside the ordinary web scheme allowlist.
+@Suite("Announced link safety")
+struct UpcomingWorkLinkTests {
+    private func work(publisherLink raw: String?) throws -> UpcomingWork {
+        let linksJSON = raw.map { #"[{"type":"publisher","link":"\#($0)"}]"# } ?? "null"
+        return try Fixture.decoder().decode(UpcomingWork.self, from: Data("""
+        {"id":"w1","links":\(linksJSON)}
+        """.utf8))
+    }
+
+    /// Gap 101: this used to be a bare `URL(string:)` with no scheme check —
+    /// the one contributed-data field on this type nothing else in the app
+    /// guarded, unlike `SeriesLink.safeURL` and `NewsItem.safeURL`.
+    /// Expected to fail before the fix with: a non-nil `URL` for
+    /// "javascript:alert(1)", since `URL(string:)` accepts it happily.
+    @Test("An unsafe scheme never becomes a publisher link")
+    func unsafeSchemeIsRejected() throws {
+        #expect(try work(publisherLink: "javascript:alert(1)").publisherLink == nil)
+    }
+
+    @Test("An ordinary web link is kept")
+    func webLinkIsKept() throws {
+        #expect(try work(publisherLink: "https://example.com/book").publisherLink != nil)
+    }
+
+    @Test("No publisher link at all is nil, not a crash")
+    func noLinkIsNil() throws {
+        #expect(try work(publisherLink: nil).publisherLink == nil)
     }
 }

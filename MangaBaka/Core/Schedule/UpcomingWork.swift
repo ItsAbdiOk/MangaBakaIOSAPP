@@ -116,9 +116,17 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     }
 
     /// Where to buy it, when the publisher gave a link.
+    ///
+    /// Gap 101: this used to hand back whatever `URL(string:)` accepted, with
+    /// no scheme check — the same contributed-data risk `SeriesLink.safeURL`
+    /// and `NewsItem.safeURL` already guard against, and the one this field
+    /// had been missing. `SafeLink.web` refuses anything that is not an
+    /// ordinary `http`/`https` link with a host, so a `javascript:` or
+    /// schemeless value some publisher entry carries cannot become a live
+    /// `Link` in `AnnouncedSection`.
     var publisherLink: URL? {
         guard let raw = links?.first(where: { $0.type == "publisher" })?.link else { return nil }
-        return URL(string: raw)
+        return SafeLink.web(URL(string: raw))
     }
 
     /// The release day as a day in the reader's own calendar: local midnight

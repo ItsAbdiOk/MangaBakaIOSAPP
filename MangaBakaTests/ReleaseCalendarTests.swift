@@ -49,7 +49,7 @@ struct ReleaseCalendarTests {
             work("b", series: 2, date: "2026-09-20")
         ])
 
-        let works = await calendar.upcoming()
+        let works = await calendar.upcoming().value ?? []
         #expect(works.map(\.id) == ["a", "b", "c", "z"])
     }
 
@@ -88,9 +88,31 @@ struct ReleaseCalendarTests {
         ))
 
         gate.failing = true
-        #expect(await calendar.upcoming().isEmpty)
+        #expect(await calendar.upcoming().value == nil)
         gate.failing = false
-        #expect(await calendar.upcoming().map(\.id) == ["a"], "The retry must reach the network")
+        #expect(await calendar.upcoming().value?.map(\.id) == ["a"], "The retry must reach the network")
+    }
+
+    /// Gap 97: `upcoming()` used to return `[UpcomingWork]`, so "MangaBaka
+    /// answered with an empty window" and "the request itself failed" were
+    /// the same `[]` to every caller — `AnnouncedSection` then read a failure
+    /// as "nothing announced" rather than showing a reason. Expected failure
+    /// before the fix: this does not compile, because `.failed`/`.error` do
+    /// not exist on `[UpcomingWork]` — `upcoming()` returned that type
+    /// directly.
+    @Test("A failed fetch is reported as a failure, not an empty window")
+    func failureCarriesTheError() async throws {
+        defer { URLProtocolStub.reset() }
+        URLProtocolStub.setHandler { _ in .fail(URLError(.networkConnectionLost)) }
+        let calendar = ReleaseCalendar(client: APIClient(
+            baseURL: URL(string: "https://api.example.invalid").unsafeTestURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        ))
+
+        let result = await calendar.upcoming()
+        #expect(result.error == .offline)
+        #expect(result.value == nil)
     }
 
     private final class FailureGate: @unchecked Sendable {
@@ -116,7 +138,7 @@ struct ReleaseCalendarTests {
         // Parsed in the device's own zone, "2026-09-15" becomes midnight local,
         // which anywhere west of UTC renders as the 14th.
         let calendar = calendar([work("a", series: 1, date: "2026-09-15")])
-        let work = try #require(await calendar.upcoming().first)
+        let work = try #require(await calendar.upcoming().value?.first)
 
         var utc = Calendar(identifier: .gregorian)
         utc.timeZone = try #require(TimeZone(secondsFromGMT: 0))
@@ -135,7 +157,7 @@ struct ReleaseCalendarTests {
          "price": [{"value": 700, "iso_code": "jpy"}]}
         """
         let calendar = calendar([json])
-        let work = try #require(await calendar.upcoming().first)
+        let work = try #require(await calendar.upcoming().value?.first)
         #expect(work.price?.contains("700") == true)
     }
 
@@ -145,7 +167,7 @@ struct ReleaseCalendarTests {
         let calendar = calendar(["""
         {"id": "a", "series_id": 1, "release_date": "2026-09-15"}
         """])
-        let work = try #require(await calendar.upcoming().first)
+        let work = try #require(await calendar.upcoming().value?.first)
         #expect(work.price == nil)
         #expect(work.isbn == nil)
     }
@@ -162,7 +184,7 @@ struct ReleaseCalendarTests {
         {"id": "a", "series_id": 1, "release_date": "2026-09-15",
          "sequence_string": "3", "count_type": "extra"}
         """])
-        let work = try #require(await calendar.upcoming().first)
+        let work = try #require(await calendar.upcoming().value?.first)
         #expect(work.volume == "Extra 3")
     }
 
@@ -170,7 +192,7 @@ struct ReleaseCalendarTests {
     func detailIsHonest() async throws {
         defer { URLProtocolStub.reset() }
         let calendar = calendar([work("a", series: 1, date: "2026-09-15")])
-        let work = try #require(await calendar.upcoming().first)
+        let work = try #require(await calendar.upcoming().value?.first)
 
         #expect(work.volume == "Vol. 11")
         #expect(work.title == "A Tale of the Secret Saint")

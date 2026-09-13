@@ -7,6 +7,9 @@ final class BrowseModel {
     private(set) var genres: [Genre] = []
     private(set) var tags: [Tag] = []
     private(set) var isLoading = false
+    /// Why the vocabulary is empty, when it is because the ask failed rather
+    /// than because there is none. Rendered by BrowseView.
+    private(set) var failure: APIError?
     /// Spoiler tags stay hidden until asked for.
     var showsSpoilers = false
 
@@ -65,7 +68,10 @@ final class BrowseModel {
         guard tags.isEmpty else { return }
         isLoading = true
         defer { isLoading = false }
-        genres = await catalogue.genres()
-        tags = await catalogue.tags(limit: 200)
+        let fetchedGenres = await catalogue.genres()
+        let fetchedTags = await catalogue.tags(limit: 200)
+        genres = fetchedGenres.value ?? []
+        tags = fetchedTags.value ?? []
+        failure = fetchedTags.error ?? fetchedGenres.error
     }
 }

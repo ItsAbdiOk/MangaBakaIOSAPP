@@ -24,7 +24,7 @@ struct CatalogueTests {
         }
         defer { URLProtocolStub.reset() }
 
-        let genres = await makeService().genres()
+        let genres = await makeService().genres().value ?? []
         #expect(genres.map(\.value) == ["action", "slice_of_life"])
         #expect(genres.first?.label == "Action")
     }
@@ -39,8 +39,8 @@ struct CatalogueTests {
         defer { URLProtocolStub.reset() }
 
         let service = makeService()
-        let first = await service.genres()
-        let second = await service.genres()
+        let first = await service.genres().value ?? []
+        let second = await service.genres().value ?? []
 
         #expect(URLProtocolStub.requests.count == 1)
         // One request is only a saving if the second answer is the first one.
@@ -68,7 +68,7 @@ struct CatalogueTests {
         URLProtocolStub.setHandler { [tagPayload] _ in .respond(.init(body: tagPayload)) }
         defer { URLProtocolStub.reset() }
 
-        let tags = await makeService().tags()
+        let tags = await makeService().tags().value ?? []
 
         let root = tags.first { $0.id == 537 }
         #expect(root?.isRoot == true)
@@ -85,7 +85,7 @@ struct CatalogueTests {
         URLProtocolStub.setHandler { [tagPayload] _ in .respond(.init(body: tagPayload)) }
         defer { URLProtocolStub.reset() }
 
-        let tags = await makeService().tags()
+        let tags = await makeService().tags().value ?? []
         #expect(!tags.contains { $0.id == 539 })
         #expect(tags.count == 2)
     }
@@ -97,7 +97,7 @@ struct CatalogueTests {
         URLProtocolStub.setHandler { [tagPayload] _ in .respond(.init(body: tagPayload)) }
         defer { URLProtocolStub.reset() }
 
-        let tags = await makeService().tags()
+        let tags = await makeService().tags().value ?? []
         #expect(tags.map(\.seriesCount) == [9000, 120])
     }
 
@@ -225,37 +225,40 @@ struct CatalogueTests {
         URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
         defer { URLProtocolStub.reset() }
 
-        #expect(await makeService().genres().isEmpty)
-        #expect(await makeService().tags().isEmpty)
+        #expect((await makeService().genres().value ?? []).isEmpty)
+        #expect((await makeService().tags().value ?? []).isEmpty)
     }
 
-    /// W12: `genres()`/`tags()` still answer `[]` on failure — every existing
-    /// caller is unaffected — but a caller that cares can now tell "nothing
-    /// there" from "the network failed" through this additive flag.
-    @Test("A failed genres/tags fetch is flagged, not just silently empty")
-    func fetchFailureIsFlagged() async {
+    /// Gap 39/40/41/42 (FAILURES-SUMMARY.md §6, Batch 1): `genres()`/`tags()`
+    /// used to answer `[]` on failure with a same-shaped `[]` for "nothing
+    /// there", and a `genresFetchFailed`/`tagsFetchFailed` flag nothing read.
+    /// `Fetched<[Genre]>`/`Fetched<[Tag]>` carry the distinction directly.
+    /// Expected to fail without the fix: `genres()`/`tags()` returned a bare
+    /// array with no `.failure` to read.
+    @Test("A failed genres/tags fetch carries the error, not just an empty array")
+    func fetchFailureIsCarried() async {
         URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
         defer { URLProtocolStub.reset() }
 
         let service = makeService()
-        #expect(await service.genres().isEmpty)
-        #expect(await service.genresFetchFailed == true)
-        #expect(await service.tags().isEmpty)
-        #expect(await service.tagsFetchFailed == true)
+        let genres = await service.genres()
+        #expect(genres.value == nil)
+        #expect(genres.error == .offline)
+        let tags = await service.tags()
+        #expect(tags.value == nil)
+        #expect(tags.error == .offline)
     }
 
-    @Test("A successful genres/tags fetch clears the failure flag")
-    func fetchSuccessClearsFlag() async {
+    @Test("A successful genres/tags fetch reports no failure")
+    func fetchSuccessHasNoFailure() async {
         URLProtocolStub.setHandler { _ in
             .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
         }
         defer { URLProtocolStub.reset() }
 
         let service = makeService()
-        _ = await service.genres()
-        #expect(await service.genresFetchFailed == false)
-        _ = await service.tags()
-        #expect(await service.tagsFetchFailed == false)
+        #expect(await service.genres().error == nil)
+        #expect(await service.tags().error == nil)
     }
 
     /// A failed search is nil, not empty: the screen says so instead of
@@ -278,12 +281,12 @@ struct CatalogueTests {
 
         let service = makeService()
         queue.fail = true
-        #expect(await service.genres().isEmpty)
-        #expect(await service.tags().isEmpty)
+        #expect((await service.genres().value ?? []).isEmpty)
+        #expect((await service.tags().value ?? []).isEmpty)
 
         queue.fail = false
-        #expect(await service.genres().count == 1, "The retry must reach the network")
-        #expect(await service.tags().count == 1)
+        #expect(await service.genres().value?.count == 1, "The retry must reach the network")
+        #expect(await service.tags().value?.count == 1)
     }
 
     /// `TagTaxonomy.bundled()` answers `[]` both when the packaged resource

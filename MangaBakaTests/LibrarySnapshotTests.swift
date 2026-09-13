@@ -116,10 +116,12 @@ struct LibrarySnapshotTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             (try? await libraryPage(page: page, limit: limit)) ?? []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
@@ -222,6 +224,58 @@ struct LibraryDiskCacheTests {
         #expect(library.calls > afterFirst, "the next launch must not read the old copy")
     }
 
+    /// Gap 116: a row that stopped decoding — an app downgrade, a dropped
+    /// format — was silently left out of `readCache`'s result, and the walk
+    /// that wrote 939 rows read back as a complete 938 forever, with nothing
+    /// ever re-fetching the missing one.
+    /// Expected to fail before the fix with: `library.calls == 0` — the
+    /// stale, short cache satisfied `all()` without a network call at all.
+    @Test("A cache short of what was written is not trusted, and is refetched")
+    func shortCacheIsRefetched() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestClock()
+        let library = Recording(entries: entries(3))
+
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+
+        // Corrupt one row directly, the way an app downgrade or a dropped
+        // decodable field would: valid JSON, but not a `LibraryEntry` anymore.
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE libraryEntry SET payload = ? WHERE seriesId = 1", arguments: [
+                Data(#"{"not":"an entry"}"#.utf8)
+            ])
+        }
+
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        #expect(library.calls > 0, "a short cache must not be handed back as though it were whole")
+    }
+
+    /// Gap 88/j (decision 5): patches one row in the shared, on-disk cache
+    /// without a network call — the mechanism `LibraryModel.apply(_:to:)`
+    /// relies on to avoid a full re-walk for a single write.
+    @Test("apply(seriesId:change:) patches the cached row in memory and on disk")
+    func applyPatchesCacheInPlace() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestClock()
+        let library = Recording(entries: entries(3))
+        let snapshot = LibrarySnapshot(library: library, database: database, clock: clock)
+        _ = await snapshot.all()
+        let callsBeforePatch = library.calls
+
+        var change = LibraryChange()
+        change.state = .completed
+        await snapshot.apply(seriesId: 1, change: change)
+
+        #expect(library.calls == callsBeforePatch, "patching must not touch the network")
+        let patched = await snapshot.all().first { $0.seriesId == 1 }
+        #expect(patched?.state == .completed)
+
+        // The disk copy has to carry it too, or the next launch reads the
+        // pre-patch row back.
+        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        #expect(reread.first { $0.seriesId == 1 }?.state == .completed)
+    }
+
     @Test("A failed walk is never written")
     func failuresAreNotCached() async throws {
         // Otherwise one bad connection freezes an empty library onto the device
@@ -271,10 +325,12 @@ struct LibraryDiskCacheTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             (try? await libraryPage(page: page, limit: limit)) ?? []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
@@ -356,10 +412,12 @@ struct LibraryDerivedStateTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             (try? await libraryPage(page: page, limit: limit)) ?? []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}

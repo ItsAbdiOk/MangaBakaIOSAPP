@@ -12,10 +12,12 @@ struct StackSaveWritesThroughTests {
         private(set) var added: [(id: Int, state: LibraryEntry.State)] = []
         var failsToAdd = false
 
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func library(page: Int, limit: Int) async -> [LibraryEntry] { [] }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
@@ -81,7 +83,7 @@ struct StackSaveWritesThroughTests {
         await model.react(.saved)
 
         #expect(model.saveWarning != nil)
-        #expect(try await shelf.entries(.saved).map(\.id) == [1], "the local save survives")
+        #expect(try await shelf.entries(.saved).series.map(\.id) == [1], "the local save survives")
         #expect(model.saveConfirmation == "Saved here", "and the toast does not claim more")
     }
 

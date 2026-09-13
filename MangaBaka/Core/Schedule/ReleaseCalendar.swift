@@ -25,30 +25,50 @@ actor ReleaseCalendar {
     private static let perPage = 50
 
     private var cached: [UpcomingWork]?
+    private var cachedAt: Date?
+    private let clock: any Clock
 
-    init(client: APIClient) {
+    /// The most recent `upcoming()` failure, or nil once an ask succeeds.
+    /// `mine(seriesIDs:)` stays `[UpcomingWork]` — batch 2's `AnnouncedSection`
+    /// needs no shape change to keep compiling — so this is how a caller of
+    /// `mine` still reaches the reason after an empty result: read this
+    /// right after awaiting `mine`, on the same actor hop.
+    private(set) var lastFailure: APIError?
+
+    init(client: APIClient, clock: any Clock = SystemClock()) {
         self.client = client
+        self.clock = clock
     }
 
     /// Everything announced in the API's own window, oldest date first.
-    func upcoming() async -> [UpcomingWork] {
-        if let cached { return cached }
+    ///
+    /// Returns `Fetched` rather than a bare array (gap 97) so a caller —
+    /// `AnnouncedSection`/`ScheduleModel`, batch 5 — can tell "asked and
+    /// MangaBaka had nothing announced" from "asked and failed", the same
+    /// distinction the rest of this failure review draws everywhere else.
+    /// Before this, a failed page returned `[]` indistinguishably from a
+    /// quiet week, and `AnnouncedSection` read that as "nothing announced"
+    /// (gap 97's other half).
+    func upcoming() async -> Fetched<[UpcomingWork]> {
+        if let cached, let cachedAt {
+            return .loaded(cached, fetchedAt: cachedAt, isPartial: false)
+        }
 
         var all: [UpcomingWork] = []
-        var complete = true
+        var failure: APIError?
         for page in 1...Self.pages {
             let query = [
                 URLQueryItem(name: "limit", value: String(Self.perPage)),
                 URLQueryItem(name: "page", value: String(page))
             ]
-            guard let batch: [UpcomingWork] = try? await client.get(
-                "/v1/works/upcoming", query: query
-            ) else {
-                complete = false
+            do {
+                let batch: [UpcomingWork] = try await client.get("/v1/works/upcoming", query: query)
+                all.append(contentsOf: batch)
+                if batch.count < Self.perPage { break }
+            } catch {
+                failure = error
                 break
             }
-            all.append(contentsOf: batch)
-            if batch.count < Self.perPage { break }
         }
 
         // Dated first, in date order. A work with no date is not upcoming in
@@ -62,18 +82,30 @@ actor ReleaseCalendar {
             default: (left.title ?? "") < (right.title ?? "")
             }
         }
-        // Only a complete answer is kept. A failed page used to cache whatever
-        // had arrived — an empty calendar, if it was the first — for the whole
-        // process, and the Schedule screen showed no announced dates until
-        // relaunch. Now the next ask tries again.
-        if complete { cached = sorted }
-        return sorted
+
+        if let failure {
+            // Only a complete answer is ever cached — a failed page used to
+            // cache whatever had arrived (an empty calendar, if it was the
+            // first page) for the whole process, and the Schedule screen
+            // showed no announced dates until relaunch. `stale: nil` here:
+            // there is nothing earlier cached either, since `cached` is only
+            // ever set on a full success below — a genuinely stale value to
+            // fall back on would need a longer-lived cache than this actor
+            // keeps, which nothing has asked for yet.
+            lastFailure = failure
+            return .failed(failure, stale: nil)
+        }
+        lastFailure = nil
+        let fetchedAt = clock.now
+        cached = sorted
+        cachedAt = fetchedAt
+        return .loaded(sorted, fetchedAt: fetchedAt, isPartial: false)
     }
 
     /// Only the works for series the reader has in their library.
     func mine(seriesIDs: Set<Int>) async -> [UpcomingWork] {
         guard !seriesIDs.isEmpty else { return [] }
-        return await upcoming().filter { work in
+        return (await upcoming().value ?? []).filter { work in
             guard let id = work.seriesId else { return false }
             return seriesIDs.contains(id)
         }

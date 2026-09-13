@@ -152,22 +152,25 @@ actor ShikimoriClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
         } catch {
-            throw APIError.transport(underlying: String(describing: error))
+            throw APIError.transport(underlying: String(describing: error), party: .shikimori)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.")
+            throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.", party: .shikimori)
         }
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
-            throw APIError.rateLimited(retryAfter: retryAfter)
+            throw APIError.rateLimited(retryAfter: retryAfter, party: .shikimori)
         }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError.server(
                 status: http.statusCode,
-                message: "Shikimori returned \(http.statusCode)."
+                message: "Shikimori returned \(http.statusCode).",
+                party: .shikimori
             )
         }
 
@@ -175,7 +178,7 @@ actor ShikimoriClient {
             let rows = try JSONDecoder().decode([ShikimoriRole].self, from: data)
             return ShikimoriCast.cast(from: rows, baseURL: baseURL, limit: limit)
         } catch {
-            throw APIError.decoding(underlying: String(describing: error))
+            throw APIError.decoding(underlying: String(describing: error), party: .shikimori)
         }
     }
 
@@ -185,7 +188,9 @@ actor ShikimoriClient {
         do {
             try await Task.sleep(for: .seconds(wait))
         } catch {
-            throw APIError.transport(underlying: "Cancelled while waiting for a request slot.")
+            // `Task.sleep` only throws `CancellationError` — see the matching
+            // comment on `AniListClient.waitForSlot` (gap 26).
+            throw APIError.cancelled
         }
     }
 }
@@ -252,31 +257,37 @@ extension ShikimoriClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
         } catch {
-            throw APIError.transport(underlying: String(describing: error))
+            throw APIError.transport(underlying: String(describing: error), party: .shikimori)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.")
+            throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.", party: .shikimori)
         }
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
-            throw APIError.rateLimited(retryAfter: retryAfter)
+            throw APIError.rateLimited(retryAfter: retryAfter, party: .shikimori)
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw APIError.server(status: http.statusCode, message: "Shikimori returned \(http.statusCode).")
+            throw APIError.server(
+                status: http.statusCode, message: "Shikimori returned \(http.statusCode).", party: .shikimori
+            )
         }
 
         let decoded: Profile
         do {
             decoded = try JSONDecoder().decode(Profile.self, from: data)
         } catch {
-            throw APIError.decoding(underlying: String(describing: error))
+            throw APIError.decoding(underlying: String(describing: error), party: .shikimori)
         }
 
         guard let profile = Self.profile(from: decoded, baseURL: baseURL) else {
-            throw APIError.decoding(underlying: "Shikimori sent a character with no id or name.")
+            throw APIError.decoding(
+                underlying: "Shikimori sent a character with no id or name.", party: .shikimori
+            )
         }
         return profile
     }

@@ -280,7 +280,9 @@ struct SeriesDetailView: View {
         similar = await similarResult.series
         alsoLike = await alsoResult.series
         extras = await extrasResult
-        covers = await imagesResult
+        // nil is "asked and failed"; batch 2 gives it a branch. Until then
+        // the gallery treats a failure like an empty answer.
+        covers = await imagesResult ?? []
         isLoading = false
     }
 
@@ -348,7 +350,7 @@ struct SeriesDetailView: View {
         cast = await characters.characters(
             aniListID: shown.aniListID,
             shikimoriID: shown.shikimoriID
-        )
+        ).characters
     }
 
     /// Asked separately from everything else, and after it.

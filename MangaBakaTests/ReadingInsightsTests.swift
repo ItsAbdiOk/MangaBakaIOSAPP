@@ -186,6 +186,34 @@ struct ReadingInsightsTests {
         #expect(novel > manhwa * 2, "a prose chapter is a different sitting entirely")
     }
 
+    // MARK: - Whether there is anything to say
+
+    /// Gap 93: the screen used to show its full layout — "0 chapters" and
+    /// three empty sections — for an account with nothing read yet. This is
+    /// the pure rule `ReadingInsightsView` now checks before drawing content
+    /// at all.
+    /// Expected to fail before the fix with: no such function existed on
+    /// `ReadingInsights`.
+    @Test("An empty library has nothing to say")
+    func emptyLibraryHasNothingToSay() {
+        #expect(!ReadingInsights.hasAnythingToSay([]))
+    }
+
+    @Test("A library with actual reading has something to say")
+    func libraryWithProgressHasSomethingToSay() {
+        let rows = [entry(1, .reading, read: 10, total: 200)]
+        #expect(ReadingInsights.hasAnythingToSay(rows))
+    }
+
+    /// A library that exists but has nothing measurable yet — no chapters
+    /// read, nothing waited on, no pattern in the tags — still has nothing
+    /// to say, even though it is not literally empty.
+    @Test("A library with only unstarted plans has nothing to say either")
+    func unstartedLibraryHasNothingToSay() {
+        let rows = (1...5).map { entry($0, .planToRead, total: 100) }
+        #expect(!ReadingInsights.hasAnythingToSay(rows))
+    }
+
     // MARK: - Verdicts
 
     @Test("What you finish and what you abandon, by tag")

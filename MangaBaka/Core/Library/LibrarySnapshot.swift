@@ -152,6 +152,13 @@ actor LibrarySnapshot {
                 try? decoder.decode(LibraryEntry.self, from: $0.payload)
             }
             guard !entries.isEmpty else { return nil }
+            // Gap 116: a row that no longer decodes — an app downgrade, a
+            // format this build dropped — was silently left out, and the
+            // walk that wrote 939 rows quietly read back as complete with
+            // 938. Falling through to the network here means one bad row
+            // costs a re-fetch rather than a permanently shrunk library that
+            // never shows as anything but whole.
+            guard entries.count == rows.count else { return nil }
             return Result(entries: entries, isComplete: meta.isComplete, failure: nil)
         }
     }
@@ -179,6 +186,41 @@ actor LibrarySnapshot {
             try LibraryMetadata(
                 cachedAt: clock.now, isComplete: result.isComplete
             ).save(db)
+        }
+    }
+
+    /// Patches one entry in the shared snapshot, in memory and on disk,
+    /// without a network call.
+    ///
+    /// Gap 88/j (decision 5): a write used to invalidate the whole snapshot
+    /// and re-walk the library — 13 requests, 24.7 MB on a real account — to
+    /// reflect one changed row. This updates the cached copy directly, so a
+    /// caller that already knows what the server now holds (because it just
+    /// wrote it) can show that immediately.
+    ///
+    /// A no-op when the entry is not in the cached snapshot yet — nothing has
+    /// been walked this session, or the row is new. The caller falls back to
+    /// `invalidate()` and a real reload in that case; there is no local row
+    /// here to patch.
+    func apply(seriesId: Int, change: LibraryChange) {
+        guard var result = cached,
+              let index = result.entries.firstIndex(where: { $0.seriesId == seriesId })
+        else { return }
+        let patched = result.entries[index].applying(change)
+        result.entries[index] = patched
+        cached = result
+        writeSingleEntry(patched)
+    }
+
+    /// Rewrites one row of the disk cache, leaving the rest and the metadata
+    /// untouched. `writeCache` replaces the whole table and is for a fresh
+    /// walk; a single patched entry does not need — and must not pay for —
+    /// re-encoding the other 938.
+    private func writeSingleEntry(_ entry: LibraryEntry) {
+        guard let database else { return }
+        guard let payload = try? JSONEncoder().encode(entry) else { return }
+        try? database.writer.write { db in
+            try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).save(db)
         }
     }
 

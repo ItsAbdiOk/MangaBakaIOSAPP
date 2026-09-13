@@ -228,7 +228,7 @@ struct ContentFilterCacheTests {
 
         await repository.updateContentRatings(["safe"])
 
-        let saved = try await shelf.entries(.saved)
+        let saved = try await shelf.entries(.saved).series
         #expect(saved.map(\.id) == [42], "A save is not derived data and must survive")
     }
 }

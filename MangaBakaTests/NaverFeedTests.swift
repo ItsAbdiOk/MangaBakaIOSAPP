@@ -114,9 +114,9 @@ struct NaverFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 1, title: "Tower of God")
 
-        let feed = await client.feed(for: series, links: [link])
-        #expect(feed?.source == .naverWebtoon)
-        #expect(feed?.totalCount == 653)
+        let answerResult = await client.feed(for: series, links: [link])
+        #expect(answerResult.feed?.source == .naverWebtoon)
+        #expect(answerResult.feed?.totalCount == 653)
         let url = URLProtocolStub.requests.first?.url?.absoluteString ?? ""
         #expect(url.contains("titleId=183559"))
     }
@@ -128,8 +128,8 @@ struct NaverFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 1, title: "Solo Leveling")
 
-        let feed = await client.feed(for: series, links: [])
-        #expect(feed == nil)
+        let answerResult = await client.feed(for: series, links: [])
+        #expect(answerResult == .notCarried)
         #expect(URLProtocolStub.requests.isEmpty)
     }
 
@@ -149,8 +149,12 @@ struct NaverFeedClientTests {
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 1, title: "Tower of God")
 
-        let feed = await client.feed(for: series, links: [link])
-        #expect(feed == nil)
+        let answerResult = await client.feed(for: series, links: [link])
+        guard case let .failed(error) = answerResult else {
+            Issue.record("expected .failed, got \(answerResult)")
+            return
+        }
+        #expect(error == .rateLimited(until: nil, party: .naver))
         #expect(URLProtocolStub.requests.count == 1)
     }
 

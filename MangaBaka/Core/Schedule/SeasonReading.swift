@@ -90,7 +90,7 @@ enum SeasonReading {
     static func describe(_ samples: [Sample]) -> String? {
         guard let newest = samples.max(by: { $0.date < $1.date }) else { return nil }
         let chapter = newest.chapter.rounded() == newest.chapter
-            ? String(Int(newest.chapter))
+            ? String(Int(wholeOrClamped: newest.chapter))
             : String(newest.chapter)
         guard currentSeason(samples) != nil else { return "Chapter \(chapter)" }
         return "Season \(newest.volume) · chapter \(chapter)"

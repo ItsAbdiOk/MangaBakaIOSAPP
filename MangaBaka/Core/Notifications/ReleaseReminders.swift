@@ -24,6 +24,14 @@ final class ReleaseReminders {
     /// What iOS says, which the reader can change in Settings behind our back.
     private(set) var systemStatus: UNAuthorizationStatus = .notDetermined
 
+    /// Gap 102: `isEnabled` alone reflects only what the reader asked this
+    /// app for, not what iOS is actually willing to deliver — a reader who
+    /// denies the system permission (or revokes it later in Settings) still
+    /// saw the in-app switch reading On, with nothing scheduled and no way to
+    /// tell why from the toggle itself. The view side of this (dimming the
+    /// switch and offering Open Settings) is `RemindersSection`, batch 6.
+    var effectiveEnabled: Bool { isEnabled && systemStatus != .denied }
+
     private static let key = "reminders.enabled"
     /// iOS keeps at most 64 pending local notifications per app and silently
     /// drops the rest, so the cap is picked rather than discovered: the nearest
@@ -106,19 +114,30 @@ final class ReleaseReminders {
     /// accumulates notifications for things that are no longer true, and there
     /// is no way for the reader to tell which is which.
     ///
-    /// - Parameter libraryFailure: why the library could not be read this
-    ///   time, if it could not. Nothing is replaced then: a reminder set from
-    ///   the library as it was yesterday is still right, and coming back to
-    ///   the app offline used to wipe every one of them.
+    /// - Parameters:
+    ///   - libraryFailure: why the library could not be read this time, if it
+    ///     could not. Nothing is replaced then: a reminder set from the
+    ///     library as it was yesterday is still right, and coming back to the
+    ///     app offline used to wipe every one of them.
+    ///   - isComplete: whether the walk that produced `library` actually
+    ///     finished. Gap 103: a walk that stopped at the page cap (or was cut
+    ///     off some other way short of a hard failure) is not `libraryFailure`
+    ///     — it succeeded, as far as this call knows — but it is still a
+    ///     partial answer, and re-deriving reminders from it used to drop
+    ///     every series past whatever page the walk reached, silently, on the
+    ///     next reschedule. Treated the same as a failure for this call: keep
+    ///     yesterday's reminders rather than removing ones for series this
+    ///     walk simply never got to.
     func reschedule(
         announced: [UpcomingWork],
         predicted: [ScheduledWork],
         library: [LibraryEntry] = [],
-        libraryFailure: APIError? = nil
+        libraryFailure: APIError? = nil,
+        isComplete: Bool = true
     ) async {
-        guard libraryFailure == nil else { return }
+        guard libraryFailure == nil, isComplete else { return }
         await centre.removeAll()
-        guard isEnabled else { return }
+        guard effectiveEnabled else { return }
 
         var requests: [ReminderRequest] = []
 

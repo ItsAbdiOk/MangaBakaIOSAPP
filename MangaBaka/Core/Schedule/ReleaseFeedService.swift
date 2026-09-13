@@ -13,8 +13,17 @@ struct ReleaseReport: Equatable, Sendable {
     let sourceName: String?
     /// The original vs. the translation the reader is following.
     let gap: TranslationGap
+    /// Which providers were carrying a link for this series and asked, but
+    /// failed (gap 19) — as opposed to a provider with nothing to say
+    /// (`.notCarried`) or one that answered but had nothing (`.answered(nil)`,
+    /// e.g. a series not in this issue of a magazine). `ReleaseSection`
+    /// (batch 2) reads this to show `InlineFailure` instead of silently
+    /// having no release row for a series that clearly has a Webtoons link.
+    let failedSources: [ReleaseSource]
 
-    static let empty = ReleaseReport(summary: .none, source: nil, sourceName: nil, gap: .none)
+    static let empty = ReleaseReport(
+        summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: []
+    )
 }
 
 /// Turns whatever a series' release providers answer into one report.
@@ -37,17 +46,22 @@ struct ReleaseFeedService: Sendable {
         // as results arrive: a `TaskGroup` yields results in completion
         // order, not submission order, and `providers`' order is the
         // preference `primary` below depends on.
-        let indexed = await withTaskGroup(of: (Int, ReleaseFeed?).self) { group in
+        let indexed = await withTaskGroup(of: (Int, FeedAnswer).self) { group in
             for (index, provider) in providers.enumerated() {
                 group.addTask { (index, await provider.feed(for: series, links: links)) }
             }
-            var slots = [ReleaseFeed?](repeating: nil, count: providers.count)
-            for await (index, feed) in group {
-                slots[index] = feed
+            var slots = [FeedAnswer](repeating: .notCarried, count: providers.count)
+            for await (index, answer) in group {
+                slots[index] = answer
             }
             return slots
         }
-        let feeds = indexed.compactMap { $0 }
+        let answers = zip(providers.map(\.source), indexed)
+        let failedSources: [ReleaseSource] = answers.compactMap { source, answer in
+            if case .failed = answer { return source }
+            return nil
+        }
+        let feeds = indexed.compactMap(\.feed)
 
         let naver = feeds.first { $0.source == .naverWebtoon }
         // The reader's own edition: the first non-Naver feed to answer, in
@@ -56,14 +70,23 @@ struct ReleaseFeedService: Sendable {
 
         // A Korean-only reader: nothing translated exists, but Naver answered,
         // so the summary is Naver's own feed rather than staying empty.
-        guard let edition = primary ?? naver else { return .empty }
+        guard let edition = primary ?? naver else {
+            return ReleaseReport(
+                summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: failedSources
+            )
+        }
 
         let summary = ReleaseSummary.summarise(edition, knownChapterCount: series.totalChapters)
-        guard !summary.isEmpty else { return .empty }
+        guard !summary.isEmpty else {
+            return ReleaseReport(
+                summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: failedSources
+            )
+        }
 
         let gap = Self.gap(primary: primary, naver: naver, now: now)
         return ReleaseReport(
-            summary: summary, source: edition.source, sourceName: edition.sourceName, gap: gap
+            summary: summary, source: edition.source, sourceName: edition.sourceName, gap: gap,
+            failedSources: failedSources
         )
     }
 

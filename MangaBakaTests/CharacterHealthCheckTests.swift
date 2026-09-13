@@ -93,7 +93,7 @@ struct CharacterHealthCheckTests {
         #expect(counter.calls == 1, "The health check itself is one request")
 
         let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(cast.map(\.name) == ["Fallback"])
+        #expect(cast.characters.map(\.name) == ["Fallback"])
         #expect(counter.calls == 1, "The primed outage means the cast request never touches AniList again")
     }
 
@@ -111,7 +111,10 @@ struct CharacterHealthCheckTests {
         let subject = service()
         await subject.primeAniListHealth()
         let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
-        #expect(cast.map(\.name) == ["Jin-woo Sung"])
+        // Both sources are asked concurrently now (the union feature,
+        // 2026-09-13); Shikimori's non-matching "Wrong source" is still
+        // appended after AniList's own cast.
+        #expect(cast.characters.map(\.name) == ["Jin-woo Sung", "Wrong source"])
     }
 
     /// Same rule the ordinary cast fetch already follows: a transport
@@ -135,7 +138,7 @@ struct CharacterHealthCheckTests {
         await subject.primeAniListHealth()
         let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
         #expect(
-            cast.map(\.name) == ["Preferred"],
+            cast.characters.map(\.name) == ["Preferred"],
             "AniList must still be asked after a transport failure at launch"
         )
     }

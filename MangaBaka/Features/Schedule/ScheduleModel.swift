@@ -23,6 +23,47 @@ final class ScheduleModel {
     private(set) var snapshot = ScheduleSnapshot()
     private(set) var progress = ScheduleProgress()
     private(set) var isLoading = false
+    /// Set once the first `load()` has actually returned. Gap 95: `isLoading`
+    /// alone is false before `load()` is ever called (a freshly constructed
+    /// model, or the instant before `.task { await model.load() }` starts on
+    /// the main actor), and in that window the screen fell straight through
+    /// to `firstRunCard` — "0 ESTIMATED OF 0 IN SCOPE" and a live Measure
+    /// button, on every cold open, before anything had actually been asked.
+    private(set) var hasLoadedOnce = false
+
+    /// What the screen shows, decided in one place — `ScheduleView` switches
+    /// on this rather than reasoning about `isLoading`/`libraryFailure`/
+    /// `isEmpty` itself.
+    enum ScreenState: Equatable {
+        case loading
+        /// Nothing to show at all: the library could not be read and there
+        /// is no announced content to fall back on either. When announced
+        /// works still exist despite `snapshot.libraryFailure`, this screen
+        /// renders as `.list` instead — see `hasAnyContent` and gap 96.
+        case failed(APIError)
+        case empty
+        case list
+    }
+
+    /// Announced dates or estimated works, either one. Decision (gap 96):
+    /// `snapshot.libraryFailure` on its own used to blank the whole screen
+    /// even when the announced section — built from a different read — had
+    /// real content, silently dropping estimates a reader could still see
+    /// were missing if the section above them were allowed to render.
+    private var hasAnyContent: Bool { !announced.isEmpty || !snapshot.isEmpty }
+
+    var screenState: ScreenState {
+        guard hasLoadedOnce else { return .loading }
+        // An announced-fetch failure (gap 97) always renders as `.list`, even
+        // over an otherwise-empty scope, so `AnnouncedSection` gets the
+        // chance to show its own inline failure rather than the whole screen
+        // silently reading as "nothing to predict yet" or a blocking
+        // failure that never names what actually failed.
+        guard announcedFailure == nil else { return .list }
+        if let libraryFailure = snapshot.libraryFailure, !hasAnyContent { return .failed(libraryFailure) }
+        if !hasAnyContent { return .empty }
+        return .list
+    }
 
     /// Volumes with dates their publishers have announced, for series the
     /// reader actually has.
@@ -30,6 +71,24 @@ final class ScheduleModel {
     /// The rest of this screen is inference. These are facts, and where a fact
     /// exists the inference gets out of the way — see `groups`.
     private(set) var announced: [UpcomingWork] = []
+    /// The reader's own library, keyed by series id, so an announced row can
+    /// open the actual series (gap 101) — `UpcomingWork` carries only an id,
+    /// not the `Series` a detail page needs, and this is the library walk
+    /// that already ran to narrow `announced` down to the reader's own ids in
+    /// the first place, not a second fetch.
+    private(set) var seriesByID: [Int: Series] = [:]
+    /// Why fetching announced dates failed, when it did. Gap 97:
+    /// `calendar.mine(seriesIDs:)` collapses a failure into the same empty
+    /// list a genuinely quiet week produces, so a reader offline saw
+    /// "nothing announced" — indistinguishable from the truth. Batch 3's
+    /// `ReleaseCalendar.lastFailure` is read on the same actor hop right
+    /// after `mine` returns, per that property's own doc comment.
+    private(set) var announcedFailure: APIError?
+
+    /// The series an announced row names, when it decoded with the library
+    /// walk. Nil for an id `UpcomingWork` carries that this session's copy of
+    /// the library does not have a `Series` for.
+    func series(for seriesId: Int) -> Series? { seriesByID[seriesId] }
 
     private let service: ReleaseScheduleService
     private let calendar: ReleaseCalendar?
@@ -107,7 +166,9 @@ final class ScheduleModel {
         guard !isMeasuring, !isLoading, snapshot.pending > 0, let failure = progress.failure else {
             return nil
         }
-        return "\(snapshot.pending) not measured. \(failure)"
+        // The headline, not the full message: this is one line under a
+        // card, and "MangaUpdates had a problem" says who and enough.
+        return "\(snapshot.pending) not measured — \(failure.headline)."
     }
 
     /// Nothing has ever been measured, and nothing is being measured now.
@@ -237,6 +298,16 @@ final class ScheduleModel {
         // at whatever count it had when the reader left.
         if progress.isRunning { followBuild() }
         await loadAnnounced()
+        hasLoadedOnce = true
+    }
+
+    /// Shown under the announced section when the library measurement failed
+    /// but there is still announced content to show above it (gap 96) — the
+    /// StaleBar names what is missing rather than the screen silently
+    /// dropping the estimates section with no explanation.
+    var announcedStaleLine: (headline: String, detail: String)? {
+        guard let libraryFailure = snapshot.libraryFailure, !announced.isEmpty else { return nil }
+        return ("Estimates couldn't be measured", libraryFailure.userFacingMessage)
     }
 
     /// Whether the screen is following a build. For the test that pins the
@@ -252,7 +323,20 @@ final class ScheduleModel {
     /// release calendar under the heading "yours".
     private func loadAnnounced() async {
         guard let calendar, let librarySnapshot else { return }
-        announced = await calendar.mine(seriesIDs: await librarySnapshot.seriesIDs())
+        let entries = await librarySnapshot.all()
+        seriesByID = Dictionary(
+            uniqueKeysWithValues: entries.compactMap { entry in entry.series.map { (entry.seriesId, $0) } }
+        )
+        announced = await calendar.mine(seriesIDs: Set(entries.map(\.seriesId)))
+        announcedFailure = await calendar.lastFailure
+    }
+
+    /// Retries just the announced half, for `AnnouncedSection`'s own inline
+    /// failure (gap 97) — a reader offline for the estimates but back online
+    /// for the announced dates should not have to re-run the whole
+    /// `load()` (which also re-reads `service.snapshot()`) to try again.
+    func retryAnnounced() async {
+        await loadAnnounced()
     }
 
     /// Starts a measurement and follows it.
@@ -286,13 +370,27 @@ final class ScheduleModel {
 
     /// Injects a snapshot so grouping can be tested without a network or a
     /// database. Grouping is the part with judgement in it.
+    ///
+    /// Also marks the model as having loaded once — every existing caller of
+    /// this is simulating "the read already happened", and `screenState`
+    /// treating an injected snapshot as still `.loading` would make gap 95's
+    /// own tests unable to reach the states they are checking.
     func applyForTesting(_ snapshot: ScheduleSnapshot) {
         self.snapshot = snapshot
         isLoading = false
+        hasLoadedOnce = true
     }
 
     func applyForTesting(_ progress: ScheduleProgress) {
         self.progress = progress
+    }
+
+    /// Injects announced works (and, optionally, an announced-fetch failure)
+    /// directly, so gaps 96 and 97 can be tested without a real
+    /// `ReleaseCalendar`/`LibrarySnapshot`.
+    func setAnnouncedForTesting(_ works: [UpcomingWork], failure: APIError? = nil) {
+        announced = works
+        announcedFailure = failure
     }
 
     func stop() {

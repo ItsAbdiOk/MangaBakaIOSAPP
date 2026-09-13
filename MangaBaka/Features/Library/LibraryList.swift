@@ -11,6 +11,7 @@ struct LibraryList: View {
     @Bindable var model: LibraryModel
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
     /// Opens the edit sheet for one row. The redesign that replaced shelf
     /// cards with this list dropped the per-row edit, and the only copy
     /// survived on a screen nothing presents; marking a chapter read from
@@ -20,6 +21,23 @@ struct LibraryList: View {
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             header
+            // Gap 91: a search or filter matching nothing used to render this
+            // header over a blank list — indistinguishable from the list
+            // still loading, or from a state genuinely holding zero entries.
+            // It is a real answer ("nothing matches"), not either of those.
+            if model.listed.isEmpty && model.isFiltering {
+                EmptyState(
+                    title: "Nothing matches",
+                    message: "No series in your library match this search or filter.",
+                    actionTitle: "Clear search",
+                    actionWeight: .aside,
+                    action: {
+                        model.searchText = ""
+                        model.filter = nil
+                    }
+                )
+                .padding(.top, 20)
+            }
             ForEach(model.listed) { entry in
                 row(entry)
             }
@@ -65,7 +83,15 @@ struct LibraryList: View {
 
     private func row(_ entry: LibraryEntry) -> some View {
         Button {
-            guard let series = entry.series else { return }
+            // Gap 115: a row whose series never decoded used to be a tap that
+            // did nothing and an Edit that did nothing, with no sign either
+            // had been noticed. There is nowhere to open it — the series
+            // itself is what a detail page is drawn from — so this says so
+            // instead of failing silently.
+            guard let series = entry.series else {
+                toasts?.show("This entry didn't load fully. Try again later.", kind: .failure)
+                return
+            }
             zoomRoute?.source = ZoomRoute.id("library", series.id)
             path.append(series)
         } label: {
@@ -114,11 +140,12 @@ struct LibraryList: View {
         .accessibilityIdentifier("library-row")
         .zoomSource("library", entry.seriesId)
         // A row is a link to the series; editing is a separate, deliberate act
-        // rather than something a stray tap can do to real data.
-        .accessibilityAction(named: "Edit") { onEdit(entry) }
-        .contextMenu {
-            Button("Edit", systemImage: "pencil") { onEdit(entry) }
-        }
+        // rather than something a stray tap can do to real data. Gap 115:
+        // offered for a row whose series never decoded, both did nothing —
+        // the edit sheet needs the series just as much as the detail page
+        // does (`LibraryView.swift` only presents it `if let series =
+        // entry.series`), so this row does not offer either action at all.
+        .modifier(EditActionIfPossible(entry: entry, onEdit: onEdit))
         // The series, not its letter. Keying rows on the letter gave every row
         // beginning with the same letter the same SwiftUI identity, so the list
         // reused one row's view for another's data — rows showed the wrong
@@ -142,17 +169,17 @@ struct LibraryList: View {
         // saw "Vol 1 / 30" instead of "Ch 112 / 179", the more specific
         // number. Both are shown when both exist.
         if let volume, let chapter {
-            return "Vol. \(Int(volume)) · Ch. \(LibraryEditSheet.chapterText(chapter))"
+            return "Vol. \(Int(wholeOrClamped: volume)) · Ch. \(LibraryEditSheet.chapterText(chapter))"
         }
         if let volume {
-            let total = entry.series?.finalVolume.map { " / \(Int($0))" } ?? ""
-            return "Vol \(Int(volume))\(total)"
+            let total = entry.series?.finalVolume.map { " / \(Int(wholeOrClamped: $0))" } ?? ""
+            return "Vol \(Int(wholeOrClamped: volume))\(total)"
         }
         // L7: truncated the half chapter the editor takes pains to keep —
         // "Ch 12" in this list, "12.5" one tap away in the editor for the
         // same entry. `LibraryEditSheet.chapterText` is the one formatter now.
         guard let chapter else { return nil }
-        let total = entry.series?.totalChapters.map { " / \(Int($0))" } ?? ""
+        let total = entry.series?.totalChapters.map { " / \(Int(wholeOrClamped: $0))" } ?? ""
         return "Ch \(LibraryEditSheet.chapterText(chapter))\(total)"
     }
 
@@ -168,11 +195,11 @@ struct LibraryList: View {
                 Image(systemName: "star.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(Palette.accent)
-                Text("\(Int((rating / 20).rounded()))")
+                Text("\(Int(wholeOrClamped: (rating / 20).rounded()))")
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textSecondary)
             }
-            .accessibilityLabel("Rated \(Int((rating / 20).rounded())) out of 5")
+            .accessibilityLabel("Rated \(Int(wholeOrClamped: (rating / 20).rounded())) out of 5")
         } else {
             // Nothing at all, rather than a dash.
             //
@@ -181,6 +208,27 @@ struct LibraryList: View {
             // meaningless on its own even when it was seen. A reader does not
             // need to be told that the space where a rating would be is empty.
             EmptyView()
+        }
+    }
+}
+
+/// Offers "Edit" only for a row whose series actually decoded (gap 115) —
+/// there is nothing for the sheet to show otherwise, so the row's context
+/// menu and accessibility rotor stay empty rather than opening a sheet with a
+/// title it cannot render.
+private struct EditActionIfPossible: ViewModifier {
+    let entry: LibraryEntry
+    let onEdit: (LibraryEntry) -> Void
+
+    func body(content: Content) -> some View {
+        if entry.series != nil {
+            content
+                .accessibilityAction(named: "Edit") { onEdit(entry) }
+                .contextMenu {
+                    Button("Edit", systemImage: "pencil") { onEdit(entry) }
+                }
+        } else {
+            content
         }
     }
 }

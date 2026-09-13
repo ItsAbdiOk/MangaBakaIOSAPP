@@ -1,6 +1,6 @@
 import Foundation
 
-/// The cast of a series, from AniList where possible and Shikimori where not.
+/// The cast of a series, unioned from AniList and Shikimori.
 ///
 /// AniList is the preferred source: better portraits, a real relevance sort,
 /// and it is the tracker most of this app's other data is reconciled against.
@@ -9,26 +9,71 @@ import Foundation
 /// that it now answers normally. `aniListDownUntil` below still exists for
 /// whichever future outage comes next.
 ///
-/// **The fallback is silent by design.** A reader opening a series page has no
-/// stake in which of two trackers answered; a banner saying one is down is a
-/// report about our plumbing, not information about their manga. So a failure
-/// on the preferred source is an internal detail, and the row either has a cast
-/// or does not appear at all.
+/// **Union, not fallback.** Abdi, 2026-09-13, verbatim: "if a character is on
+/// AniList but not on Shikimori, use AniList as the default. If it's on
+/// Shikimori but AniList doesn't have that character, make sure you put it."
+/// Before this both sources were asked one after the other and Shikimori was
+/// only ever used when AniList had nothing at all — a character AniList
+/// simply did not carry (a minor role, a spin-off cameo) never appeared even
+/// though Shikimori had it. Both are asked concurrently now; AniList's cast
+/// leads, in AniList's own order, and every Shikimori character that does not
+/// fuzzy-match one already in that list (`CharacterNameMatch`) is appended
+/// after it.
 ///
-/// Silent here means invisible, not unrecorded: `lastOutcome` names which
-/// source answered so a test can prove the fallback ran, and so the decision is
-/// inspectable rather than folded away.
+/// Silent about *which* source answered, same as before: a reader opening a
+/// series page has no stake in that plumbing. `lastOutcome` is still recorded
+/// for tests, now naming the union rather than a single winner (see
+/// `Source.union`).
 actor CharacterService {
     enum Source: String, Equatable, Sendable {
         case aniList
         case shikimori
+        /// Characters were merged from both — the ordinary case once both
+        /// sources answer with something.
+        case union
         case none
+    }
+
+    /// One source's outcome for a single `characters()` call, so a caller can
+    /// tell "asked and failed" from "asked and had nobody" from "never asked"
+    /// (gap 17) — the same distinction `Fetched` draws generally, specialised
+    /// here because a cast is a union of two independent asks rather than one.
+    enum SourceOutcome: Equatable, Sendable {
+        case notAsked
+        case answered
+        case failed(APIError)
+    }
+
+    /// The union, plus enough about each half to tell a real failure from a
+    /// source that simply had nobody. `characters` alone is enough for any
+    /// caller that only wants to render the row — `CharacterRow` needs no
+    /// change to keep working against it.
+    struct CharacterCast: Equatable, Sendable {
+        let characters: [SeriesCharacter]
+        let aniList: SourceOutcome
+        let shikimori: SourceOutcome
+
+        static let empty = CharacterCast(characters: [], aniList: .notAsked, shikimori: .notAsked)
+
+        /// True only when every source that was asked failed outright — never
+        /// true for "asked and got nothing", which needs no failure banner.
+        /// The view (batch 2) reads this to choose `InlineFailure` over
+        /// simply hiding the row.
+        var failed: Bool {
+            let asked = [aniList, shikimori].filter { $0 != .notAsked }
+            guard !asked.isEmpty else { return false }
+            return asked.allSatisfy {
+                if case .failed = $0 { return true }
+                return false
+            }
+        }
     }
 
     private let aniList: AniListClient
     private let shikimori: ShikimoriClient
 
-    /// Which source answered last. Diagnostic only — nothing on screen reads it.
+    /// Which source(s) contributed last. Diagnostic only — nothing on screen
+    /// reads it.
     private(set) var lastOutcome: Source = .none
 
     /// How long a refusal from AniList is remembered before it is tried again.
@@ -43,6 +88,10 @@ actor CharacterService {
     /// them as an outage used to drop the preferred source for the whole
     /// session over a reader leaving a page early.
     private var aniListDownUntil: Date?
+    /// The refusal that set `aniListDownUntil`, so a caller that skips AniList
+    /// because it is remembered as down still gets a real `APIError` in its
+    /// `SourceOutcome.failed`, rather than `.notAsked` hiding an actual outage.
+    private var aniListDownReason: APIError?
     private let clock: any Clock
 
     private var aniListIsDown: Bool {
@@ -60,44 +109,87 @@ actor CharacterService {
         self.clock = clock
     }
 
-    /// The cast, or an empty list if neither source can answer.
+    /// The union of both sources' casts.
     ///
     /// - Parameters:
-    ///   - aniListID: from `source.anilist.id`. Nil skips straight to Shikimori.
-    ///   - shikimoriID: from `source.shikimori.id`.
-    func characters(aniListID: Int?, shikimoriID: Int?, limit: Int = 20) async -> [SeriesCharacter] {
-        if let aniListID, !aniListIsDown {
-            do {
-                let cast = try await aniList.characters(mediaId: aniListID, limit: limit)
-                lastOutcome = .aniList
-                return cast
-            } catch {
-                // Only the service's own refusal counts as an outage. A rate
-                // limit is about us; offline and transport failures are about
-                // the network; a decode failure is a shape problem that will
-                // recur and is cheap to hit again. `.server` itself is not
-                // enough either — see `isAniListOutage(status:)`.
-                if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
-                    aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
-                }
-            }
+    ///   - aniListID: from `source.anilist.id`. Nil skips AniList entirely.
+    ///   - shikimoriID: from `source.shikimori.id`. Nil skips Shikimori.
+    ///
+    /// Both sources are asked concurrently — one being slow or throttled must
+    /// not delay the other, since neither is a fallback for the other anymore.
+    func characters(aniListID: Int?, shikimoriID: Int?, limit: Int = 20) async -> CharacterCast {
+        async let aniListAsk = fetchAniList(aniListID: aniListID, limit: limit)
+        async let shikimoriAsk = fetchShikimori(shikimoriID: shikimoriID, limit: limit)
+        let (aniListCast, aniListOutcome) = await aniListAsk
+        let (shikimoriCast, shikimoriOutcome) = await shikimoriAsk
+
+        var merged = aniListCast
+        for character in shikimoriCast where !merged.contains(where: {
+            CharacterNameMatch.matches($0.name, character.name)
+        }) {
+            merged.append(character)
         }
 
-        if let shikimoriID {
-            if let cast = try? await shikimori.characters(mangaId: shikimoriID, limit: limit),
-               !cast.isEmpty {
-                lastOutcome = .shikimori
-                return cast
+        lastOutcome = {
+            switch (aniListCast.isEmpty, shikimoriCast.isEmpty) {
+            case (false, false): .union
+            case (false, true): .aniList
+            case (true, false): .shikimori
+            case (true, true): .none
             }
-        }
+        }()
 
-        lastOutcome = .none
-        return []
+        return CharacterCast(characters: merged, aniList: aniListOutcome, shikimori: shikimoriOutcome)
+    }
+
+    /// AniList's half of the union: skipped (`.notAsked`) with no id, remembered
+    /// as down (`.failed`, the stored reason) without spending a request, or
+    /// asked live.
+    private func fetchAniList(
+        aniListID: Int?, limit: Int
+    ) async -> ([SeriesCharacter], SourceOutcome) {
+        guard let aniListID else { return ([], .notAsked) }
+        if aniListIsDown {
+            return ([], .failed(aniListDownReason ?? .server(
+                status: 403, message: "AniList is remembered as down.", party: .aniList
+            )))
+        }
+        do {
+            let cast = try await aniList.characters(mediaId: aniListID, limit: limit)
+            return (cast, .answered)
+        } catch {
+            // Only the service's own refusal counts as an outage. A rate
+            // limit is about us; offline and transport failures are about
+            // the network; a decode failure is a shape problem that will
+            // recur and is cheap to hit again. `.server` itself is not
+            // enough either — see `isAniListOutage(status:)`.
+            if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
+                aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
+                aniListDownReason = error
+            }
+            return ([], .failed(error))
+        }
+    }
+
+    /// Shikimori's half of the union: skipped with no id, otherwise asked
+    /// live. Unlike the old fallback, an empty Shikimori answer is `.answered`
+    /// — a real "no cast" is no longer discarded in favour of nothing.
+    private func fetchShikimori(
+        shikimoriID: Int?, limit: Int
+    ) async -> ([SeriesCharacter], SourceOutcome) {
+        guard let shikimoriID else { return ([], .notAsked) }
+        do {
+            let cast = try await shikimori.characters(mangaId: shikimoriID, limit: limit)
+            return (cast, .answered)
+        } catch {
+            return ([], .failed(error))
+        }
     }
 
     /// Lets a caller try AniList again before the memory expires.
     func clearOutageMemory() {
         aniListDownUntil = nil
+        aniListDownReason = nil
     }
 
     /// Checks AniList once, at app launch, so the first series page opened
@@ -120,6 +212,7 @@ actor CharacterService {
         } catch {
             if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
                 aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
+                aniListDownReason = error
             }
         }
     }
@@ -127,17 +220,18 @@ actor CharacterService {
     /// Whether a `.server` failure is AniList's edge refusing us, versus
     /// AniList answering normally with nothing useful for this one series.
     ///
-    /// `AniListClient` throws `.server` for three different things: an actual
-    /// non-2xx refusal (403, 5xx — and 404 for a stale/unknown media id, which
-    /// is AniList correctly saying "no such series", not an outage), a
-    /// GraphQL `errors` body arriving inside a 200, and a 200 with an edges
-    /// array that is simply empty (a real manga AniList just has no cast
-    /// for). The last two carry the original 200 status through unchanged.
-    /// Before this fix every one of them set the same 15-minute outage timer,
-    /// so one series with no AniList cast blacked out AniList for every other
-    /// series page for 15 minutes (docs/reviews/third-parties.md finding 2,
-    /// 2026-09-13). Only a refusal AniList's own edge sent — 403 or 5xx — is
-    /// actually a reason to stop asking it.
+    /// `AniListClient` throws `.server` for two things: an actual non-2xx
+    /// refusal (403, 5xx — and 404 for a stale/unknown media id, which is
+    /// AniList correctly saying "no such series", not an outage), and a
+    /// GraphQL `errors` body arriving inside a 200 (which carries that 200
+    /// status through unchanged). A 200 with a simply-empty edges array is no
+    /// longer one of them — gap 31 fixed `AniListClient.characters` to return
+    /// `[]` for that case, a real answer rather than a thrown `.server(200)`.
+    /// Before both fixes, every one of these set the same 15-minute outage
+    /// timer, so one series with no AniList cast blacked out AniList for
+    /// every other series page for 15 minutes (docs/reviews/third-parties.md
+    /// finding 2, 2026-09-13). Only a refusal AniList's own edge sent — 403 or
+    /// 5xx — is actually a reason to stop asking it.
     private static func isAniListOutage(status: Int) -> Bool {
         status == 403 || (500...599).contains(status)
     }

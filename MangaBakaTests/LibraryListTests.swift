@@ -121,6 +121,27 @@ struct LibraryListTests {
         #expect(model.listed.map(\.seriesId) == [1])
     }
 
+    /// Gap 91: a search matching nothing used to render the list's header
+    /// over a blank space with no message at all — the same look as the list
+    /// still loading. `isFiltering` is what `LibraryList` uses to decide
+    /// whether an empty `listed` means "nothing matches" rather than "nothing
+    /// saved yet".
+    /// Expected to fail before the fix with: no `isFiltering` property on
+    /// `LibraryModel` at all.
+    @Test("A search or filter matching nothing is reported as filtering")
+    func isFilteringTracksSearchAndFilter() async throws {
+        let model = await model([entry(1, .reading, title: "Solo Leveling")])
+        #expect(!model.isFiltering)
+
+        model.searchText = "berserk"
+        #expect(model.isFiltering)
+        #expect(model.listed.isEmpty)
+
+        model.searchText = ""
+        model.filter = .completed
+        #expect(model.isFiltering)
+    }
+
     // MARK: - Progress line
 
     /// L7: `Int(chapter)` truncated a half chapter to a whole one in this
@@ -169,10 +190,12 @@ struct LibraryListTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             page == 1 ? entries : []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            throw APIError.offline
+        }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}

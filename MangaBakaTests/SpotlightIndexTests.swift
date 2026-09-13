@@ -47,6 +47,23 @@ struct SpotlightIndexTests {
         )
     }
 
+    /// Gap 1/g: `description(for:)` used `Int(chapter)`/`Int(totalChapters)`
+    /// directly, which traps outside roughly ±9.2e18 — and this runs from
+    /// `startSession` on every launch (`SpotlightIndex.swift:93-94`), so a
+    /// single library entry with a chapter number that large would be a
+    /// crash loop with no in-app fix. `Int(wholeOrClamped:)` cannot trap.
+    /// Expected to fail before the fix with: a fatal trap ("Double value
+    /// cannot be converted to Int because it is either infinite or NaN"),
+    /// not a returned string.
+    @Test("An absurd chapter or total does not crash the description")
+    func absurdNumbersDoNotTrap() {
+        let series = SeriesFactory.make(id: 7, title: "S", totalChapters: 1e300)
+        let description = SpotlightIndex.description(
+            for: entry(7, state: .reading, chapter: 1e300, series: series)
+        )
+        #expect(!description.isEmpty)
+    }
+
     /// Only a cover the app already holds; the closure stands in for the
     /// URL cache, and a miss on the small rendering falls through to the
     /// larger one a row may have loaded instead.

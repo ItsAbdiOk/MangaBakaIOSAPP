@@ -118,22 +118,25 @@ actor AniListClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
         } catch {
-            throw APIError.transport(underlying: String(describing: error))
+            throw APIError.transport(underlying: String(describing: error), party: .aniList)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "AniList sent a non-HTTP response.")
+            throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
         }
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
-            throw APIError.rateLimited(retryAfter: retryAfter)
+            throw APIError.rateLimited(retryAfter: retryAfter, party: .aniList)
         }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError.server(
                 status: http.statusCode,
-                message: "AniList returned \(http.statusCode)."
+                message: "AniList returned \(http.statusCode).",
+                party: .aniList
             )
         }
 
@@ -141,7 +144,7 @@ actor AniListClient {
         do {
             decoded = try JSONDecoder().decode(Response.self, from: data)
         } catch {
-            throw APIError.decoding(underlying: String(describing: error))
+            throw APIError.decoding(underlying: String(describing: error), party: .aniList)
         }
 
         // GraphQL reports failure inside a 200 as often as through a status
@@ -150,17 +153,17 @@ actor AniListClient {
         if let errors = decoded.errors, !errors.isEmpty, decoded.data?.media == nil {
             throw APIError.server(
                 status: http.statusCode,
-                message: errors.compactMap(\.message).first ?? "AniList refused the query."
+                message: errors.compactMap(\.message).first ?? "AniList refused the query.",
+                party: .aniList
             )
         }
 
-        let cast = Self.cast(from: decoded, limit: limit)
-        // An empty cast is not an error, but it is also not an answer worth
-        // preferring over the other source's.
-        guard !cast.isEmpty else {
-            throw APIError.server(status: http.statusCode, message: "AniList knows no cast.")
-        }
-        return cast
+        // An empty cast is a real answer, not a failure (gap 31) — before
+        // this it threw `.server(200, …)`, which `CharacterService` then had
+        // to specially avoid treating as an AniList outage, and which made
+        // "AniList has this series but no cast for it" indistinguishable from
+        // an actual refusal to the union in `CharacterService.characters`.
+        return Self.cast(from: decoded, limit: limit)
     }
 
     /// AniList already sorts by role, so this only drops what cannot be shown.
@@ -197,7 +200,12 @@ actor AniListClient {
         do {
             try await Task.sleep(for: .seconds(wait))
         } catch {
-            throw APIError.transport(underlying: "Cancelled while waiting for a request slot.")
+            // `Task.sleep` only ever throws `CancellationError` — the reader
+            // left, or a newer request superseded this one. `.cancelled`, not
+            // `.transport`: the latter told the kit the network was broken
+            // (`staleContentRemainsUseful == false`) over a screen nobody is
+            // waiting on anymore (gap 26).
+            throw APIError.cancelled
         }
     }
 }
@@ -207,6 +215,19 @@ private extension Optional where Wrapped == URL {
         guard let self else { preconditionFailure("Hard-coded AniList URL failed to parse.") }
         return self
     }
+}
+
+/// The three codes `APIClient.perform` treats as "no usable network path"
+/// (`APIClient.swift:168-171`). AniList, Shikimori and MangaUpdates clients
+/// don't route through `perform` — each has its own transport rules — so each
+/// maps these to `.offline` at its own catch site (gap 30: before this,
+/// losing the network read as `.transport`, which the kit treats as "the
+/// content may be wrong" rather than "nothing new can load until you're
+/// back"). Declared once, here, rather than copied three times.
+extension URLError.Code {
+    static let offlineCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed
+    ]
 }
 
 /// The character-profile query, kept in its own extension (rather than in the
@@ -299,27 +320,31 @@ extension AniListClient {
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
         } catch {
-            throw APIError.transport(underlying: String(describing: error))
+            throw APIError.transport(underlying: String(describing: error), party: .aniList)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "AniList sent a non-HTTP response.")
+            throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
         }
         if http.statusCode == 429 {
             let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
             spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
-            throw APIError.rateLimited(retryAfter: retryAfter)
+            throw APIError.rateLimited(retryAfter: retryAfter, party: .aniList)
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw APIError.server(status: http.statusCode, message: "AniList returned \(http.statusCode).")
+            throw APIError.server(
+                status: http.statusCode, message: "AniList returned \(http.statusCode).", party: .aniList
+            )
         }
 
         let decoded: ProfileResponse
         do {
             decoded = try JSONDecoder().decode(ProfileResponse.self, from: data)
         } catch {
-            throw APIError.decoding(underlying: String(describing: error))
+            throw APIError.decoding(underlying: String(describing: error), party: .aniList)
         }
 
         // Same trap as the cast query: GraphQL reports failure inside a 200
@@ -327,12 +352,15 @@ extension AniListClient {
         if let errors = decoded.errors, !errors.isEmpty, decoded.data?.character == nil {
             throw APIError.server(
                 status: http.statusCode,
-                message: errors.compactMap(\.message).first ?? "AniList refused the query."
+                message: errors.compactMap(\.message).first ?? "AniList refused the query.",
+                party: .aniList
             )
         }
 
         guard let profile = Self.profile(from: decoded) else {
-            throw APIError.server(status: http.statusCode, message: "AniList knows no such character.")
+            throw APIError.server(
+                status: http.statusCode, message: "AniList knows no such character.", party: .aniList
+            )
         }
         return profile
     }
@@ -393,12 +421,14 @@ extension AniListClient {
         let response: URLResponse
         do {
             (_, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
         } catch {
-            throw APIError.transport(underlying: String(describing: error))
+            throw APIError.transport(underlying: String(describing: error), party: .aniList)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "AniList sent a non-HTTP response.")
+            throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
         }
         // A body-level GraphQL error is not checked here: this call only
         // asks "is AniList refusing us at the transport level", the same
@@ -406,7 +436,9 @@ extension AniListClient {
         // bug, not an outage, and would recur on every launch rather than
         // clearing itself in fifteen minutes.
         guard (200..<300).contains(http.statusCode) else {
-            throw APIError.server(status: http.statusCode, message: "AniList returned \(http.statusCode).")
+            throw APIError.server(
+                status: http.statusCode, message: "AniList returned \(http.statusCode).", party: .aniList
+            )
         }
     }
 

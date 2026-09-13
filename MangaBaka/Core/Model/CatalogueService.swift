@@ -9,9 +9,20 @@ import Foundation
 actor CatalogueService {
     private let client: APIClient
 
-    private var cachedGenres: [Genre]?
-    private var cachedTags: [Tag]?
-    /// How many were asked for when the cache was filled.
+    /// The vocabulary, and whether it can be trusted as final. Doubles as the
+    /// cache: once a call lands on `.loaded`, later callers within the limit
+    /// it was fetched at are served from here rather than the network. A
+    /// failure is never stored here — see `genres()`/`tags(limit:)` — so it
+    /// stays `.idle` (or a previous success) and the next ask tries again.
+    ///
+    /// Replaces the `[Genre]?`/`[Tag]?` pair plus the `genresFetchFailed`/
+    /// `tagsFetchFailed` flags nothing read (gap 39, 40, 41, 42,
+    /// FAILURES-SUMMARY.md): those collapsed "the vocabulary is genuinely
+    /// empty" and "the request failed" into the same `[]`, and the flags that
+    /// were meant to tell them apart had no caller.
+    private var genresState: Fetched<[Genre]> = .idle
+    private var tagsState: Fetched<[Tag]> = .idle
+    /// How many were asked for when `tagsState` was last filled.
     ///
     /// **The cache used to ignore the limit**, so whichever screen asked first
     /// decided for everyone: Browse asks for 200 and the tag picker asks for
@@ -23,77 +34,75 @@ actor CatalogueService {
     /// This used to compare against `cachedTagLimit`, which is only set once
     /// the fetch lands — so two screens opening together never joined.
     private var inFlightTagLimit = 0
-    private var tagsInFlight: Task<[Tag]?, Never>?
-    private var genresInFlight: Task<[Genre]?, Never>?
-
-    /// Whether the most recent `genres()`/`tags()` call answered `[]` because
-    /// the request failed, as opposed to the vocabulary genuinely being
-    /// empty. Both methods keep returning `[]` for either case — every
-    /// existing caller (`BrowseModel`, `TagPickerSheet`,
-    /// `BlockedTagsSection`) reads only the array and needs no change — this
-    /// is purely additive, for a caller that wants to tell "nothing there"
-    /// from "the network is down" without widening the return type
-    /// everywhere `[Genre]`/`[Tag]` is already relied on.
-    private(set) var genresFetchFailed = false
-    private(set) var tagsFetchFailed = false
+    private var tagsInFlight: Task<Fetched<[Tag]>, Never>?
+    private var genresInFlight: Task<Fetched<[Genre]>, Never>?
 
     init(client: APIClient) {
         self.client = client
     }
 
-    func genres() async -> [Genre] {
-        if let cachedGenres { return cachedGenres }
+    func genres() async -> Fetched<[Genre]> {
+        if case .loaded = genresState { return genresState }
         // Two screens opening at once are one request, not two.
-        if let genresInFlight { return await genresInFlight.value ?? [] }
+        if let genresInFlight { return await genresInFlight.value }
 
-        let task = Task<[Genre]?, Never> { [client] in
-            try? await client.get("/v1/genres")
+        let task = Task<Fetched<[Genre]>, Never> { [client] in
+            do throws(APIError) {
+                let fetched: [Genre] = try await client.get("/v1/genres")
+                return .loaded(fetched, fetchedAt: Date(), isPartial: false)
+            } catch {
+                // Not cached: a dropped packet used to cache an empty
+                // vocabulary for the whole process; the next ask now tries
+                // again.
+                return .failed(error, stale: nil)
+            }
         }
         genresInFlight = task
-        let fetched = await task.value
-        // Only an answer is cached. A dropped packet used to cache an empty
-        // vocabulary for the whole process; the next ask now tries again.
-        if let fetched { cachedGenres = fetched }
-        genresFetchFailed = fetched == nil
+        let result = await task.value
+        if case .loaded = result { genresState = result }
         genresInFlight = nil
-        return fetched ?? []
+        return result
     }
 
     /// - Parameter limit: the API paginates; a browsing screen wants the
     ///   heavily-used tags rather than all of them.
-    func tags(limit: Int = 200) async -> [Tag] {
+    func tags(limit: Int = 200) async -> Fetched<[Tag]> {
         // Serves a smaller ask from a bigger cache, refetches for a bigger one.
-        if let cachedTags, cachedTagLimit >= limit { return cachedTags }
-        if let tagsInFlight, inFlightTagLimit >= limit { return await tagsInFlight.value ?? [] }
+        if case .loaded = tagsState, cachedTagLimit >= limit { return tagsState }
+        if let tagsInFlight, inFlightTagLimit >= limit { return await tagsInFlight.value }
 
-        let task = Task<[Tag]?, Never> { [client] in
-            let fetched: [Tag]? = try? await client.get(
-                "/v1/tags",
-                query: [URLQueryItem(name: "limit", value: String(limit))]
-            )
-            // Merged tags point at a survivor and should never be shown or
-            // linked to. Ordered by how many series carry them, because a tag
-            // on three series does not deserve the same row as one on nine
-            // thousand.
-            return fetched?
-                .filter(\.isUsable)
-                .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
+        let task = Task<Fetched<[Tag]>, Never> { [client] in
+            do throws(APIError) {
+                let fetched: [Tag] = try await client.get(
+                    "/v1/tags",
+                    query: [URLQueryItem(name: "limit", value: String(limit))]
+                )
+                // Merged tags point at a survivor and should never be shown
+                // or linked to. Ordered by how many series carry them,
+                // because a tag on three series does not deserve the same
+                // row as one on nine thousand.
+                let usable = fetched
+                    .filter(\.isUsable)
+                    .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
+                return .loaded(usable, fetchedAt: Date(), isPartial: false)
+            } catch {
+                return .failed(error, stale: nil)
+            }
         }
         tagsInFlight = task
         inFlightTagLimit = limit
-        let fetched = await task.value
-        if let fetched {
-            cachedTags = fetched
+        let result = await task.value
+        if case .loaded = result {
+            tagsState = result
             cachedTagLimit = limit
         }
-        tagsFetchFailed = fetched == nil
         tagsInFlight = nil
-        return fetched ?? []
+        return result
     }
 
     /// Tags that sit directly under a parent, for walking the tree.
     func children(of parentId: Int?) async -> [Tag] {
-        await tags().filter { $0.parentId == parentId }
+        (await tags().value ?? []).filter { $0.parentId == parentId }
     }
 
     /// Tags matching a typed query, asked of the API rather than filtered here.

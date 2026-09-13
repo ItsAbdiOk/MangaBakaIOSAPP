@@ -294,6 +294,96 @@ struct WebtoonsFeedURLTests {
     }
 }
 
+/// The client's network behaviour: what it asks for, and the shape it
+/// answers in. `.serialized` because it shares `URLProtocolStub`'s per-test
+/// state.
+@Suite("Webtoons feed client", .serialized)
+struct WebtoonsFeedClientTests {
+    private func makeClient(clock: TestClock, cacheDirectory: URL) -> WebtoonsFeedClient {
+        WebtoonsFeedClient(
+            session: URLProtocolStub.makeSession(), clock: clock, cacheDirectory: cacheDirectory
+        )
+    }
+
+    private let link = SeriesLink(
+        id: "1", url: URL(string: "https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95"),
+        name: "webtoons", nameDisplay: nil, type: "webplatform", language: "en"
+    )
+
+    private let rss = Data(#"""
+    <?xml version="1.0"?>
+    <rss version="2.0"><channel><title>Tower of God</title>
+    <item><title>Episode 1</title><pubDate>Thu, 11 Sep 2026 15:00:00 GMT</pubDate></item>
+    </channel></rss>
+    """#.utf8)
+
+    /// A series with no Webtoons-shaped link is never asked, and is not
+    /// reported as a failure — it simply never carried this source.
+    @Test("A series with no Webtoons link is notCarried, not failed")
+    func noLinkIsNotCarried() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let answer = await client.feed(for: [], seriesID: 1)
+        #expect(answer == .notCarried)
+    }
+
+    /// A matching link that answers gets `.answered(_)`, attributed to
+    /// Webtoons, and the party on a subsequent 429 is Webtoons', not
+    /// MangaBaka's default.
+    @Test("A matching link that is rate-limited fails with Webtoons named as the party")
+    func rateLimitedCarriesTheParty() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+
+        let answer = await client.feed(for: [link], seriesID: 95)
+        guard case let .failed(error) = answer else {
+            Issue.record("expected .failed, got \(answer)")
+            return
+        }
+        #expect(error == .rateLimited(until: nil, party: .webtoons))
+    }
+
+    /// Gap 29: commit 5bb36b8 changed the parser and the never-cache-empty
+    /// rule without bumping the cache key, so a `v3-` file written under the
+    /// old rules could still answer for up to a week under the new ones.
+    /// Expected failure before the fix: this test fails because the client
+    /// still reads the `v3-` file — it asks the key it always asked, which
+    /// was `v3-`, so a request that should have gone to the (stubbed, and
+    /// here deliberately failing) network instead returned the stale `v3-`
+    /// cache and `URLProtocolStub.requests` stayed empty.
+    @Test("A v3- cache file is not read; the client asks for v4-")
+    func cacheKeyIsBumpedToV4() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let staleFeed = ReleaseFeed(
+            title: "Stale",
+            entries: [ReleaseEntry(title: "Episode 1", published: Date(), number: 1, season: nil)],
+            source: .webtoons
+        )
+        // `WebtoonsFeedClient.Cached` is private; this mirrors its shape
+        // exactly (`storedAt`/`feed`) to write a file the client would read
+        // if it were still asking for the `v3-` key.
+        struct LegacyCached: Codable { let storedAt: Date; let feed: ReleaseFeed }
+        let data = try JSONEncoder().encode(LegacyCached(storedAt: Date(), feed: staleFeed))
+        try data.write(to: directory.appendingPathComponent("v3-95.json"))
+
+        // The network fails outright, so the only way this test can see a
+        // feed at all is by (incorrectly) reading the v3- file.
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 500)) }
+        defer { URLProtocolStub.reset() }
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+
+        let answer = await client.feed(for: [link], seriesID: 95)
+        #expect(answer.feed == nil, "the v3- file must not answer for the v4- key")
+        #expect(!URLProtocolStub.requests.isEmpty, "a real request must have been attempted")
+    }
+}
+
 /// Rewriting a landed feed URL's language to English. See
 /// `WebtoonsFeedParser.englishVariant` and finding 2 in
 /// `docs/reviews/reader.md`, 2026-09-13.

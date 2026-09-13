@@ -34,7 +34,6 @@ final class LibraryModel {
     /// How the list is ordered.
     var sort: LibrarySort = .recentlyUpdated { didSet { refreshDerived() } }
     private(set) var isLoading = false
-    private(set) var hasAccount = true
     /// Whether every page arrived. False means the counts on screen are a floor,
     /// not a total, and nothing may be stated as absent on the strength of them.
     private(set) var isComplete = true
@@ -54,7 +53,13 @@ final class LibraryModel {
 
     var screenState: ScreenState {
         if isLoading && entries.isEmpty { return .loading }
-        if !hasAccount { return .noAccount }
+        // Gap 84/85/89 (f): this used to be `!entries.isEmpty || !isComplete`
+        // — a row count standing in for whether a token exists at all — which
+        // read a signed-in reader with a genuinely empty library as having no
+        // account, and (inverted) read an unreachable 937-series library as
+        // having one. Whether there is an account to ask is its own question,
+        // answered by `hasCredentials`, not guessed from what came back.
+        guard hasCredentials() else { return .noAccount }
         if entries.isEmpty {
             if let failure { return .failed(failure) }
             return .empty
@@ -62,12 +67,49 @@ final class LibraryModel {
         return .list
     }
 
+    /// Deprecated alias kept only so call sites outside this batch that still
+    /// read `hasAccount` keep compiling; `screenState` is the real decision
+    /// now. See the report accompanying this change for the two assertions in
+    /// `NonsenseGuardTests.swift` this inverts.
+    var hasAccount: Bool { screenState != .noAccount }
+
+    /// Set only once the walk has stopped short without emptying the screen —
+    /// `!entries.isEmpty && !isComplete`. Distinct from `failure` alone: a
+    /// walk still in flight is also incomplete, and a `StaleBar` drawn while
+    /// page 4 of 13 is still landing would flash off again a moment later, so
+    /// callers combine this with `isLoading` (see `LibraryView.partialLoad`)
+    /// to tell "still walking" from "gave up" from "hit the page cap" (gap 83).
+    var partialFailure: APIError? {
+        guard !entries.isEmpty, !isComplete else { return nil }
+        return failure
+    }
+
+    /// Whether the reader has narrowed the list at all — by typing or by
+    /// picking a shelf. A search or filter matching nothing is a real answer
+    /// ("Nothing matches"), not the same empty screen as never having saved
+    /// anything (gap 91).
+    var isFiltering: Bool { isSearching || filter != nil }
+
     private let library: any LibraryProviding
     private let snapshot: LibrarySnapshot
+    /// Whether the reader has a MangaBaka credential to walk the library
+    /// with, checked before any walk rather than inferred from what one
+    /// returned. Defaulted to `true` — every existing caller and test that
+    /// does not pass this keeps its current behaviour — until batch 6 wires
+    /// the real check from `TokenStore` and the build PAT.
+    private let hasCredentials: () -> Bool
+    /// Bumped by `reload()`, so a walk started before it and still landing
+    /// pages cannot interleave its results with the newer walk's (gap 117).
+    private var generation = 0
 
-    init(library: any LibraryProviding, snapshot: LibrarySnapshot? = nil) {
+    init(
+        library: any LibraryProviding,
+        snapshot: LibrarySnapshot? = nil,
+        hasCredentials: @escaping () -> Bool = { true }
+    ) {
         self.library = library
         self.snapshot = snapshot ?? LibrarySnapshot(library: library)
+        self.hasCredentials = hasCredentials
     }
 
     var total: Int { entries.count }
@@ -181,7 +223,12 @@ final class LibraryModel {
     /// 1,000-entry library, fifty reads of `inProgress` and `subtitle` cost
     /// 43 ms against 17 µs for the three already stored — 0.86 ms per body
     /// pass, measured 2026-09-11 in `RedrawPerformanceTests`.
-    private(set) var subtitle = "Nothing here yet"
+    /// Gap 112: this used to default to "Nothing here yet" and stay there
+    /// until the first page landed, which read as a genuinely empty library
+    /// for every reader during the walk. Blank until `refreshDerived` has run
+    /// at least once — see `screenState`, which is what actually decides
+    /// whether "Nothing here yet" belongs on screen.
+    private(set) var subtitle = ""
 
     private static func subtitle(of entries: [LibraryEntry]) -> String {
         guard !entries.isEmpty else { return "Nothing here yet" }
@@ -220,7 +267,17 @@ final class LibraryModel {
 
     /// Re-reads after a write, so the screen reflects the server rather than
     /// what was typed into a sheet.
+    ///
+    /// Prefer `apply(_:to:)` at a call site that already knows what it wrote —
+    /// decision 5 exists precisely because this is expensive (13 requests,
+    /// 24.7 MB on a real account) and closes the sheet no sooner than the
+    /// slowest of them. This stays for a write `apply` cannot patch locally
+    /// (the entry is not currently loaded) and for an explicit Retry.
     func reload() async {
+        // Bumped first: a page from the walk this replaces can still be in
+        // flight, and without this its `apply` would interleave with the new
+        // walk's (gap 117) — two page counts racing into `entries`.
+        generation += 1
         // The shared snapshot has to be told, or a reload re-reads the copy
         // that was already wrong. Caught by three existing tests the moment the
         // snapshot was introduced: a write landed, the screen refetched, and
@@ -238,6 +295,7 @@ final class LibraryModel {
         guard entries.isEmpty else { return }
         isLoading = true
         defer { isLoading = false }
+        let myGeneration = generation
 
         // One walk per session, shared with the taste ledger and the release
         // reminders. Measured on a real account: 939 entries is 24.7 MB, and
@@ -248,11 +306,57 @@ final class LibraryModel {
         // and the first hundred entries land in the first one.
         await snapshot.observePages { @Sendable [weak self] partial in
             guard !partial.isEmpty else { return }
-            Task { @MainActor in self?.apply(partial, isComplete: false) }
+            Task { @MainActor in
+                // Gap 117: a `reload()` fired while this walk's pages are
+                // still landing must not let a page from the walk it replaced
+                // land in `entries` after the newer walk has already reset it.
+                guard let self, self.generation == myGeneration else { return }
+                self.apply(partial, isComplete: false)
+            }
         }
         let result = await snapshot.load()
+        guard generation == myGeneration else { return }
         apply(result.entries, isComplete: result.isComplete)
         failure = result.failure
+    }
+
+    /// Patches one entry after a write lands, in memory and in the shared
+    /// snapshot's cache, instead of re-walking the whole library to reflect
+    /// it (gap 88/j, decision 5).
+    ///
+    /// The one-line call the shell needs at its write site, replacing a
+    /// `reload()` there:
+    /// ```
+    /// await session.library.apply(change, to: seriesId)
+    /// ```
+    /// Falls back to doing nothing when the entry is not currently loaded —
+    /// a series added for the first time has no local row to patch, and the
+    /// caller should `reload()` (or just let the next natural load pick it
+    /// up) in that case rather than this silently failing to show it.
+    func apply(_ change: LibraryChange, to seriesId: Int) async {
+        guard let index = entries.firstIndex(where: { $0.seriesId == seriesId }) else { return }
+        entries[index] = entries[index].applying(change)
+        shelves = Self.shelves(from: entries)
+        refreshDerived()
+        await snapshot.apply(seriesId: seriesId, change: change)
+    }
+
+    /// Clears everything this model remembers about who was signed in.
+    ///
+    /// Gap 89 (f): `forgetPreviousAccount` clears seven other stores on an
+    /// account change but not the library, so the previous account's shelves
+    /// stayed on screen until relaunch. This is the call it needs:
+    /// ```
+    /// await session.library.forget()
+    /// ```
+    func forget() async {
+        generation += 1
+        await snapshot.invalidate()
+        entries = []
+        shelves = []
+        failure = nil
+        isComplete = true
+        refreshDerived()
     }
 
     /// Shows what has arrived so far.
@@ -269,7 +373,6 @@ final class LibraryModel {
         // skips empty emissions instead.
         entries = rows
         isComplete = complete
-        hasAccount = !rows.isEmpty || !complete
         shelves = Self.shelves(from: rows)
         refreshDerived()
         // The first page is enough to draw the screen; the spinner should stop

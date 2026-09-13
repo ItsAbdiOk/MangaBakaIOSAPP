@@ -37,13 +37,29 @@ actor ShelfStore {
         }
     }
 
-    func entries(_ kind: ShelfEntry.Kind) throws -> [Series] {
+    /// - Returns: the decodable rows, and how many of the shelf's own rows
+    ///   could not be decoded. `compactMap` used to drop those silently, so a
+    ///   shelf whose disk cache held one row in a shape this version no
+    ///   longer understands reported itself one entry shorter with nothing to
+    ///   say why (gap 116, FAILURES-SUMMARY.md). Every existing caller that
+    ///   only wants the series can take `.series` and see no change.
+    func entries(_ kind: ShelfEntry.Kind) throws -> (series: [Series], undecodable: Int) {
         try database.writer.read { db in
-            try ShelfEntry
+            let rows = try ShelfEntry
                 .filter(Column("kind") == kind.rawValue)
                 .order(Column("addedAt").desc)
                 .fetchAll(db)
-                .compactMap { try? decoder.decode(Series.self, from: $0.payload) }
+            var series: [Series] = []
+            series.reserveCapacity(rows.count)
+            var undecodable = 0
+            for row in rows {
+                if let decoded = try? decoder.decode(Series.self, from: row.payload) {
+                    series.append(decoded)
+                } else {
+                    undecodable += 1
+                }
+            }
+            return (series, undecodable)
         }
     }
 

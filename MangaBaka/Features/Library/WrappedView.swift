@@ -16,9 +16,32 @@ struct WrappedView: View {
     /// from the community pulse rather than hard-coded, because it moves every
     /// week.
     let catalogueSize: Int
+    /// False while the library walk this was built from is still going.
+    /// Defaulted to `true` so every existing call site keeps compiling and
+    /// behaving exactly as before until the shell (batch 6) passes the real
+    /// value from `LibraryModel.isComplete`.
+    var isComplete = true
     @Binding var path: [Series]
 
     @State private var facts = Facts()
+    /// Gap 94: this screen's header, provenance line and nothing readable in
+    /// between is exactly what a library with nothing to say drew — there
+    /// was no branch for "the partial library it was built from just has no
+    /// year yet", only cards that each independently declined to render.
+    @State private var hasComputed = false
+
+    private var revision: String { "\(entries.count)-\(isComplete)" }
+
+    /// Whether any card below the header would actually draw anything.
+    private var hasAnythingToShow: Bool {
+        (facts.year?.isWorthShowing ?? false)
+            || facts.sprint != nil
+            || !facts.signatures.isEmpty
+            || facts.critic != nil
+            || facts.longest != nil
+            || !facts.creators.isEmpty
+            || !facts.formats.isEmpty
+    }
 
     private struct Facts {
         var year: ReadingWrapped.Year?
@@ -46,17 +69,38 @@ struct WrappedView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
-                if let year = facts.year, year.isWorthShowing {
-                    yearCard(year)
-                    if let busiest = facts.busiest { busiestCard(busiest) }
+                // Decision (matching gap 93's): say what this is built from
+                // rather than hiding the screen until the walk completes.
+                if !isComplete {
+                    StaleBar(
+                        headline: "Built from the \(entries.count.formatted()) series that loaded",
+                        detail: "This updates once the rest of your library finishes loading."
+                    )
                 }
-                if let sprint = facts.sprint { sprintCard(sprint) }
-                if !facts.signatures.isEmpty { signatureCard }
-                if let critic = facts.critic { criticCard(critic) }
-                if let longest = facts.longest { longestCard(longest) }
-                if !facts.creators.isEmpty { creatorsCard }
-                if !facts.formats.isEmpty { formatsCard }
-                provenance
+                if !hasComputed {
+                    loading
+                } else if !hasAnythingToShow {
+                    EmptyState(
+                        title: "Not enough of a year yet",
+                        message: """
+                        This fills in as you finish series, rate them, and read at your \
+                        own pace — there is nothing distinctive to show yet.
+                        """
+                    )
+                    .padding(.top, 20)
+                } else {
+                    if let year = facts.year, year.isWorthShowing {
+                        yearCard(year)
+                        if let busiest = facts.busiest { busiestCard(busiest) }
+                    }
+                    if let sprint = facts.sprint { sprintCard(sprint) }
+                    if !facts.signatures.isEmpty { signatureCard }
+                    if let critic = facts.critic { criticCard(critic) }
+                    if let longest = facts.longest { longestCard(longest) }
+                    if !facts.creators.isEmpty { creatorsCard }
+                    if !facts.formats.isEmpty { formatsCard }
+                    provenance
+                }
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)
@@ -67,7 +111,19 @@ struct WrappedView: View {
         .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle("Your year")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await compute() }
+        // Keyed on `revision`: a plain `.task {}` runs once per view identity
+        // and never again, so a library reload landing while this screen was
+        // open used to leave it showing the year built from the old data.
+        .task(id: revision) { await compute() }
+    }
+
+    private var loading: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Capsule().fill(Palette.surface).frame(width: 140, height: 40)
+            Capsule().fill(Palette.surface).frame(width: 200, height: 14)
+        }
+        .shimmering()
+        .accessibilityHidden(true)
     }
 
     /// Off the main actor: the signature pass walks every tag of every series,
@@ -94,8 +150,15 @@ struct WrappedView: View {
             return facts
         }.value
         facts = computed
+        hasComputed = true
     }
 
+}
+
+/// The individual cards, split out of the type above purely to stay under
+/// SwiftLint's `type_body_length` — the loading/empty branches this batch
+/// added (gap 94) pushed the single declaration over it.
+extension WrappedView {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(thisYear))

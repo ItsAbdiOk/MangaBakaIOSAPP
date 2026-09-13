@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// The cache half of `SeriesRepository`.
 ///
@@ -81,7 +82,7 @@ extension SeriesRepository {
     ) {
         let discards = shouldDiscard(key)
         guard changed, discards else { return }
-        if scope.contains(.feeds) { try? discardCachedFeeds() }
+        if scope.contains(.feeds) { discardCachedFeeds() }
         if scope.contains(.images) { cachedImages.removeAll() }
         if scope.contains(.detail) { try? discardDetailCache() }
     }
@@ -98,6 +99,38 @@ extension SeriesRepository {
     }
 
     private static let exclusionKey = "cache.libraryExclusionUserID"
+
+    private static let cacheLogger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "cache")
+
+    /// Split out because GRDB offers both a sync and an async `write`, and in
+    /// an async context `try?` picks the async one, which does not compile
+    /// here.
+    ///
+    /// - Returns: whether the discard actually happened. Every caller used to
+    ///   spend `try?` on this and move on regardless — so a filter change
+    ///   whose discard failed (a full disk, a locked file) left the reader
+    ///   looking at content their new filter should have removed, with
+    ///   nothing on record to say why (gap 74, FAILURES-SUMMARY.md). A caller
+    ///   that only wants the old fire-and-forget behaviour can still ignore
+    ///   the result; this type itself no longer does, and logs when it
+    ///   happens.
+    @discardableResult
+    func discardCachedFeeds() -> Bool {
+        do {
+            try database.writer.write { db in
+                // Only the feed cache is cleared. The shelf holds the
+                // reader's own saves and is not derived from the filter.
+                try db.execute(sql: "DELETE FROM feedEntry")
+                try db.execute(sql: "DELETE FROM feedMetadata")
+                try Self.trimOrphans(db)
+            }
+            return true
+        } catch {
+            let description = String(describing: error)
+            Self.cacheLogger.error("discardCachedFeeds failed: \(description, privacy: .public)")
+            return false
+        }
+    }
 
     func discardDetailCache() throws {
         try database.writer.write { db in

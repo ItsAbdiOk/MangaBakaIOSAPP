@@ -41,13 +41,21 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
         self.cacheDirectory = cacheDirectory
     }
 
-    func feed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
-        guard let host = Self.matchingHost(in: links.compactMap(\.safeURL)) else { return nil }
-        guard let items = await magazineItems(host: host) else { return nil }
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer {
+        guard let host = Self.matchingHost(in: links.compactMap(\.safeURL)) else { return .notCarried }
+        let (items, failure) = await magazineItems(host: host)
+        guard let items else {
+            let fallback = APIError.transport(
+                underlying: "GigaViewer feed did not parse.", party: .gigaViewer
+            )
+            return .failed(failure ?? fallback)
+        }
 
         let titles = Self.candidateTitles(for: series)
         let matched = items.filter { item in titles.contains(Self.normalise(item.seriesTitle)) }
-        guard !matched.isEmpty else { return nil }
+        // The magazine answered; this series just is not in this issue. A
+        // real answer with nothing usable, not a failure.
+        guard !matched.isEmpty else { return .answered(nil) }
 
         let entries = matched.map { item in
             let read = WebtoonsTitle.read(item.episodeTitle)
@@ -61,7 +69,9 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
         // `ReleaseSource.gigaViewer.displayName` rather than its own copy of
         // the string, so there is one name to update, not two.
         let hostName = ReleaseSource.gigaViewerHostNames[host] ?? ReleaseSource.gigaViewer.displayName
-        return ReleaseFeed(title: hostName, entries: entries, source: .gigaViewer, sourceName: hostName)
+        return .answered(ReleaseFeed(
+            title: hostName, entries: entries, source: .gigaViewer, sourceName: hostName
+        ))
     }
 
     /// The host from a series' links that is one of the seven confirmed
@@ -95,25 +105,42 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
 
     // MARK: - Magazine feed
 
-    private func magazineItems(host: String) async -> [Item]? {
+    /// - Returns: the magazine's items, or nil with the reason it could not
+    ///   be read (`APIError`, nil only when there was genuinely no candidate
+    ///   URL to build — should not happen, `host` always comes from
+    ///   `matchingHost`'s own dictionary of hosts it can build a URL for).
+    private func magazineItems(host: String) async -> (items: [Item]?, failure: APIError?) {
         let key = "v1-giga-\(host)"
-        if let cached = readCache(key) { return cached }
-        guard let url = URL(string: "https://\(host)/rss") else { return nil }
+        if let cached = readCache(key) { return (cached, nil) }
+        guard let url = URL(string: "https://\(host)/rss") else { return (nil, nil) }
 
         let wait = spacing.claim(now: clock.now)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-
-        guard let (data, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse
-        else { return nil }
-        if http.statusCode == 429 {
-            spacing.backOff(until: clock.now.addingTimeInterval(60))
-            return nil
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: see `WebtoonsFeedClient.feed(for:seriesID:)`.
+            guard !Task.isCancelled else { return (nil, .cancelled) }
         }
-        guard (200..<300).contains(http.statusCode), let items = MagazineFeedParser.parse(data)
-        else { return nil }
+
+        guard let (data, response) = try? await session.data(from: url) else {
+            return (nil, .transport(underlying: "GigaViewer request failed.", party: .gigaViewer))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            return (nil, .transport(underlying: "GigaViewer sent a non-HTTP response.", party: .gigaViewer))
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            return (nil, .rateLimited(retryAfter: retryAfter, party: .gigaViewer))
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = "GigaViewer returned \(http.statusCode)."
+            return (nil, .server(status: http.statusCode, message: message, party: .gigaViewer))
+        }
+        guard let items = MagazineFeedParser.parse(data) else {
+            return (nil, .decoding(underlying: "GigaViewer feed did not parse.", party: .gigaViewer))
+        }
         writeCache(key, items)
-        return items
+        return (items, nil)
     }
 
     /// One item off a magazine feed: an episode of some series in the

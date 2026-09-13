@@ -166,7 +166,7 @@ final class StackModel {
     }
 
     private func refreshSaved() async {
-        saved = ((try? await shelf.entries(.saved)) ?? [])
+        saved = ((try? await shelf.entries(.saved).series) ?? [])
     }
 
     private func performRefill() async {
@@ -317,7 +317,7 @@ final class StackModel {
         }
         // cold_start means the library is too small to build a profile from.
         // Asking anyway would spend a request to be told nothing.
-        let usable = await library.recommendationStatus()?.canPersonalise ?? false
+        let usable = (try? await library.recommendationStatus())?.canPersonalise ?? false
         canUseProfile = usable
         return usable
     }
@@ -342,7 +342,7 @@ final class StackModel {
             limit: 20,
             page: recommendationPage,
             excluding: excluded
-        )
+        ).items
         guard !recommendations.isEmpty else { return [] }
 
         // Nil means the answer is not known, and an unverified tag name is the
@@ -378,7 +378,7 @@ final class StackModel {
         guard seedPool.isEmpty else { return }
         seedCursor = 0
 
-        let saved = ((try? await shelf.entries(.saved)) ?? []).map(\.id)
+        let saved = ((try? await shelf.entries(.saved).series) ?? []).map(\.id)
         if !saved.isEmpty {
             seedPool = saved
             source = .yourSaves

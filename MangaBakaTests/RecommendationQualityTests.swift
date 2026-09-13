@@ -221,15 +221,18 @@ struct StackSourceTests {
 
         init(status: RecommendationStatus?) { self.status = status }
 
-        func recommendationStatus() async -> RecommendationStatus? { status }
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus {
+            guard let status else { throw APIError.offline }
+            return status
+        }
 
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] {
+        ) async -> PersonalRecommendations {
             requestedPages.append(page)
             sentExclusions.append(excluding)
-            guard page <= pages.count else { return [] }
-            return pages[page - 1]
+            guard page <= pages.count else { return PersonalRecommendations() }
+            return PersonalRecommendations(items: pages[page - 1])
         }
 
         func library(page: Int, limit: Int) async -> [LibraryEntry] { libraryEntries }

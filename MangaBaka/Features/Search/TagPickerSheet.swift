@@ -77,7 +77,7 @@ struct TagPickerSheet: View {
                 isLoading = false
             }
 
-            let fetched = await catalogue.tags(limit: 500).filter(\.isUsable)
+            let fetched = (await catalogue.tags(limit: 500).value ?? []).filter(\.isUsable)
             if !fetched.isEmpty {
                 tags = fetched
                 sortedCounts = TagBreadth.sortedCounts(of: tags)

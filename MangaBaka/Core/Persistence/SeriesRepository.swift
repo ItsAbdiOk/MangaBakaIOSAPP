@@ -42,10 +42,17 @@ protocol SeriesRepositoryProtocol: Sendable {
 
     /// Everything the detail screen shows beyond the series itself. Fetched
     /// together so one slow endpoint does not stagger the screen into place.
+    ///
+    /// `SeriesExtras.failure` is set when any of the six legs failed — check
+    /// it rather than assuming an empty section means there was nothing to
+    /// show (gap 9, FAILURES-SUMMARY.md).
     func extras(for seriesId: Int) async -> SeriesExtras
 
     /// Every cover the series has, filtered to what the reader has allowed.
-    func images(for seriesId: Int) async -> [SeriesImage]
+    /// Nil when the fetch failed, distinct from a series that genuinely has
+    /// none — collapsing the two into `[]` (gap 32) made a throttled reader
+    /// see "1 cover" instead of a failure they could retry.
+    func images(for seriesId: Int) async -> [SeriesImage]?
 
     /// A series' formal relationships: sequels, spin-offs, the source it was
     /// adapted from. Nil on failure, distinct from an empty list, which is a
@@ -118,6 +125,20 @@ struct SeriesExtras: Sendable, Equatable, Codable {
     /// was already being fetched here for its tags; everything else it carried
     /// was thrown away. Kept now, and merged in by `Series.filling(gapsFrom:)`.
     var full: Series?
+    /// Set when at least one of the six concurrent legs `fetchExtras` runs
+    /// failed — cancellation excluded, since nobody left waiting on this
+    /// answer needs to be told it didn't finish (`APIError.cancelled`).
+    ///
+    /// Excluded from `Codable` on purpose: `extras(for:)` refuses to persist a
+    /// result this is set on (gap 9), so a cached row never actually carries
+    /// one, and giving `APIError` a `Codable` conformance it does not
+    /// otherwise need — just so a value nothing writes to disk can round-trip
+    /// through JSON — is not worth doing.
+    var failure: APIError?
+
+    enum CodingKeys: String, CodingKey {
+        case links, news, relationships, tags, richTags, editions, volumes, year, full
+    }
 }
 
 /// The API's sort keys, and what to call them in front of a reader.
@@ -461,7 +482,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
                 )
             )
         } catch {
-            return .empty
+            // The request itself failed — a rate limit, an outage — which is
+            // not the same thing as "nothing matched". `.empty` used to stand
+            // for both, and the screen told a throttled reader "Nothing
+            // matched. Try loosening the filters." (gap 11).
+            return MixResult(failure: error)
         }
     }
 
@@ -542,7 +567,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         cachedExclusionUserID = userID
         // Cached blends were built under the previous value, so they still
         // hold series the reader already tracks — or exclude ones they do not.
-        try? discardCachedFeeds()
+        discardCachedFeeds()
     }
 
     func cachedSeriesCount() async -> Int {
@@ -629,17 +654,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         return items
     }
 
-    /// Split out because GRDB offers both a sync and an async `write`, and in
-    /// an async context `try?` picks the async one, which does not compile here.
-    func discardCachedFeeds() throws {
-        try database.writer.write { db in
-            // Only the feed cache is cleared. The shelf holds the reader's own
-            // saves and is not derived from the filter.
-            try db.execute(sql: "DELETE FROM feedEntry")
-            try db.execute(sql: "DELETE FROM feedMetadata")
-            try Self.trimOrphans(db)
-        }
-    }
+    // `discardCachedFeeds()` moved to SeriesRepository+Cache.swift — it is
+    // cache logic through and through, and this actor's own body was over
+    // the lint's 250-line ceiling before it had a place to go.
 
     /// Volume covers and alternate editions.
     ///
@@ -648,13 +665,16 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// suggestive alternate cover, and the filter failing on exactly the thing
     /// it exists to hide is a bug this app has already shipped once, on
     /// personalised recommendations.
-    func images(for seriesId: Int) async -> [SeriesImage] {
+    func images(for seriesId: Int) async -> [SeriesImage]? {
         if let cached = cachedImages[seriesId] { return cached }
-        let all: [SeriesImage]? = try? await client.get("/v1/series/\(seriesId)/images")
-        // Nothing back is not cached: a failed fetch and a series with one
-        // cover look identical from here, and remembering the first would hide
-        // the gallery for the rest of the session.
-        guard let all, !all.isEmpty else { return [] }
+        // Nil, not swallowed: a failed fetch and a series with no covers used
+        // to look identical from here, and the gallery read "1 cover" (the
+        // series' own primary cover, drawn from elsewhere) for a throttled
+        // reader exactly as it would for one whose series really has one
+        // (gap 32).
+        guard let all: [SeriesImage] = try? await client.get("/v1/series/\(seriesId)/images") else {
+            return nil
+        }
         let presentable = all.presentable(allowedRatings: contentRatings)
         cachedImages[seriesId] = presentable
         return presentable
@@ -673,10 +693,18 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     func extras(for seriesId: Int) async -> SeriesExtras {
         if let cached = try? readDetailCache(seriesId) { return cached }
         let fresh = await fetchExtras(for: seriesId)
-        // Not cached when it came back empty: that is a failed fetch wearing
-        // the same clothes as a series with nothing to show, and caching it
-        // would make a dropped connection stick for six hours.
-        if fresh != SeriesExtras() { try? writeDetailCache(fresh, for: seriesId) }
+        // Cached only when every leg answered. Used to skip caching only an
+        // all-empty result, on the theory that an empty struct was a dropped
+        // connection wearing the same clothes as a series with nothing to
+        // show — but five legs succeeding and a sixth 429'ing produced a
+        // *non-empty* struct missing one section, and that was cached whole
+        // for six hours (gap 9). `failure` now says directly whether this is
+        // the whole answer; a partial one is never persisted at all, so the
+        // next open retries instead of the missing section staying missing
+        // for the rest of the cache's life.
+        if fresh.failure == nil, fresh != SeriesExtras() {
+            try? writeDetailCache(fresh, for: seriesId)
+        }
         return fresh
     }
 
@@ -693,40 +721,91 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         return fetched
     }
 
+    /// Runs one leg of `fetchExtras`, turning its typed throw into a `Result`
+    /// rather than dropping it with `try?` — a struct with five legs full and
+    /// one missing needs to say which one failed and why, so the section can
+    /// offer Retry instead of quietly looking like a series with nothing
+    /// there (gap 9, FAILURES-SUMMARY.md).
+    private static func attempt<T>(
+        _ operation: () async throws(APIError) -> T
+    ) async -> Result<T, APIError> {
+        do {
+            return .success(try await operation())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private static func value<T>(_ result: Result<T, APIError>) -> T? { try? result.get() }
+
+    private static func failure<T>(_ result: Result<T, APIError>) -> APIError? {
+        if case let .failure(error) = result { return error }
+        return nil
+    }
+
     private func fetchExtras(for seriesId: Int) async -> SeriesExtras {
-        // Concurrent rather than sequential: three independent reads, and the
+        // Concurrent rather than sequential: six independent reads, and the
         // detail screen should not wait for them in series.
-        async let links: [SeriesLink]? = try? client.get("/v1/series/\(seriesId)/links")
-        async let news: [NewsItem]? = try? client.get(
-            "/v1/series/\(seriesId)/news",
-            query: [URLQueryItem(name: "limit", value: "6")]
-        )
-        async let related: [SeriesRelationship]? = try? client.get(
-            "/v1/series/\(seriesId)/relationships"
-        )
+        async let links: Result<[SeriesLink], APIError> = Self.attempt {
+            () async throws(APIError) -> [SeriesLink] in
+            try await client.get("/v1/series/\(seriesId)/links")
+        }
+        async let news: Result<[NewsItem], APIError> = Self.attempt {
+            () async throws(APIError) -> [NewsItem] in
+            try await client.get(
+                "/v1/series/\(seriesId)/news",
+                query: [URLQueryItem(name: "limit", value: "6")]
+            )
+        }
+        async let related: Result<[SeriesRelationship], APIError> = Self.attempt {
+            () async throws(APIError) -> [SeriesRelationship] in
+            try await client.get("/v1/series/\(seriesId)/relationships")
+        }
         // The only source of tags and year — see SeriesExtras.
-        async let full: Series? = try? client.get("/v1/series/\(seriesId)")
-        async let editions: [SeriesEdition]? = try? client.get(
-            "/v1/series/\(seriesId)/collections"
-        )
+        async let full: Result<Series, APIError> = Self.attempt {
+            () async throws(APIError) -> Series in
+            try await client.get("/v1/series/\(seriesId)")
+        }
+        async let editions: Result<[SeriesEdition], APIError> = Self.attempt {
+            () async throws(APIError) -> [SeriesEdition] in
+            try await client.get("/v1/series/\(seriesId)/collections")
+        }
         // Published volumes: dates, prices, page counts, ISBNs and per-volume
         // cover art. A sixth concurrent read rather than a lazy one, because
         // the section sits above the fold on a short series and a spinner that
         // appears after the page has settled reads as a second page load.
-        async let works: [SeriesWork]? = try? client.get("/v1/series/\(seriesId)/works")
+        async let works: Result<[SeriesWork], APIError> = Self.attempt {
+            () async throws(APIError) -> [SeriesWork] in
+            try await client.get("/v1/series/\(seriesId)/works")
+        }
 
-        let detail = await full
-        return await SeriesExtras(
-            links: links ?? [],
-            news: news ?? [],
-            relationships: (related ?? []).filter(\.series.isDiscoverable),
+        let results = await (links, news, related, full, editions, works)
+        let detail = Self.value(results.3)
+
+        return SeriesExtras(
+            links: Self.value(results.0) ?? [],
+            news: Self.value(results.1) ?? [],
+            relationships: (Self.value(results.2) ?? []).filter(\.series.isDiscoverable),
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
-            editions: (await editions ?? []).presentable,
-            volumes: SeriesWork.volumes(from: await works ?? []),
+            editions: (Self.value(results.4) ?? []).presentable,
+            volumes: SeriesWork.volumes(from: Self.value(results.5) ?? []),
             year: detail?.year,
-            full: detail
+            full: detail,
+            failure: Self.combinedFailure([
+                Self.failure(results.0), Self.failure(results.1), Self.failure(results.2),
+                Self.failure(results.3), Self.failure(results.4), Self.failure(results.5)
+            ])
         )
     }
 
+    /// The first real failure among the six legs, cancellation dropped:
+    /// nobody still waiting on this page needs telling that a request they no
+    /// longer care about didn't finish (`APIError.cancelled`'s doc comment).
+    /// Which leg is named is arbitrary when more than one failed — no caller
+    /// distinguishes among them today — but a single `APIError` is what
+    /// `SeriesExtras.failure` and every test written against it expect.
+    private static func combinedFailure(_ perLeg: [APIError?]) -> APIError? {
+        perLeg.compactMap { $0 }.first { $0 != .cancelled }
+    }
 }

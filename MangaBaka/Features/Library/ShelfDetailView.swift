@@ -15,6 +15,7 @@ struct ShelfDetailView: View {
     @State private var filter: Filter = .all
     @State private var editing: LibraryEntry?
     @State private var searchText = ""
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     enum Filter: String, CaseIterable, Identifiable {
         case all
@@ -50,8 +51,20 @@ struct ShelfDetailView: View {
     /// scrolling, and a field that filters six rows is furniture.
     private var showsSearch: Bool { shelf.entries.count >= 12 }
 
+    /// Gap 114: an edit made from this screen (unrating the shelf's last
+    /// unrated entry, say) can shrink `availableFilters` out from under the
+    /// filter `@State` still points at — the chip for it disappears, but
+    /// `filter` itself stays selected, and `visible` was left permanently
+    /// empty with no chip left to tap back to "All". This is the pure rule;
+    /// `body`'s `.onChange` keeps the `@State` itself in sync with it.
+    nonisolated static func visibleFilter(selected: Filter, available: [Filter]) -> Filter {
+        available.contains(selected) ? selected : .all
+    }
+
+    private var effectiveFilter: Filter { Self.visibleFilter(selected: filter, available: availableFilters) }
+
     private var visible: [LibraryEntry] {
-        let filtered = showsFilters ? shelf.entries.filter(filter.matches) : shelf.entries
+        let filtered = showsFilters ? shelf.entries.filter(effectiveFilter.matches) : shelf.entries
         let needle = searchText.trimmingCharacters(in: .whitespaces)
         guard !needle.isEmpty else { return filtered }
         return filtered.filter { entry in
@@ -71,21 +84,44 @@ struct ShelfDetailView: View {
                     .padding(.bottom, 14)
                 }
                 if showsFilters { filterChips }
-                if visible.isEmpty && !searchText.isEmpty {
-                    Text("Nothing on this shelf matches")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                        .padding(.vertical, 20)
+                // Gap 113 (partial — the routing half of this belongs to
+                // whatever pushed this screen, not to this view): a shelf
+                // emptied by an edit made from here shows a real empty state
+                // rather than a bare scroll view with nothing in it.
+                if shelf.entries.isEmpty {
+                    EmptyState(
+                        title: "Nothing left on this shelf",
+                        message: "Every series here has moved, or been edited off it."
+                    )
+                    .padding(.top, 40)
+                } else if visible.isEmpty {
+                    EmptyState(
+                        title: "Nothing matches",
+                        message: searchText.isEmpty
+                            ? "No series here match this filter."
+                            : "No series here match this search.",
+                        actionTitle: "Clear",
+                        actionWeight: .aside,
+                        action: {
+                            searchText = ""
+                            filter = .all
+                        }
+                    )
+                    .padding(.top, 20)
                 }
                 ForEach(visible) { entry in
-                    if let series = entry.series {
-                        LibraryRow(
-                            entry: entry,
-                            series: series,
-                            onOpen: { path.append(series) },
-                            onEdit: { editing = entry }
-                        )
-                    }
+                    LibraryRow(
+                        entry: entry,
+                        series: entry.series,
+                        onOpen: {
+                            guard let series = entry.series else {
+                                toasts?.show("This entry didn't load fully. Try again later.", kind: .failure)
+                                return
+                            }
+                            path.append(series)
+                        },
+                        onEdit: entry.series == nil ? nil : { editing = entry }
+                    )
                 }
             }
             .padding(.horizontal, Metrics.gutter)
@@ -93,6 +129,12 @@ struct ShelfDetailView: View {
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
+        // Gap 114: keeps the actual selection in step with what the chips
+        // can offer, rather than leaving `filter` pointed at a chip that
+        // just disappeared.
+        .onChange(of: availableFilters) { _, available in
+            filter = Self.visibleFilter(selected: filter, available: available)
+        }
         .background(Palette.ground)
         .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle(shelf.label)
@@ -154,28 +196,60 @@ struct ShelfDetailView: View {
     }
 }
 
+/// Offers "Edit" only when there is something for it to open (gap 115).
+private struct EditActionIfAvailable: ViewModifier {
+    let onEdit: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let onEdit {
+            content
+                .accessibilityAction(named: "Edit") { onEdit() }
+                .contextMenu {
+                    Button("Edit", systemImage: "pencil", action: onEdit)
+                }
+        } else {
+            content
+        }
+    }
+}
+
 /// One library entry as a row: cover, title, where you left it, your rating,
 /// and your note if you wrote one.
+///
+/// `series` is optional and `onEdit` nil where it is missing (gap 115): an
+/// entry whose series never decoded has nothing for a detail page or an edit
+/// sheet to show, so `onOpen` is expected to toast rather than navigate, and
+/// no Edit action is offered at all rather than one that would open a sheet
+/// with no title.
 struct LibraryRow: View {
     let entry: LibraryEntry
-    let series: Series
+    let series: Series?
     let onOpen: () -> Void
-    let onEdit: () -> Void
+    let onEdit: (() -> Void)?
 
     var body: some View {
         Button(action: onOpen) {
             HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                CoverImage(
-                    cover: series.cover,
-                    width: Metrics.coverUpcomingThumb,
-                    radius: Metrics.radiusThumb,
-                    accessibilityText: ""
-                )
-                // The row combines into one element carrying the title, so the
-                // cover would only add a focus stop that says nothing.
-                .accessibilityHidden(true)
+                if let series {
+                    CoverImage(
+                        cover: series.cover,
+                        width: Metrics.coverUpcomingThumb,
+                        radius: Metrics.radiusThumb,
+                        accessibilityText: ""
+                    )
+                    // The row combines into one element carrying the title, so
+                    // the cover would only add a focus stop that says nothing.
+                    .accessibilityHidden(true)
+                } else {
+                    RoundedRectangle(cornerRadius: Metrics.radiusThumb, style: .continuous)
+                        .fill(Palette.surface)
+                        .frame(
+                            width: Metrics.coverUpcomingThumb,
+                            height: Metrics.coverUpcomingThumb / Metrics.coverAspect
+                        )
+                }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(series.displayTitle ?? "Untitled series")
+                    Text(series?.displayTitle ?? "Untitled series")
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(2)
@@ -209,13 +283,12 @@ struct LibraryRow: View {
         .accessibilityElement(children: .combine)
         // A row is a link to the series; editing is a separate, deliberate act
         // rather than something a stray tap can do to real data.
-        .accessibilityAction(named: "Edit") { onEdit() }
-        .contextMenu {
-            Button("Edit", systemImage: "pencil", action: onEdit)
-        }
+        .modifier(EditActionIfAvailable(onEdit: onEdit))
     }
 
-    private var progressLine: String { Self.progressLine(entry, series: series) }
+    private var progressLine: String {
+        series.map { Self.progressLine(entry, series: $0) } ?? entry.state.title
+    }
 
     /// "left at 18/112 · 16%", or a plain state when there is no progress.
     ///
@@ -236,8 +309,8 @@ struct LibraryRow: View {
         // button has no ceiling. "left at 205/201 · 102%" is the result, and
         // the progress bar beside it already clamps, so the two disagreed.
         guard read <= total else { return "left at ch \(LibraryEditSheet.chapterText(read))" }
-        let percent = Int((read / total * 100).rounded())
-        return "left at \(LibraryEditSheet.chapterText(read))/\(Int(total)) · \(percent)%"
+        let percent = Int(wholeOrClamped: (read / total * 100).rounded())
+        return "left at \(LibraryEditSheet.chapterText(read))/\(Int(wholeOrClamped: total)) · \(percent)%"
     }
 }
 
@@ -249,7 +322,7 @@ struct LibraryRow: View {
 struct RatingPips: View {
     let rating: Double
 
-    private var filled: Int { max(0, min(5, Int((rating / 20).rounded()))) }
+    private var filled: Int { max(0, min(5, Int(wholeOrClamped: (rating / 20).rounded()))) }
 
     var body: some View {
         HStack(spacing: 3) {

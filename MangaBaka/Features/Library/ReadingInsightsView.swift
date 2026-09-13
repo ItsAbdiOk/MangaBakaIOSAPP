@@ -17,6 +17,11 @@ import SwiftUI
 /// is a different claim from a verdict on all of them.
 struct ReadingInsightsView: View {
     let entries: [LibraryEntry]
+    /// False while the library walk this was built from is still going.
+    /// Defaulted to `true` so every existing call site keeps compiling and
+    /// behaving exactly as before until the shell (batch 6) passes the real
+    /// value from `LibraryModel.isComplete`.
+    var isComplete = true
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
 
@@ -28,6 +33,22 @@ struct ReadingInsightsView: View {
     /// was dropping them. The tag verdicts alone are 13ms — a thousand entries
     /// at forty tags each is forty thousand dictionary touches.
     @State private var derived = Derived()
+    /// Gap 93: `derived` starts at its all-zero default and the first real
+    /// pass is a detached, off-main-actor computation — there is a real,
+    /// visible window where this screen would otherwise show "0 chapters"
+    /// before flipping to the true number. This is the loading branch that
+    /// window needs, decided before the empty/content branches rather than
+    /// after them.
+    @State private var hasComputed = false
+
+    /// What `.task(id:)` keys the recompute on. `entries` alone is not
+    /// `Hashable`/`Equatable` as a `.task` id in a way that is cheap to
+    /// compare, and a `let` property does not re-trigger a `.task {}` with no
+    /// id at all when a parent hands this view a new array — which is why
+    /// this screen used to show stale insights after a library reload landed
+    /// while it was open. Count plus completedness is enough to catch both a
+    /// changed library and a walk finishing.
+    private var revision: String { "\(entries.count)-\(isComplete)" }
 
     private struct Derived {
         var waiting: [ReadingInsights.Behind] = []
@@ -42,10 +63,35 @@ struct ReadingInsightsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                readingTime
-                if !derived.nearly.isEmpty { finishedSection }
-                if !derived.waiting.isEmpty { catchUpSection }
-                if !derived.verdicts.isEmpty { tasteSection }
+                // Gap 93 (decision: say "based on N of M" rather than hide):
+                // a partial library still has something to say about the
+                // part that loaded, and hiding the whole screen until a
+                // 900-series walk finishes would be a worse answer than
+                // naming the number it is built from.
+                if !isComplete {
+                    StaleBar(
+                        headline: "Built from the \(entries.count.formatted()) series that loaded",
+                        detail: "This updates once the rest of your library finishes loading."
+                    )
+                }
+                if !hasComputed {
+                    loading
+                } else if !ReadingInsights.hasAnythingToSay(entries) {
+                    EmptyState(
+                        title: "Nothing to say yet",
+                        message: """
+                        Read a few chapters, finish something, or drop something you \
+                        didn't like — these come from your library once there is a \
+                        pattern in it.
+                        """
+                    )
+                    .padding(.top, 20)
+                } else {
+                    readingTime
+                    if !derived.nearly.isEmpty { finishedSection }
+                    if !derived.waiting.isEmpty { catchUpSection }
+                    if !derived.verdicts.isEmpty { tasteSection }
+                }
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)
@@ -56,10 +102,20 @@ struct ReadingInsightsView: View {
         .scrollEdgeEffectStyle(.hard, for: .top)
         .navigationTitle("Your reading")
         .navigationBarTitleDisplayMode(.inline)
-        // Every visit, not keyed on a count: a library can change without
-        // changing size — a state moved from reading to dropped is exactly the
-        // sort of edit that should change what this screen says.
-        .task { await recompute() }
+        // Keyed on `revision` rather than run once: a plain `.task {}` only
+        // fires the first time this view's identity appears, so a library
+        // reload landing while this screen was already open never
+        // recomputed anything (gap 93).
+        .task(id: revision) { await recompute() }
+    }
+
+    private var loading: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Capsule().fill(Palette.surface).frame(width: 160, height: 26)
+            Capsule().fill(Palette.surface).frame(width: 220, height: 14)
+        }
+        .shimmering()
+        .accessibilityHidden(true)
     }
 
     /// Off the main actor, because it is tens of milliseconds of pure work on a
@@ -78,10 +134,17 @@ struct ReadingInsightsView: View {
             )
         }.value
         derived = computed
+        hasComputed = true
     }
 
     // MARK: - Time
 
+}
+
+/// The screen's sections, split out of the type above purely to stay under
+/// SwiftLint's `type_body_length` — the loading/empty branches this batch
+/// added (gap 93) pushed the single declaration over it.
+extension ReadingInsightsView {
     private var readingTime: some View {
         let hours = derived.hours
         let chapters = derived.chapters
@@ -93,7 +156,7 @@ struct ReadingInsightsView: View {
             // times a per-format estimate and the screen should not pretend
             // otherwise.
             Text("""
-            About \(Int(hours.rounded()).formatted()) hours, going by how long \
+            About \(Int(wholeOrClamped: hours.rounded()).formatted()) hours, going by how long \
             a chapter usually takes.
             """)
                 .typeSubtitle()
@@ -176,7 +239,7 @@ struct ReadingInsightsView: View {
         // L7: `Int(...)` truncated a half chapter to a whole one here, though
         // not in the editor for the same entry.
         let read = LibraryEditSheet.chapterText(item.entry.progressChapter ?? 0)
-        let total = Int(item.series?.totalChapters ?? 0)
+        let total = Int(wholeOrClamped: item.series?.totalChapters ?? 0)
         var line = "\(item.entry.state.title) · ch \(read) of \(total)"
         // "Waiting for you" only: a filter, not a promise — see ReadingTime.
         // Left off "It finished without telling you" on purpose, the caller

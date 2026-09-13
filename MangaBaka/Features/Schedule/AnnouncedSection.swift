@@ -11,46 +11,82 @@ import SwiftUI
 /// series appearing here is removed from the estimates below.
 struct AnnouncedSection: View {
     let works: [UpcomingWork]
+    /// Gap 97: fetching announced dates failing used to collapse into the
+    /// same empty `works` a genuinely quiet week produces, so a reader
+    /// offline saw "nothing announced" — the truth withheld rather than
+    /// stated. Set, this renders as an inline failure with Retry instead of
+    /// the section simply not appearing.
+    var failure: APIError?
+    var onRetry: (() async -> Void)?
+    /// Opens the series a row names, given its id. Gap 101: a row used to be
+    /// a dead tap — nothing here made it into a link at all. Defaulted so
+    /// existing previews and any other call site keep compiling; `onOpen`
+    /// receiving an id it cannot resolve is expected to no-op rather than
+    /// this view guessing at a fallback destination.
+    var onOpen: (Int) -> Void = { _ in }
 
     var body: some View {
         if !works.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    SectionHeader(title: "Announced")
-                    Text("""
-                    Dates the publishers have given. Everything below this is \
-                    an estimate; these are not.
-                    """)
-                    .typeSmallMeta()
-                    .foregroundStyle(Palette.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
+                heading
                 VStack(spacing: 8) {
                     ForEach(works) { work in
                         row(work)
                     }
                 }
             }
+        } else if let failure {
+            VStack(alignment: .leading, spacing: 12) {
+                heading
+                InlineFailure(error: failure, retry: onRetry)
+            }
+        }
+    }
+
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            SectionHeader(title: "Announced")
+            Text("""
+            Dates the publishers have given. Everything below this is \
+            an estimate; these are not.
+            """)
+            .typeSmallMeta()
+            .foregroundStyle(Palette.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private func row(_ work: UpcomingWork) -> some View {
+        // Gap 101: the date-and-title half of the row opens the series (when
+        // its id resolves to one); the publisher link stays its own,
+        // separate tap target at the trailing edge rather than nested inside
+        // the same control — a `Link` inside a `Button` fights it for the
+        // gesture instead of adding a second one.
         HStack(alignment: .top, spacing: 12) {
-            dateBlock(work)
+            Button {
+                guard let seriesId = work.seriesId else { return }
+                onOpen(seriesId)
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    dateBlock(work)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(work.title ?? "Untitled")
-                    .typeRowTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let detail = detail(work) {
-                    Text(detail)
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(work.title ?? "Untitled")
+                            .typeRowTitle()
+                            .foregroundStyle(Palette.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let detail = detail(work) {
+                            Text(detail)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textMuted)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.press)
+            .disabled(work.seriesId == nil)
 
             if let link = work.publisherLink {
                 Link(destination: link) {

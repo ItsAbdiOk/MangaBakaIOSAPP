@@ -72,6 +72,6 @@ struct InlineSearchReachabilityTests {
     func thresholdExists() throws {
         let source = try SourceTree.read("MangaBaka/Features/Library/ShelfDetailView.swift")
         #expect(source.contains("shelf.entries.count >= 12"))
-        #expect(source.contains("Nothing on this shelf matches"))
+        #expect(source.contains("No series here match this filter."))
     }
 }

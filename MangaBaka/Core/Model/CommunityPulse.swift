@@ -70,7 +70,7 @@ struct CommunityPulse: Codable, Equatable, Sendable {
         let difference = Int(current - previous)
         return Figure(
             id: id,
-            value: Int(current).formatted(),
+            value: Int(wholeOrClamped: current).formatted(),
             label: label,
             change: difference > 0 ? "+\(difference.formatted()) this week" : nil
         )

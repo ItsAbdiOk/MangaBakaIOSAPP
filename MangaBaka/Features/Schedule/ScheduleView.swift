@@ -21,35 +21,72 @@ struct ScheduleView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
 
-                // Announced dates lead, and appear even when there is nothing
-                // to estimate from: a reader with no measurable series can
-                // still have a volume arriving on Tuesday.
-                AnnouncedSection(works: model.announced)
-                    .padding(.bottom, model.announced.isEmpty ? 0 : 26)
-
-                if let failure = model.libraryFailure, model.announced.isEmpty {
-                    FailureState(error: failure, retry: { await model.load() })
+                // Gap 95: this used to fall straight through to the content
+                // branches with no loading state of its own — `screenState`
+                // decides `.loading` first, exactly the way
+                // `LibraryModel.screenState` already does, so the "0
+                // estimated of 0 in scope" cold-open flash cannot happen
+                // ahead of the first real read.
+                switch model.screenState {
+                case .loading:
+                    loadingSkeleton
+                case let .failed(error):
+                    FailureState(error: error, retry: { await model.load() })
                         .padding(.top, 60)
-                } else if model.libraryFailure != nil {
-                    EmptyView()
-                } else if model.isEmpty && model.announced.isEmpty {
+                case .empty:
                     emptyState
-                } else if model.isEmpty {
-                    EmptyView()
-                } else {
-                    controls
-                    if model.isMeasuring { measuringCard }
-                    if model.isStale { staleCard }
-                    // The scope card counts estimates. Before the first
-                    // measurement there are none, and "0 estimated of 0 in
-                    // scope" over two thirds of an empty screen is what the
-                    // device review found. Say what Measure will do instead.
-                    if model.hasNeverMeasured {
-                        firstRunCard
+                case .list:
+                    // Announced dates lead, and appear even when there is
+                    // nothing to estimate from: a reader with no measurable
+                    // series can still have a volume arriving on Tuesday.
+                    // Gap 101: an announced row used to be inert — no way to
+                    // reach the series it names. `ScheduleModel.series(for:)`
+                    // resolves the id against the library walk this section
+                    // is already narrowed from; a nil (the entry's series
+                    // did not itself decode) leaves the row as it was rather
+                    // than opening nothing.
+                    AnnouncedSection(
+                        works: model.announced,
+                        failure: model.announcedFailure,
+                        onRetry: { await model.retryAnnounced() },
+                        onOpen: { seriesId in
+                            guard let series = model.series(for: seriesId) else { return }
+                            zoomRoute?.source = ZoomRoute.id("schedule-announced", series.id)
+                            path.append(series)
+                        }
+                    )
+                    .padding(.bottom, model.announced.isEmpty && model.announcedFailure == nil ? 0 : 12)
+
+                    // Gap 96: the library measurement failing used to blank
+                    // the estimate half of the screen with no word, even
+                    // though the announced section above it (a different
+                    // read) still had real content to show.
+                    if let stale = model.announcedStaleLine {
+                        StaleBar(
+                            headline: stale.headline, detail: stale.detail,
+                            retry: { await model.load() }
+                        )
+                        .padding(.bottom, 14)
+                    }
+
+                    if model.isEmpty {
+                        EmptyView()
                     } else {
-                        scopeCard
-                        ForEach(model.groups) { group in
-                            groupSection(group)
+                        controls
+                        if model.isMeasuring { measuringCard }
+                        if model.isStale { staleCard }
+                        // The scope card counts estimates. Before the first
+                        // measurement there are none, and "0 estimated of 0
+                        // in scope" over two thirds of an empty screen is
+                        // what the device review found. Say what Measure
+                        // will do instead.
+                        if model.hasNeverMeasured {
+                            firstRunCard
+                        } else {
+                            scopeCard
+                            ForEach(model.groups) { group in
+                                groupSection(group)
+                            }
                         }
                     }
                 }
@@ -62,6 +99,23 @@ struct ScheduleView: View {
         .background(Palette.ground)
         .task { await model.load() }
         .onDisappear { model.stop() }
+    }
+
+    /// Gap 95: rows in the schedule's own shape rather than a bare spinner,
+    /// so the first paint does not jump once real content lands — the same
+    /// reasoning `LibraryView.loading` already applies.
+    private var loadingSkeleton: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    Capsule().fill(Palette.surface).frame(width: 160, height: 13)
+                    Capsule().fill(Palette.surface).frame(width: 220, height: 10)
+                }
+            }
+        }
+        .padding(.top, 24)
+        .shimmering()
+        .accessibilityHidden(true)
     }
 
     private var header: some View {
@@ -112,6 +166,13 @@ struct ScheduleView: View {
         .padding(.horizontal, 2)
     }
 
+}
+
+/// The individual cards, split out of the type above purely to stay under
+/// SwiftLint's `type_body_length` — this batch's additions (`screenState`'s
+/// loading/failed/empty branches and the announced-stale-line combo, gaps
+/// 95/96/98) pushed the single declaration over it.
+extension ScheduleView {
     /// A build takes minutes and can be interrupted by the phone locking, so
     /// the card says plainly that progress survives.
     private var measuringCard: some View {
@@ -171,6 +232,18 @@ struct ScheduleView: View {
                 .foregroundStyle(Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 13)
+            // Gap 98: a first measurement that failed for every series left
+            // `measuredAt` nil — this card is still `hasNeverMeasured` — so
+            // three minutes of visible progress ended right back here with
+            // no sign anything had even been tried, "Measure now" identical
+            // to how it read before the attempt.
+            if let failure = model.measurementFailureLine {
+                Text(failure)
+                    .typeFootnote()
+                    .foregroundStyle(Palette.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 9)
+            }
             Button {
                 Task { await model.measure(refresh: false) }
             } label: {

@@ -32,53 +32,113 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     }
 
     /// `ReleaseFeedProvider` conformance: forwards to `feed(for:seriesID:)`.
-    func feed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer {
         await feed(for: links, seriesID: series.id)
     }
 
-    /// The feed for whichever of a series' links Webtoons will answer for, or
-    /// nil when there is none or the fetch failed.
-    ///
-    /// Failure is ordinary here and must stay silent: the series page already
-    /// has a cadence estimated from release history, and this only ever
-    /// replaces it with something better.
-    func feed(for links: [SeriesLink], seriesID: Int) async -> ReleaseFeed? {
+    /// The feed for whichever of a series' links Webtoons will answer for.
+    /// See `FeedAnswer` for what each case means; `.failed` is ordinary here
+    /// and must stay silent by the time it reaches the series page — the
+    /// page already has a cadence estimated from release history, and this
+    /// only ever replaces it with something better when it can.
+    func feed(for links: [SeriesLink], seriesID: Int) async -> FeedAnswer {
         let candidates = links.compactMap(\.safeURL)
+        guard !candidates.isEmpty else { return .notCarried }
+
         // Versioned like the other caches: a parser change must not be
         // outlived by a week of entries read under the old rules. Bumped to
-        // v3 when `ReleaseFeed` grew `source`/`totalCount`/`finished` — the
-        // Codable shape changed, so a v2 cache file would fail to decode.
-        let key = "v3-\(seriesID)"
-        if let cached = readCache(key) { return cached }
+        // v4, from v3 (5bb36b8): the parser and the never-cache-empty rule
+        // both changed without the key following, so a v3 file written under
+        // the old rules could still answer for up to a week under the new
+        // ones (gap 29).
+        let key = "v4-\(seriesID)"
+        if let cached = readCache(key) { return .answered(cached) }
 
         let urls = await resolveFeedURLs(candidates)
-        guard !urls.isEmpty else { return nil }
-
-        for url in urls {
-            let wait = spacing.claim(now: clock.now)
-            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-
-            guard let (data, response) = try? await session.data(from: url),
-                  let http = response as? HTTPURLResponse
-            else { continue }
-            if http.statusCode == 429 {
-                spacing.backOff(until: clock.now.addingTimeInterval(60))
-                return nil
-            }
-            // A wrong genre or slug in the path answers 500, not 404, and
-            // that is indistinguishable here from the feed being down.
-            // Either way: try the next candidate, if there is one.
-            guard (200..<300).contains(http.statusCode), let feed = WebtoonsFeedParser.parse(data)
-            else { continue }
-            // A feed that parsed with a channel title but zero entries is not
-            // a real answer — every `pubDate` failed to parse, the shape a
-            // localised non-English edition takes (measured live, `/fr/`).
-            // Caching it would hide the series for a week; try the next URL.
-            guard !feed.entries.isEmpty else { continue }
-            writeCache(key, feed)
-            return feed
+        guard !urls.isEmpty else {
+            return .failed(.transport(underlying: "No usable Webtoons feed URL.", party: .webtoons))
         }
-        return nil
+
+        var sawAnsweredEmpty = false
+        var lastFailure: APIError?
+        for url in urls {
+            switch await attempt(url) {
+            case let .feed(feed):
+                writeCache(key, feed)
+                return .answered(feed)
+            case .empty:
+                // A feed that parsed with a channel title but zero entries is
+                // not a real answer — every `pubDate` failed to parse, the
+                // shape a localised non-English edition takes (measured
+                // live, `/fr/`). Caching it would hide the series for a
+                // week; try the next URL. It is also not a *failure* —
+                // Webtoons answered, there is simply nothing usable in this
+                // candidate — so it counts toward `.answered(nil)`, not
+                // toward `lastFailure`.
+                sawAnsweredEmpty = true
+            case .cancelled:
+                return .failed(.cancelled)
+            case let .failed(error, isRateLimit) where isRateLimit:
+                // A rate limit is global to this client, not per-candidate:
+                // trying the next URL would just spend it too.
+                return .failed(error)
+            case let .failed(error, _):
+                lastFailure = error
+            }
+        }
+        if sawAnsweredEmpty { return .answered(nil) }
+        return .failed(
+            lastFailure ?? .transport(underlying: "No Webtoons candidate answered.", party: .webtoons)
+        )
+    }
+
+    /// One candidate URL's outcome, factored out of `feed(for:seriesID:)` to
+    /// keep that function's branching under the lint cap — the loop over
+    /// candidates is a `switch` on this rather than a wall of `guard`s.
+    private enum Attempt {
+        case feed(ReleaseFeed)
+        case empty
+        case cancelled
+        case failed(APIError, isRateLimit: Bool)
+    }
+
+    private func attempt(_ url: URL) async -> Attempt {
+        let wait = spacing.claim(now: clock.now)
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: a cancelled wait must not still spend the request.
+            guard !Task.isCancelled else { return .cancelled }
+        }
+
+        guard let (data, response) = try? await session.data(from: url) else {
+            return .failed(
+                .transport(underlying: "Webtoons request failed.", party: .webtoons), isRateLimit: false
+            )
+        }
+        guard let http = response as? HTTPURLResponse else {
+            let error = APIError.transport(underlying: "Webtoons sent a non-HTTP response.", party: .webtoons)
+            return .failed(error, isRateLimit: false)
+        }
+        if http.statusCode == 429 {
+            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            return .failed(.rateLimited(retryAfter: retryAfter, party: .webtoons), isRateLimit: true)
+        }
+        // A wrong genre or slug in the path answers 500, not 404, and that is
+        // indistinguishable here from the feed being down. Either way: try
+        // the next candidate, if there is one.
+        guard (200..<300).contains(http.statusCode) else {
+            let message = "Webtoons returned \(http.statusCode)."
+            let error = APIError.server(status: http.statusCode, message: message, party: .webtoons)
+            return .failed(error, isRateLimit: false)
+        }
+        guard let feed = WebtoonsFeedParser.parse(data) else {
+            return .failed(
+                .decoding(underlying: "Webtoons feed did not parse.", party: .webtoons), isRateLimit: false
+            )
+        }
+        guard !feed.entries.isEmpty else { return .empty }
+        return .feed(feed)
     }
 
     /// Usable feed URLs, in the order to try them, following one redirect
@@ -100,7 +160,11 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
         else { return [] }
 
         let wait = spacing.claim(now: clock.now)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        if wait > 0 {
+            try? await Task.sleep(for: .seconds(wait))
+            // Gap 28: see `feed(for:seriesID:)` above.
+            guard !Task.isCancelled else { return [] }
+        }
         // URLSession follows redirects itself, so the landing page's URL is
         // what comes back on the response — the body is discarded.
         guard let (_, response) = try? await session.data(from: lookup),

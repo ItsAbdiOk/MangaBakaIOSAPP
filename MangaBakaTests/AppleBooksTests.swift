@@ -341,6 +341,77 @@ struct AppleBooksClientTests {
         let second = await client.volumes(for: series, country: "gb")
         #expect(second?.count == 1)
     }
+
+    /// Gap 72: the cache file already carried `storedAt` and every read threw
+    /// it away. Expected failure before the fix: this does not compile —
+    /// `readCache` returned `[AppleBooksVolume]?` with no age alongside it.
+    @Test("The cache exposes when it was written, not only what")
+    func cacheExposesAge() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
+        let writtenAt = clock.now
+
+        _ = await client.volumes(for: series, country: "gb")
+        clock.advance(by: 6 * 24 * 3600)
+
+        let key = "v5-\(series.id)-gb-any"
+        let cached = await client.readCache(key)
+        #expect(cached?.storedAt == writtenAt, "the age must be the write time, not the read time")
+    }
+
+    /// Gap 73: a 403 used to get the same 60s backoff as a 429, on the theory
+    /// that Apple answers an over-limit client with 403 as often as 429. It
+    /// also answers 403 for a store the requested country does not sell
+    /// ebooks in, which has nothing to do with this client having asked too
+    /// much — backing every future request off for that would stall
+    /// `japaneseVolumes` (a different country) for an unrelated reason.
+    /// Expected failure before the fix: the second call below also returns
+    /// nil, because the first 403 armed a 60s backoff that suppressed it.
+    @Test("A 403 does not back off the way a 429 does")
+    func forbiddenDoesNotBackOff() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 403)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
+
+        let first = await client.volumes(for: series, country: "gb")
+        #expect(first == nil)
+
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        // No time advance at all: if the 403 had armed a backoff the way a
+        // 429 does, this would still be inside its 60s window and answer nil.
+        let second = await client.volumes(for: series, country: "gb")
+        #expect(second?.count == 1, "a 403 must not suppress the very next request")
+    }
+
+    /// Gap 28: `try? await Task.sleep` swallowed cancellation and fell
+    /// through to firing the request anyway — for a page the reader already
+    /// left. Expected failure before the fix: `URLProtocolStub.requests` is
+    /// non-empty, because the cancelled task still spent its claimed slot.
+    @Test("A cancelled wait for a request slot does not fire the request")
+    func cancelledWaitDoesNotFireTheRequest() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+        let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
+
+        // Claim the only free slot with a call that never awaits far enough
+        // to be cancelled, so the next call must wait — that wait is what
+        // gets cancelled below.
+        let warm = Task { await client.volumes(for: series, country: "gb") }
+        _ = await warm.value
+
+        let task = Task { await client.volumes(for: series, country: "fr") }
+        task.cancel()
+        _ = await task.value
+
+        #expect(URLProtocolStub.requests.count == 1, "only the warm-up request should have been sent")
+    }
 }
 
 @Suite("Apple volumes on the page", .enabled(if: SourceTree.isAvailable))

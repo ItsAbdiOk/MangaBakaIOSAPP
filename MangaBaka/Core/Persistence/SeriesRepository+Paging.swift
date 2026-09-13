@@ -35,7 +35,11 @@ extension SeriesRepository {
                 total: pagination?.count
             )
         } catch {
-            return FeedResult(series: [], origin: .staleAfter(error))
+            // `hasMore: true` on a failed page, not the default `false`: a
+            // page that failed to load is not the end of the feed, and
+            // leaving it at the default made a page-2 failure look
+            // indistinguishable from "nothing more exists" (gap 15).
+            return FeedResult(series: [], origin: .staleAfter(error), hasMore: true)
         }
     }
 
@@ -56,6 +60,11 @@ extension SeriesRepository {
                 total: pagination?.count
             )
         } catch {
-            return FeedResult(series: [], origin: .staleAfter(error))
+            // Same reasoning as `feedPage`'s catch above: a failed page is not
+            // the end of the results, so `hasMore` stays true rather than
+            // defaulting to false and reading as "nothing more to find"
+            // (gap 15). Applies to `search`'s own page 1 too — a failed first
+            // page and an exhausted query must not look alike either.
+            return FeedResult(series: [], origin: .staleAfter(error), hasMore: true)
         }
     }}

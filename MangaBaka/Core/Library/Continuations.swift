@@ -92,6 +92,11 @@ final class ContinuationsModel {
     private let repository: any SeriesRepositoryProtocol
     private(set) var items: [Continuation] = []
     private(set) var isLoading = false
+    /// True when at least one of the last walk's asks failed rather than
+    /// genuinely finding nothing. The row shows `InlineFailure` under its
+    /// header instead of vanishing when this is set and `items` is empty —
+    /// see `ContinuationsRow`.
+    private(set) var hasFailure = false
     /// The finished entries' own ids `items` was last built from. A second
     /// `load` with the same set is a no-op — the library screen re-appears
     /// far more often than the reader finishes a new series.
@@ -104,6 +109,17 @@ final class ContinuationsModel {
     /// Fetches relationships for up to eight recently completed series,
     /// sequentially — this is at most eight requests, not worth the
     /// concurrency — and stops as soon as 12 continuations have turned up.
+    ///
+    /// Gap 92 (d): three bugs in how a failure was handled. The loop had no
+    /// cancellation check, so leaving the library screen mid-walk let it run
+    /// eight requests nobody was waiting on. Every failed
+    /// `relationships(for:)` call was silently indistinguishable from "no
+    /// relationships" — `nil` and `[]` both just skipped the entry — so a
+    /// reader offline saw an empty row with no way to tell it apart from one
+    /// that genuinely has no continuations to show. And `loadedFor` was set
+    /// unconditionally, so a session that started offline never retried once
+    /// the connection came back — the empty answer was cached as final by
+    /// the one guard whose job is to avoid redundant *successful* fetches.
     func load(entries: [LibraryEntry]) async {
         let libraryIDs = Set(entries.compactMap(\.series?.id))
         let finished = Continuations.candidates(finished: entries, libraryIDs: libraryIDs)
@@ -114,17 +130,35 @@ final class ContinuationsModel {
         defer { isLoading = false }
 
         var relations: [Continuations.RelationSource] = []
+        var anyFailed = false
         for entry in finished {
-            guard let seriesId = entry.series?.id,
-                  let fetched = await repository.relationships(for: seriesId)
-            else { continue }
+            guard !Task.isCancelled else { return }
+            guard let seriesId = entry.series?.id else { continue }
+            guard let fetched = await repository.relationships(for: seriesId) else {
+                anyFailed = true
+                continue
+            }
             relations.append(contentsOf: fetched.map {
                 Continuations.RelationSource(from: entry, relation: $0)
             })
             if Continuations.pick(relations, libraryIDs: libraryIDs).count >= 12 { break }
         }
+        guard !Task.isCancelled else { return }
 
         items = Continuations.pick(relations, libraryIDs: libraryIDs)
-        loadedFor = finishedIDs
+        hasFailure = anyFailed
+        // Only remembered as "seen" when every ask actually answered — a
+        // session that saw nothing because it was offline gets to try again
+        // next time this loads, rather than being told the same silence
+        // forever.
+        if !anyFailed { loadedFor = finishedIDs }
+    }
+
+    /// Forces the next `load` to run again, ignoring `loadedFor` — for the
+    /// row's own Retry, which should not have to wait for the finished-ids
+    /// set to change.
+    func retry(entries: [LibraryEntry]) async {
+        loadedFor = nil
+        await load(entries: entries)
     }
 }

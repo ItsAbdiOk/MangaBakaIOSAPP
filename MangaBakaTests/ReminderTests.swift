@@ -217,6 +217,55 @@ struct ReminderTests {
         )
     }
 
+    /// Gap 102: `isEnabled` alone said nothing about whether iOS would
+    /// actually deliver anything — a reader who denied the system prompt (or
+    /// revoked it later in Settings) still saw the in-app switch reading On.
+    /// Expected to fail before the fix with: no `effectiveEnabled` property
+    /// existed on `ReleaseReminders` at all.
+    @Test("A denied system permission overrides an enabled switch")
+    func deniedSystemPermissionOverridesTheSwitch() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+
+        // The reader turned it on while the app still had permission.
+        _ = await reminders.enable()
+        #expect(reminders.isEnabled)
+        #expect(reminders.effectiveEnabled)
+
+        // iOS takes the permission away behind the app's back — Settings, not
+        // this app. `isEnabled` (the reader's own ask) does not move on its
+        // own; only a fresh `refreshStatus()` learns of it.
+        centre.grants = false
+        await reminders.refreshStatus()
+
+        #expect(reminders.isEnabled, "the reader's own ask has not changed")
+        #expect(!reminders.effectiveEnabled, "but iOS will not deliver anything")
+    }
+
+    /// Gap 103: a walk that stopped at the page cap is not `libraryFailure` —
+    /// nothing failed, as far as this call knows — but it is still a partial
+    /// answer, and re-deriving reminders from it used to drop every series
+    /// past wherever the walk stopped, silently, the next time this ran.
+    /// Expected to fail before the fix with: `centre.removeAllCount == 2` and
+    /// the announced-b reminder replacing announced-a, because nothing told
+    /// `reschedule` the second library was incomplete.
+    @Test("An incomplete walk is treated like a failure for removals, not a real answer")
+    func incompleteWalkKeepsPendingReminders() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
+        #expect(centre.added.map(\.id) == ["announced-a"])
+
+        await reminders.reschedule(
+            announced: [try work("b", series: 2, daysFromNow: 4)], predicted: [], isComplete: false
+        )
+
+        #expect(centre.removeAllCount == 1, "an incomplete walk must not touch what is pending")
+        #expect(centre.added.map(\.id) == ["announced-a"])
+    }
+
     @Test("Turning it off clears what was pending")
     func disableClears() async throws {
         let centre = FakeCentre()

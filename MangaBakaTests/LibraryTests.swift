@@ -107,19 +107,54 @@ struct LibraryTests {
 
         let results = await makeService().recommendations()
 
-        #expect(results.count == 1)
-        #expect(results.first?.displayTitle == "The Regressed Doctor")
+        #expect(results.items.count == 1)
+        #expect(results.failure == nil)
+        #expect(results.items.first?.displayTitle == "The Regressed Doctor")
         // The real shape, not an invented one. This payload used to spell
         // cover_image as a plain URL string because that is what the field's
         // name suggests; the live endpoint returns a full v1 cover object, and
         // the invented fixture is why the endpoint never decoding went unnoticed.
-        #expect(results.first?.coverImage?.raw != nil)
-        #expect(results.first?.coverImage?.width == 690)
-        #expect(results.first?.coverImage?.blurhash == "|cFt4x")
-        #expect(results.first?.asSeries.cover.x150 != nil)
-        #expect(results.first?.reason?.reasonType == "similar_to")
-        #expect(results.first?.reason?.topTags?.first?.name == "Time Rewind")
-        #expect(results.first?.reason?.summary == "Because you read Time Rewind and Time Travel")
+        #expect(results.items.first?.coverImage?.raw != nil)
+        #expect(results.items.first?.coverImage?.width == 690)
+        #expect(results.items.first?.coverImage?.blurhash == "|cFt4x")
+        #expect(results.items.first?.asSeries.cover.x150 != nil)
+        #expect(results.items.first?.reason?.reasonType == "similar_to")
+        #expect(results.items.first?.reason?.topTags?.first?.name == "Time Rewind")
+        #expect(results.items.first?.reason?.summary == "Because you read Time Rewind and Time Travel")
+    }
+
+    /// Gap 108 (FAILURES-SUMMARY.md §6, Batch 1): the same envelope that
+    /// carries `results` also carries `cold_start`/`profile_stale`, and
+    /// `getResults` used to discard both. Expected to fail without the fix:
+    /// `recommendations()` returned a bare `[PersonalRecommendation]` with no
+    /// `.coldStart`/`.profileStale` to read.
+    @Test("Recommendations carry the envelope's cold-start and stale flags")
+    func recommendationsCarryEnvelopeFlags() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data("""
+            {"status":200,"cold_start":true,"profile_stale":true,"results":[]}
+            """.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let results = await makeService().recommendations()
+        #expect(results.coldStart == true)
+        #expect(results.profileStale == true)
+        #expect(results.items.isEmpty)
+    }
+
+    /// Gap 107: a failed recommendations request used to look exactly like a
+    /// cold-start account — both answered `[]`. Expected to fail without the
+    /// fix: `recommendations()` had nowhere to carry the error at all.
+    @Test("A failed recommendations request is distinguishable from a cold start")
+    func recommendationsFailureIsCarried() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
+        defer { URLProtocolStub.reset() }
+
+        let results = await makeService().recommendations()
+        #expect(results.failure == .offline)
+        #expect(results.coldStart == false, "an unknown answer must not read as a confirmed cold start")
+        #expect(results.items.isEmpty)
     }
 
     /// Three envelope shapes, not two. This endpoint uses none: its fields sit
@@ -127,7 +162,7 @@ struct LibraryTests {
     /// threw, the `try?` turned that into nil, and the stack concluded the
     /// reader had no profile — silently choosing a worse source.
     @Test("The status endpoint decodes from a bare response, not an envelope")
-    func statusHasNoEnvelope() async {
+    func statusHasNoEnvelope() async throws {
         URLProtocolStub.setHandler { _ in
             .respond(.init(body: Data("""
             {"status":200,"cold_start":false,"profile_stale":false,"library_count":937}
@@ -135,15 +170,28 @@ struct LibraryTests {
         }
         defer { URLProtocolStub.reset() }
 
-        let status = await makeService().recommendationStatus()
-        #expect(status?.libraryCount == 937)
-        #expect(status?.canPersonalise == true)
+        let status = try await makeService().recommendationStatus()
+        #expect(status.libraryCount == 937)
+        #expect(status.canPersonalise == true)
+    }
+
+    /// Gap 107: this used to be `try?`'d into `nil`, indistinguishable from a
+    /// perfectly healthy "no token yet". Expected to fail without the fix:
+    /// `recommendationStatus()` has no throwing overload to catch.
+    @Test("A failed status request throws rather than answering nil")
+    func statusFailureThrows() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
+        defer { URLProtocolStub.reset() }
+
+        await #expect(throws: APIError.offline) {
+            try await makeService().recommendationStatus()
+        }
     }
 
     /// A small library cannot be personalised from. The UI needs to say that
     /// rather than showing an empty list as though nothing matched.
     @Test("Cold start is reported rather than looking like an empty result")
-    func coldStartIsVisible() async {
+    func coldStartIsVisible() async throws {
         URLProtocolStub.setHandler { _ in
             .respond(.init(body: Data("""
             {"status":200,"cold_start":true,"profile_stale":false,"library_count":3,
@@ -152,11 +200,11 @@ struct LibraryTests {
         }
         defer { URLProtocolStub.reset() }
 
-        let status = await makeService().recommendationStatus()
+        let status = try await makeService().recommendationStatus()
 
-        #expect(status?.coldStart == true)
-        #expect(status?.canPersonalise == false)
-        #expect(status?.libraryCount == 3)
+        #expect(status.coldStart == true)
+        #expect(status.canPersonalise == false)
+        #expect(status.libraryCount == 3)
     }
 
     /// The closest thing to a taste profile the API offers. Sorted strongest
@@ -225,7 +273,7 @@ struct LibraryTests {
         defer { URLProtocolStub.reset() }
 
         #expect(await makeService().library().isEmpty)
-        #expect(await makeService().recommendations().isEmpty)
+        #expect(await makeService().recommendations().items.isEmpty)
         #expect(await makeService().topGenres() == nil, "A failure is nil, not an empty taste")
     }
 }
@@ -295,7 +343,10 @@ struct ShelfReachabilityTests {
     @Test("A picked state offers to open its shelf")
     func shelfIsReachable() throws {
         let source = try SourceTree.read("MangaBaka/Features/Library/LibraryView.swift")
-        let offer = "if let state = model.filter {\n                        Button { onOpenShelf(state) }"
+        // Offered only once the walk is complete: a shelf opened against a
+        // partial library would show a floor, not the shelf.
+        let offer = "if let state = model.filter, model.isComplete {\n"
+            + "                        Button { onOpenShelf(state) }"
         #expect(source.contains(offer))
     }
 }

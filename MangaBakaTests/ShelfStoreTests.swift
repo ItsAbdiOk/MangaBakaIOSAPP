@@ -13,7 +13,7 @@ struct ShelfStoreTests {
         let shelf = try makeShelf()
         try await shelf.record(SeriesFactory.make(id: 1, title: "Kept"), as: .saved)
 
-        let saved = try await shelf.entries(.saved)
+        let saved = try await shelf.entries(.saved).series
         #expect(saved.map(\.id) == [1])
         #expect(saved.first?.displayTitle == "Kept")
     }
@@ -26,8 +26,8 @@ struct ShelfStoreTests {
         try await shelf.record(SeriesFactory.make(id: 1, title: "Kept"), as: .saved)
         try await shelf.record(SeriesFactory.make(id: 2, title: "Passed"), as: .skipped)
 
-        #expect(try await shelf.entries(.saved).map(\.id) == [1])
-        #expect(try await shelf.entries(.skipped).map(\.id) == [2])
+        #expect(try await shelf.entries(.saved).series.map(\.id) == [1])
+        #expect(try await shelf.entries(.skipped).series.map(\.id) == [2])
     }
 
     /// The stack asks for this to avoid showing something already judged.
@@ -49,8 +49,8 @@ struct ShelfStoreTests {
         try await shelf.record(series, as: .skipped)
         try await shelf.record(series, as: .saved)
 
-        #expect(try await shelf.entries(.saved).map(\.id) == [1])
-        #expect(try await shelf.entries(.skipped).isEmpty, "It cannot be in both lists")
+        #expect(try await shelf.entries(.saved).series.map(\.id) == [1])
+        #expect(try await shelf.entries(.skipped).series.isEmpty, "It cannot be in both lists")
     }
 
     @Test("Removing takes it out of both lists")
@@ -60,7 +60,7 @@ struct ShelfStoreTests {
 
         try await shelf.remove(seriesId: 1)
 
-        #expect(try await shelf.entries(.saved).isEmpty)
+        #expect(try await shelf.entries(.saved).series.isEmpty)
         #expect(try await shelf.reactedIDs().isEmpty)
     }
 
@@ -83,7 +83,7 @@ struct ShelfStoreTests {
             try db.execute(sql: "DELETE FROM feedEntry")
         }
 
-        let saved = try await shelf.entries(.saved)
+        let saved = try await shelf.entries(.saved).series
         #expect(saved.first?.displayTitle == "Standalone")
         #expect(saved.first?.cover.width == 200, "The stored copy keeps its cover")
     }
@@ -97,7 +97,7 @@ struct ShelfStoreTests {
         clock.advance(by: 60)
         try await shelf.record(SeriesFactory.make(id: 2, title: "Second"), as: .saved)
 
-        #expect(try await shelf.entries(.saved).map(\.id) == [2, 1])
+        #expect(try await shelf.entries(.saved).series.map(\.id) == [2, 1])
     }
 
     /// L4: `StackModel` used to build its exclusion list as
@@ -137,5 +137,30 @@ struct ShelfStoreTests {
 
         let recent = try await shelf.recentlyReactedIDs(limit: 2)
         #expect(recent == [5, 4])
+    }
+
+    /// `entries` used to `compactMap` a row that no longer decodes straight
+    /// out of the result, so a shelf with one corrupt row silently reported
+    /// itself one entry shorter — a shrinking disk cache with nothing to say
+    /// why (gap 116, FAILURES-SUMMARY.md). Expected to fail without the fix:
+    /// `entries` returned a bare `[Series]` with no way to report the drop, so
+    /// `undecodable` does not exist to read yet.
+    @Test("A row that no longer decodes is counted, not silently dropped")
+    func undecodableRowIsCounted() async throws {
+        let database = try AppDatabase.inMemory()
+        let shelf = ShelfStore(database: database, clock: TestClock())
+        try await shelf.record(SeriesFactory.make(id: 1, title: "Fine"), as: .saved)
+        // A row GRDB will hand back but the current `Series` shape cannot
+        // decode — standing in for a schema this build no longer understands.
+        try await database.writer.write { db in
+            try db.execute(
+                sql: "INSERT INTO shelfEntry (seriesId, kind, addedAt, payload) VALUES (?, ?, ?, ?)",
+                arguments: [2, ShelfEntry.Kind.saved.rawValue, Date(), Data("{}".utf8)]
+            )
+        }
+
+        let result = try await shelf.entries(.saved)
+        #expect(result.series.map(\.id) == [1], "the decodable row still comes back")
+        #expect(result.undecodable == 1, "the corrupt row is counted rather than silently vanishing")
     }
 }

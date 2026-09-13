@@ -1,5 +1,32 @@
 import Foundation
 
+/// What one release-feed provider produced for one series.
+///
+/// Three shapes, not the bare `ReleaseFeed?` this used to be (gap 19). A
+/// provider that never had a link for this series at all (`.notCarried`) must
+/// not look the same, to `ReleaseFeedService`, as one that had a link and
+/// asked but the network or the parser failed (`.failed`) — the first is
+/// silent by design (the series page always has a cadence estimate to fall
+/// back on), the second is what `ReleaseSection`'s `InlineFailure` (batch 2)
+/// needs to show instead of quietly having nothing. `.answered(nil)` is the
+/// third shape still: a real ask that came back with nothing usable — no
+/// candidate URL resolved to a live feed, or a feed that parsed with zero
+/// entries, the shape a localised non-English Webtoons edition takes — which
+/// is a legitimate empty answer, not a failure.
+enum FeedAnswer: Equatable, Sendable {
+    case notCarried
+    case answered(ReleaseFeed?)
+    case failed(APIError)
+
+    /// The feed, when this answer carried one. Nil for `.notCarried`,
+    /// `.answered(nil)`, and `.failed` — mirrors `Fetched.value` for the one
+    /// case (`.answered(nil)`) that type does not have a slot for.
+    var feed: ReleaseFeed? {
+        if case let .answered(feed) = self { return feed }
+        return nil
+    }
+}
+
 /// Something that can answer a series' release feed for one publisher.
 ///
 /// One protocol, three adapters (`WebtoonsFeedClient`, `NaverFeedClient`,
@@ -14,9 +41,9 @@ import Foundation
 protocol ReleaseFeedProvider: Sendable {
     var source: ReleaseSource { get }
 
-    /// nil when no link belongs to this source, or the fetch failed. Failure
-    /// is silent by design: the series page already has a cadence estimated
-    /// from release history, and a provider only ever replaces it with
-    /// something better when it can.
-    func feed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed?
+    /// See `FeedAnswer`. A cadence estimated from release history is always
+    /// on the series page as a fallback, so `.failed` is never itself a
+    /// reason to block the page — only to tell `ReleaseSection` there is a
+    /// reason this provider has nothing, instead of it looking unasked.
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer
 }

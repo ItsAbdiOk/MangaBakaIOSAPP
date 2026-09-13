@@ -98,11 +98,14 @@ struct LibraryView: View {
                         partialLoad
                     }
 
-                    // The shelf on its own page, once a state is picked.
-                    // The shelf screen has the filters the list does not —
-                    // "has a note", "never rated", "left before chapter
-                    // 10" — and until now nothing opened it.
-                    if let state = model.filter {
+                    // Decision 2: a partially loaded library still renders,
+                    // but the two controls that act on the whole thing —
+                    // this button and (see `LibraryControl`, a sibling file)
+                    // the add/remove toggle — stay hidden until the walk
+                    // finishes. Offering "Open the shelf" against a floor
+                    // count is how a shelf opened mid-walk read as smaller
+                    // than it was.
+                    if let state = model.filter, model.isComplete {
                         Button { onOpenShelf(state) } label: {
                             HStack(spacing: 4) {
                                 Text("Open the \(state.title) shelf")
@@ -133,6 +136,8 @@ struct LibraryView: View {
                             ContinuationsRow(
                                 items: continuations.items,
                                 isLoading: continuations.isLoading,
+                                hasFailure: continuations.hasFailure,
+                                onRetry: { await continuations.retry(entries: model.entries) },
                                 path: $path
                             )
                             // L6: keyed on every page's ids, this re-ran the
@@ -173,6 +178,12 @@ struct LibraryView: View {
         }
     }
 
+}
+
+/// The screen's smaller pieces, split out of the type above purely to stay
+/// under SwiftLint's `type_body_length` — the three-way `partialLoad` (gap
+/// 83) pushed the single declaration over it.
+extension LibraryView {
     /// Settings sits here rather than in a navigation bar. The bar is empty on
     /// this screen — no title, no back button — so iOS collapses it to nothing
     /// and the gear went with it, which is how Settings became unreachable.
@@ -219,31 +230,55 @@ struct LibraryView: View {
         )
     }
 
-    /// Some of the library, and saying so.
-    ///
-    /// The board draws "500 of 1,204 loaded", and its own critique names the
-    /// problem: that total comes from page one and never grows in front of the
-    /// reader. So this states what is true — how many have arrived — and what
-    /// follows from it, without a denominator it cannot stand behind.
+    /// Some of the library, and saying so — one of three things, not one
+    /// (gap 83): the walk is still going (a spinner, the honest "so far"
+    /// count this always said); the walk stopped on a failure with rows
+    /// already on screen (a `StaleBar` naming it, with Retry); or it hit the
+    /// page cap cleanly, with nothing wrong to report. Before this the
+    /// screen only ever showed the first of the three, so a walk that gave up
+    /// on page 12 of 13 looked identical to one still on page 3 — a spinner
+    /// with no end, over 1,100 rows that had, in fact, finished arriving.
+    @ViewBuilder
     private var partialLoad: some View {
-        HStack(spacing: 10) {
-            ProgressView().tint(Palette.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(model.total.formatted()) loaded so far")
-                    .typeRowTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                Text("Counts and search cover what has arrived.")
+        if model.isLoading {
+            HStack(spacing: 10) {
+                ProgressView().tint(Palette.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(model.total.formatted()) loaded so far")
+                        .typeRowTitle()
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("Counts and search cover what has arrived.")
+                        .typeSmallMeta()
+                        .foregroundStyle(Palette.textMuted)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(Palette.surface, in: RoundedRectangle(
+                cornerRadius: Metrics.radiusCard, style: .continuous
+            ))
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.top, 16)
+        } else if let failure = model.partialFailure {
+            StaleBar(
+                headline: "Some of your library didn't load",
+                detail: "\(model.total.formatted()) so far. \(failure.userFacingMessage)",
+                retry: { await model.reload() }
+            )
+            .padding(.top, 16)
+        } else {
+            HStack(spacing: 10) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.textMuted)
+                Text("Showing the first \(model.total.formatted())")
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, Metrics.gutter)
+            .padding(.top, 16)
         }
-        .padding(12)
-        .background(Palette.surface, in: RoundedRectangle(
-            cornerRadius: Metrics.radiusCard, style: .continuous
-        ))
-        .padding(.horizontal, Metrics.gutter)
-        .padding(.top, 16)
     }
 
     /// Searching your own library, which at 937 entries is the difference
