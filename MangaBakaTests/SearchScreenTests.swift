@@ -35,6 +35,21 @@ struct SearchHeadingTests {
     }
 }
 
+/// The offline-index `StaleBar` line's date, e.g. "From the offline index
+/// (built 13 Sep)".
+@Suite("Offline index date label")
+struct OfflineIndexDateLabelTests {
+    @Test("An ISO date shortens to day and month")
+    func shortensKnownDate() {
+        #expect(OfflineIndexDateLabel.short("2026-09-13") == "13 Sep")
+    }
+
+    @Test("An unparsable string is shown as-is rather than hidden")
+    func fallsBackOnUnparsable() {
+        #expect(OfflineIndexDateLabel.short("not a date") == "not a date")
+    }
+}
+
 /// Whether the tag picker sheet is showing the live catalogue, a bundled
 /// fallback, or nothing — gap 41 (the fallback rendered with no label) and
 /// gap 42 (both sources failing left a blank sheet).

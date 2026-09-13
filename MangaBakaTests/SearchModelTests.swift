@@ -359,3 +359,112 @@ struct OpenTagRouteTests {
         #expect(model.query.tags == ["Isekai"])
     }
 }
+
+private extension SearchResultOrigin {
+    var isOfflineIndex: Bool {
+        if case .offlineIndex = self { return true }
+        return false
+    }
+}
+
+/// Offline browsing: the "Browse offline" toggle, and the automatic fallback
+/// when the network answer is `.offline` or rate-limited.
+@Suite("Search falls back to the offline index")
+@MainActor
+struct SearchOfflineFallbackTests {
+    /// The bundled `OfflineIndex.json.gz` — real, not a stub, the same way
+    /// `TagTaxonomyTests` exercises the real `TagTaxonomy.json`. `.origin`
+    /// existing at all is the thing under test; a fake index would only prove
+    /// the plumbing compiles.
+    private func makeModel(repository: any SeriesRepositoryProtocol) -> SearchModel {
+        SearchModel(repository: repository)
+    }
+
+    /// "Browse offline" is the reader choosing not to ask the network at all —
+    /// the toggle exists specifically so a search made with it on can be
+    /// proven to send zero requests, not merely to usually avoid sending one.
+    @Test("Toggling Browse offline answers from the index and calls the repository zero times")
+    func browseOfflineSendsZeroRequests() async {
+        let repository = RecordingRepository()
+        let model = makeModel(repository: repository)
+        model.preferOffline = true
+        model.query.text = "one"
+
+        await model.search()
+
+        #expect(repository.searchCount == 0, "Browse offline must never touch the network")
+        #expect(model.origin.isOfflineIndex)
+        #expect(!model.results.isEmpty, "\"one\" should match real titles in the bundled index")
+    }
+
+    /// Paging while browsing offline must not fall back to the network either
+    /// — the toggle's promise is zero requests for the whole session on it,
+    /// not just the first page.
+    @Test("Loading more pages of the offline index also calls the repository zero times")
+    func offlinePagingSendsZeroRequests() async {
+        let repository = RecordingRepository()
+        let model = makeModel(repository: repository)
+        model.preferOffline = true
+        // Sort-only is a real, non-empty query (see `SearchQuery.isEmpty`'s
+        // doc comment) that matches broadly enough to guarantee a second page.
+        model.query.sort = "score_desc"
+
+        await model.search()
+        let firstPageCount = model.results.count
+        #expect(model.hasMore, "Sanity: the bundled index has far more than one page of results")
+
+        await model.loadMore()
+
+        #expect(repository.searchCount == 0)
+        #expect(model.results.count > firstPageCount)
+    }
+
+    /// The control for the fallback tests below: a failure that is not
+    /// `.offline` or `.rateLimited` says nothing about whether the network
+    /// itself works, so it must read as the ordinary failure it is rather
+    /// than triggering the offline index.
+    @Test("A non-network failure does not fall back to the offline index")
+    func serverErrorDoesNotFallBackOffline() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [], origin: .staleAfter(.server(status: 500, message: "")))
+        let model = makeModel(repository: repository)
+        model.query.text = "solo"
+
+        await model.search()
+
+        #expect(model.origin == .network)
+        #expect(model.failure != nil)
+        #expect(repository.searchCount == 1, "The online path must still be the one that ran")
+    }
+
+    @Test("An offline search failure falls back to the bundled index")
+    func offlineFailureFallsBack() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [], origin: .staleAfter(.offline))
+        let model = makeModel(repository: repository)
+        model.query.text = "one"
+
+        await model.search()
+
+        #expect(
+            repository.searchCount == 1,
+            "One request must go out before the fallback is known to be needed"
+        )
+        #expect(model.origin.isOfflineIndex)
+        #expect(model.failure == nil, "The fallback answered, so this is not a dead end needing FailureState")
+        #expect(!model.results.isEmpty)
+    }
+
+    @Test("A rate-limited search failure also falls back to the bundled index")
+    func rateLimitedFailureFallsBack() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [], origin: .staleAfter(.rateLimited(until: nil)))
+        let model = makeModel(repository: repository)
+        model.query.text = "one"
+
+        await model.search()
+
+        #expect(model.origin.isOfflineIndex)
+        #expect(model.failure == nil)
+    }
+}

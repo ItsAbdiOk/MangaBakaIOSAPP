@@ -101,7 +101,8 @@ struct SearchView: View {
                     Task { model.cancelPendingDebounce(); await model.search() }
                 },
                 onSaveLens: { isNamingLens = true },
-                catalogue: catalogue
+                catalogue: catalogue,
+                preferOffline: $model.preferOffline
             )
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(Metrics.radiusSheet)
@@ -263,6 +264,15 @@ struct SearchView: View {
                     retry: { await model.search() }
                 )
                 .padding(.bottom, 12)
+            } else if case let .offlineIndex(builtDate) = model.origin {
+                // No retry closure: retrying is what the reader already did by
+                // switching "Browse offline" off, or what happens on its own
+                // the next time a search succeeds against the network.
+                StaleBar(
+                    headline: "From the offline index (built \(OfflineIndexDateLabel.short(builtDate)))",
+                    detail: "Top 20,000 series, covers load when you're back."
+                )
+                .padding(.bottom, 12)
             }
             resultsGrid
             if model.isLoadingMore {
@@ -351,6 +361,25 @@ enum SearchHeading {
         let text = "\(count) shown"
         guard let sortLabel else { return text }
         return "\(text) · \(sortLabel)"
+    }
+}
+
+/// "2026-09-13" to "13 Sep", for the offline-index `StaleBar` line. Its own
+/// enum, not a private method on `SearchView`, for the same reason
+/// `SearchHeading` is: this project has no ViewInspector, so a view-only
+/// function cannot be driven from a test at all.
+enum OfflineIndexDateLabel {
+    /// Falls back to the raw string when it does not parse as `yyyy-MM-dd` —
+    /// an unparsed date on screen is still more useful than none at all.
+    static func short(_ isoDate: String) -> String {
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd"
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        guard let date = parser.date(from: isoDate) else { return isoDate }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: date)
     }
 }
 

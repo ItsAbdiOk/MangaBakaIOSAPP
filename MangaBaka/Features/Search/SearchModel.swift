@@ -1,5 +1,15 @@
 import Foundation
 
+/// Where the current `SearchModel.results` came from.
+enum SearchResultOrigin: Sendable, Equatable {
+    /// The live API.
+    case network
+    /// `OfflineCatalogue`, the bundled top-20,000-by-popularity index.
+    /// - Parameter builtDate: the export's own date, e.g. "2026-09-13", for
+    ///   the line `SearchView` shows above the results.
+    case offlineIndex(builtDate: String)
+}
+
 /// Backing state for the Search screen.
 ///
 /// Every keystroke updates `query`, but the network call is debounced: the API
@@ -45,6 +55,17 @@ final class SearchModel {
     /// reached the real end.
     private(set) var stoppedEarly = false
 
+    /// Where `results` came from. `.network` until a search actually falls
+    /// back, so a screen that never checks this still behaves exactly as it
+    /// did before offline browsing existed.
+    private(set) var origin: SearchResultOrigin = .network
+
+    /// Set by the reader from a toggle in `FilterSheet`. While true, `search()`
+    /// answers from `OfflineCatalogue` and never calls the repository at all —
+    /// "Zero requests in that mode" is the whole point of the toggle, not a
+    /// side effect of the network happening to be down.
+    var preferOffline = false
+
     /// Compatibility for a caller not yet reading `failure` directly —
     /// `SeedPickerSheet.swift` (owned by the Mix batch, gap 44) still reads
     /// `search.message` for its empty-state copy. Kept as a thin derivation
@@ -54,13 +75,36 @@ final class SearchModel {
     var message: String? { failure?.userFacingMessage }
 
     private let repository: any SeriesRepositoryProtocol
+    private let offline: OfflineCatalogue
+    /// The reader's content-rating preference, read fresh on every offline
+    /// search rather than copied in once — the repository's own filters are
+    /// pushed to it the same way (`AppServices`'s `store.onChange`), and this
+    /// mirrors that rather than going stale the moment a setting changes.
+    /// Defaults match `SeriesRepository.init`'s own defaults, so a caller that
+    /// does not wire these (a test, `SeedPickerSheet`) still filters mature
+    /// content out by default rather than showing everything. Main-actor
+    /// closures, like `SessionModels`' `allowedRatings`: the preference
+    /// stores are main-actor and so is this model.
+    private let allowedRatings: @MainActor () -> [String]
+    private let allowedFormats: @MainActor () -> [String]
+    private let blockedTagIDs: @MainActor () -> [Int]
     private var debounceTask: Task<Void, Never>?
     /// The text `apply(_:)` just set, so the field's own change observer can
     /// tell that edit from a keystroke. See `queryDidChange`.
     private var appliedText: String?
 
-    init(repository: any SeriesRepositoryProtocol) {
+    init(
+        repository: any SeriesRepositoryProtocol,
+        offline: OfflineCatalogue = OfflineCatalogue(),
+        allowedRatings: @escaping @MainActor () -> [String] = { ["safe", "suggestive"] },
+        allowedFormats: @escaping @MainActor () -> [String] = { [] },
+        blockedTagIDs: @escaping @MainActor () -> [Int] = { [] }
+    ) {
         self.repository = repository
+        self.offline = offline
+        self.allowedRatings = allowedRatings
+        self.allowedFormats = allowedFormats
+        self.blockedTagIDs = blockedTagIDs
     }
 
     /// Called on every edit to `query` from the view. Cancels whatever debounce
@@ -133,6 +177,14 @@ final class SearchModel {
         query.page = 1
         generation += 1
         let mine = generation
+
+        // The toggle wins outright: "Browse offline" means the reader does
+        // not want a request going out at all, not "try the network first".
+        if preferOffline {
+            await runOfflineSearch(mine: mine, page: 1, appending: false)
+            return
+        }
+
         let result = await repository.search(query)
         guard !Task.isCancelled, mine == generation else { return }
         // A fresh search always retires a stale page-2+ failure and the
@@ -151,7 +203,25 @@ final class SearchModel {
         // change). Everything the reader had stays under a `StaleBar` while
         // `failure` carries the live countdown.
         if let blockingError = result.blockingError {
+            // Offline and a rate limit both mean "the network answer is not
+            // coming right now" — falling back to the bundled index turns
+            // that into a browsable catalogue instead of a dead end. Any
+            // other blocking failure (a decode error, a genuine 4xx/5xx) says
+            // nothing about whether the network itself works, so it is left
+            // to read as the failure it is.
+            // Two rules meet here. A rate limit with results already on
+            // screen keeps them under the countdown: the network answer is
+            // seconds away and auto-retry will fetch it, so swapping the
+            // grid for the offline index would be a flicker. Nothing on
+            // screen, or genuinely offline, falls back to the bundled index
+            // — a browsable catalogue instead of a dead end.
+            let keepWhatIsShown = !results.isEmpty && !Self.isOffline(blockingError)
+            if Self.isOfflineEligible(blockingError), !keepWhatIsShown {
+                await runOfflineSearch(mine: mine, page: 1, appending: false)
+                return
+            }
             failure = blockingError
+            origin = .network
             return
         }
         results = result.series
@@ -166,6 +236,56 @@ final class SearchModel {
         // — distinct from the blocking-failure branch above, so the view can
         // tell `EmptyState` from `FailureState` from the model alone.
         failure = nil
+        origin = .network
+    }
+
+    nonisolated private static func isOffline(_ error: APIError) -> Bool {
+        if case .offline = error { return true }
+        return false
+    }
+
+    /// Whether a blocking failure should fall back to the offline index rather
+    /// than read as a dead end. Offline and rate-limited both mean the network
+    /// path is temporarily unusable, not that the ask itself was wrong.
+    private static func isOfflineEligible(_ error: APIError) -> Bool {
+        switch error {
+        case .offline, .rateLimited: true
+        case .server, .decoding, .transport, .cancelled: false
+        }
+    }
+
+    /// Answers `query` from `OfflineCatalogue` instead of the network. Shared
+    /// by `search()` (page one) and `loadMore()` (later pages, `appending:
+    /// true`) so paging against the bundled index works the same way paging
+    /// against the API does.
+    private func runOfflineSearch(mine: Int, page: Int, appending: Bool) async {
+        let offset = (page - 1) * query.limit
+        let hits = await offline.matches(
+            query,
+            allowedRatings: allowedRatings(),
+            allowedTypes: allowedFormats(),
+            blockedTags: blockedTagIDs(),
+            limit: query.limit,
+            offset: offset
+        )
+        guard mine == generation else { return }
+        let built = await offline.builtDate() ?? "unknown"
+
+        if appending {
+            let known = Set(results.map(\.id))
+            results.append(contentsOf: hits.map(\.series).filter { !known.contains($0.id) })
+        } else {
+            results = hits.map(\.series)
+        }
+        query.page = page
+        // A short page means the index has nothing further to offer — there
+        // is no separate "next page exists" signal to read the way
+        // `FeedResult.hasMore` reads the API's `pagination.next`.
+        hasMore = hits.count == query.limit
+        failure = nil
+        pageFailure = nil
+        stoppedEarly = false
+        origin = .offlineIndex(builtDate: built)
     }
 
     /// Drops every filter but the typed text, and searches again.
@@ -196,6 +316,12 @@ final class SearchModel {
         defer { isLoadingMore = false }
 
         let mine = generation
+
+        if case .offlineIndex = origin {
+            await runOfflineSearch(mine: mine, page: query.page + 1, appending: true)
+            return
+        }
+
         var next = query
         var emptyPages = 0
 

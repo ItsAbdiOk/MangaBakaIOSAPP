@@ -17,6 +17,17 @@ struct SearchQuery: Sendable, Equatable, Codable {
     var tagMode: String?
     /// 0-100 as the API expresses it.
     var minimumRating: Int?
+    /// First-publication-year range, inclusive on both ends when set.
+    ///
+    /// Offline-only for now: `queryItems` below does not send these, because
+    /// no live check has confirmed the online search endpoint's year
+    /// parameter names — unlike `minimumRating`'s `rating_lower`, verified
+    /// 2026-09-10 (`activeFilterCount`'s doc comment). Added for
+    /// `OfflineCatalogue`'s year filter, which needed a field that did not
+    /// exist here yet. GUESS: never sent to the wire until someone checks
+    /// the live endpoint and adds the query items.
+    var yearFrom: Int?
+    var yearTo: Int?
     /// A publisher's name, as `/v1/publishers/search` spells it.
     ///
     /// Verified against the live API on 2026-09-10: `publisher=Seven Seas`
@@ -42,7 +53,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
         (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
             && sort == nil && tags.isEmpty && (publisher ?? "").isEmpty
-            && (staff ?? "").isEmpty
+            && (staff ?? "").isEmpty && yearFrom == nil && yearTo == nil
     }
 
     /// What is narrowing the results besides the typed text.
@@ -57,6 +68,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
             + (minimumRating == nil ? 0 : 1)
             + ((publisher ?? "").isEmpty ? 0 : 1)
             + ((staff ?? "").isEmpty ? 0 : 1)
+            + (yearFrom == nil && yearTo == nil ? 0 : 1)
     }
 
     /// Everything except the typed text, cleared.

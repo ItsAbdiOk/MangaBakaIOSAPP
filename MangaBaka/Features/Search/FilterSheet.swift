@@ -11,6 +11,11 @@ struct FilterSheet: View {
     /// The tag catalogue, so tags can be picked here rather than typed. Absent
     /// where a caller has none to offer.
     var catalogue: CatalogueService?
+    /// "Browse offline" — answer from the bundled index and send zero
+    /// requests, rather than waiting for the network to actually fail first.
+    /// Absent where a caller has nowhere to read or set it (`SeedPickerSheet`,
+    /// which builds its own `SearchModel` without wiring offline support).
+    var preferOffline: Binding<Bool>?
 
     @State private var isPickingTags = false
     /// The filters "Clear all" threw away, kept so they can be put back.
@@ -64,6 +69,28 @@ struct FilterSheet: View {
                 }
 
                 ratingSection
+
+                yearSection
+
+                if let preferOffline {
+                    section("Offline") {
+                        Toggle(isOn: preferOffline) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Browse offline")
+                                    .typeRowTitle()
+                                    .foregroundStyle(Palette.textPrimary)
+                                Text("""
+                                Filters the bundled top 20,000 series with no requests. \
+                                Covers load when you're back online.
+                                """)
+                                    .typeSmallMeta()
+                                    .foregroundStyle(Palette.textMuted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .tint(Palette.accent)
+                    }
+                }
 
                 HStack(spacing: Metrics.gapChips) {
                     if let onSaveLens {
@@ -229,5 +256,33 @@ struct FilterSheet: View {
             }
             RatingSegments(minimum: $query.minimumRating)
         }
+    }
+
+    /// First-publication-year range. Plain number fields rather than a
+    /// slider or wheel — the mockup Abdi will send later replaces this, and
+    /// two fields say exactly what they mean without inventing a control.
+    /// Offline-only today: see `SearchQuery.yearFrom`'s doc comment.
+    private var yearSection: some View {
+        section("Year") {
+            HStack(spacing: Metrics.gapChips) {
+                yearField("From", value: $query.yearFrom)
+                yearField("To", value: $query.yearTo)
+            }
+        }
+    }
+
+    private func yearField(_ placeholder: String, value: Binding<Int?>) -> some View {
+        TextField(placeholder, text: Binding(
+            get: { value.wrappedValue.map(String.init) ?? "" },
+            set: { value.wrappedValue = Int($0.filter(\.isNumber)) }
+        ))
+        .keyboardType(.numberPad)
+        .typeChip()
+        .foregroundStyle(Palette.textPrimary)
+        .padding(.horizontal, 14)
+        .frame(height: Metrics.headerPill)
+        .frame(maxWidth: .infinity)
+        .background(Palette.surfaceChip)
+        .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
     }
 }
