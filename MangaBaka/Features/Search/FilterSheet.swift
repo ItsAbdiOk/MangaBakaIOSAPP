@@ -9,9 +9,11 @@ import SwiftUI
 struct FilterSheet: View {
     @Binding var query: SearchQuery
     let onApply: () -> Void
-    /// Saving a lens happens here, in the sheet that owns filters, so Search
-    /// and Mix both get it without it being designed twice. Absent where a
-    /// caller has nowhere to put a lens.
+    /// Saving a lens happens in the panel that owns filters, so any host
+    /// gets it without it being designed twice. Absent where a caller has
+    /// nowhere to put a lens. (Only `SearchView` presents this sheet; Mix
+    /// reaches the same `SaveLensButton` through its own strip, not through
+    /// here — an earlier version of this comment said otherwise.)
     var onSaveLens: (() -> Void)?
     /// The tag catalogue, so tags can be picked here rather than typed. Absent
     /// where a caller has none to offer.

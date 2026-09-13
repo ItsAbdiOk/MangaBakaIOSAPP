@@ -24,7 +24,7 @@ struct OfflineCatalogueTests {
     /// is hosted by the app or standalone.
     private final class BundleMarker {}
 
-    private static let rawEntries: [OfflineIndexEntry] = {
+    fileprivate static let rawEntries: [OfflineIndexEntry] = {
         let inTestBundle = Bundle(for: BundleMarker.self)
             .url(forResource: "OfflineIndex", withExtension: "json.gz")
         guard
@@ -43,6 +43,7 @@ struct OfflineCatalogueTests {
         types: [String] = [],
         statuses: [String] = [],
         tags: [String] = [],
+        genres: [String] = [],
         tagMode: String? = nil,
         minimumRating: Int? = nil
     ) -> SearchQuery {
@@ -51,6 +52,7 @@ struct OfflineCatalogueTests {
         result.types = types
         result.statuses = statuses
         result.tags = tags
+        result.genres = genres
         result.tagMode = tagMode
         result.minimumRating = minimumRating
         return result
@@ -311,5 +313,108 @@ struct OfflineCatalogueTests {
         // consults a global `TitleSettings.preference` this test does not
         // want to depend on.
         #expect(hit.series.titles?.first?.title == "Solo Leveling")
+    }
+}
+
+/// Genres and tag mode against the same real export. A second suite only
+/// because `OfflineCatalogueTests` is at the lint's body ceiling; the
+/// control is the same independent decode.
+@Suite("Offline catalogue: genres and tag mode")
+struct OfflineGenreTests {
+    private var raw: [OfflineIndexEntry] { OfflineCatalogueTests.rawEntries }
+
+    private func query(tags: [String] = [], genres: [String] = [], tagMode: String? = nil) -> SearchQuery {
+        var result = SearchQuery()
+        result.tags = tags
+        result.genres = genres
+        result.tagMode = tagMode
+        return result
+    }
+
+    /// The export folds genres into the same `g` array as tags, so a genre
+    /// value has to resolve to a tag id or the filter does nothing. Before
+    /// 2026-09-13 a genre rode in `query.tags` and `"slice_of_life"` matched
+    /// no tag name, so a genre-only offline search returned all 19,300 rows
+    /// (review, catalogue #2). Tag 7 is "Slice of Life" in `TagTaxonomy`.
+    @Test("A genre-only query narrows to the genre's rows, not the whole index")
+    func genreFilterGivesExactSubset() async {
+        let expected = Set(raw.filter { $0.tagIDs.contains(7) }.map(\.id))
+        #expect(!expected.isEmpty, "Sanity: the fixture must carry Slice of Life somewhere")
+        #expect(expected.count < raw.count, "Sanity: a real subset, not everything")
+
+        let catalogue = OfflineCatalogue()
+        let hits = await catalogue.matches(
+            query(genres: ["slice_of_life"]), allowedRatings: [], allowedTypes: [], blockedTags: [],
+            limit: raw.count, offset: 0
+        )
+        #expect(Set(hits.map(\.id)) == expected)
+    }
+
+    /// Two genres are ANDed, as the live API does it: `genre=action`
+    /// 31,025, `genre=romance` 100,947, both 6,692 (`/v1/series/search`,
+    /// 2026-09-13). Tags 39 "Action" and 9 "Romance".
+    @Test("Two genres both have to hold")
+    func genresAreAnded() async {
+        let expected = Set(
+            raw.filter { $0.tagIDs.contains(39) && $0.tagIDs.contains(9) }.map(\.id)
+        )
+        let either = Set(
+            raw.filter { $0.tagIDs.contains(39) || $0.tagIDs.contains(9) }.map(\.id)
+        )
+        #expect(!expected.isEmpty)
+        #expect(expected.count < either.count, "Sanity: AND and OR must differ for this pair")
+
+        let catalogue = OfflineCatalogue()
+        let hits = await catalogue.matches(
+            query(genres: ["action", "romance"]), allowedRatings: [], allowedTypes: [], blockedTags: [],
+            limit: raw.count, offset: 0
+        )
+        #expect(Set(hits.map(\.id)) == expected)
+    }
+
+    /// Every value `/v1/genres` answered on 2026-09-13 (46 of them) has
+    /// exactly one bundled tag whose name folds to it — so the offline
+    /// path can honour any genre the sheet offers, not just the ones that
+    /// happened to match by case. If the taxonomy export ever renames one,
+    /// this is where it shows.
+    @Test("Every live genre value resolves to one bundled tag id")
+    func everyGenreResolves() {
+        let live = [
+            "action", "adult", "adventure", "avant_garde", "award_winning", "boys_love", "comedy",
+            "doujinshi", "drama", "ecchi", "erotica", "fantasy", "gender_bender", "girls_love",
+            "gourmet", "harem", "hentai", "historical", "horror", "josei", "lolicon", "mahou_shoujo",
+            "martial_arts", "mature", "mecha", "music", "mystery", "psychological", "romance",
+            "school_life", "sci-fi", "seinen", "shotacon", "shoujo", "shoujo_ai", "shounen",
+            "shounen_ai", "slice_of_life", "smut", "sports", "supernatural", "suspense", "thriller",
+            "tragedy", "yaoi", "yuri"
+        ]
+        #expect(live.count == 46)
+        let ids = OfflineCatalogue.tagIDs(forGenres: live)
+        #expect(ids.count == live.count, "a genre with no bundled tag would be silently dropped")
+        #expect(Set(ids).count == ids.count, "two genres must not fold to one tag")
+        #expect(OfflineCatalogue.tagIDs(forGenres: ["slice_of_life"]) == [7])
+    }
+
+    /// `tagMode` is stored but never sent: the wire is always AND (see
+    /// `SearchQuery.tagMode`, 164 either way). Offline used to honour a
+    /// literal "or", so a saved lens carrying one answered a different
+    /// question offline than online. 36 "Fantasy", 44 "Horror".
+    @Test("A stored tagMode of \"or\" still filters as AND, matching the wire")
+    func orModeIsAndOffline() async {
+        let both = Set(
+            raw.filter { $0.tagIDs.contains(36) && $0.tagIDs.contains(44) }.map(\.id)
+        )
+        let either = Set(
+            raw.filter { $0.tagIDs.contains(36) || $0.tagIDs.contains(44) }.map(\.id)
+        )
+        #expect(both.count < either.count, "Sanity: the two readings must differ")
+
+        let catalogue = OfflineCatalogue()
+        let hits = await catalogue.matches(
+            query(tags: ["Fantasy", "Horror"], tagMode: "or"),
+            allowedRatings: [], allowedTypes: [], blockedTags: [],
+            limit: raw.count, offset: 0
+        )
+        #expect(Set(hits.map(\.id)) == both)
     }
 }

@@ -298,7 +298,7 @@ struct SearchLensTests {
         _ = await repository.search(query)
 
         let sent = try items(from: URLProtocolStub.requests.first)
-        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression", "Comedy"])
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression", "6"])
         #expect(sent.first { $0.name == "tag_mode" }?.value == "and")
         #expect(!sent.contains { $0.name == "tag" && ($0.value ?? "").contains(",") })
     }
@@ -340,8 +340,8 @@ struct SearchLensTests {
         _ = await repository.search(query)
 
         let sent = try items(from: URLProtocolStub.requests.first)
-        #expect(sent.filter { $0.name == "genre" }.compactMap(\.value) == ["romance"])
-        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression"])
+        #expect(!sent.contains { $0.name == "genre" })
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression", "9"])
     }
 
     /// Year is a real filter on both endpoints now (`/v1/series/mix` lists

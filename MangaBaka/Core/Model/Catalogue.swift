@@ -21,7 +21,8 @@ struct Tag: Decodable, Identifiable, Sendable, Equatable, Hashable {
     /// ambiguous out of context.
     let namePath: String?
     let parentId: Int?
-    /// Depth in the tree; 0 is a root.
+    /// Depth in the tree; 1 is a root on the wire (`MangaBakaTests/Fixtures/tags-page1.json`,
+    /// captured 2026-09-13) — not the 0 this said until then.
     let level: Int?
     let description: String?
     /// How many series carry it. The honest way to order a tag list: a tag on

@@ -26,9 +26,13 @@ struct SaveLensSheet: View {
                 .typeScreenTitle()
                 .foregroundStyle(Palette.textPrimary)
 
+            // "Under the filters", not "at the top": `SearchIdleView` draws
+            // "Your lenses" last, below the panel, and this sentence was the
+            // only one on the screen that said where a lens goes — and had
+            // it wrong (review 2026-09-13, UX#8).
             Text("""
-            Lenses sit at the top of Search. This one reruns live — it stores \
-            the filters, not the results.
+            Lenses sit under the filters on Search. This one reruns live — it \
+            stores the filters, not the results.
             """)
             .typeSubtitle()
             .foregroundStyle(Palette.textSecondary)

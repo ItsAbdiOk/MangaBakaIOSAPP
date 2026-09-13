@@ -80,20 +80,32 @@ struct CoverSkeletonRow: View {
 }
 
 /// The grid Search shows while a request is out, in the results' own shape.
+///
+/// Built on the same `CoverGrid` the results use, so the columns, the gap
+/// and the gutter cannot drift apart: this used to be `.adaptive(minimum:
+/// 111)` with 16pt gaps and no gutter against the results' three
+/// `.flexible()` columns, 12pt gaps and an 18pt gutter, and every
+/// placeholder jumped 5–13pt right when the results landed (R F12b) —
+/// the opposite of "so nothing jumps when they land".
 struct CoverSkeletonGrid: View {
+    /// Two rows of three, the first screen on a phone. At accessibility
+    /// sizes the grid is two across, so six is three rows; still the first
+    /// screen, since the cards are taller too.
     var count: Int = 6
-    var width: CGFloat = 111
+
+    private struct Slot: Identifiable {
+        let id: Int
+    }
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: 16)], spacing: 16) {
-            ForEach(0..<count, id: \.self) { index in
-                VStack(alignment: .leading, spacing: 8) {
-                    RoundedRectangle(cornerRadius: Metrics.radiusCoverGrid, style: .continuous)
-                        .fill(Palette.imagePlaceholder)
-                        .frame(width: width, height: width / Metrics.coverAspect)
-                    Capsule().fill(Palette.surface)
-                        .frame(width: width * (index.isMultiple(of: 2) ? 0.82 : 0.66), height: 9)
-                }
+        CoverGrid(items: (0..<count).map(Slot.init)) { index, _, layout in
+            VStack(alignment: .leading, spacing: 8) {
+                RoundedRectangle(cornerRadius: Metrics.radiusCoverGrid, style: .continuous)
+                    .fill(Palette.imagePlaceholder)
+                    .frame(width: layout.cardWidth, height: layout.cardWidth / Metrics.coverAspect)
+                // Two bars, unequal, as `CoverSkeletonRow` draws them.
+                Capsule().fill(Palette.surface)
+                    .frame(width: layout.cardWidth * (index.isMultiple(of: 2) ? 0.82 : 0.66), height: 9)
             }
         }
         .shimmering()

@@ -149,31 +149,42 @@ struct SearchQueryWireTests {
         #expect(seedOnly.isEmpty, "A leftover seed is not a filter")
     }
 
-    /// Measured 2026-09-13 (catalogue review C#2): `tag=slice_of_life` answers
-    /// 2,017 and `genre=slice_of_life` 34,220; `tag=romance` 14,065 against
-    /// `genre=romance` 100,947. Sending a genre as a tag shows 6–14% of it.
-    @Test("Genres go out as genre=, never as tag=")
+    /// Measured 2026-09-13: `/v2/series/search` has no `genre` key (HTTP 400
+    /// "Unrecognized key"), and a tag sent by *name* is a fraction of the
+    /// tag sent by *id* — `tag=Romance` 14,065 against `tag=9` 110,242
+    /// (v1's `genre=romance` is 100,948). So a genre goes out as its
+    /// taxonomy id under `tag=`, never as a bare name and never as `genre=`.
+    @Test("Genres go out as their tag id, never as genre= or a name")
     func genresAreNotTags() {
         var query = SearchQuery()
         query.genres = ["romance"]
 
         let sent = query.queryItems
-        #expect(sent.contains(URLQueryItem(name: "genre", value: "romance")))
-        #expect(!sent.contains { $0.name == "tag" })
+        #expect(sent.contains(URLQueryItem(name: "tag", value: "9")))
+        #expect(!sent.contains { $0.name == "genre" })
+        #expect(!sent.contains { $0.name == "tag" && $0.value == "romance" })
         #expect(!query.isEmpty)
         #expect(query.activeFilterCount == 1)
         #expect(query.clearingFilters().genres.isEmpty)
     }
 
-    @Test("Tags keep their own key when genres are set beside them")
+    /// Tags first, then genres, all as ids; `tag=Action` by name answered
+    /// 4,380 where `tag=39` answers 34,704 (2026-09-13), so names never go out
+    /// when the bundled taxonomy knows the id. A name it does not know is
+    /// sent as-is rather than dropped.
+    @Test("Tags and genres share tag=, as ids, tags first")
     func tagsAndGenresAreSeparateKeys() {
         var query = SearchQuery()
         query.genres = ["romance", "comedy"]
-        query.tags = ["Regression"]
+        query.tags = ["Regression", "Not A Real Tag"]
 
         let sent = query.queryItems
-        #expect(sent.filter { $0.name == "genre" }.compactMap(\.value) == ["romance", "comedy"])
-        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression"])
+        #expect(!sent.contains { $0.name == "genre" })
+        let tags = sent.filter { $0.name == "tag" }.compactMap(\.value)
+        // "Regression" is a live tag the bundled taxonomy does not carry, so
+        // it is the name-fallback case as well as the order case.
+        #expect(tags == ["Regression", "Not A Real Tag", "9", "6"])
+        #expect(SearchQuery.wireTagIDs(tags: ["Romance"], genres: ["romance"]) == ["9"])
     }
 
     /// Measured 2026-09-13: `tag=Isekai&tag=Regression` answers 164 with no

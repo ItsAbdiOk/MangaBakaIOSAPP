@@ -449,7 +449,7 @@ struct MixTagFilterTests {
         _ = try await makeRepository().mix(seeds: [1], filters: filters, excludedTags: [])
 
         let sent = try items(from: URLProtocolStub.requests.first)
-        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Kuudere", "Twins"])
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["467", "253"])
         #expect(sent.first { $0.name == "tag_mode" }?.value == "and")
     }
 
@@ -468,7 +468,7 @@ struct MixTagFilterTests {
         _ = try await makeRepository().mix(seeds: [1], filters: filters, excludedTags: [467])
 
         let sent = try items(from: URLProtocolStub.requests.first)
-        #expect(sent.contains { $0.name == "tag" && $0.value == "Twins" })
+        #expect(sent.contains { $0.name == "tag" && $0.value == "253" })
         #expect(sent.contains { $0.name == "tag_not" && $0.value == "467" })
     }
 

@@ -94,31 +94,23 @@ struct MixResults: View {
                     .buttonStyle(.press)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, Metrics.gutter + 2)
             .padding(.bottom, 12)
 
-            LazyVGrid(
-                columns: Array(
-                    repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
-                    count: 3
-                ),
-                alignment: .leading,
-                spacing: 16
-            ) {
-                ForEach(model.results) { recommendation in
-                    Button {
-                        zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
-                        zoomRoute?.neighbours = model.results.map(\.series)
-                        path.append(recommendation.series)
-                    } label: {
-                        card(recommendation)
-                    }
-                    .buttonStyle(.press)
-                    .zoomSource("mix", recommendation.series.id)
+            // `CoverGrid` carries the screen gutter itself; the count line
+            // above keeps its own.
+            CoverGrid(items: model.results) { _, recommendation, layout in
+                Button {
+                    zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
+                    zoomRoute?.neighbours = model.results.map(\.series)
+                    path.append(recommendation.series)
+                } label: {
+                    card(recommendation, width: layout.cardWidth)
                 }
+                .buttonStyle(.press)
+                .zoomSource("mix", recommendation.series.id)
             }
         }
-        .padding(.horizontal, Metrics.gutter)
         // 0.6, not the 0.45 a plain disabled fade would use: a re-blend
         // keeps the previous grid readable while it dims, since it is still
         // the best answer the reader has until the new one lands.
@@ -130,11 +122,11 @@ struct MixResults: View {
 
     /// The mockup puts the reason in the accent under each cover, where a
     /// rating would normally sit — in a blend, why it matched IS the metadata.
-    private func card(_ recommendation: Recommendation) -> some View {
+    private func card(_ recommendation: Recommendation, width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             CoverImage(
                 cover: recommendation.series.cover,
-                width: 111,
+                width: width,
                 radius: Metrics.radiusCoverGrid,
                 accessibilityText: recommendation.series.displayTitle ?? "Untitled series"
             )

@@ -25,11 +25,12 @@ struct SearchLens: Identifiable, Equatable, Sendable, Codable {
     /// `describe(_:)`, which is what actually generates it at save time.
     let rule: String
     let query: SearchQuery
-    /// Always true now that there are no presets left to be false for. Kept
-    /// rather than removed: `SaveLensSheet`/`SearchIdleView` read it to
-    /// decide whether a lens can be deleted, and a future re-introduction of
-    /// any non-deletable lens (a "starred" one, say) would want the flag
-    /// back rather than reinvented.
+    /// Always true now that there are no presets left to be false for.
+    /// Nothing in the app reads it any more (grep, 2026-09-13 — an earlier
+    /// version of this comment claimed `SaveLensSheet`/`SearchIdleView`
+    /// did; they do not). Kept because it is in every lens already on disk
+    /// and two tests assert it round-trips; a future non-deletable lens (a
+    /// "starred" one, say) would want the flag back rather than reinvented.
     var isOwn = true
 }
 
@@ -44,6 +45,13 @@ final class SearchLensStore {
     private static let key = "search.lenses"
 
     private(set) var own: [SearchLens] = []
+    /// The name of the lens the most recent `save` took the place of, or
+    /// nil when it took nobody's. Saving "Seinen" twice with a tweak used
+    /// to drop the first without a word (review 2026-09-13, UX#12); the
+    /// caller reads this after a successful save to say "Replaced Seinen"
+    /// instead of "Lens saved". Reset on every save, so it never reports
+    /// an earlier overwrite against a later, clean one.
+    private(set) var replaced: String?
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -68,6 +76,8 @@ final class SearchLensStore {
         var stored = query
         stored.page = 1
 
+        let displaced = own.first { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }
+        replaced = displaced?.name
         own.removeAll { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }
         own.append(SearchLens(
             id: UUID().uuidString,
@@ -104,15 +114,36 @@ extension SearchLens {
         if !query.statuses.isEmpty {
             parts.append("status: " + query.statuses.joined(separator: ", "))
         }
+        // "AND" whatever `tagMode` holds: the wire only ever sends `and`
+        // (see `SearchQuery.tagMode`), and "A, B" read as "either" for a
+        // request that requires both.
+        if !query.genres.isEmpty {
+            let names = query.genres.map { $0.replacingOccurrences(of: "_", with: " ") }
+            parts.append((names.count > 1 ? "genres: " : "genre: ") + names.joined(separator: " AND "))
+        }
         if !query.tags.isEmpty {
-            let joiner = query.tags.count > 1 && query.tagMode == "and" ? " AND " : ", "
-            parts.append("tags: " + query.tags.joined(separator: joiner))
+            parts.append("tags: " + query.tags.joined(separator: " AND "))
         }
         if let publisher = query.publisher, !publisher.isEmpty {
             parts.append("publisher: \(publisher)")
         }
         if let rating = query.minimumRating { parts.append("rating \u{2265} \(rating / 10)") }
+        if let year = yearPart(from: query.yearFrom, to: query.yearTo) { parts.append(year) }
         if let sort = SortOrder.label(for: query.sort) { parts.append("sort: \(sort.lowercased())") }
         return parts.isEmpty ? "Everything" : parts.joined(separator: " \u{00B7} ")
+    }
+
+    /// The year range in words. Missing until 2026-09-13, so a lens built
+    /// from the Year fields alone — which `save` accepts — was named and
+    /// described as "Everything", the one claim `save`'s own comment says a
+    /// lens must never make (review UX#4).
+    private static func yearPart(from: Int?, to: Int?) -> String? {
+        switch (from, to) {
+        case (nil, nil): nil
+        case let (from?, to?) where from == to: "year: \(from)"
+        case let (from?, to?): "year: \(from)\u{2013}\(to)"
+        case let (from?, nil): "year: from \(from)"
+        case let (nil, to?): "year: to \(to)"
+        }
     }
 }

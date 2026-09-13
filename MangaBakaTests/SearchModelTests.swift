@@ -422,6 +422,29 @@ struct OpenTagRouteTests {
         #expect(model.query.statuses.isEmpty)
         #expect(model.query.tags == ["Isekai"])
     }
+
+    /// A genre route used to write `tags = [genre]`, so a Browse genre chip
+    /// went to the wire as `tag=` — `tag=romance` 14,065 against
+    /// `genre=romance` 100,947 (2026-09-13; see `SearchQuery.genres`).
+    @Test("A genre route fills genres, not tags")
+    @MainActor
+    func applyBrowseSetsGenre() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.tags = ["Isekai"]
+        model.applyBrowse(genre: "slice_of_life")
+        #expect(model.query.genres == ["slice_of_life"])
+        #expect(model.query.tags.isEmpty, "a genre route replaces, the same as a tag route")
+        #expect(model.query.sort == "popularity_asc")
+    }
+
+    /// The control: a tag route leaves genres alone.
+    @Test("A tag route does not fill genres")
+    @MainActor
+    func applyBrowseTagLeavesGenresEmpty() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.applyBrowse(tag: "Isekai")
+        #expect(model.query.genres.isEmpty)
+    }
 }
 
 private extension SearchResultOrigin {

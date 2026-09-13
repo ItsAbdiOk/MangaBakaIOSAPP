@@ -57,11 +57,18 @@ struct SearchIdleView: View {
 
     // MARK: - Recent
 
+    /// The three section titles here are `typeSectionHeader()` — 20pt bold,
+    /// the mockup's own size for "Recent" and "Your lenses" and what
+    /// Discover and Library head their rows with. Until 2026-09-13 they
+    /// were the 15pt `typeSubsectionHeader()` the panel's own "Type",
+    /// "Status", … labels used, so a first-time reader met ten headers at
+    /// one weight and nothing to say which seven belonged to "Filters"
+    /// (review UX#7). The panel's labels are now eyebrows, one level down.
     private var recentSearches: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Recent")
-                    .typeSubsectionHeader()
+                    .typeSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
                 // Muted, not accent. Accent on this screen means "a way
@@ -132,7 +139,7 @@ struct SearchIdleView: View {
     private var filters: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Filters")
-                .typeSubsectionHeader()
+                .typeSectionHeader()
                 .foregroundStyle(Palette.textPrimary)
             FilterPanel(
                 query: $query,
@@ -152,7 +159,7 @@ struct SearchIdleView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Your lenses")
-                    .typeSubsectionHeader()
+                    .typeSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
                 Button(isEditingLenses ? "Done" : "Edit") {

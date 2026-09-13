@@ -242,6 +242,7 @@ actor OfflineCatalogue {
         let statuses = Set(query.statuses.map { $0.lowercased() })
         let blocked = Set(blockedTags)
         let requiredTagIDs = Self.tagIDs(named: query.tags)
+        let requiredGenreIDs = Self.tagIDs(forGenres: query.genres)
         let text = (query.text ?? "").trimmingCharacters(in: .whitespaces)
 
         let result = entries.filter { entry in
@@ -251,7 +252,8 @@ actor OfflineCatalogue {
                 && passesStatus(entry, allowed: statuses)
                 && passesRating(entry, minimum: query.minimumRating)
                 && passesYear(entry, from: query.yearFrom, to: query.yearTo)
-                && passesTags(entry, required: requiredTagIDs, mode: query.tagMode)
+                && passesTags(entry, required: requiredTagIDs)
+                && passesGenre(entry, required: requiredGenreIDs)
                 && passesText(entry, needle: text)
         }
         return Self.sorted(result, by: query.sort)
@@ -296,11 +298,26 @@ actor OfflineCatalogue {
         return true
     }
 
-    private func passesTags(_ entry: OfflineIndexEntry, required: [Int], mode: String?) -> Bool {
+    /// AND only. This used to honour a literal `tagMode == "or"`, which no
+    /// path ever set on purpose and the wire never sends: measured
+    /// 2026-09-13, `tag=Isekai&tag=Regression` answers 164 with no mode,
+    /// with `tag_mode=or` and with `tag_mode=and` (`tag=isekai` alone is
+    /// 7,116). Offline honouring "or" meant a lens saved with that flag
+    /// answered a different question here than online.
+    private func passesTags(_ entry: OfflineIndexEntry, required: [Int]) -> Bool {
         guard !required.isEmpty else { return true }
-        if mode == "or" {
-            return required.contains { entry.tagIDs.contains($0) }
-        }
+        return required.allSatisfy { entry.tagIDs.contains($0) }
+    }
+
+    /// Genres, resolved to the tag ids the export folds them into — see
+    /// `tagIDs(forGenres:)`. AND, as the API does it: `genre=action`
+    /// 31,025, `genre=romance` 100,947, both together 6,692
+    /// (`/v1/series/search`, 2026-09-13). Before this existed a genre rode
+    /// in `query.tags` and eleven of the 46 values (`slice_of_life`,
+    /// `school_life`, …) matched no tag name, so a genre-only offline
+    /// search silently returned the whole index (review, catalogue #2).
+    private func passesGenre(_ entry: OfflineIndexEntry, required: [Int]) -> Bool {
+        guard !required.isEmpty else { return true }
         return required.allSatisfy { entry.tagIDs.contains($0) }
     }
 
@@ -316,13 +333,36 @@ actor OfflineCatalogue {
     /// export keys its `g` array by, via the same bundled `TagTaxonomy` the
     /// tag picker uses. A name with no match (renamed, merged away) drops out
     /// rather than failing the whole filter.
-    private static func tagIDs(named names: [String]) -> [Int] {
+    /// `nonisolated static` because `SearchQuery.queryItems` resolves the
+    /// same names for the wire — see `SearchQuery.wireTagIDs`.
+    nonisolated static func tagIDs(named names: [String]) -> [Int] {
         guard !names.isEmpty else { return [] }
         let byName = Dictionary(
             TagTaxonomy.bundled().map { ($0.name.lowercased(), $0.id) },
             uniquingKeysWith: { first, _ in first }
         )
         return names.compactMap { byName[$0.lowercased()] }
+    }
+
+    /// Genre *values* (`slice_of_life`, `sci-fi`), as `/v1/genres` and
+    /// `SearchQuery.genres` spell them, resolved to the bundled tag whose
+    /// name folds to the same string — lowercased, spaces to underscores.
+    /// The export has no genre field of its own; its `g` array carries
+    /// genres as tags. Checked 2026-09-13: all 46 live values fold to
+    /// exactly one taxonomy name each ("Slice of Life" → 7, "Sci-Fi" → 1),
+    /// none to two. `OfflineCatalogueTests.everyGenreResolves` holds that.
+    /// `nonisolated static` so the test can ask without an actor hop.
+    nonisolated static func tagIDs(forGenres values: [String]) -> [Int] {
+        guard !values.isEmpty else { return [] }
+        let byValue = Dictionary(
+            TagTaxonomy.bundled().map { (Self.genreValue(for: $0.name), $0.id) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return values.compactMap { byValue[$0.lowercased()] }
+    }
+
+    nonisolated private static func genreValue(for tagName: String) -> String {
+        tagName.lowercased().replacingOccurrences(of: " ", with: "_")
     }
 
     /// Popularity ascending (rank 1 first) by default — the same "ascending is

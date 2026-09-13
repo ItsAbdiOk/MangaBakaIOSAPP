@@ -118,11 +118,21 @@ struct SearchQuery: Sendable, Equatable, Codable {
         }
         for type in types { items.append(URLQueryItem(name: "type", value: type)) }
         for status in statuses { items.append(URLQueryItem(name: "status", value: status)) }
-        for genre in genres { items.append(URLQueryItem(name: "genre", value: genre)) }
-        for tag in tags { items.append(URLQueryItem(name: "tag", value: tag)) }
+        // Ids, never names. `/v2/series/search` accepts a tag by name, but
+        // it is not the same filter: measured 2026-09-13, `tag=Action` 4,380
+        // against `tag=39` 34,704; `tag=Isekai` 7,116 against `tag=94`
+        // 9,643; `tag=Romance` 14,065 against `tag=9` 110,242. Whatever the
+        // name form matches, it is a fraction of the tag. And v2 has no
+        // `genre` key at all (HTTP 400 "Unrecognized key"; only v1 does —
+        // `genre=romance` 100,948 there), so a genre goes out as its tag's
+        // id too, 9% wider than v1's genre and the nearest v2 offers.
+        // A name the bundled taxonomy cannot resolve is sent as-is rather
+        // than dropped, so a tag renamed upstream still filters somewhat.
+        let wireTags = Self.wireTagIDs(tags: tags, genres: genres)
+        for tag in wireTags { items.append(URLQueryItem(name: "tag", value: tag)) }
         // Always `and`, whatever `tagMode` holds — see its doc comment. Only
         // when there is something to combine, or the key is noise.
-        if tags.count > 1 {
+        if wireTags.count > 1 {
             items.append(URLQueryItem(name: "tag_mode", value: "and"))
         }
         if let sort {
@@ -182,5 +192,25 @@ extension SearchQuery {
         staff = try keyed.decodeIfPresent(String.self, forKey: .staff)
         limit = try keyed.decodeIfPresent(Int.self, forKey: .limit) ?? 30
         page = try keyed.decodeIfPresent(Int.self, forKey: .page) ?? 1
+    }
+}
+
+extension SearchQuery {
+    /// The `tag=` values for the wire: every tag and genre as a bundled
+    /// taxonomy id where one resolves, the name itself where none does. Order
+    /// is tags then genres, duplicates folded (a genre picked as a tag too is
+    /// one filter, not two `tag_mode=and` copies of it).
+    nonisolated static func wireTagIDs(tags: [String], genres: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        let values = tags.map { tag in
+            OfflineCatalogue.tagIDs(named: [tag]).first.map(String.init) ?? tag
+        } + genres.map { genre in
+            OfflineCatalogue.tagIDs(forGenres: [genre]).first.map(String.init) ?? genre
+        }
+        for value in values where seen.insert(value).inserted {
+            out.append(value)
+        }
+        return out
     }
 }

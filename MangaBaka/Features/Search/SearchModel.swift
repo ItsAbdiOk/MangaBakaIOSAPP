@@ -500,9 +500,14 @@ final class SearchModel {
     ///
     /// Replaces the query rather than adding to it: arriving from a browse
     /// screen means "show me this", not "narrow whatever I had".
+    ///
+    /// A genre goes in `genres`, not `tags`: it used to ride in `tags` and
+    /// reach the wire as `tag=`, which finds a fraction of the genre
+    /// (`tag=romance` 14,065 against `genre=romance` 100,947, 2026-09-13 —
+    /// see `SearchQuery.genres`).
     func applyBrowse(genre: String? = nil, tag: String? = nil, publisher: String? = nil) {
         var next = SearchQuery()
-        if let genre { next.tags = [genre] }
+        if let genre { next.genres = [genre] }
         if let tag { next.tags = [tag] }
         if let publisher { next.publisher = publisher }
         next.sort = "popularity_asc"

@@ -149,7 +149,7 @@ struct FilterPanel: View {
         }
         .sheet(isPresented: $isPickingGenres) {
             if let catalogue {
-                GenrePickerSheet(catalogue: catalogue, genres: $genres, selected: $query.tags)
+                GenrePickerSheet(catalogue: catalogue, genres: $genres, selected: $query.genres)
             }
         }
         .sheet(isPresented: $isPickingPublisher) {
@@ -170,26 +170,18 @@ struct FilterPanel: View {
 extension FilterPanel {
     // MARK: - Tags / Genres / Publishers
 
-    /// The values `catalogue.genres()` answered with, so a tag picked through
-    /// "Genres" can be told apart from an ordinary tag in `query.tags` —
-    /// both live in the same array, because a genre *is* a tag as far as the
-    /// query is concerned (see `SearchModel.applyBrowse(genre:)`).
-    private var genreValues: Set<String> { Set(genres.map(\.value)) }
-
-    private var tagsOnlyCount: Int { query.tags.filter { !genreValues.contains($0) }.count }
-    private var genresOnlyCount: Int { query.tags.filter { genreValues.contains($0) }.count }
-
     /// Three compact doors out, instead of the vocabulary laid out in full:
-    /// tags and genres both narrow by name — genres are just the coarse,
-    /// curated ones — and a publisher narrows by who released it.
+    /// a tag and a genre are two vocabularies on the wire (`tag=` against
+    /// `genre=`; `SearchQuery.genres` has the 6-14% measurement), so each
+    /// button counts its own array — until 2026-09-13 both wrote into
+    /// `query.tags` and the badges had to guess which was which from a
+    /// fetch. A publisher narrows by who released it.
     private var pickerRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Narrow by")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
+            Eyebrow(text: "Narrow by")
             HStack(spacing: Metrics.gapChips) {
-                pickerButton("Tags", count: tagsOnlyCount) { isPickingTags = true }
-                pickerButton("Genres", count: genresOnlyCount) {
+                pickerButton("Tags", count: query.tags.count) { isPickingTags = true }
+                pickerButton("Genres", count: query.genres.count) {
                     isPickingGenres = true
                     if genres.isEmpty { Task { await loadGenres() } }
                 }
@@ -367,11 +359,15 @@ extension FilterPanel {
 
     // MARK: - Shared controls
 
+    /// An eyebrow, not a subsection header: the mockup draws "Status" at
+    /// 11px semibold, tracked and uppercase, under a 20px "Filters" — and
+    /// until 2026-09-13 these seven labels and the idle screen's three
+    /// sections were all `typeSubsectionHeader()`, ten headers at one
+    /// weight with nothing to say which seven belonged to "Filters"
+    /// (review UX#7).
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 11) {
-            Text(title)
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
+            Eyebrow(text: title)
             content()
         }
     }
@@ -399,9 +395,7 @@ extension FilterPanel {
     private var ratingSection: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Minimum rating")
-                    .typeSubsectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
+                Eyebrow(text: "Minimum rating")
                 Spacer(minLength: 8)
                 Text(RatingSegments.label(for: query.minimumRating))
                     .typeChip()
@@ -414,7 +408,7 @@ extension FilterPanel {
     /// First-publication-year range. Plain number fields rather than a
     /// slider or wheel — the mockup Abdi will send later replaces this, and
     /// two fields say exactly what they mean without inventing a control.
-    /// Offline-only today: see `SearchQuery.yearFrom`'s doc comment.
+    /// Sent live since 2026-09-13: see `SearchQuery.yearFrom`'s doc comment.
     private var yearSection: some View {
         section("Year") {
             HStack(spacing: Metrics.gapChips) {
@@ -462,93 +456,13 @@ struct FilterCountBadge: View {
     }
 }
 
-/// Picking a genre for the panel's "Genres" button — the same 46-item list
-/// `BrowseView`'s genre chips draw from, presented as a sheet rather than a
-/// whole screen since this is one filter among several being built, not a
-/// destination in its own right.
-private struct GenrePickerSheet: View {
-    let catalogue: CatalogueService
-    @Binding var genres: [Genre]
-    @Binding var selected: [String]
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                FlowLayout(spacing: 8) {
-                    ForEach(genres) { genre in
-                        Button {
-                            toggle(&selected, genre.value)
-                        } label: {
-                            Text(genre.label)
-                                .typeChip()
-                                .foregroundStyle(
-                                    selected.contains(genre.value) ? Palette.onAccent : Palette.textSecondary
-                                )
-                                .padding(.horizontal, 13)
-                                .frame(height: Metrics.headerPill)
-                                .background(
-                                    selected.contains(genre.value) ? Palette.accent : Palette.surfaceChip,
-                                    in: Capsule()
-                                )
-                                .tapTarget()
-                        }
-                        .buttonStyle(.press)
-                        .haptic(Haptics.selection, on: selected.contains(genre.value))
-                    }
-                }
-                .padding(Metrics.gutter)
-            }
-            .background(Palette.ground)
-            .navigationTitle("Genres")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.foregroundStyle(Palette.accent)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-        .edgeSwipeToDismiss()
-        .task { if genres.isEmpty { genres = await catalogue.genres().value ?? [] } }
-    }
-}
-
-/// Add-or-remove for a chip's value; shared by the panel's chips and the
-/// genre sheet's, which used to carry a copy each.
-private func toggle(_ collection: inout [String], _ value: String) {
+/// Add-or-remove for a chip's value; shared by the panel's chips and
+/// `GenrePickerSheet`'s (in `FilterPickerSheets.swift`), which used to carry
+/// a copy each. Internal, not private, only for that second caller.
+func toggle(_ collection: inout [String], _ value: String) {
     if let index = collection.firstIndex(of: value) {
         collection.remove(at: index)
     } else {
         collection.append(value)
-    }
-}
-
-/// Picking a publisher for the panel's "Publishers" button — `PublisherBrowser`
-/// wrapped in a sheet's chrome, the same reuse `TagPickerSheet` gets.
-private struct PublisherPickerSheet: View {
-    let catalogue: CatalogueService
-    let onOpen: (PublisherRecord) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                PublisherBrowser(catalogue: catalogue, onOpen: onOpen)
-                    .padding(.top, 12)
-            }
-            .background(Palette.ground)
-            .navigationTitle("Publishers")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.foregroundStyle(Palette.accent)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-        .edgeSwipeToDismiss()
     }
 }

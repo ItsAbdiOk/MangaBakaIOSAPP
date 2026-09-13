@@ -115,6 +115,12 @@ enum Metrics {
     /// Every cover in the app is 2:3.
     static let coverAspect: CGFloat = 2.0 / 3.0
 
+    /// The phone the mockups were measured on, and the one width the grid's
+    /// old `111` literal was right for. Only a fallback now — `CoverGrid`
+    /// measures its real width on first layout — for the frame before that
+    /// measurement lands.
+    static let referenceScreenWidth: CGFloat = 393
+
     /// The column a flag emoji sits in at the end of a language label, so
     /// the flags line up down a list. One flag at the meta size is ~18pt.
     static let flagColumn: CGFloat = 22
@@ -148,6 +154,41 @@ enum Metrics {
     /// its scroll edge over roughly a line of text, so a hard stop at the safe
     /// area boundary would read as a painted band instead of an edge.
     static let scrollEdgeFade: CGFloat = 14
+}
+
+/// How many covers across, and how wide each is, for the grid Search, Mix
+/// and Publisher share.
+///
+/// Derived, not written down: the card width was the literal `111` in four
+/// files — (393 − 2×18 − 2×12) / 3, right for the 393pt phone and 6pt too
+/// wide on a 375 (R F11). And at accessibility text sizes `CoverCard` used
+/// to widen 1.5× inside three fixed columns, so three 166pt cards were
+/// asked to share 357pt (R F4). Fewer columns is the answer to bigger text,
+/// not wider cards in the same columns.
+struct CoverGridLayout: Equatable {
+    let columns: Int
+    let cardWidth: CGFloat
+
+    /// - Parameter availableWidth: the grid's own width, gutters already
+    ///   taken off.
+    nonisolated static func resolve(availableWidth: CGFloat, isAccessibilitySize: Bool) -> CoverGridLayout {
+        let columns = isAccessibilitySize ? 2 : 3
+        let gaps = CGFloat(columns - 1) * Metrics.gapCovers
+        return CoverGridLayout(
+            columns: columns,
+            cardWidth: max(0, (availableWidth - gaps) / CGFloat(columns))
+        )
+    }
+
+    /// Whether the card at `index` is close enough to the end of `count`
+    /// to ask for the next page: two rows from the bottom, so the page is
+    /// usually there before the reader is. Takes the `ForEach` index the
+    /// caller already has rather than an O(n) `firstIndex` per cell
+    /// appearance (R minor). Shared by Search and Publisher.
+    nonisolated func shouldLoadMore(index: Int, count: Int, hasMore: Bool, isLoadingMore: Bool) -> Bool {
+        guard hasMore, !isLoadingMore else { return false }
+        return index >= count - 2 * columns
+    }
 }
 
 extension View {

@@ -79,10 +79,6 @@ struct PublisherView: View {
     @Environment(\.zoomRoute) private var zoomRoute
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: Metrics.gapCovers), count: 3
-    )
-
     /// What the page shows, decided in one place — the same shape
     /// `LibraryModel.screenState` uses, so a publisher's list reads the same
     /// way the library does: loading first, a failure only when there is
@@ -302,32 +298,29 @@ extension PublisherView {
                 }
             }
             .padding(.horizontal, Metrics.gutter)
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-                ForEach(series) { item in
-                    Button {
-                        zoomRoute?.source = ZoomRoute.id("publisher", item.id)
-                        zoomRoute?.neighbours = series
-                        path.append(item)
-                    } label: {
-                        CoverCard(
-                            series: item, width: 111, radius: Metrics.radiusCoverGrid,
-                            meta: DiscoverView.meta(for: item)
-                        )
-                    }
-                    .zoomSource("publisher", item.id)
-                    .buttonStyle(.press)
-                    // Two rows from the bottom, as Search does, so the next
-                    // page is usually there before the reader is.
-                    .onAppear {
-                        guard hasMore, !isLoadingMore,
-                              let index = series.firstIndex(where: { $0.id == item.id }),
-                              index >= series.count - 6
-                        else { return }
-                        Task { await loadMore() }
-                    }
+            CoverGrid(items: series) { index, item, layout in
+                Button {
+                    zoomRoute?.source = ZoomRoute.id("publisher", item.id)
+                    zoomRoute?.neighbours = series
+                    path.append(item)
+                } label: {
+                    CoverCard(
+                        series: item, width: layout.cardWidth, radius: Metrics.radiusCoverGrid,
+                        meta: DiscoverView.meta(for: item), sizing: .gridColumn
+                    )
+                }
+                .zoomSource("publisher", item.id)
+                .buttonStyle(.press)
+                // Two rows from the bottom, as Search does, so the next
+                // page is usually there before the reader is.
+                .onAppear {
+                    guard layout.shouldLoadMore(
+                        index: index, count: series.count,
+                        hasMore: hasMore, isLoadingMore: isLoadingMore
+                    ) else { return }
+                    Task { await loadMore() }
                 }
             }
-            .padding(.horizontal, Metrics.gutter)
             if isLoadingMore {
                 ProgressView()
                     .tint(Palette.accent)

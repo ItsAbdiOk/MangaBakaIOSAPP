@@ -128,11 +128,17 @@ struct DynamicTypeLayoutTests {
 
     /// Larger text in a fixed-width card only wraps more, until the title runs
     /// past the card and under the floating tab bar.
+    ///
+    /// A width, not a grep: this used to assert the source contained the word
+    /// `scaledWidth`, and passed for as long as the Search grid's three fixed
+    /// columns overflowed at accessibility sizes (R F4). The grid's own rule
+    /// — two columns, no widening — is in `ResultGridTests`.
     @Test("Cover cards widen at accessibility text sizes")
-    func cardsWidenWithText() throws {
-        let text = try source("MangaBaka/Features/Shared/CoverImage.swift")
-        #expect(text.contains("isAccessibilitySize"))
-        #expect(text.contains("scaledWidth"))
+    func cardsWidenWithText() {
+        let base = Metrics.coverRowWidth
+        let widened = CoverCard.scaledWidth(base, sizing: .row, isAccessibilitySize: true)
+        #expect(widened > base, "\(widened) is not wider than \(base)")
+        #expect(CoverCard.scaledWidth(base, sizing: .row, isAccessibilitySize: false) == base)
     }
 
     /// One item wider than its container used to hang off the screen edge. At

@@ -9,6 +9,8 @@ import SwiftUI
 struct BrowseDestination: View {
     /// What the reader picked. Exactly one of these is ever set.
     struct Pick {
+        /// A genre *value* (`slice_of_life`), as `/v1/genres` spells it —
+        /// bound for `SearchQuery.genres`, never `tags`.
         var genre: String?
         var tag: String?
         var publisher: String?

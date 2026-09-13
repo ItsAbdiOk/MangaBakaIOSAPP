@@ -236,12 +236,26 @@ struct CoverGloss: View {
     }
 }
 
-/// A cover with its title beneath, as used in every horizontal row.
+/// A cover with its title beneath, as used in every horizontal row and in
+/// the three-across grids.
 struct CoverCard: View {
+    /// Where the card sits, which decides what bigger text does to it.
+    enum Sizing {
+        /// A horizontal row: the card widens 1.5× at accessibility sizes,
+        /// because a row has the width to spare and a fixed card only
+        /// wrapped the title further until it ran under the tab bar.
+        case row
+        /// A grid column: `width` is already the column's width, and the
+        /// grid answered bigger text by dropping a column (`CoverGridLayout`).
+        /// Widening here too is what put three 166pt cards in 357pt (R F4).
+        case gridColumn
+    }
+
     let series: Series
     var width: CGFloat = Metrics.coverRowWidth
     var radius: CGFloat = Metrics.radiusCoverRow
     var meta: String?
+    var sizing: Sizing = .row
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -252,11 +266,20 @@ struct CoverCard: View {
         typeSize.isAccessibilitySize ? 4 : 2
     }
 
-    /// Cards widen with the text. Keeping them fixed meant larger type simply
-    /// wrapped more inside the same narrow column until the title ran past the
-    /// card and disappeared under the floating tab bar.
     private var scaledWidth: CGFloat {
-        typeSize.isAccessibilitySize ? width * 1.5 : width
+        Self.scaledWidth(width, sizing: sizing, isAccessibilitySize: typeSize.isAccessibilitySize)
+    }
+
+    /// Pure, so the widening rule has a test that asserts a number rather
+    /// than grepping this file for the word `scaledWidth` — which is what
+    /// `cardsWidenWithText` did while the grid overflowed.
+    nonisolated static func scaledWidth(
+        _ width: CGFloat, sizing: Sizing, isAccessibilitySize: Bool
+    ) -> CGFloat {
+        switch sizing {
+        case .row: isAccessibilitySize ? width * 1.5 : width
+        case .gridColumn: width
+        }
     }
 
     var body: some View {
@@ -292,15 +315,62 @@ struct CoverCard: View {
         }
         .frame(width: scaledWidth, alignment: .leading)
         // One element rather than three: VoiceOver should announce a card as a
-        // single thing to tap, not read cover, title and meta separately.
+        // single thing to tap, not read cover, title and meta separately. No
+        // `.isButton` trait here: every call site wraps this in a `Button`,
+        // which carries the trait itself (R minor).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
     }
 
     private var accessibilityLabel: String {
         let title = series.displayTitle ?? "Untitled series"
         guard let meta else { return title }
         return "\(title), \(meta)"
+    }
+}
+
+/// The grid of covers Search, Mix and Publisher share: three across, two at
+/// accessibility text sizes, each card as wide as its column.
+///
+/// Measures its own width once laid out and hands every cell the column
+/// width it should draw at, so no screen writes a card width down — the
+/// literal `111` lived in four files and was right for one phone (R F11).
+/// Before the first measurement lands the reference phone's width stands
+/// in, so the frame before layout is the old, nearly-right one rather than
+/// a zero-width column.
+struct CoverGrid<Item: Identifiable, Cell: View>: View {
+    let items: [Item]
+    /// Between rows. 16 is what the three grids used, unchanged.
+    var rowSpacing: CGFloat = 16
+    @ViewBuilder let cell: (_ index: Int, _ item: Item, _ layout: CoverGridLayout) -> Cell
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var measuredWidth: CGFloat?
+
+    private var layout: CoverGridLayout {
+        CoverGridLayout.resolve(
+            availableWidth: measuredWidth ?? (Metrics.referenceScreenWidth - 2 * Metrics.gutter),
+            isAccessibilitySize: typeSize.isAccessibilitySize
+        )
+    }
+
+    var body: some View {
+        let resolved = layout
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
+                count: resolved.columns
+            ),
+            alignment: .leading,
+            spacing: rowSpacing
+        ) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                cell(index, item, resolved)
+            }
+        }
+        // Measured inside the gutter, so `availableWidth` is what the columns
+        // actually divide.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
+        .padding(.horizontal, Metrics.gutter)
     }
 }

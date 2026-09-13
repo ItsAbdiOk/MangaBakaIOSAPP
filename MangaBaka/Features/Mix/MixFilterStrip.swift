@@ -51,7 +51,8 @@ extension MixView {
         .padding(.horizontal, Metrics.gutter)
     }
 
-    /// Tags to require in the blend, with the mockup's AND/OR mode.
+    /// Tags to require in the blend. The mockup's AND/OR mode is gone — see
+    /// the comment where the toggle used to sit.
     ///
     /// **Offered before the first blend as well as after.** It used to appear
     /// only once a blend had run, on the reasoning that there was no DNA to
@@ -63,31 +64,14 @@ extension MixView {
     var tagFilter: some View {
         if !model.dna.isEmpty || !model.filters.tags.isEmpty || catalogue != nil {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Eyebrow(text: "Require tags")
-                    Spacer(minLength: 0)
-                    if model.filters.tags.count > 1 {
-                        Button { toggleTagMode() } label: {
-                            Text(model.filters.tagMode == "and" ? "ALL" : "ANY")
-                                .typeTabLabel()
-                                .tracking(0.6)
-                                .foregroundStyle(Palette.textSecondary)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4)
-                                .background(Palette.surfaceChip, in: RoundedRectangle(
-                                    cornerRadius: 7, style: .continuous
-                                ))
-                                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .strokeBorder(Palette.borderPill, lineWidth: 0.5))
-                        }
-                        .buttonStyle(.press)
-                        .accessibilityLabel(
-                            model.filters.tagMode == "and"
-                                ? "Requiring all tags. Switch to any."
-                                : "Requiring any tag. Switch to all."
-                        )
-                    }
-                }
+                // The ALL/ANY toggle that used to sit here is gone: measured
+                // 2026-09-13, `/v1/series/mix` with `tag=Isekai&tag=Regression`
+                // returns the same 50 ids with and without `tag_mode=or`, and
+                // `SearchQuery` now always sends `tag_mode=and` regardless of
+                // what this model's `tagMode` holds (see its doc comment).
+                // A control whose two states send the same request is not a
+                // control. `TagPickerSheet.pickedTagMode` made the same call.
+                Eyebrow(text: "Require tags")
 
                 // Drawn from the blend's own DNA, so every chip is a tag this
                 // blend actually contains rather than a guess at the taxonomy.
@@ -176,11 +160,6 @@ extension MixView {
         if model.filters.tags.count > 1, model.filters.tagMode == nil {
             model.filters.tagMode = "and"
         }
-        requestBlend()
-    }
-
-    func toggleTagMode() {
-        model.filters.tagMode = model.filters.tagMode == "and" ? "or" : "and"
         requestBlend()
     }
 

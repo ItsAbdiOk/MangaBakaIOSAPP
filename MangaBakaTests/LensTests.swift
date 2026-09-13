@@ -355,6 +355,90 @@ struct LensTests {
     }
 }
 
+/// How a lens is named and described, and what saving one over another
+/// says. Its own suite so `LensTests` stays under the lint's body ceiling.
+@Suite("Lens names")
+@MainActor
+struct LensNamingTests {
+    private func defaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "lens.names.\(UUID().uuidString)"))
+    }
+
+    /// `describe` used to skip the year fields, so a lens built from Year
+    /// alone — which `save` accepts, since `isEmpty` counts a year — was
+    /// named "Everything", the one thing `save`'s own comment says a lens
+    /// must never claim (review 2026-09-13, UX#4).
+    @Test("A year-only lens is named after the year, not \"Everything\"")
+    func yearOnlyLensIsNamed() {
+        var query = SearchQuery()
+        query.yearFrom = 2020
+        query.yearTo = 2020
+        #expect(SearchLens.describe(query) == "year: 2020")
+
+        query.yearTo = 2023
+        #expect(SearchLens.describe(query) == "year: 2020\u{2013}2023")
+
+        query.yearFrom = nil
+        #expect(SearchLens.describe(query) == "year: to 2023")
+
+        query.yearFrom = 2020
+        query.yearTo = nil
+        #expect(SearchLens.describe(query) == "year: from 2020")
+    }
+
+    /// Same hole for genres once they stopped riding in `tags`: a lens from
+    /// the Genres sheet alone would have been "Everything" too.
+    @Test("A genre-only lens is named after the genre")
+    func genreOnlyLensIsNamed() {
+        var query = SearchQuery()
+        query.genres = ["slice_of_life"]
+        #expect(SearchLens.describe(query) == "genre: slice of life")
+
+        query.genres = ["action", "romance"]
+        // AND, because that is what the API does: `genre=action` 31,025,
+        // `genre=romance` 100,947, both together 6,692 (`/v1/series/search`,
+        // 2026-09-13).
+        #expect(SearchLens.describe(query) == "genres: action AND romance")
+    }
+
+    /// The control: a text-only lens keeps the name it always had.
+    @Test("A text-only lens is still named after the text")
+    func textOnlyLensIsNamed() {
+        #expect(SearchLens.describe(SearchQuery(text: "murim")) == "\u{201C}murim\u{201D}")
+    }
+
+    /// Two tags used to be joined "A, B" unless `tagMode` was literally
+    /// "and" — which read as "either" for a request that is always AND
+    /// (`SearchQuery.tagMode`'s doc has the 164-either-way measurement).
+    @Test("Two tags read as AND whatever tagMode says")
+    func tagsReadAsAnd() {
+        var query = SearchQuery()
+        query.tags = ["Isekai", "Regression"]
+        #expect(SearchLens.describe(query) == "tags: Isekai AND Regression")
+        query.tagMode = "or"
+        #expect(SearchLens.describe(query) == "tags: Isekai AND Regression")
+    }
+
+    // MARK: - Overwrite
+
+    /// Saving under a name already taken replaces the old lens, and used
+    /// to do so without a word (review 2026-09-13, UX#12). The store now
+    /// says whose place the new lens took, so the caller's toast can.
+    @Test("Saving over an existing name reports which lens was replaced")
+    func overwriteIsReported() throws {
+        let store = SearchLensStore(defaults: try defaults())
+        #expect(store.save(name: "Seinen", query: SearchQuery(text: "seinen")))
+        #expect(store.replaced == nil, "a first save replaces nothing")
+
+        #expect(store.save(name: "seinen", query: SearchQuery(text: "seinen, completed")))
+        #expect(store.replaced == "Seinen", "the name as it was saved, not as it was retyped")
+        #expect(store.own.count == 1)
+
+        #expect(store.save(name: "Josei", query: SearchQuery(text: "josei")))
+        #expect(store.replaced == nil, "the report is per save, not sticky")
+    }
+}
+
 /// One save control, in the panel that owns filters.
 ///
 /// Lived in `FilterSheet.swift` until 2026-09-13, when the controls moved
@@ -422,6 +506,17 @@ struct FilterPanelWiringTests {
     func idleScreenUsesThePanel() throws {
         let idle = try SourceTree.read("MangaBaka/Features/Search/SearchIdleView.swift")
         #expect(idle.contains("FilterPanel("))
+    }
+
+    /// The Genres sheet used to write into `query.tags`, so a genre went to
+    /// the wire as `tag=` and found 6-14% of the genre (measured figures on
+    /// `SearchQuery.genres`). A grep, because a `Binding<[String]>` to the
+    /// wrong array type-checks just as well as one to the right array.
+    @Test("The Genres sheet writes query.genres, not query.tags")
+    func genreSheetBindsGenres() throws {
+        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
+        #expect(panel.contains("selected: $query.genres"))
+        #expect(!panel.contains("genres: $genres, selected: $query.tags)"))
     }
 }
 
