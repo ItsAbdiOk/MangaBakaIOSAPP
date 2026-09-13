@@ -71,4 +71,24 @@ if ! xcodebuild test \
 fi
 ok "tests passed"
 
+# The Release archive, the way Xcode Cloud builds it. Builds 69 and 71
+# (2026-09-13) died in the Swift 6.3.3 SIL verifier under whole-module
+# optimisation on code that compiled fine in Debug and even in a plain
+# Release *build* — only `xcodebuild archive` reproduced it. Unsigned:
+# signing is Xcode Cloud's job; the compiler is what this checks.
+echo "  archiving unsigned Release (the other slow bit)..."
+if ! xcodebuild archive \
+        -project MangaBaka.xcodeproj -scheme MangaBaka \
+        -destination "generic/platform=iOS" \
+        -archivePath /tmp/mb-prepush-archive/MangaBaka.xcarchive \
+        CODE_SIGNING_ALLOWED=NO \
+        >/tmp/mb-prepush-archive.log 2>&1; then
+    printf "%spre-push: Release archive failed%s\n" "$RED" "$OFF" >&2
+    grep -E "error:|While running pass|for expression at" /tmp/mb-prepush-archive.log \
+        | cut -c1-200 | sed 's/^/  /' | head -12 >&2
+    echo "  full log: /tmp/mb-prepush-archive.log" >&2
+    exit 1
+fi
+ok "Release archive compiles"
+
 echo "pre-push checks passed."

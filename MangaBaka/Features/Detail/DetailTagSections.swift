@@ -81,7 +81,7 @@ struct DetailTagSections: View {
             // sections onto the page rather than answering one tap, the same
             // distinction the motion brief draws between a toggle and
             // content arriving.
-            Motion.run(.settle) { showsAllGroups.toggle() }
+            Motion.run(Motion.settle) { showsAllGroups.toggle() }
         } label: {
             HStack(spacing: 6) {
                 Text(showsAllGroups ? "Fewer tags" : "\(remaining) more tag groups")
@@ -114,7 +114,7 @@ struct DetailTagSections: View {
                 Spacer(minLength: 0)
                 if hidden > 0 || isExpanded {
                     Button {
-                        Motion.run(.settle) { toggle(group.name) }
+                        Motion.run(Motion.settle) { toggle(group.name) }
                     } label: {
                         Text(isExpanded ? "Less" : "+\(hidden)")
                             .typeChip()

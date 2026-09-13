@@ -310,7 +310,7 @@ struct DetailTags: View {
                 }
                 if hiddenCount > 0, !isExpanded {
                     Button {
-                        Motion.run(.settle) { isExpanded = true }
+                        Motion.run(Motion.settle) { isExpanded = true }
                     } label: {
                         Text("+\(hiddenCount) more")
                             .typeChip()

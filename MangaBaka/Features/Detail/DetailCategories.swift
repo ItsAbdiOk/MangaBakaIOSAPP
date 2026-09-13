@@ -89,7 +89,7 @@ struct DetailCategories: View {
                             title: showingAll ? "Show less" : "Show all \(categories.count)",
                             weight: .aside
                         ) {
-                            Motion.run(.settle) { showingAll.toggle() }
+                            Motion.run(Motion.settle) { showingAll.toggle() }
                         }
                         .padding(.horizontal, Metrics.gutter)
                     }

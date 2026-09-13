@@ -80,11 +80,18 @@ struct StateFamilyTests {
         let gate = await RetryGate()
         let runCount = Counter()
 
-        // Two "taps" fired concurrently, the way a double-tap on the real
-        // button would arrive.
-        async let first: Void = gate.fire { await runCount.increment(); await Task.yield() }
-        async let second: Void = gate.fire { await runCount.increment() }
-        _ = await (first, second)
+        // The first tap's retry is still running when the second lands: it
+        // holds for 200 ms and the second tap arrives at 50 ms. Two bare
+        // `async let`s raced here and the first could finish before the
+        // second even started — a pass that proved nothing, and a failure
+        // one run in three.
+        async let first: Void = gate.fire {
+            await runCount.increment()
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        await gate.fire { await runCount.increment() }
+        _ = await first
 
         #expect(await runCount.value == 1, "The second tap must not run the retry a second time")
     }

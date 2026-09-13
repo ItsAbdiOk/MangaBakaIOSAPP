@@ -141,12 +141,3 @@ private struct ArrivalTransition: ViewModifier {
         }
     }
 }
-
-extension Animation {
-    /// The presets by their short names, so a call site can write
-    /// `Motion.run(.settle)` the way it writes `.easeOut`.
-    static var snappy: Animation { Motion.snappy }
-    static var settle: Animation { Motion.settle }
-    static var celebrate: Animation { Motion.celebrate }
-    static var glide: Animation { Motion.glide }
-}
