@@ -21,8 +21,8 @@ struct CoverImageTests {
     }
 }
 
-/// The long-press quick-action pill shows only the actions a cover was
-/// actually given, in a fixed order.
+/// The cover's context menu (beside "Copy cover", since 2026-09-13 — R F3)
+/// shows only the actions a cover was actually given, in a fixed order.
 @Suite("Cover quick actions")
 struct CoverQuickActionsTests {
     @Test("No actions supplied, nothing to show")

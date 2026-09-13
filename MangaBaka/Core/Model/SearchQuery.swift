@@ -67,7 +67,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
     /// the view kept rendering its idle state. A sort-only query is a real
     /// query — random and trending are both browsing, not filtering.
     var isEmpty: Bool {
-        (text ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        askedText == nil
             && types.isEmpty && statuses.isEmpty && minimumRating == nil
             && sort == nil && tags.isEmpty && genres.isEmpty && (publisher ?? "").isEmpty
             && (staff ?? "").isEmpty && yearFrom == nil && yearTo == nil
@@ -101,7 +101,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
     var queryItems: [URLQueryItem] {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if page > 1 { items.append(URLQueryItem(name: "page", value: String(page))) }
-        if let text, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+        if let text = askedText {
             // `URLComponents` leaves a literal `+` unencoded, and most server
             // stacks read a literal `+` in a query string as a space — a
             // real hazard for a title like "+Anima". NOT A BUG here, checked
@@ -114,7 +114,7 @@ struct SearchQuery: Sendable, Equatable, Codable {
             // Trimmed: `q=one` and `q=one%20` answer the same 4,926 series
             // in the same order (measured 2026-09-13), and the pause after a
             // word used to cost a request for an answer already on screen.
-            items.append(URLQueryItem(name: "q", value: text.trimmingCharacters(in: .whitespaces)))
+            items.append(URLQueryItem(name: "q", value: text))
         }
         for type in types { items.append(URLQueryItem(name: "type", value: type)) }
         for status in statuses { items.append(URLQueryItem(name: "status", value: status)) }
@@ -157,6 +157,26 @@ struct SearchQuery: Sendable, Equatable, Codable {
             items.append(URLQueryItem(name: "publisher", value: publisher))
         }
         return items
+    }
+
+    /// The fewest characters of text that count as a question. One
+    /// character fired a request and the walk saw "30 shown" over titles
+    /// with no "a" in them (LW §2, 2026-09-13) — `q=a` is a fuzzy match
+    /// the API answers with noise. `RecentSearches.record` had refused
+    /// one-character terms since before that, so the two rules disagreed:
+    /// a search could run that could never be remembered (E "Minimum
+    /// length"). One number, read by both. A guess at where noise ends;
+    /// two is the shortest string the walk saw answer sensibly ("on").
+    static let minimumTextLength = 2
+
+    /// `text` as a question: trimmed, and nil when blank or under
+    /// `minimumTextLength`. The one reading of the text every rule shares —
+    /// `isEmpty`, the wire's `q`, and `SearchModel`'s memory of what it
+    /// answered — so a one-character field is "no text" everywhere rather
+    /// than a request in one place and idle in another.
+    var askedText: String? {
+        let trimmed = (text ?? "").trimmingCharacters(in: .whitespaces)
+        return trimmed.count >= Self.minimumTextLength ? trimmed : nil
     }
 
     /// A seed the API will accept. The schema says −1…1, but `random_seed=0`

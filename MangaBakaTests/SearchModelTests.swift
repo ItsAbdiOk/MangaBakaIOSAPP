@@ -408,19 +408,25 @@ struct OpenTagRouteTests {
         #expect(!model.query.isEmpty, "an empty query never reaches the network")
     }
 
-    /// The control: a tag route replaces the previous query rather than
-    /// narrowing it. Arriving from a series page means "show me this tag",
-    /// not "this tag plus whatever was still set".
-    @Test("A tag route drops the text and filters that were already there")
+    /// UX#11, decision 2026-09-13: Browse *adds*, like the panel's own
+    /// pickers, so the two doors to one vocabulary behave the same after
+    /// the pick. It used to replace — this test's previous form asserted
+    /// `model.query.text == nil` here. Expected to fail on HEAD~ with:
+    /// `model.query.text == "one piece"` → actual `nil`.
+    @Test("A browse pick keeps the text and filters that were already there")
     @MainActor
-    func applyBrowseReplacesTheQuery() async {
+    func applyBrowseAddsToTheQuery() async {
         let model = SearchModel(repository: StubRepositoryBase())
         model.query.text = "one piece"
         model.query.statuses = ["completed"]
+        model.query.sort = "score_desc"
         model.applyBrowse(tag: "Isekai")
-        #expect(model.query.text == nil)
-        #expect(model.query.statuses.isEmpty)
+        #expect(model.query.text == "one piece")
+        #expect(model.query.statuses == ["completed"])
         #expect(model.query.tags == ["Isekai"])
+        #expect(model.query.sort == "score_desc", "a sort already chosen is kept")
+        model.applyBrowse(tag: "Isekai")
+        #expect(model.query.tags == ["Isekai"], "the same pick twice is one token")
     }
 
     /// A genre route used to write `tags = [genre]`, so a Browse genre chip
@@ -433,7 +439,23 @@ struct OpenTagRouteTests {
         model.query.tags = ["Isekai"]
         model.applyBrowse(genre: "slice_of_life")
         #expect(model.query.genres == ["slice_of_life"])
-        #expect(model.query.tags.isEmpty, "a genre route replaces, the same as a tag route")
+        #expect(model.query.tags == ["Isekai"], "a genre adds beside a tag; neither replaces the other")
+        #expect(model.query.sort == "popularity_asc")
+    }
+
+    /// The other door keeps the old semantics: a tag tapped on a series
+    /// page replaces whatever Search last held. Expected to fail on HEAD~
+    /// with: no such method `openTag`.
+    @Test("A tag from a series page replaces the last search")
+    @MainActor
+    func openTagReplacesTheQuery() async {
+        let model = SearchModel(repository: StubRepositoryBase())
+        model.query.text = "one piece"
+        model.query.statuses = ["completed"]
+        model.openTag("Isekai")
+        #expect(model.query.text == nil)
+        #expect(model.query.statuses.isEmpty)
+        #expect(model.query.tags == ["Isekai"])
         #expect(model.query.sort == "popularity_asc")
     }
 

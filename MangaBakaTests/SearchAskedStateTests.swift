@@ -67,7 +67,9 @@ struct SearchAskedStateTests {
         let repository = RecordingRepository()
         let model = SearchModel(repository: repository)
 
-        model.query.text = "n"
+        // Two letters, not one: one is under `SearchQuery.minimumTextLength`
+        // and is idle, not pending — see `SearchTokenTests`.
+        model.query.text = "na"
         model.queryDidChange()
 
         #expect(model.hasAsked, "Typing is an ask")

@@ -243,7 +243,9 @@ actor OfflineCatalogue {
         let blocked = Set(blockedTags)
         let requiredTagIDs = Self.tagIDs(named: query.tags)
         let requiredGenreIDs = Self.tagIDs(forGenres: query.genres)
-        let text = (query.text ?? "").trimmingCharacters(in: .whitespaces)
+        // The same floor the wire has: one character is not a question here
+        // either (`SearchQuery.minimumTextLength`).
+        let text = query.askedText ?? ""
 
         let result = entries.filter { entry in
             passesRating(entry, allowed: ratings)

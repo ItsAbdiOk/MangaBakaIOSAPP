@@ -156,11 +156,12 @@ final class LensCounts {
 /// What the reader searched for recently, on this device.
 ///
 /// Raw terms, not lenses: a lens is a saved question, and this is just the last
-/// few things typed. Shown as rows on the idle screen (2026-09-13: were
-/// chips, alongside the presets that crowded the screen — see `SearchLens`'s
-/// doc comment), each with its own "×", because a single stray recent term is
-/// now something the reader removes on its own rather than only by clearing
-/// the whole list.
+/// few things typed. Shown as the search field's own suggestions while it is
+/// empty (`SearchField`, since 2026-09-13; before that rows on the idle
+/// screen, and before that chips alongside the presets that crowded the
+/// screen — see `SearchLens`'s doc comment). `remove` and `clear` outlive
+/// the rows that called them: the suggestion list has no × of its own, and
+/// the store's rules are the store's, not the screen's.
 @MainActor
 @Observable
 final class RecentSearches {
@@ -186,10 +187,13 @@ final class RecentSearches {
     }
 
     /// Records a term, moving a repeat to the front rather than listing it
-    /// twice. Blank and whitespace-only searches are not searches.
+    /// twice. Blank and whitespace-only searches are not searches, and
+    /// neither is anything under `SearchQuery.minimumTextLength` — the same
+    /// floor the request has, so nothing is remembered that could not have
+    /// been asked, and nothing asked is too short to remember.
     func record(_ term: String) {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > 1 else { return }
+        guard trimmed.count >= SearchQuery.minimumTextLength else { return }
         terms.removeAll { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
         terms.insert(trimmed, at: 0)
         if terms.count > Self.limit { terms = Array(terms.prefix(Self.limit)) }

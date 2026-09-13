@@ -1,6 +1,18 @@
 import SwiftUI
 
-/// Search, with type/status/sort/rating filters in a sheet.
+/// Search: the system field on the search tab, scopes for type, tokens for
+/// the picked tags/genres/publisher, and the rest of the filters in a sheet.
+///
+/// The field is `.searchable` on a navigation bar, since 2026-09-13 (UX#6).
+/// It was a `TextField` in a rounded box inside the scroll view, with a
+/// hand-built clear button, because the four tab roots drew no navigation
+/// bar (`ScrollEdge`). Search is the one tab iOS 26 redesigned around
+/// (`Tab(role: .search)`, `RootView`): with the system field, tapping the
+/// tab morphs the bar into the field, a picked tag is a token the reader can
+/// see and remove, Recent is a suggestion list that vanishes on the first
+/// keystroke, and Cancel restores the idle panel — none of which the
+/// hand-rolled field had, and the field itself no longer scrolls away under
+/// the results (R F5).
 struct SearchView: View {
     @Bindable var model: SearchModel
     @Binding var path: [Series]
@@ -8,36 +20,30 @@ struct SearchView: View {
     // (moved there for the lint's type-length ceiling, alongside the empty
     // state it sits next to), and `private` is file-scoped in Swift.
     @Environment(\.zoomRoute) var zoomRoute
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(ToastCentre.self) private var toasts: ToastCentre?
+    @Environment(ToastCentre.self) var toasts: ToastCentre?
     /// Opens the genre and tag browser.
-    ///
-    /// Lives in the screen's own header rather than the navigation bar: the
-    /// app's custom top bar is drawn over the navigation bar on a root screen,
-    /// so a toolbar button there was clipped to a sliver at the screen edge.
     let onBrowse: () -> Void
     let lenses: SearchLensStore
     let counts: LensCounts
     let catalogue: CatalogueService
     let recents: RecentSearches
+    /// Where a result's "Save" and "Mark read" write (R F3). Nil where a
+    /// caller has no library to offer, and the menu shows only "Open".
+    var library: (any LibraryProviding)?
 
     @State private var isNamingLens = false
-
     @State private var showFilters = false
-
-    // Not `private`: `resultsGrid` (moved to `SearchEmptyState.swift`) reads
-    // this too.
-    let columns = Array(
-        repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
-        count: 3
-    )
+    /// The system field's presented state. Bound so Cancel can be seen:
+    /// the platform empties the text itself, and the model drops the
+    /// tokens with it and returns to idle (`SearchModel.cancelSearch`).
+    @State private var isSearchPresented = false
+    /// Reset to the top on every new answer generation (R F5): a long grid
+    /// followed by a short one left the offset wherever the clamp put it.
+    @State private var scrollPosition = ScrollPosition(edge: .top)
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.sectionGap) {
-                searchBar
-                    .padding(.horizontal, Metrics.gutter)
-
                 // A heading and two links. Kept on one row until they no
                 // longer fit: squeezed by both links, "30 results" broke into
                 // "30" / "result" / "s" at the largest text size.
@@ -71,8 +77,18 @@ struct SearchView: View {
             .padding(.bottom, Metrics.scrollBottomInset)
         }
         .scrollIndicators(.hidden)
+        .scrollPosition($scrollPosition)
         .background(Palette.ground)
-        .scrollEdge()
+        // No `.scrollEdge()`: the navigation bar draws the edge itself, which
+        // is what that modifier stands in for on the three bar-less tabs.
+        .navigationTitle("Search")
+        .modifier(SearchField(
+            model: model, recents: recents, isPresented: $isSearchPresented
+        ))
+        .onChange(of: model.query.text) { _, _ in model.queryDidChange() }
+        .onChange(of: model.generation) { _, _ in
+            scrollPosition.scrollTo(edge: .top)
+        }
         // The end of the results, felt — and, since R F10, also said, by the
         // "That's all N" line under the grid. Not while a new search is
         // resetting `hasMore` for its own first page, and not when the walk
@@ -124,68 +140,6 @@ struct SearchView: View {
         }
     }
 
-    private var searchBar: some View {
-        HStack(spacing: Metrics.gapChips) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Palette.textTertiary)
-                    // Breathes while a request is out, so the field itself
-                    // says "working" without a spinner beside it.
-                    .symbolEffect(.pulse, isActive: isWorking && !reduceMotion)
-                TextField("Title, author, or tag", text: Binding(
-                    get: { model.query.text ?? "" },
-                    set: { model.query.text = $0 }
-                ))
-                .textInputAutocapitalization(.never)
-                .submitLabel(.search)
-                .foregroundStyle(Palette.textPrimary)
-                .typeBody()
-                .onSubmit {
-                    recents.record(model.query.text ?? "")
-                    Task { model.cancelPendingDebounce(); await model.search() }
-                }
-                .onChange(of: model.query.text) { _, _ in model.queryDidChange() }
-
-                SearchClearButton(
-                    text: Binding(
-                        get: { model.query.text ?? "" },
-                        set: { model.query.text = $0 }
-                    ),
-                    // Clearing is a search in its own right: the results for a
-                    // query that no longer exists must not stay on screen.
-                    onClear: { model.queryDidChange() }
-                )
-            }
-            .padding(.horizontal, 14)
-            .frame(height: Metrics.field)
-            .background(Palette.surfaceField)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-
-            // Redundant while the idle page shows the same panel inline
-            // (Abdi, 2026-09-13); it returns once results are on screen.
-            if contentKind != .idle {
-                Button {
-                    showFilters = true
-                } label: {
-                    // The badge is the only sign, on this screen, that a
-                    // Type chip from the panel is still narrowing the grid
-                    // (LW §1: "Manga silently survives").
-                    HStack(spacing: 6) {
-                        Text("Filters")
-                            .typeCTA()
-                            .foregroundStyle(Palette.textPrimary)
-                        FilterCountBadge(query: model.query)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: Metrics.field)
-                    .background(Palette.surfaceChip)
-                    .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-                }
-                .transition(.blurReplace)
-            }
-        }
-    }
-
     @ViewBuilder
     private var headingText: some View {
         // Nil while a new search is in flight, so a heading over the
@@ -202,13 +156,16 @@ struct SearchView: View {
         }
     }
 
-    /// Two actions of different weight, drawn differently.
+    /// Two actions of different weight, drawn differently, and the door to
+    /// the rest of the filters once results are up.
     ///
-    /// They were three same-weight accent links — "Browse", "Surprise me" and
-    /// the recents "Clear" below — which told the reader nothing about which
-    /// one to reach for. Browse opens a whole other surface and is the one
-    /// worth finding, so it takes a chip; "Surprise me" reorders the results
-    /// you already have and stays a plain link.
+    /// Browse and Surprise me were three same-weight accent links — with the
+    /// recents "Clear" below — which told the reader nothing about which one
+    /// to reach for. Browse opens a whole other surface and is the one worth
+    /// finding, so it takes a chip; "Surprise me" reorders the results you
+    /// already have and stays a plain link. Every control here hits at
+    /// `Metrics.tapTarget`: the pills are drawn at `headerPill` and were
+    /// 30pt targets, fourteen under the platform minimum (R F8).
     private var headerActions: some View {
         HStack(spacing: 12) {
             Button(action: onBrowse) {
@@ -219,11 +176,36 @@ struct SearchView: View {
                     .frame(minHeight: Metrics.headerPill)
                     .background(Palette.accentTint, in: Capsule())
                     .overlay(Capsule().strokeBorder(Palette.accent.opacity(0.4), lineWidth: 0.5))
-                    .contentShape(Capsule())
+                    .tapTarget()
             }
             .buttonStyle(.press)
             SurpriseMeButton(isSearching: isWorking) {
                 Task { await model.surpriseMe() }
+            }
+            // Redundant while the idle page shows the same panel inline
+            // (Abdi, 2026-09-13); it returns once results are on screen.
+            if contentKind != .idle {
+                Button {
+                    showFilters = true
+                } label: {
+                    // The badge is the only sign, on this screen, that a
+                    // status or rating from the panel is still narrowing
+                    // the grid (LW §1: "Manga silently survives") — a type
+                    // shows in the scope bar and a tag in the field, but
+                    // the panel's own filters show nowhere else.
+                    HStack(spacing: 6) {
+                        Text("Filters")
+                            .typeInstruction()
+                            .foregroundStyle(Palette.textPrimary)
+                        FilterCountBadge(query: model.query)
+                    }
+                    .padding(.horizontal, 13)
+                    .frame(minHeight: Metrics.headerPill)
+                    .background(Palette.surfaceChip, in: Capsule())
+                    .tapTarget()
+                }
+                .buttonStyle(.press)
+                .transition(.blurReplace)
             }
         }
         .fixedSize()
@@ -253,18 +235,11 @@ struct SearchView: View {
             SearchIdleView(
                 lenses: lenses,
                 counts: counts,
-                recents: recents,
                 query: $model.query,
                 catalogue: catalogue,
                 preferOffline: $model.preferOffline,
                 onRun: { lens in
                     Task { await model.apply(lens.query) }
-                },
-                onRunTerm: { term in
-                    // Moves it to the front (UX#10): a recent tapped again
-                    // is the most recent search.
-                    recents.record(term)
-                    Task { await model.apply(SearchQuery(text: term)) }
                 },
                 onSaveLens: { isNamingLens = true },
                 onShowResults: {
@@ -303,9 +278,6 @@ struct SearchView: View {
                 .transition(.blurReplace)
         }
     }
-
-    // `resultsGrid`, `shouldPrefetch` and `prefetchDistance` moved to
-    // `SearchEmptyState.swift` for the lint's type-length ceiling.
 
     // Internal, not private: the empty state lives in its own file for the
     // lint's ceiling. See SearchEmptyState.swift.
@@ -472,8 +444,7 @@ private struct SurpriseMeButton: View {
             Text("Surprise me")
                 .typeInstruction()
                 .foregroundStyle(isActuallyEnabled ? Palette.textSecondary : Palette.textQuaternary)
-                .frame(minHeight: Metrics.headerPill)
-                .contentShape(Rectangle())
+                .tapTarget()
         }
         .buttonStyle(.press)
         .disabled(!isActuallyEnabled)

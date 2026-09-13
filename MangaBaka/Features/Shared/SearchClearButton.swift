@@ -2,10 +2,12 @@ import SwiftUI
 
 /// The X at the right of a search field.
 ///
-/// One implementation, used by every field in the app that takes a query. It
-/// existed only inside `InlineSearchField`, so the two fields people actually
-/// search from — the Search tab and the tag picker — had no way to clear
-/// themselves but backspacing a sentence one character at a time.
+/// One implementation, used by every hand-rolled field in the app that takes
+/// a query — the tag, genre and seed pickers and `InlineSearchField`. It
+/// existed only inside `InlineSearchField`, so the fields people actually
+/// search from had no way to clear themselves but backspacing a sentence one
+/// character at a time. The Search tab itself no longer uses it: its field
+/// is the system's (`SearchField`, 2026-09-13), which clears itself.
 ///
 /// Absent when the field is empty, because a control that does nothing is worse
 /// than no control, and it steals the space the text needs.

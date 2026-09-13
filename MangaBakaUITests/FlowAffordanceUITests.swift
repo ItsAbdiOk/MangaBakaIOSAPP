@@ -21,11 +21,14 @@ final class FlowAffordanceUITests: XCTestCase {
     }
 
     /// The field on Search clears, by pressing the button rather than by
-    /// containing one.
+    /// containing one. Since 2026-09-13 the field is the system's
+    /// (`.searchable`, a `searchField` to XCUI rather than a `textField`)
+    /// and the button is the system's "Clear text" — the hand-built "Clear
+    /// search" is gone with the hand-built field (UX#6).
     func testSearchFieldClears() throws {
         let app = launchedApp()
         app.tabBars.buttons["Search"].tap()
-        let field = app.textFields.firstMatch
+        let field = app.searchFields.firstMatch
         guard field.waitForExistence(timeout: 15) else {
             throw XCTSkip("no search field on the Search tab")
         }
@@ -33,7 +36,7 @@ final class FlowAffordanceUITests: XCTestCase {
         field.typeText("one piece")
         XCTAssertEqual(field.value as? String, "one piece", "the field did not take the text")
 
-        let clear = app.buttons["Clear search"]
+        let clear = app.buttons["Clear text"]
         guard clear.waitForExistence(timeout: 5) else {
             return XCTFail("a field with text and no way to empty it")
         }

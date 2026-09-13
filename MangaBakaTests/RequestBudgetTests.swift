@@ -111,9 +111,11 @@ struct RequestBudgetTests {
     /// "count on appear with a non-empty query" and "count once per settled
     /// change" — are replayed as the `LensCounts.count` calls it makes.
     ///
-    /// Batch 3 (the `.searchable` redesign) is measured against this number
-    /// before and after; if it moves, the summary at
-    /// `docs/reviews/search/SUMMARY.md` §8 says why it may.
+    /// Batch 3 (the `.searchable` redesign, 2026-09-13) was measured against
+    /// this number before and after: four before, four after. The redesign
+    /// moved the field, not the asks — the one thing it changed on the wire
+    /// is that "s" alone now sends nothing (`SearchQuery.minimumTextLength`),
+    /// and the debounce already folded that keystroke into the one request.
     @Test("Typing a word, opening filters and toggling two chips costs four search-family requests")
     @MainActor
     func searchSessionCostsFourRequests() async throws {

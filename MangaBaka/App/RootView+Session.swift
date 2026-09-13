@@ -354,18 +354,20 @@ extension RootView {
             // Gap 77: see `useAsSeedTapped` in `RootView+Failures.swift`.
             onUseAsSeed: useAsSeedTapped,
             onOpenTag: { tag in
-                // `applyBrowse`, not a raw assignment plus `search()`. Tapping
-                // a tag is the same gesture as picking one on the browse
-                // screen, and that method is what it is for: it remembers the
-                // text it applied so the field's own change observer does not
-                // schedule a second, identical request 300ms later (two calls
-                // per tap against a 30 req/min budget shared with everyone on
-                // the same network — see `SearchModel.queryDidChange`), it
-                // cancels any keystroke debounce already pending, and it sets
-                // a stable sort. The sort matters beyond tidiness: without one
-                // the API is free to reorder between pages, and this app pages
-                // by asking for page 2 and dropping ids it has already seen.
-                searchModel?.applyBrowse(tag: tag)
+                // `openTag`, not a raw assignment plus `search()`: it
+                // remembers the text it applied so the field's own change
+                // observer does not schedule a second, identical request
+                // 300ms later (two calls per tap against a 30 req/min budget
+                // shared with everyone on the same network — see
+                // `SearchModel.queryDidChange`), it cancels any keystroke
+                // debounce already pending, and it sets a stable sort. The
+                // sort matters beyond tidiness: without one the API is free
+                // to reorder between pages, and this app pages by asking for
+                // page 2 and dropping ids it has already seen. Not
+                // `applyBrowse`, which since 2026-09-13 adds to the query
+                // (UX#11): a tag from a series page replaces the last search,
+                // which may be an hour old and about something else.
+                searchModel?.openTag(tag)
                 selection = .search
             },
             onOpenSchedule: {

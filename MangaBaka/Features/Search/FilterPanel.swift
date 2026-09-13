@@ -255,17 +255,24 @@ extension FilterPanel {
                 .disabled(cleared == nil && query.isEmpty)
             }
 
+            // A disabled control is a different control, not a live one that
+            // ignores taps: with nothing to show the button used to keep its
+            // accent fill and simply not respond, which the live walk logged
+            // as "Show results stopped responding after scrolling"
+            // (docs/reviews/search/live-walk-2.md, third attempt, B). Same
+            // rule as Mix's Blend button.
+            let canShow = Self.canShow(query: query)
             Button(action: onShowResults) {
                 Text(showResultsLabel)
                     .typeCTA()
-                    .foregroundStyle(Palette.onAccent)
+                    .foregroundStyle(canShow ? Palette.onAccent : Palette.textMuted)
                     .frame(maxWidth: .infinity)
                     .frame(height: Metrics.ctaSecondary)
-                    .background(Palette.accent)
+                    .background(canShow ? Palette.accent : Palette.surfaceChip)
                     .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
                     .countsNotCuts()
             }
-            .disabled(!Self.canShow(query: query))
+            .disabled(!canShow)
 
             if onSaveLens != nil, let footnote = Self.lensFootnote(for: query) {
                 Text(footnote)

@@ -4,8 +4,11 @@ import SwiftUI
 ///
 /// iOS gives a navigation bar a scroll edge effect for free: content passing
 /// underneath is blurred and dimmed, so the clock, the Dynamic Island and the
-/// bar's own text stay legible. The four tab roots draw the mockup's title
-/// inside the scroll view and have no navigation bar, so they never got one.
+/// bar's own text stay legible. Three of the four tab roots draw the mockup's
+/// title inside the scroll view and have no navigation bar, so they never got
+/// one. Search is the exception since 2026-09-13: its `.searchable` field
+/// needs a real bar (UX#6), so that tab lets iOS draw the edge and does not
+/// use this.
 ///
 /// On the device that was the worst-looking defect in the app: a library row
 /// title cut in half by the Dynamic Island with the clock printed over the

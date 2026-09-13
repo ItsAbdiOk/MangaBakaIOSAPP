@@ -17,11 +17,6 @@ struct CoverImage: View {
     /// loading, whether that came from cache or the network. Rows use this to
     /// chain their own arrival to the cover's rather than guessing at a delay.
     var onLoaded: (() -> Void)?
-    /// The long-press quick actions this cover offers, or nil for none. Left
-    /// nil at nearly every call site on purpose — `.coverQuickActions(_:)` is
-    /// itself inert when nil, so nothing about this view changes for the
-    /// screens that do not pass anything here.
-    var quickActions: CoverQuickActions.Actions?
 
     @Environment(\.displayScale) private var displayScale
 
@@ -63,7 +58,6 @@ struct CoverImage: View {
             }
         }
         .modifier(CoverFrame(width: width, height: height, radius: radius))
-        .coverQuickActions(quickActions)
         // The label the property has always documented, finally applied.
         // `accessibilityText` was declared, commented ("without this a
         // reader using VoiceOver hears nothing at all"), and passed in at
@@ -256,6 +250,10 @@ struct CoverCard: View {
     var radius: CGFloat = Metrics.radiusCoverRow
     var meta: String?
     var sizing: Sizing = .row
+    /// Save / Mark read / Open on a hold, in the same menu as "Copy cover"
+    /// — one long-press, one menu (R F3). Nil at every call site but Search
+    /// today, and the menu then carries only the copy.
+    var quickActions: CoverQuickActions.Actions?
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -294,7 +292,9 @@ struct CoverCard: View {
             // card rather than on `CoverImage` itself, because `CoverImage` is
             // also what the swipe stack draws its cards with, and a context
             // menu there competes with the drag for the same press.
-            .copyableArtwork(series.cover.raw ?? series.cover.x350, noun: "cover")
+            .copyableArtwork(
+                series.cover.raw ?? series.cover.x350, noun: "cover", quickActions: quickActions
+            )
 
             // A series can legitimately have no titles at all.
             Text(series.displayTitle ?? "Untitled series")

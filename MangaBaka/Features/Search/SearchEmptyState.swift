@@ -55,21 +55,15 @@ extension SearchView {
     var resultsGrid: some View {
         CoverGrid(items: model.results) { index, series, layout in
             Button {
-                // Opening a result is how most searches end, and Recent
-                // only heard about Return and "Show results" — "typed
-                // berserk, tapped the cover" was never in the list
-                // (UX#10, LW §2). `record` refuses blanks itself.
-                recents.record(model.query.text ?? "")
-                zoomRoute?.source = ZoomRoute.id("search", series.id)
-                zoomRoute?.neighbours = model.results
-                path.append(series)
+                open(series)
             } label: {
                 CoverCard(
                     series: series,
                     width: layout.cardWidth,
                     radius: Metrics.radiusCoverGrid,
                     meta: Self.meta(for: series),
-                    sizing: .gridColumn
+                    sizing: .gridColumn,
+                    quickActions: quickActions(for: series)
                 )
             }
             .zoomSource("search", series.id)
@@ -88,6 +82,45 @@ extension SearchView {
             }
         }
         .modifier(ResultsLanded(model: model, kind: contentKind))
+    }
+
+    /// Opening a result is how most searches end, and Recent only heard
+    /// about Return and "Show results" — "typed berserk, tapped the cover"
+    /// was never in the list (UX#10, LW §2). `record` refuses blanks itself.
+    private func open(_ series: Series) {
+        recents.record(model.query.text ?? "")
+        zoomRoute?.source = ZoomRoute.id("search", series.id)
+        zoomRoute?.neighbours = model.results
+        path.append(series)
+    }
+
+    /// Hold a result: Save, Mark read, Open — in the cover's own context
+    /// menu, beside "Copy cover" (R F3; decision 2026-09-13: wire it). The
+    /// two library writes go through `LibraryService.add`, which moves an
+    /// entry already tracked rather than failing on it; "Saved" is what a
+    /// discovery surface means by save (`StackModel.pushSaveToLibrary`),
+    /// and "Mark read" is the completed shelf. Without a library to write
+    /// to, only Open is offered.
+    private func quickActions(for series: Series) -> CoverQuickActions.Actions {
+        var actions = CoverQuickActions.Actions(open: { open(series) })
+        if let library {
+            actions.save = { write(series, to: .planToRead, via: library, said: "Saved") }
+            actions.markRead = { write(series, to: .completed, via: library, said: "Marked read") }
+        }
+        return actions
+    }
+
+    private func write(
+        _ series: Series, to state: LibraryEntry.State, via library: any LibraryProviding, said: String
+    ) {
+        Task {
+            do throws(APIError) {
+                _ = try await library.add(seriesId: series.id, state: state)
+                toasts?.show(said)
+            } catch let error {
+                toasts?.show(error.userFacingMessage, kind: .failure)
+            }
+        }
     }
 
     /// "Manga · 2019 · Releasing". Discover's "Manhwa · 8.6" was built for

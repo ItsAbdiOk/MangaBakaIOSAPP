@@ -41,18 +41,20 @@ struct PublisherBrowseTests {
         #expect(SearchLens.describe(query).contains("publisher: Seven Seas"))
     }
 
-    @Test("Arriving from browse replaces the query rather than narrowing it")
+    @Test("Arriving from browse narrows the query rather than replacing it")
     @MainActor
-    func browseReplaces() async {
-        // "Show me this", not "narrow whatever I had" — a reader who browses to
-        // a publisher does not expect their half-typed search to still apply.
+    func browseAdds() async {
+        // UX#11, decision 2026-09-13: Browse adds, like the panel's own
+        // publisher picker, and the pick shows as a token beside the text.
+        // Inverted from "replaces" — expected to fail on HEAD~ with:
+        // `model.query.text == "leftover"` → actual `nil`.
         let model = SearchModel(repository: StubRepositoryBase())
         model.query = SearchQuery(text: "leftover", types: ["novel"])
 
         model.applyBrowse(publisher: "Ize Press")
 
         #expect(model.query.publisher == "Ize Press")
-        #expect(model.query.text == nil)
-        #expect(model.query.types.isEmpty)
+        #expect(model.query.text == "leftover")
+        #expect(model.query.types == ["novel"])
     }
 }

@@ -17,11 +17,24 @@ private struct CopyableArtwork: ViewModifier {
     /// What the menu item says, and what the toast confirms: "cover", "art",
     /// "portrait". Named so the reader knows which of the images they held.
     let noun: String
+    /// Save / Mark read / Open ahead of the copy, when the surface offers
+    /// them — one menu on one hold, rather than the pill `CoverQuickActions`
+    /// used to hang under the cover on the same press (R F3).
+    let quickActions: CoverQuickActions.Actions?
 
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     func body(content: Content) -> some View {
         content.contextMenu {
+            if let quickActions {
+                ForEach(CoverQuickActions.visibleActions(quickActions), id: \.title) { item in
+                    Button {
+                        CoverQuickActions.perform(item, in: quickActions)
+                    } label: {
+                        Label(item.title, systemImage: item.systemImage)
+                    }
+                }
+            }
             if url != nil {
                 Button {
                     copy()
@@ -60,7 +73,11 @@ extension View {
     /// - Parameter url: the image to copy — the ORIGINAL where one exists, not
     ///   the thumbnail being displayed. Someone pasting a cover into a message
     ///   wants the artwork, not a 150-point rendering of it.
-    func copyableArtwork(_ url: URL?, noun: String = "cover") -> some View {
-        modifier(CopyableArtwork(url: url, noun: noun))
+    /// - Parameter quickActions: Save / Mark read / Open, listed ahead of
+    ///   the copy; nil for a surface with nothing to offer but the artwork.
+    func copyableArtwork(
+        _ url: URL?, noun: String = "cover", quickActions: CoverQuickActions.Actions? = nil
+    ) -> some View {
+        modifier(CopyableArtwork(url: url, noun: noun, quickActions: quickActions))
     }
 }

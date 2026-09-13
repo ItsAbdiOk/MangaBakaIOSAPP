@@ -259,7 +259,8 @@ struct RootView: View {
                         lenses: lenses,
                         counts: session.counts,
                         catalogue: catalogue,
-                        recents: recents
+                        recents: recents,
+                        library: library
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
                     .navigationDestination(isPresented: $showsBrowse) {

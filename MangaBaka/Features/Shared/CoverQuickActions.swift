@@ -1,24 +1,23 @@
 import SwiftUI
 
-/// The long-press quick actions every cover can offer.
+/// The quick actions a cover can offer on a hold: Save, Mark read, Open.
 ///
-/// Deliberately not `.contextMenu`: the system menu is a flat list of text
-/// rows that has to draw somewhere on screen, and on a cover as small as a
-/// row's it tends to cover the very thing it names. This instead pops the
-/// cover itself up a little and hangs a small glass pill of actions beneath
-/// it, so the gesture reads as "here is what you can do with *this*" rather
-/// than opening an unrelated menu.
+/// These live in the cover's context menu, beside "Copy cover"
+/// (`CopyableArtwork`), since 2026-09-13. They were a glass pill hung under
+/// the cover by a long-press gesture of their own — complete, tested, and
+/// presented nowhere (R F3): `CoverImage` took the actions and no screen
+/// passed any, and the pill's press competed with the card's context menu
+/// for the same hold (`CopyableArtwork`'s own warning). One hold, one menu:
+/// the system's, which draws itself clear of the cover and reads to
+/// VoiceOver without a custom-actions rotor.
 ///
-/// `CoverImage` is the one call site that wires this in (`quickActions:`,
-/// applied via `.coverQuickActions(_:)`), but the modifier is on `View`
-/// precisely so nothing about that stays private to it — a row's own card,
-/// or a future non-cover surface, can adopt the same gesture without
-/// depending on `CoverImage`'s internals.
+/// What is left here is the decision — which actions exist and in what
+/// order — kept pure so the menu's contents have a test without a menu.
 enum CoverQuickActions {
-    /// What a cover can do on long-press. Every field is optional, and the
-    /// pill shows only the ones that are set — a cover with nothing to
-    /// offer here simply does not opt in at all (see `View.coverQuickActions`
-    /// on a nil `Actions?`).
+    /// What a cover can do on a hold. Every field is optional, and the menu
+    /// shows only the ones that are set — a cover with nothing to offer
+    /// passes nil to `copyableArtwork(_:noun:quickActions:)` and gets the
+    /// copy alone.
     struct Actions {
         var save: (() -> Void)?
         var markRead: (() -> Void)?
@@ -31,7 +30,7 @@ enum CoverQuickActions {
         }
     }
 
-    /// One action's face in the pill: what it is called and which glyph
+    /// One action's face in the menu: what it is called and which glyph
     /// stands for it. Not `Actions` itself, so `visibleActions` can return an
     /// ordered, `Equatable` list without dragging non-equatable closures
     /// into a test assertion.
@@ -40,10 +39,8 @@ enum CoverQuickActions {
         let systemImage: String
     }
 
-    /// Which of `actions`' closures are set, as the pill (and VoiceOver, via
-    /// the same list) should show them: Save, then Mark read, then Open,
-    /// skipping whatever is nil. A pure decision, kept separate from the
-    /// gesture and the glass so it can be tested without building either.
+    /// Which of `actions`' closures are set, as the menu should show them:
+    /// Save, then Mark read, then Open, skipping whatever is nil.
     nonisolated static func visibleActions(_ actions: Actions) -> [Item] {
         var items: [Item] = []
         if actions.save != nil {
@@ -61,122 +58,12 @@ enum CoverQuickActions {
     /// Runs whichever closure `item` names. `visibleActions` is the only
     /// place that decides an item exists at all, so this is the one place
     /// that has to agree with it on the name.
-    fileprivate static func perform(_ item: Item, in actions: Actions) {
+    static func perform(_ item: Item, in actions: Actions) {
         switch item.title {
         case "Save": actions.save?()
         case "Mark read": actions.markRead?()
         case "Open": actions.open?()
         default: break
         }
-    }
-}
-
-extension View {
-    /// Adds the long-press quick-action pill to this view. A no-op when
-    /// `actions` is nil — not just an empty pill — so a call site that has
-    /// nothing to offer pays no cost and adds no gesture at all.
-    func coverQuickActions(_ actions: CoverQuickActions.Actions?) -> some View {
-        modifier(CoverQuickActionsModifier(actions: actions))
-    }
-}
-
-private struct CoverQuickActionsModifier: ViewModifier {
-    let actions: CoverQuickActions.Actions?
-
-    /// Popped up and showing the pill, or not. One flag drives both: the
-    /// brief's "long-press pops the cover, and shows a pill under it" is one
-    /// state, not two that could disagree.
-    @State private var isActive = false
-
-    func body(content: Content) -> some View {
-        if let actions {
-            let items = CoverQuickActions.visibleActions(actions)
-            content
-                .scaleEffect(isActive && !Motion.isReduced ? 1.06 : 1)
-                // Above its row neighbours while popped, so the pill below it
-                // is not clipped or covered by the next cover over.
-                .zIndex(isActive ? 1 : 0)
-                .onLongPressGesture(minimumDuration: 0.4, maximumDistance: 24) {
-                    // The actual activation happens in `onPressingChanged`,
-                    // as soon as the hold is recognised — the pill should
-                    // appear the moment the press commits, not wait for the
-                    // finger to lift.
-                } onPressingChanged: { pressing in
-                    guard pressing, !isActive, !items.isEmpty else { return }
-                    withAnimation(Motion.reduced(Motion.celebrate)) { isActive = true }
-                }
-                .sensoryFeedback(Haptics.selection, trigger: isActive) { old, new in new && !old }
-                .overlay(alignment: .bottom) {
-                    if isActive, !items.isEmpty {
-                        ZStack {
-                            outsideCatcher
-                            pill(items, actions: actions)
-                                // Below the (popped-up) cover, clear of its
-                                // shadow. 14pt is a GUESS, not measured.
-                                .offset(y: Metrics.radiusCoverRow + 14)
-                        }
-                        .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
-                    }
-                }
-                // VoiceOver gets the same list, reachable without ever
-                // triggering the long press — a hold gesture is not
-                // something VoiceOver users perform the same way.
-                .accessibilityActions {
-                    ForEach(items, id: \.title) { item in
-                        Button(item.title) { CoverQuickActions.perform(item, in: actions) }
-                    }
-                }
-        } else {
-            content
-        }
-    }
-
-    /// Dismisses on a tap anywhere else, or the start of a scroll.
-    ///
-    /// This view has no way to ask its ancestors how big the screen is, so
-    /// the catcher is just sized well past any plausible one — 2000pt is a
-    /// GUESS, not a measurement. The drag threshold catches a scroll started
-    /// on or near the cover; a scroll started elsewhere already falls under
-    /// "somewhere else" and is a tap-outside dismiss instead. The main
-    /// session should confirm on a device that a real scroll does not also
-    /// get eaten by this once it lets go — a proper fix would coordinate
-    /// through a root-level overlay host, which is out of this file's reach.
-    private var outsideCatcher: some View {
-        Color.black.opacity(0.0001)
-            .frame(width: 2000, height: 2000)
-            .contentShape(Rectangle())
-            .onTapGesture { dismiss() }
-            .gesture(DragGesture(minimumDistance: 8).onEnded { _ in dismiss() })
-    }
-
-    private func dismiss() {
-        withAnimation(Motion.reduced(Motion.snappy)) {
-            isActive = false
-        }
-    }
-
-    @ViewBuilder
-    private func pill(_ items: [CoverQuickActions.Item], actions: CoverQuickActions.Actions) -> some View {
-        HStack(spacing: 16) {
-            ForEach(items, id: \.title) { item in
-                Button {
-                    CoverQuickActions.perform(item, in: actions)
-                    dismiss()
-                } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: item.systemImage)
-                            .font(.system(size: 15, weight: .semibold))
-                        Text(item.title)
-                            .font(.caption2)
-                    }
-                    .frame(minWidth: 44)
-                }
-                .buttonStyle(.press(haptic: Haptics.selection))
-            }
-        }
-        .foregroundStyle(Palette.textPrimary)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background { Glass.floating(Capsule()) }
     }
 }

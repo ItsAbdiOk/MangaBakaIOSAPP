@@ -60,8 +60,11 @@ final class SearchModel {
     private(set) var isLoadingMore = false
     /// Bumped by every fresh search. A page that comes back for an older
     /// generation belongs to a search the reader has since replaced, and is
-    /// dropped rather than appended under the new one.
-    private var generation = 0
+    /// dropped rather than appended under the new one. Readable so the view
+    /// can scroll back to the top when a new answer is on its way — a long
+    /// grid followed by a short one left the offset wherever the clamp put
+    /// it, and a new query's results opened partway down (R F5).
+    private(set) var generation = 0
     /// False once a page comes back short or empty. Starts false so the first
     /// page has to actually arrive before the view offers to fetch a second.
     private(set) var hasMore = false
@@ -173,7 +176,9 @@ final class SearchModel {
         }
         // An empty field is idle, whatever filters are still set: they stay
         // on the panel, visible and removable, rather than running as a
-        // filter-only search under an unlabelled grid (UX#5, LW §1).
+        // filter-only search under an unlabelled grid (UX#5, LW §1). One
+        // character is "empty" here too (`SearchQuery.askedText`): it used
+        // to fire a request the API answered with noise (LW §2).
         guard query.asAsked.text != nil else {
             resetToIdle()
             return
@@ -185,6 +190,29 @@ final class SearchModel {
             guard !Task.isCancelled else { return }
             await self?.search()
         }
+    }
+
+    /// The field's Cancel: text and tokens gone, back to the idle panel.
+    /// Tokens are the tag, genre and publisher filters the field shows
+    /// (`SearchToken`); the rest of the filters stay on the panel, where
+    /// they live — Cancel clears what the field holds, not the panel.
+    func cancelSearch() {
+        cancelPendingDebounce()
+        query.text = nil
+        query.tags = []
+        query.genres = []
+        query.publisher = nil
+        resetToIdle()
+    }
+
+    /// A token removed from the field, or a scope picked, mid-search: the
+    /// grid must answer the query as it now stands, not the one the token
+    /// was part of. Nothing asked yet (a token dropped, a scope picked, on
+    /// the idle panel) stays nothing asked — the panel is not an ask (UX#1).
+    func filtersDidChange() {
+        guard hasAsked else { return }
+        cancelPendingDebounce()
+        Task { await search() }
     }
 
     /// Back to the idle panel: nothing asked, nothing shown, nothing owed.
@@ -375,13 +403,16 @@ final class SearchModel {
         origin = .offlineIndex(builtDate: built)
     }
 
-    /// "Surprise me": a random sort with a fresh seed, so this tap is a new
-    /// shuffle and its later pages are the same shuffle. Keeps whatever else
+    /// "Surprise me": a random sort, searched at once. Keeps whatever else
     /// the query holds — the empty state's "Random with these filters" is
-    /// the same gesture.
+    /// the same gesture, and so is the panel's Random chip followed by
+    /// "Show results": all three end in `search()`, which is the one place
+    /// a seed is minted (UX#11, one implementation). The seed is dropped
+    /// first so each tap is a new shuffle, whose later pages are the same
+    /// shuffle.
     func surpriseMe() async {
         query.sort = "random"
-        query.randomSeed = SearchQuery.freshRandomSeed()
+        query.randomSeed = nil
         cancelPendingDebounce()
         await search()
     }
@@ -495,24 +526,51 @@ final class SearchModel {
             }
         }
     }
+}
 
-    /// Runs a search for a genre or tag picked while browsing.
+/// The explicit asks — a browse pick, a tag from a series page, a lens —
+/// and the debounce control they share. An extension of the same file for
+/// the lint's type-length ceiling; `private` is file-scoped, so nothing
+/// widens.
+extension SearchModel {
+    /// Runs a search for a genre, tag or publisher picked while browsing.
     ///
-    /// Replaces the query rather than adding to it: arriving from a browse
-    /// screen means "show me this", not "narrow whatever I had".
+    /// Adds to the query, the way the panel's Tags/Genres/Publishers pickers
+    /// do. It used to replace it, so the two doors to the same vocabulary
+    /// on one screen behaved differently after the pick (UX#11; decision
+    /// 2026-09-13: Browse adds). The pick lands in the field as a token
+    /// beside whatever was typed, removable on its own.
     ///
     /// A genre goes in `genres`, not `tags`: it used to ride in `tags` and
     /// reach the wire as `tag=`, which finds a fraction of the genre
     /// (`tag=romance` 14,065 against `genre=romance` 100,947, 2026-09-13 —
-    /// see `SearchQuery.genres`).
+    /// see `SearchQuery.genres`). A sort only when there is none: paging
+    /// drops ids already seen, so an unsorted query whose order shifts
+    /// between pages loses rows.
     func applyBrowse(genre: String? = nil, tag: String? = nil, publisher: String? = nil) {
-        var next = SearchQuery()
-        if let genre { next.genres = [genre] }
-        if let tag { next.tags = [tag] }
+        var next = query
+        if let genre, !next.genres.contains(genre) { next.genres.append(genre) }
+        if let tag, !next.tags.contains(tag) { next.tags.append(tag) }
         if let publisher { next.publisher = publisher }
+        if next.sort == nil { next.sort = "popularity_asc" }
+        applyAtOnce(next)
+    }
+
+    /// A tag tapped on a series page: "show me this tag", not "this tag
+    /// plus whatever my last search still held" — the reader left Search
+    /// for that page and is arriving back through a different door than
+    /// Browse's. Replaces the query outright, with the same stable sort.
+    func openTag(_ tag: String) {
+        var next = SearchQuery()
+        next.tags = [tag]
         next.sort = "popularity_asc"
-        // Assigned here, not in the task: a caller may read the query
-        // straight back, and it should be the browse.
+        applyAtOnce(next)
+    }
+
+    /// `apply(_:)` for a caller that cannot await: the query is assigned
+    /// here, not in the task, so a caller reading it straight back sees the
+    /// pick already in place.
+    private func applyAtOnce(_ next: SearchQuery) {
         appliedText = next.text ?? ""
         query = next
         cancelPendingDebounce()
@@ -568,8 +626,7 @@ private extension SearchQuery {
     var asAsked: SearchQuery {
         var probe = self
         probe.page = 1
-        let text = (self.text ?? "").trimmingCharacters(in: .whitespaces)
-        probe.text = text.isEmpty ? nil : text
+        probe.text = askedText
         return probe
     }
 }
