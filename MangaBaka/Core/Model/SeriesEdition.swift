@@ -31,9 +31,16 @@ struct SeriesEdition: Codable, Identifiable, Sendable, Equatable {
     let title: String?
     let language: Language?
     let publisher: Publisher?
-    /// "digital", "print".
+    /// `digital | paperback | hardcover` — the spec's enum
+    /// (`docs/schemas/mangabaka_openapi.json`, `/v1/series/{id}/collections`).
+    /// This comment used to say "digital", "print", values the spec does not
+    /// have.
     let medium: String?
-    /// "complete", "ongoing", "cancelled".
+    /// The series-status vocabulary (`completed | releasing | hiatus |
+    /// cancelled | upcoming | unknown`), not "complete", "ongoing",
+    /// "cancelled" as this comment used to claim. See `SeriesStatus`, which
+    /// already turns these into words a reader uses; `detail` below reads it
+    /// through that rather than printing the raw value.
     let status: String?
     /// Whether it is an official licensed release rather than a scanlation.
     let licensed: Bool?
@@ -60,7 +67,7 @@ struct SeriesEdition: Codable, Identifiable, Sendable, Equatable {
             parts.append("\(countMain) volume\(countMain == 1 ? "" : "s")")
         }
         if let medium, !medium.isEmpty { parts.append(medium) }
-        if let status, !status.isEmpty { parts.append(status) }
+        if let label = SeriesStatus.label(for: status) { parts.append(label) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

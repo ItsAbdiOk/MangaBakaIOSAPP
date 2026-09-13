@@ -150,6 +150,22 @@ struct ReleaseCalendarTests {
         #expect(work.isbn == nil)
     }
 
+    /// The schema's `count_type` (`main|extra|other`) has never been anything
+    /// but `main` in a captured window (50 of 50, live 2026-09-13), but the
+    /// schema promises the other two exist, and every work used to be labelled
+    /// "Vol." regardless. Fails without the fix: `volume == "Vol. 3"`, an art
+    /// book or guidebook claimed as a main-run volume.
+    @Test("A non-main work is labelled by its own count_type, not as a volume")
+    func nonMainWorkIsNotCalledAVolume() async throws {
+        defer { URLProtocolStub.reset() }
+        let calendar = calendar(["""
+        {"id": "a", "series_id": 1, "release_date": "2026-09-15",
+         "sequence_string": "3", "count_type": "extra"}
+        """])
+        let work = try #require(await calendar.upcoming().first)
+        #expect(work.volume == "Extra 3")
+    }
+
     @Test("A work says only what the API supplied")
     func detailIsHonest() async throws {
         defer { URLProtocolStub.reset() }

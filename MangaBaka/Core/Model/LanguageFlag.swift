@@ -19,9 +19,24 @@ enum LanguageFlag {
               let base = Locale.current.localizedString(forLanguageCode: language)
         else { return tag.uppercased() }
         guard parts.count > 1 else { return base }
-        let qualifier = parts[1].count == 2
-            ? Locale.current.localizedString(forRegionCode: parts[1])
-            : Locale.current.localizedString(forScriptCode: parts[1])
+        let qualifier: String?
+        if parts[1].count == 2 {
+            // Gated on `knownRegions`, the same list `emoji(for:)` already
+            // uses — a two-letter second subtag is not always a country.
+            // The schema's own title-language enum has `es-la` (Latin
+            // America) and `ko-ro`/`ja-ro` (romanisations), and ICU cannot
+            // tell those from real region codes: `forRegionCode: "la"` is
+            // "Laos", `"ro"` is "Romania". `emoji(for:)` already refuses an
+            // unknown region rather than drawing a flag for nowhere; this
+            // gates the same way rather than naming one.
+            qualifier = knownRegions.contains(parts[1])
+                ? Locale.current.localizedString(forRegionCode: parts[1])
+                : nil
+        } else {
+            // ICU wants the script code's own casing ("Latn"), not the
+            // lowercased tag this function otherwise works in.
+            qualifier = Locale.current.localizedString(forScriptCode: parts[1].capitalized)
+        }
         guard let qualifier else { return base }
         return "\(base) (\(qualifier))"
     }

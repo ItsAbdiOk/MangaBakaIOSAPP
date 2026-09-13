@@ -36,9 +36,13 @@ enum ReadingPlatforms {
     /// `mangaplus.shueisha.co.jp` and `zebrack-comic.shueisha.co.jp` without
     /// either needing its own line. A leading `www.` is ignored.
     static func allows(_ url: URL?) -> Bool {
-        guard let host = url?.host()?.lowercased(), !host.isEmpty else { return false }
+        guard let url, let host = url.host()?.lowercased(), !host.isEmpty else { return false }
         let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-        return allowed.contains { bare == $0 || bare.hasSuffix("." + $0) }
+        guard allowed.contains(where: { bare == $0 || bare.hasSuffix("." + $0) }) else { return false }
+        // A bare host root ("https://webtoons.com/") is not an offer to read
+        // a series — it is the platform's front door. A genuine reading link
+        // always names at least one path segment.
+        return !url.path.split(separator: "/", omittingEmptySubsequences: true).isEmpty
     }
 
     /// Registrable domains, grouped by who runs them. Subdomains are covered by
@@ -55,14 +59,25 @@ enum ReadingPlatforms {
         "comikey.com", "mangas.io", "delitoon.com", "delitoon.de", "delitoonb.de",
         "ono.live", "mangetsu-manga.fr", "webnovel.com", "webcomicsapp.com",
         "mangatoon.mobi", "junemanga.com", "manga-park.com", "azuki.co",
+        // Kakao's licensed Japanese platform — 3397's only Japanese reading
+        // link (`webplatform | ja | piccoma.com`) was hidden outright before
+        // this; measured against `/v1/series/3397/full`, 2026-09-13.
+        "piccoma.com",
         // Lezhin runs a separate registrable domain per territory rather than
         // subdomains, so each is its own entry.
         "lezhin.com", "lezhinus.com", "lezhin.es", "lezhin.jp", "lezhinfr.com",
         "lezhinth.com", "lezhinde.com"
     ]
 
+    /// `naver.com`, `daum.net` and `kakao.com` are portal roots, not reading
+    /// platforms — a suffix match on the bare domain would also admit
+    /// `blog.naver.com` and `cafe.daum.net`, a contributor's own aggregator
+    /// page under the licensed host's name. Only the specific reader
+    /// subdomains are listed; `kakaowebtoon.com` is a separate registrable
+    /// domain and keeps its own broad entry below.
     private static let koreanPlatforms: Set<String> = [
-        "naver.com", "kakao.com", "kakaowebtoon.com", "daum.net", "comico.jp",
+        "comic.naver.com", "webtoon.kakao.com", "page.kakao.com", "webtoon.daum.net",
+        "kakaowebtoon.com", "comico.jp",
         "comico.kr", "bomtoon.com", "bomtoon.tw", "ridibooks.com", "munpia.com",
         "toomics.com", "toptoon.com", "lalatoon.com", "peanutoon.com", "qtoon.co.kr",
         "anytoon.co.kr", "onestory.co.kr", "mootoon.co.kr", "beltoon.jp",
@@ -71,13 +86,18 @@ enum ReadingPlatforms {
 
     /// Japanese publishers and their magazine sites. One entry per publisher
     /// wherever the magazines are subdomains; per-site where they are not.
+    ///
+    /// `pixiv.net` and `nicovideo.jp` are portal roots the same way the
+    /// Korean ones are — `*.pixiv.net` covers a contributor's personal
+    /// gallery, not just the licensed reader — so only the specific reader
+    /// subdomain is listed for each.
     private static let japanesePublishers: Set<String> = [
         "shueisha.co.jp", "shonenjumpplus.com", "shonenjump.com", "kodansha.com",
         "kodansha.co.jp", "comic-days.com", "shonenmagazine.com", "yanmaga.jp",
         "magcomi.com", "mangacross.jp", "kuragebunch.com", "kurage-bunch.com",
         "comicbunch.com", "younganimal.com", "youngchampion.jp", "comic-action.com",
-        "futabanet.jp", "pixiv.net", "comic-walker.com", "manga-up.com",
-        "ganganonline.com", "nicovideo.jp", "sunday-webry.com", "websunday.net",
+        "futabanet.jp", "comic.pixiv.net", "comic-walker.com", "manga-up.com",
+        "ganganonline.com", "seiga.nicovideo.jp", "sunday-webry.com", "websunday.net",
         "urasunday.com", "bigcomics.jp", "manga-one.com", "manga-mee.jp",
         "hanayume.com", "hanaoto.net", "comic-fuz.com", "comic-growl.com",
         "comic-y-ours.com", "comic-alive.jp", "dengeki.com", "ichijin-plus.com",
@@ -89,8 +109,10 @@ enum ReadingPlatforms {
         "line.me"
     ]
 
+    /// `bilibili.com` is a portal root too — `space.bilibili.com` is any
+    /// user's profile page, not the licensed comics reader.
     private static let chinesePlatforms: Set<String> = [
-        "bilibili.com", "kuaikanmanhua.com", "ac.qq.com", "iqiyi.com",
+        "manga.bilibili.com", "kuaikanmanhua.com", "ac.qq.com", "iqiyi.com",
         "ching-win.com.tw"
     ]
 }

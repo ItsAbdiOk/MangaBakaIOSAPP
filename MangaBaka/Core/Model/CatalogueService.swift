@@ -26,6 +26,17 @@ actor CatalogueService {
     private var tagsInFlight: Task<[Tag]?, Never>?
     private var genresInFlight: Task<[Genre]?, Never>?
 
+    /// Whether the most recent `genres()`/`tags()` call answered `[]` because
+    /// the request failed, as opposed to the vocabulary genuinely being
+    /// empty. Both methods keep returning `[]` for either case — every
+    /// existing caller (`BrowseModel`, `TagPickerSheet`,
+    /// `BlockedTagsSection`) reads only the array and needs no change — this
+    /// is purely additive, for a caller that wants to tell "nothing there"
+    /// from "the network is down" without widening the return type
+    /// everywhere `[Genre]`/`[Tag]` is already relied on.
+    private(set) var genresFetchFailed = false
+    private(set) var tagsFetchFailed = false
+
     init(client: APIClient) {
         self.client = client
     }
@@ -43,6 +54,7 @@ actor CatalogueService {
         // Only an answer is cached. A dropped packet used to cache an empty
         // vocabulary for the whole process; the next ask now tries again.
         if let fetched { cachedGenres = fetched }
+        genresFetchFailed = fetched == nil
         genresInFlight = nil
         return fetched ?? []
     }
@@ -74,6 +86,7 @@ actor CatalogueService {
             cachedTags = fetched
             cachedTagLimit = limit
         }
+        tagsFetchFailed = fetched == nil
         tagsInFlight = nil
         return fetched ?? []
     }
@@ -113,13 +126,58 @@ actor CatalogueService {
     /// that name" and "the request failed" must not look the same on screen.
     /// It used to return `[]` for both, eight lines under the comment saying
     /// not to.
+    ///
     /// The publisher a series names, by that name. The series carries names
-    /// only, not ids, so this is a search — exact name first, else the first
-    /// hit, else nil. Nil also on failure.
+    /// only, not ids, so this is a search.
+    ///
+    /// Measured live 2026-09-13: `q=Ize Press (Yen Press)` returns `[]` —
+    /// the directory does not index the composite string a series' credit
+    /// sometimes is — so a name with a parenthetical is also tried as its two
+    /// halves ("Ize Press", then "Yen Press"). Within whichever candidate
+    /// gets hits: exact name first, else a hit this candidate is a *prefix*
+    /// of, else the next candidate. `?? hits.first` used to fall back to an
+    /// unrelated publisher whenever nothing matched exactly — measured the
+    /// same day: `q=Kodansha` returns `["Kodansha USA","Kodansha Manga",
+    /// "Kodansha"]`, so plain "Kodansha" must still resolve to the exact
+    /// "Kodansha" (not the alphabetically-first "Kodansha USA"), and
+    /// "Kodansha Comics" — naming nothing in that list — must resolve to nil
+    /// rather than decorating its page with one of the other three.
     func findPublisher(named name: String) async -> PublisherRecord? {
-        guard let hits = await searchPublishers(name, limit: 10) else { return nil }
-        let wanted = name.lowercased()
-        return hits.first { $0.name.lowercased() == wanted } ?? hits.first
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        for candidate in Self.searchCandidates(for: trimmed) {
+            guard let hits = await searchPublishers(candidate, limit: 10) else { continue }
+            if let match = Self.bestMatch(for: candidate, in: hits) { return match }
+        }
+        return nil
+    }
+
+    /// The name as given, plus — for "X (Y)" — "X" and "Y" on their own, in
+    /// that order: the composite is tried first because it is occasionally
+    /// exactly right, and splitting first would cost an extra request for
+    /// every ordinary, non-composite name.
+    private static func searchCandidates(for name: String) -> [String] {
+        var candidates = [name]
+        guard let openParen = name.firstIndex(of: "("),
+              let closeParen = name.lastIndex(of: ")"),
+              openParen < closeParen
+        else { return candidates }
+        let before = name[name.startIndex..<openParen].trimmingCharacters(in: .whitespaces)
+        let inside = name[name.index(after: openParen)..<closeParen].trimmingCharacters(in: .whitespaces)
+        if !before.isEmpty { candidates.append(before) }
+        if !inside.isEmpty { candidates.append(inside) }
+        return candidates
+    }
+
+    /// An exact, case-insensitive name match, else a hit this name is a
+    /// prefix of ("Yen Press" finding "Yen Press LLC"). Never the reverse —
+    /// a longer wanted name being a prefix of a shorter hit would have
+    /// matched "Kodansha Comics" against "Kodansha", a different publisher
+    /// that merely starts the same way.
+    private static func bestMatch(for wanted: String, in hits: [PublisherRecord]) -> PublisherRecord? {
+        let lowered = wanted.lowercased()
+        return hits.first { $0.name.lowercased() == lowered }
+            ?? hits.first { $0.name.lowercased().hasPrefix(lowered) }
     }
 
     func publisher(id: Int) async -> PublisherDetail? {

@@ -111,14 +111,25 @@ struct CatalogueTests {
         #expect(await service.children(of: 537).map(\.id) == [538])
     }
 
-    @Test("Publishers decode, including a closed one")
+    /// `founded`/`closed` are `string|null, format: date` on the wire, not the
+    /// `Int?`/`Bool?` this used to type them as — verified live 2026-09-13,
+    /// `/v1/publishers/search?q=Kodansha` sends `"founded": "2008-07-01"` on
+    /// Kodansha USA. Fails without the fix: decoding `"founded":"2008-07-01"`
+    /// into an `Int?` throws, `[PublisherRecord]` is one array under `try?`
+    /// (`CatalogueService.swift:130`), and `searchPublishers` returns nil —
+    /// expected to fail with: `publishers?.first?.name == "A-1 Pictures (English)"`,
+    /// since `publishers` itself would be nil.
+    @Test("Publishers decode a founding date, and a closing one")
     func decodesPublishers() async {
         URLProtocolStub.setHandler { _ in
             .respond(.init(body: Data("""
             {"status":200,"data":[
               {"id":84,"type":"publisher","sub_type":"both","aliases":null,
                "parent_id":null,"name":"A-1 Pictures (English)","languages":null,
-               "country_of_origin":"JP","founded":2005,"closed":false}
+               "country_of_origin":"JP","founded":"2008-07-01","closed":null},
+              {"id":5,"type":"publisher","sub_type":"both","aliases":null,
+               "parent_id":null,"name":"Tokyopop","languages":null,
+               "country_of_origin":"US","founded":"1997-01-01","closed":"2011-05-01"}
             ]}
             """.utf8)))
         }
@@ -127,7 +138,86 @@ struct CatalogueTests {
         let publishers = await makeService().searchPublishers("a-1")
         #expect(publishers?.first?.name == "A-1 Pictures (English)")
         #expect(publishers?.first?.countryOfOrigin == "JP")
-        #expect(publishers?.first?.closed == false)
+        #expect(publishers?.first?.founded == "2008-07-01")
+        #expect(publishers?.first?.closed == nil)
+        #expect(publishers?.last?.closed == "2011-05-01")
+    }
+
+    /// `q=Ize Press (Yen Press)` answers `[]` live (measured 2026-09-13) — the
+    /// directory does not index the composite string a series' English-print
+    /// credit sometimes is. Fails without the fix: `findPublisher` gives up
+    /// after that one empty search and returns nil, rather than also trying
+    /// "Ize Press" and "Yen Press" on their own.
+    @Test("A composite 'imprint (parent)' name is also tried as its two halves")
+    func findsPublisherFromCompositeName() async {
+        URLProtocolStub.setHandler { request in
+            let query = request.url?.query ?? ""
+            if query.contains("Yen%20Press") || query.contains("Yen+Press") {
+                return .respond(.init(body: Data("""
+                {"status":200,"data":[{"id":18,"name":"Yen Press"}]}
+                """.utf8)))
+            }
+            return .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let found = await makeService().findPublisher(named: "Ize Press (Yen Press)")
+        #expect(found?.name == "Yen Press")
+    }
+
+    /// `q=Kodansha` answers `["Kodansha USA","Kodansha Manga","Kodansha"]`
+    /// live (measured 2026-09-13) — the exact match is third, not first.
+    /// Fails without the fix: `?? hits.first` picks "Kodansha USA".
+    @Test("An exact name match wins even when it is not the first result")
+    func exactMatchBeatsFirstResult() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data("""
+            {"status":200,"data":[
+              {"id":1,"name":"Kodansha USA"},
+              {"id":2,"name":"Kodansha Manga"},
+              {"id":3,"name":"Kodansha"}
+            ]}
+            """.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let found = await makeService().findPublisher(named: "Kodansha")
+        #expect(found?.name == "Kodansha")
+    }
+
+    /// Same three results, a name none of them are. Fails without the fix:
+    /// `?? hits.first` decorates the page with "Kodansha USA", a different
+    /// publisher that merely starts the same way.
+    @Test("A name matching nothing in the results is nil, not the first result")
+    func noMatchIsNilNotFirstResult() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data("""
+            {"status":200,"data":[
+              {"id":1,"name":"Kodansha USA"},
+              {"id":2,"name":"Kodansha Manga"},
+              {"id":3,"name":"Kodansha"}
+            ]}
+            """.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let found = await makeService().findPublisher(named: "Kodansha Comics")
+        #expect(found == nil)
+    }
+
+    /// S9: the name is trimmed before it reaches the wire, even though the
+    /// server also trims — being explicit here means the app does not depend
+    /// on that.
+    @Test("A publisher name is trimmed before it is sent")
+    func findPublisherTrimsTheName() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[{"id":1,"name":"Seven Seas"}]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        _ = await makeService().findPublisher(named: "  Seven Seas  ")
+        let sentQuery = URLProtocolStub.requests.first?.url?.query ?? ""
+        #expect(!sentQuery.contains("%20%20") && !sentQuery.contains("++"))
     }
 
     @Test("A failed catalogue fetch degrades to empty rather than throwing")
@@ -137,6 +227,35 @@ struct CatalogueTests {
 
         #expect(await makeService().genres().isEmpty)
         #expect(await makeService().tags().isEmpty)
+    }
+
+    /// W12: `genres()`/`tags()` still answer `[]` on failure — every existing
+    /// caller is unaffected — but a caller that cares can now tell "nothing
+    /// there" from "the network failed" through this additive flag.
+    @Test("A failed genres/tags fetch is flagged, not just silently empty")
+    func fetchFailureIsFlagged() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
+        defer { URLProtocolStub.reset() }
+
+        let service = makeService()
+        #expect(await service.genres().isEmpty)
+        #expect(await service.genresFetchFailed == true)
+        #expect(await service.tags().isEmpty)
+        #expect(await service.tagsFetchFailed == true)
+    }
+
+    @Test("A successful genres/tags fetch clears the failure flag")
+    func fetchSuccessClearsFlag() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let service = makeService()
+        _ = await service.genres()
+        #expect(await service.genresFetchFailed == false)
+        _ = await service.tags()
+        #expect(await service.tagsFetchFailed == false)
     }
 
     /// A failed search is nil, not empty: the screen says so instead of
@@ -167,6 +286,20 @@ struct CatalogueTests {
         #expect(await service.tags().count == 1)
     }
 
+    /// `TagTaxonomy.bundled()` answers `[]` both when the packaged resource
+    /// is missing/corrupt and when it is genuinely empty; `loadFailed` is the
+    /// additive signal that tells the two apart. Whatever the test bundle's
+    /// `Bundle.main` actually holds, the two must agree: no rows only when
+    /// the load itself failed.
+    @Test("The bundled taxonomy's empty and failed states agree with each other")
+    func bundledTaxonomyReportsFailureConsistently() {
+        if TagTaxonomy.bundled().isEmpty {
+            #expect(TagTaxonomy.loadFailed)
+        } else {
+            #expect(!TagTaxonomy.loadFailed)
+        }
+    }
+
     /// Switchable between failing and answering, from inside the stub's
     /// `@Sendable` handler.
     private final class ResponseQueue: @unchecked Sendable {
@@ -179,9 +312,14 @@ struct CatalogueTests {
 
         func next() -> URLProtocolStub.Outcome {
             if fail { return .fail(URLError(.networkConnectionLost)) }
+            // The real keys (`V1_Series_Tag`, matching `tagPayload` above):
+            // `merged_with`, not `merged_into`; `name_path`, not `full_name`.
+            // Every field is optional, so the wrong keys used to decode fine
+            // and this retry proved itself against a payload that has never
+            // existed on the wire.
             return .respond(.init(body: Data(#"""
             {"status":200,"data":[{"id":1,"name":"Action","label":"Action","value":"action",
-             "full_name":"Action","level":0,"parent_id":null,"series_count":10,"merged_into":null}]}
+             "name_path":"Action","level":0,"parent_id":null,"series_count":10,"merged_with":null}]}
             """#.utf8)))
         }
     }

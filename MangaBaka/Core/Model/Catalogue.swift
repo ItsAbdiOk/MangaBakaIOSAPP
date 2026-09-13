@@ -56,9 +56,15 @@ struct PublisherRecord: Decodable, Identifiable, Sendable, Equatable, Hashable {
     let subType: String?
     let parentId: Int?
     let countryOfOrigin: String?
-    let founded: Int?
-    /// Whether the publisher has shut down.
-    let closed: Bool?
+    /// `string|null, format: date` on the wire (`"2008-07-01"` on Kodansha
+    /// USA, live 2026-09-13) — not the `Int` this was typed as until then,
+    /// which threw the whole `[PublisherRecord]` array under `try?` for any
+    /// search whose results included a founded publisher. Both fixtures had
+    /// `founded: null` and never caught it. See `PublisherDetail.founded`.
+    let founded: String?
+    /// Also a date (`format: date`), not a `Bool`: the day the publisher
+    /// closed, when known. Presence, not a boolean field, is "closed".
+    let closed: String?
 
     var id: String { publisherID.map(String.init) ?? name }
 

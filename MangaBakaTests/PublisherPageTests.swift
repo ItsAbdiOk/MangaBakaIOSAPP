@@ -27,15 +27,33 @@ struct PublisherPageTests {
         #expect(PublisherView.label(for: try #require(detail.links?.last)) == "instagram.com")
     }
 
-    @Test("A closed publisher with a founding year says both")
+    /// `founded`/`closed` are `string|null, format: date` on the wire
+    /// (`docs/schemas/mangabaka_openapi.json`, `/v1/publishers/{id}/full`),
+    /// not the `Int?`/`Bool?` this used to type them as. Fails without the
+    /// fix: `JSONDecoder` throws decoding `"founded":"1997-01-01"` into an
+    /// `Int?` — expected to fail with a `DecodingError` before ever reaching
+    /// the `#expect`.
+    @Test("A closed publisher with a founding date says both, as a year")
     func closedAndFounded() throws {
         let json = Data(
-            #"{"id": 5, "name": "Tokyopop", "type": "publisher", "founded": 1997, "closed": true}"#.utf8
+            #"""
+            {"id": 5, "name": "Tokyopop", "type": "publisher",
+             "founded": "1997-01-01", "closed": "2011-05-01"}
+            """#.utf8
         )
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let detail = try decoder.decode(PublisherDetail.self, from: json)
         #expect(detail.summary == "Publisher · Since 1997 · Closed")
+    }
+
+    @Test("A publisher with neither date says neither")
+    func neitherFoundedNorClosed() throws {
+        let json = Data(#"{"id": 18, "name": "Yen Press", "type": "publisher"}"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let detail = try decoder.decode(PublisherDetail.self, from: json)
+        #expect(detail.summary == "Publisher")
     }
 
     /// The series' Publishers row names several; the sheet labels each with
@@ -72,7 +90,8 @@ struct PublisherPageTests {
             id: 1, authors: ["Chu-Gong ", "Chu-Gong"], artists: ["Seong-Rak Jang", "DUBU"]
         )
         let credits = DetailCredits(series: series)
-        let story = credits.rows.first { $0.id == "Story & art" }
+        // Different artists, so the author row is "Story", not "Story & art".
+        let story = credits.rows.first { $0.id == "Story" }
         let art = credits.rows.first { $0.id == "Art" }
         #expect(story.map(credits.creators(for:)) == ["Chu-Gong"])
         #expect(art.map(credits.creators(for:)) == ["Seong-Rak Jang", "DUBU"])
@@ -106,7 +125,7 @@ struct PublisherWiringTests {
         #expect(view.contains("hasMore = result.hasMore"))
         #expect(view.contains(".task(id: order) { await load() }"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
-        #expect(credits.contains("onOpenPublisher(publishers[0].name)"))
+        #expect(credits.contains("onOpenPublisher(publishers[0].name.trimmingCharacters(in: .whitespaces))"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(root.contains(".navigationDestination(item: $openPublisher)"))
     }

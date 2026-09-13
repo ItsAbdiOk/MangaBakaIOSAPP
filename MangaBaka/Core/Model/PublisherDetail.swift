@@ -28,8 +28,17 @@ struct PublisherDetail: Decodable, Sendable, Equatable {
     /// "physical", "digital" or "both".
     let subType: String?
     let countryOfOrigin: String?
-    let founded: Int?
-    let closed: Bool?
+    /// `string|null, format: date` (`docs/schemas/mangabaka_openapi.json`,
+    /// `/v1/publishers/{id}/full`) — live 2026-09-13, Kodansha USA sends
+    /// `"2008-07-01"`. Typed as `Int?` until then, which was never observed
+    /// wrong because Ize Press and Yen Press both happen to have
+    /// `founded: null`; the whole detail decode was under `try?`
+    /// (`CatalogueService.swift:126`), so a founded publisher's page opened
+    /// with no record and no error. `summary` derives the year.
+    let founded: String?
+    /// Also `string|null, format: date`, not a `Bool`: the closing date, when
+    /// known. Presence is "closed", not the value itself.
+    let closed: String?
     let languages: [String]?
     let note: String?
     let description: String?
@@ -53,8 +62,19 @@ struct PublisherDetail: Decodable, Sendable, Equatable {
         case "digital": parts.append("Digital")
         default: break
         }
-        if let founded, founded > 0 { parts.append("Since \(founded)") }
-        if closed == true { parts.append("Closed") }
+        if let year = Self.year(from: founded) { parts.append("Since \(year)") }
+        if closed != nil { parts.append("Closed") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The calendar year out of a `yyyy-MM-dd` (or any `yyyy`-prefixed) date
+    /// string. `String(prefix(4))` rather than a `DateFormatter`: nothing here
+    /// needs the day or month, and the wire has only ever shown the full date
+    /// form, but a formatter would throw the whole field away if that ever
+    /// changed to a bare year.
+    private static func year(from date: String?) -> String? {
+        guard let date, date.count >= 4 else { return nil }
+        let year = date.prefix(4)
+        return year.allSatisfy(\.isNumber) ? String(year) : nil
     }
 }

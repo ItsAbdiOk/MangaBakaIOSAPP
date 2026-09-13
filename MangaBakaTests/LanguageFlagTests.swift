@@ -35,6 +35,28 @@ struct LanguageFlagTests {
         #expect(LanguageFlag.name(for: "xx") == "XX")
     }
 
+    /// The schema's title-language enum includes `es-la` (Latin America) and
+    /// romanisation markers like `ko-ro`/`ja-ro`; ICU cannot tell those from
+    /// real region codes on its own — `forRegionCode: "la"` is "Laos",
+    /// `"ro"` is "Romania". Fails without the fix: `name(for: "es-la")`
+    /// returns "Spanish (Laos)", not the language alone.
+    @Test("A non-country two-letter code does not become a wrong country")
+    func nonCountryRegionsAreNotNamed() {
+        #expect(LanguageFlag.name(for: "es-la") != "Spanish (Laos)")
+        #expect(LanguageFlag.name(for: "es-la") == "Spanish")
+        #expect(LanguageFlag.name(for: "ko-ro") != "Korean (Romania)")
+        #expect(LanguageFlag.name(for: "ko-ro") == "Korean")
+    }
+
+    /// `zh-Hant` and `zh-Hans` must read as different scripts, not both as
+    /// bare "Chinese" — which is what a lowercased `"hant"`/`"hans"` handed
+    /// to `localizedString(forScriptCode:)` would collapse to if ICU does
+    /// not canonicalise the case itself.
+    @Test("Traditional and simplified Chinese are named differently")
+    func scriptSubtagsAreDistinguished() {
+        #expect(LanguageFlag.name(for: "zh-Hant") != LanguageFlag.name(for: "zh-Hans"))
+    }
+
     @Test("A title row carries one flag per language, in order")
     func rowFlags() {
         let row = SeriesTitle.Alternative(title: "Solo Leveling", languages: ["en", "tr", "pt-br", "xx"])

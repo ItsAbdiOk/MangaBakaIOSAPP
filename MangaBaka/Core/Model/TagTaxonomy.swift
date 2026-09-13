@@ -25,25 +25,36 @@ enum TagTaxonomy {
         let mergedWith: Int?
     }
 
-    private static let cached: [Tag] = load()
+    private static let loadResult: (tags: [Tag], failed: Bool) = load()
 
     /// The bundled taxonomy, decoded once and cached for the process
     /// lifetime — 2,686 rows is cheap to hold, expensive to re-decode per
     /// sheet open.
-    static func bundled() -> [Tag] { cached }
+    static func bundled() -> [Tag] { loadResult.tags }
 
-    private static func load() -> [Tag] {
+    /// Whether the bundled resource was missing, unreadable, or failed to
+    /// decode — distinguishing a packaging bug from a taxonomy that
+    /// genuinely has nothing in it, which `bundled()` alone cannot: both
+    /// answer `[]`. Additive: `bundled()`'s signature and existing callers
+    /// are unchanged, since the two failures already surface the same
+    /// "empty offline list" and every caller today only reads the list.
+    /// `let`, not `var` — a mutable global would need actor isolation under
+    /// strict concurrency; a tuple computed once alongside `loadResult`
+    /// needs none.
+    static var loadFailed: Bool { loadResult.failed }
+
+    private static func load() -> (tags: [Tag], failed: Bool) {
         guard let url = Bundle.main.url(forResource: "TagTaxonomy", withExtension: "json") else {
             // Missing from the bundle is a packaging bug, not a network
             // failure: the picker falls back to an empty offline list and the
             // network fetch that follows still works.
-            return []
+            return ([], true)
         }
-        guard let data = try? Data(contentsOf: url) else { return [] }
+        guard let data = try? Data(contentsOf: url) else { return ([], true) }
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        guard let rows = try? decoder.decode([Row].self, from: data) else { return [] }
+        guard let rows = try? decoder.decode([Row].self, from: data) else { return ([], true) }
 
         // A merged tag points at a survivor and should never be shown or
         // linked to — the same filter CatalogueService.tags applies to the
@@ -78,6 +89,6 @@ enum TagTaxonomy {
         }
 
         // Same order CatalogueService.tags uses: broadest tag first.
-        return tags.sorted { $0.seriesCount ?? 0 > $1.seriesCount ?? 0 }
+        return (tags.sorted { $0.seriesCount ?? 0 > $1.seriesCount ?? 0 }, false)
     }
 }

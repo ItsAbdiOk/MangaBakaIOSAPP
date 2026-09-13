@@ -55,10 +55,17 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
     let identifiers: [Identifier]?
     let links: [Link]?
     let collections: [Collection]?
+    /// `main | extra | other` (`docs/schemas/mangabaka_openapi.json`,
+    /// `V1_Work_Default.count_type`). 50 of 50 works in the live window were
+    /// `main` on 2026-09-13, so an `extra`/`other` work has not actually been
+    /// seen there, but the schema promises the other two exist, and calling
+    /// every one of them "Vol." — an art book or guidebook included — is a
+    /// wrong claim, not a missing nicety. See `volume`.
+    let countType: String?
 
     enum CodingKeys: String, CodingKey {
         case id, seriesId, releaseDate, sequenceString, sequenceNumeric
-        case pages, identifiers, links, collections
+        case pages, identifiers, links, collections, countType
         case prices = "price"
     }
 
@@ -68,10 +75,17 @@ struct UpcomingWork: Decodable, Identifiable, Sendable, Equatable {
         collections?.compactMap(\.title).first
     }
 
-    /// "Vol. 11", or nothing when the publisher did not number it.
+    /// "Vol. 11" for a main-run volume, "Extra 3" or "Other 1" for the two
+    /// other `count_type`s the schema allows — calling an art book or a
+    /// guidebook "Vol." would be a wrong claim, not a missing nicety. Nothing
+    /// when the publisher did not number it at all.
     var volume: String? {
         guard let sequenceString, !sequenceString.isEmpty else { return nil }
-        return "Vol. \(sequenceString)"
+        switch countType?.lowercased() {
+        case "extra": return "Extra \(sequenceString)"
+        case "other": return "Other \(sequenceString)"
+        default: return "Vol. \(sequenceString)"
+        }
     }
 
     var date: Date? {

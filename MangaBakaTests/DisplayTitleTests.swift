@@ -32,6 +32,32 @@ struct DisplayTitleTests {
         )
     }
 
+    /// Measured live on series 638, 2026-09-10, in full: two `ko-Latn`
+    /// titles, not the one `series638` above keeps. The untagged one
+    /// ("Baegjaggaui Mangnaniga Doeeossda", `is_primary: false`) sorts first
+    /// in the wire order; the one the "Romanised" setting itself quotes
+    /// ("Baekjakgaui Mangnaniga Doeeotda") is tagged `native` and
+    /// `is_primary: true`, and comes second. Fails without the fix: picking
+    /// the first `-Latn` title returns the wrong (untagged) one — expected to
+    /// fail with the untagged spelling in place of the asserted one.
+    @Test("Romanised prefers the primary, native-tagged title over an untagged one that sorts first")
+    func romanisedPrefersPrimaryNative() {
+        let titles = [
+            SeriesTitle(
+                language: "ko-Latn", traits: [],
+                title: "Baegjaggaui Mangnaniga Doeeossda", isPrimary: false
+            ),
+            SeriesTitle(
+                language: "ko-Latn", traits: ["native"],
+                title: "Baekjakgaui Mangnaniga Doeeotda", isPrimary: true
+            )
+        ]
+        #expect(
+            DisplayTitle.choose(from: titles, preferredLanguages: ["en"], preference: .romanised)
+                == "Baekjakgaui Mangnaniga Doeeotda"
+        )
+    }
+
     @Test("Each preference picks its own form")
     func eachPreference() {
         #expect(

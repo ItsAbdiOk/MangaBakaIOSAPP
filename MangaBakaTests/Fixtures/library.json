@@ -389,6 +389,90 @@
      }
     }
    }
+  },
+  {
+   "note": null,
+   "read_link": null,
+   "rating": 92,
+   "state": "completed",
+   "priority": 0,
+   "is_private": false,
+   "number_of_rereads": 1,
+   "progress_chapter": 200,
+   "progress_volume": 20,
+   "start_date": "2024-01-05T00:00:00.000Z",
+   "finish_date": "2026-03-02T00:00:00.000Z",
+   "id": 1904511,
+   "series_id": 1002,
+   "user_id": "REDACTED",
+   "Entries": [],
+   "Series": {
+    "id": 1002,
+    "state": "active",
+    "merged_with": null,
+    "cover": {},
+    "authors": ["C. Author"],
+    "artists": ["D. Artist"],
+    "description": "Placeholder description.",
+    "year": 2018,
+    "status": "completed",
+    "is_licensed": true,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manga",
+    "rating": 91.2,
+    "final_volume": "20",
+    "total_chapters": "200",
+    "titles": [
+     {"language": "en", "traits": ["official"], "title": "Placeholder Series 3", "is_primary": true}
+    ],
+    "tags_v2": [],
+    "tags": [],
+    "source": {}
+   }
+  },
+  {
+   "note": null,
+   "read_link": null,
+   "rating": null,
+   "state": "dropped",
+   "priority": 0,
+   "is_private": false,
+   "number_of_rereads": 0,
+   "progress_chapter": 12,
+   "progress_volume": null,
+   "start_date": "2025-02-10T00:00:00.000Z",
+   "finish_date": null,
+   "id": 1911987,
+   "series_id": 1003,
+   "user_id": "REDACTED",
+   "Entries": [],
+   "Series": {
+    "id": 1003,
+    "state": "active",
+    "merged_with": null,
+    "cover": {},
+    "authors": ["E. Author"],
+    "artists": ["E. Author"],
+    "description": "Placeholder description.",
+    "year": 2021,
+    "status": "releasing",
+    "is_licensed": true,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manhwa",
+    "rating": 60.5,
+    "final_volume": null,
+    "total_chapters": "45",
+    "titles": [
+     {"language": "en", "traits": ["official"], "title": "Placeholder Series 4", "is_primary": true}
+    ],
+    "tags_v2": [],
+    "tags": [],
+    "source": {}
+   }
   }
  ]
 }

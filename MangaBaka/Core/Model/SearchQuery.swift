@@ -73,6 +73,15 @@ struct SearchQuery: Sendable, Equatable, Codable {
         var items = [URLQueryItem(name: "limit", value: String(limit))]
         if page > 1 { items.append(URLQueryItem(name: "page", value: String(page))) }
         if let text, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+            // `URLComponents` leaves a literal `+` unencoded, and most server
+            // stacks read a literal `+` in a query string as a space — a
+            // real hazard for a title like "+Anima". NOT A BUG here, checked
+            // live 2026-09-13: `q=%2BAnima` and `q=+Anima` both answer id
+            // 14619 — `api.mangabaka.org` evidently normalises `+` back to
+            // itself for `q` (fuzzy search), rather than decoding it as a
+            // space. Left unencoded on purpose; do not "fix" this without a
+            // fresh measurement, and see `staff`/`publisher` below, which are
+            // exact-match filters and were not checked the same way.
             items.append(URLQueryItem(name: "q", value: text))
         }
         for type in types { items.append(URLQueryItem(name: "type", value: type)) }

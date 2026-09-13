@@ -35,6 +35,15 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// Whether an anime adaptation exists, and which chapters it covers.
     /// The mockup derived this from the rating; it is a real field.
     let anime: AnimeAdaptation?
+    /// The same fact, from a different shape. `/v2/series/{id}` sends
+    /// `anime: {exists: true, start, end}` and no sibling `has_anime`;
+    /// `/v1/series/{id}` sends `anime: {start, end}` — no `exists` key at
+    /// all — plus a top-level `has_anime: true`. Both captured live against
+    /// series 3397 on 2026-09-13. `AnimeAdaptation.exists` alone answers
+    /// "no" for every v1 payload, which is every library entry's fill
+    /// (`SeriesRepository.swift:683`, `filling(gapsFrom:)` below). See
+    /// `hasAnimeAdaptation`.
+    let hasAnime: Bool?
     /// The same series on other trackers, with their ratings. Also real —
     /// the mockup faked these as arithmetic offsets from the base rating.
     let source: [String: TrackerEntry]?
@@ -113,13 +122,18 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         contentRating = try container.decodeIfPresent(String.self, forKey: .contentRating)
         publishers = try container.decodeIfPresent([Publisher].self, forKey: .publishers)
         anime = try container.decodeIfPresent(AnimeAdaptation.self, forKey: .anime)
+        hasAnime = try container.decodeIfPresent(Bool.self, forKey: .hasAnime)
         source = try container.decodeIfPresent([String: TrackerEntry].self, forKey: .source)
 
         rating = container.lenientDouble(forKey: .rating)
         totalChapters = container.lenientDouble(forKey: .totalChapters)
         finalVolume = container.lenientDouble(forKey: .finalVolume)
-        year = container.lenientDouble(forKey: .year).map { Int($0) }
-        ratingCount = container.lenientDouble(forKey: .ratingCount).map { Int($0) }
+        // `Int(_: Double)` traps on anything outside Int's range — a
+        // server-controlled `"year": "inf"` or `"rating_count": 1e19` would
+        // crash the feed page it appears on for every reader. `Int(exactly:)`
+        // returns nil instead, which the model already treats as "unknown".
+        year = container.lenientDouble(forKey: .year).flatMap { Int(exactly: $0) }
+        ratingCount = container.lenientDouble(forKey: .ratingCount).flatMap { Int(exactly: $0) }
         tags = container.lenientTagNames(forKey: .tags)
         // Absent on v2 entirely, and on any v1 payload that predates it. A
         // series with no rich tags falls back to the flat names.
@@ -141,7 +155,8 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         year: Int? = nil,
         ratingCount: Int? = nil,
         tags: [String]? = nil,
-        tagsV2: [SeriesTag]? = nil
+        tagsV2: [SeriesTag]? = nil,
+        hasAnime: Bool? = nil
     ) {
         self.id = id
         self.state = state
@@ -159,6 +174,7 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         self.finalVolume = finalVolume
         self.publishers = publishers
         self.anime = anime
+        self.hasAnime = hasAnime
         self.source = source
         self.year = year
         self.ratingCount = ratingCount
@@ -182,7 +198,7 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
             status: status, rating: rating, type: type, contentRating: contentRating,
             totalChapters: totalChapters, finalVolume: finalVolume,
             publishers: publishers, anime: anime, source: source, year: year,
-            ratingCount: ratingCount, tags: self.tags, tagsV2: tags
+            ratingCount: ratingCount, tags: self.tags, tagsV2: tags, hasAnime: hasAnime
         )
     }
 
@@ -216,7 +232,8 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
             year: year ?? other.year,
             ratingCount: ratingCount ?? other.ratingCount,
             tags: (tags?.isEmpty == false) ? tags : other.tags,
-            tagsV2: (tagsV2?.isEmpty == false) ? tagsV2 : other.tagsV2
+            tagsV2: (tagsV2?.isEmpty == false) ? tagsV2 : other.tagsV2,
+            hasAnime: hasAnime ?? other.hasAnime
         )
     }
 
@@ -224,6 +241,22 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// carries no titles at all, which the schema permits.
     var displayTitle: String? {
         DisplayTitle.choose(from: titles)
+    }
+
+    /// Whether an anime adaptation exists, reconciling the two shapes the
+    /// wire sends this fact in.
+    ///
+    /// `/v2/series/{id}` (schema=full): `anime: {exists: true, start, end}`,
+    /// no `has_anime`. `/v1/series/{id}` — the endpoint that fills every
+    /// library entry's gaps, `SeriesRepository.swift:683` — sends
+    /// `anime: {start, end}` with **no `exists` key** at all, plus a
+    /// top-level `has_anime: true`. Both captured live against series 3397,
+    /// 2026-09-13. Reading `anime?.exists` alone answered "None listed" for
+    /// a series with two anime seasons, on the v1 shape every library entry
+    /// gets. `anime?.start != nil` is a last resort for a payload that gives
+    /// neither flag but does give a start chapter.
+    var hasAnimeAdaptation: Bool {
+        anime?.exists == true || hasAnime == true || anime?.start != nil
     }
 
     /// MangaUpdates' id for this series, if it has one. Base-36, and it must be
@@ -237,8 +270,18 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// Taken from the title marked "native" rather than from a field, because
     /// there is no field: MangaBaka records the language per title, and the
     /// native one is the only reliable statement about the work's own language.
+    /// `-Latn` is excluded on purpose, the same rule `DisplayTitle.original`
+    /// applies: a romanisation is a reading of the native title, not the
+    /// native language itself. Solo Leveling (3397) carries `ko`, `ko-Latn`,
+    /// `ja-Latn` and `ja` titles, all tagged `native`, and the API's order is
+    /// not documented as stable (`DisplayTitle.swift`'s series-638 finding
+    /// already caught it changing once) — if a `ko-Latn native` title ever
+    /// sorts first, first-match here used to answer "ko-latn", which then
+    /// narrowed `coverLanguages` to `["en", "ko-latn"]` and dropped every
+    /// Korean cover, since `hasPrefix` never matches a `-latn` tag against a
+    /// bare `ko`.
     var nativeLanguage: String? {
-        titles?.first { $0.traits.contains("native") }?.language
+        titles?.first { $0.traits.contains("native") && !$0.language.hasSuffix("-Latn") }?.language
     }
 
     /// The language a series was originally published in, inferred from its
@@ -340,9 +383,16 @@ private extension KeyedDecodingContainer {
     /// field is unknown, which the model already allows for, and throwing here
     /// would discard the entire series over one optional field.
     func lenientDouble(forKey key: Key) -> Double? {
-        if let value = try? decodeIfPresent(Double.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return value.isFinite ? value : nil
+        }
         guard let text = try? decodeIfPresent(String.self, forKey: key) else { return nil }
-        return Double(text)
+        // `Double("inf")`, `Double("-inf")` and `Double("nan")` all succeed,
+        // and a caller turning this into an `Int` would trap on them (see
+        // `year`/`ratingCount` above). An unparsable-as-finite value is
+        // exactly as unknown as one that fails `Double(text)` outright.
+        guard let value = Double(text), value.isFinite else { return nil }
+        return value
     }
 }
 

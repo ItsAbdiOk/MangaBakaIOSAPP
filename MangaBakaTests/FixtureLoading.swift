@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import MangaBaka
 
 enum Fixture {
     /// Loads a bundled JSON fixture, failing loudly rather than returning empty
@@ -24,10 +25,13 @@ enum Fixture {
         return try Data(contentsOf: url)
     }
 
+    /// The app's own decoder, not a second hand-rolled one: a "real response
+    /// decodes" test that decoded with different rules than production
+    /// (`.iso8601` here, a custom with/without-fraction closure there) was
+    /// measuring a decoder nothing in the app actually uses. See
+    /// `APIClient.makeDecoder()`.
     static func decoder() -> JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return decoder
+        APIClient.makeDecoder()
     }
 
     enum FixtureError: Error, CustomStringConvertible {

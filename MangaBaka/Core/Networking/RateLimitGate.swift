@@ -32,14 +32,28 @@ actor RateLimitGate {
         return remaining
     }
 
+    /// A ceiling on how long the server's own `Retry-After` is honoured for.
+    ///
+    /// GUESS: nothing on record says what MangaBaka actually sends on a 429
+    /// (the existing tests' `Retry-After: 30` is hand-written, not captured).
+    /// Without some cap, a malformed or unusually large value — an
+    /// HTTP-date parsed wrong, or a server-side misconfiguration — would lock
+    /// every request in the process for however long it said, with the
+    /// screen reading "Retrying in N minutes." 15 minutes is long enough that
+    /// no plausible real backoff hits it, short enough that a bad value
+    /// cannot strand the app for the rest of a reading session.
+    static let maxHonouredRetryAfter: TimeInterval = 15 * 60
+
     /// - Parameter retryAfter: the server's own `Retry-After`, in seconds.
     ///   Honoured when given, because the server knows better than any local
-    ///   guess. Otherwise back off exponentially, capped so the app cannot
+    ///   guess — but capped, same as the fallback below it, so a bad value
+    ///   cannot lock the app out for longer than a transient spike could ever
+    ///   justify. Otherwise back off exponentially, capped so the app cannot
     ///   lock itself out for minutes over a transient spike.
     func recordRateLimit(retryAfter: TimeInterval?) {
         consecutiveRateLimits += 1
         let fallback = min(pow(2, Double(consecutiveRateLimits)), 60)
-        let wait = retryAfter ?? fallback
+        let wait = min(retryAfter ?? fallback, Self.maxHonouredRetryAfter)
         blockedUntil = now().addingTimeInterval(wait)
     }
 

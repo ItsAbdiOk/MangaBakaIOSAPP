@@ -49,6 +49,19 @@ struct RateLimitGateTests {
         #expect(await gate.secondsUntilAllowed() == nil, "Window passed")
     }
 
+    /// GUESS (labelled in `RateLimitGate.maxHonouredRetryAfter`): nothing on
+    /// record says what MangaBaka actually sends on a 429. Without some cap,
+    /// a malformed or oversized `Retry-After` would lock the app out for
+    /// however long it said — the doc comment promised a cap that only ever
+    /// applied to the exponential fallback, not to the server's own value.
+    @Test("An honoured Retry-After is capped, not trusted verbatim")
+    func honouredRetryAfterIsCapped() async {
+        let (gate, _) = makeGate()
+        await gate.recordRateLimit(retryAfter: 36000)
+        let wait = await gate.secondsUntilAllowed() ?? 0
+        #expect(wait <= RateLimitGate.maxHonouredRetryAfter)
+    }
+
     /// Without a Retry-After header there is nothing to honour, so back off
     /// exponentially rather than retrying immediately into the same refusal.
     @Test("Backoff grows when the server gives no Retry-After")

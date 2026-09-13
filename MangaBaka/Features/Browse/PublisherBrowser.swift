@@ -84,7 +84,7 @@ struct PublisherBrowser: View {
     private func note(_ publisher: PublisherRecord) -> String? {
         var parts: [String] = []
         if let type = publisher.type, type != "publisher" { parts.append(type.capitalized) }
-        if publisher.closed == true { parts.append("closed") }
+        if publisher.closed != nil { parts.append("closed") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

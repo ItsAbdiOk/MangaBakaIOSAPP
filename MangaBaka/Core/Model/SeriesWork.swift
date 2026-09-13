@@ -89,6 +89,14 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     /// Dates only, fixed to UTC — a release date is a calendar day rather than
     /// an instant, and parsing it in the device's zone puts it on the previous
     /// day west of UTC.
+    ///
+    /// `yyyy-MM-dd` only: the spec gives `release_date` no `format` at all.
+    /// Checked against `/v1/works/upcoming` live on 2026-09-13 — 50 of 50
+    /// `release_date` values were exactly 10 characters, i.e. this shape —
+    /// so a partial ("2026-11") or timestamped form has not been seen, but
+    /// nothing rules it out for an announced-but-unscheduled volume, which is
+    /// exactly the kind of release a reader is waiting on. If one ever shows
+    /// up, `date` silently returns nil for it today rather than throwing.
     private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

@@ -43,8 +43,8 @@ enum DisplayTitle {
         if let anyEnglish = titles.first(where: { languageCode(of: $0.language) == "en" }) {
             return anyEnglish.title
         }
-        if let romanised = titles.first(where: { $0.language.hasSuffix("-Latn") }) {
-            return romanised.title
+        if let romanised = bestRomanised(of: titles) {
+            return romanised
         }
         if let native = titles.first(where: { $0.traits.contains("native") }) {
             return native.title
@@ -64,7 +64,7 @@ enum DisplayTitle {
     ) -> String? {
         switch preference {
         case .romanised:
-            titles.first { $0.language.hasSuffix("-Latn") }?.title
+            bestRomanised(of: titles)
         case .original:
             // The trait first, then the script. Most series carry no "native"
             // trait at all — the origin-language title is simply tagged `ja`
@@ -81,6 +81,25 @@ enum DisplayTitle {
             // no English title should show something rather than nothing.
             best(inLanguage: "en", of: titles)
         }
+    }
+
+    /// The best romanisation, when the series carries more than one.
+    ///
+    /// Measured live on series 638, 2026-09-10: two `ko-Latn` titles, the
+    /// untagged "Baegjaggaui Mangnaniga Doeeossda" first and the one tagged
+    /// `native` and `is_primary: true`, "Baekjakgaui Mangnaniga Doeeotda",
+    /// second — first-match picked the untagged one, which the setting itself
+    /// quotes as wrong. `isPrimary` first because it is the field the API
+    /// itself uses to distinguish a language's canonical title from its
+    /// alternates (see `SeriesTitle.isPrimary`); `native` next because a
+    /// romanisation of the native title is the one this preference exists to
+    /// show.
+    private static func bestRomanised(of titles: [SeriesTitle]) -> String? {
+        let romanised = titles.filter { $0.language.hasSuffix("-Latn") }
+        guard !romanised.isEmpty else { return nil }
+        return romanised.first { $0.isPrimary == true }?.title
+            ?? romanised.first { $0.traits.contains("native") }?.title
+            ?? romanised.first?.title
     }
 
     /// The best title in one language.

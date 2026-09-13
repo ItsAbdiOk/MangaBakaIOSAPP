@@ -76,7 +76,7 @@ struct APIShapeContractTests {
             APIEnvelope<[LibraryEntry]>.self,
             from: try Fixture.data("library")
         )
-        #expect(envelope.data?.count == 2)
+        #expect(envelope.data?.count == 4)
     }
 
     /// The sweep's job is the series-shaped endpoints: the ones whose payload

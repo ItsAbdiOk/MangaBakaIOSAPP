@@ -33,6 +33,29 @@ struct APIClientFailurePathTests {
         #expect(try await makeClient().total("/v2/series/search") == 411)
     }
 
+    /// The client's date strategy already accepted a timestamp with and
+    /// without fractional seconds; a third shape — a bare calendar day, no
+    /// time at all — reaches the wire too (`"start_date": "2026-08-27"`).
+    /// Fails without the fix: `DecodingError.dataCorruptedError` (neither
+    /// ISO-8601 formatter accepts a date with no time component).
+    @Test("A bare yyyy-MM-dd date decodes, not only the two timestamped forms")
+    func decodesDateOnlyStrings() async throws {
+        struct Payload: Decodable { let startDate: Date }
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"""
+            {"status":200,"data":{"start_date":"2026-08-27"}}
+            """#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let payload: Payload = try await makeClient().get("/things")
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        #expect(utc.component(.year, from: payload.startDate) == 2026)
+        #expect(utc.component(.month, from: payload.startDate) == 8)
+        #expect(utc.component(.day, from: payload.startDate) == 27)
+    }
+
     /// Control: with a well-formed response the client succeeds. If this fails,
     /// every failure assertion below is meaningless.
     @Test("Control — a well-formed response decodes")
@@ -59,6 +82,68 @@ struct APIClientFailurePathTests {
 
         await #expect(throws: APIError.rateLimited(retryAfter: 30)) {
             let _: [Int] = try await makeClient().get("/things")
+        }
+    }
+
+    /// `Retry-After` may be delta-seconds or an HTTP-date (RFC 7231 §7.1.3);
+    /// only the delta form was ever parsed, so a date silently fell to the
+    /// local exponential fallback instead of the deadline the server gave.
+    /// Fails without the fix: `TimeInterval.init("Wed, 01 Jan 2025 …")` is
+    /// nil, so `retryAfter` comes back nil instead of ~30.
+    @Test("A Retry-After given as an HTTP-date is honoured, not silently dropped")
+    func rateLimitedWithHTTPDateRetryAfter() async {
+        let future = Date().addingTimeInterval(30)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        let header = formatter.string(from: future)
+
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(
+                statusCode: 429,
+                body: Data(#"{"status":429,"message":"Slow down"}"#.utf8),
+                headers: ["Retry-After": header]
+            ))
+        }
+        defer { URLProtocolStub.reset() }
+
+        do {
+            let _: [Int] = try await makeClient().get("/things")
+            Issue.record("Expected the request to throw")
+        } catch let error {
+            guard case let .rateLimited(retryAfter) = error, let retryAfter else {
+                Issue.record("Expected .rateLimited with a value, got \(error)")
+                return
+            }
+            #expect(retryAfter > 25 && retryAfter <= 30, "Within a few seconds of the parsed date")
+        }
+    }
+
+    /// A `Retry-After` above the cap is capped, not honoured verbatim — a
+    /// malformed or misconfigured value must not lock the app out, or leave
+    /// the screen reading an absurd countdown, for longer than a transient
+    /// spike could ever justify.
+    @Test("A very large Retry-After is capped rather than honoured verbatim")
+    func rateLimitedRetryAfterIsCapped() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(
+                statusCode: 429,
+                body: Data(#"{"status":429,"message":"Slow down"}"#.utf8),
+                headers: ["Retry-After": "36000"]
+            ))
+        }
+        defer { URLProtocolStub.reset() }
+
+        do {
+            let _: [Int] = try await makeClient().get("/things")
+            Issue.record("Expected the request to throw")
+        } catch let error {
+            guard case let .rateLimited(retryAfter) = error, let retryAfter else {
+                Issue.record("Expected .rateLimited with a value, got \(error)")
+                return
+            }
+            #expect(retryAfter <= RateLimitGate.maxHonouredRetryAfter)
         }
     }
 
@@ -123,6 +208,25 @@ struct APIClientFailurePathTests {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 201, body: Data("{}".utf8))) }
         _ = try? await makeClient().post("/things", body: ["id": 1])
         #expect(await NetworkLedger.shared.totalRequests == before + 1, "Writes were invisible to the ledger")
+    }
+
+    /// `JSONSerialization.data(withJSONObject:)` raises an Objective-C
+    /// exception — not a Swift error — for a body containing `.infinity` or
+    /// `.nan`, which a bare `try?` cannot catch. Reachable from real input: a
+    /// chapter field typed "inf" on a hardware keyboard parses with
+    /// `Double("inf")` before it ever reaches this layer. Fails without the
+    /// fix: the process crashes here rather than the `#expect(throws:)` below
+    /// ever getting a chance to run.
+    @Test("A non-finite value in a write body throws instead of crashing")
+    func nonFiniteBodyThrowsRatherThanCrashing() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":{}}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        await #expect(throws: APIError.self) {
+            try await makeClient().patch("/things/1", body: ["progress_chapter": Double.infinity])
+        }
     }
 
     /// The spec documents `message` as safe to show end users verbatim, so it

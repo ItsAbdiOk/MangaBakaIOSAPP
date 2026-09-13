@@ -83,3 +83,32 @@ struct EditionLabelTests {
         #expect(volume.editionLabels.isEmpty)
     }
 }
+
+/// `SeriesEdition.status` is the series-status vocabulary
+/// (`completed | releasing | hiatus | …`), not "complete"/"ongoing"/"cancelled"
+/// as a stale comment used to claim — and the series page three sections up
+/// already turns these into words via `SeriesStatus.label`. Printing the raw
+/// value here read "12 volumes · print · hiatus" instead of "On hiatus".
+@Suite("Edition detail line")
+struct EditionDetailTests {
+    private func edition(status: String?) -> SeriesEdition {
+        SeriesEdition(
+            id: "1", title: nil, language: nil, publisher: nil, medium: nil,
+            status: status, licensed: nil, countMain: nil, countExtra: nil,
+            startDate: nil, endDate: nil
+        )
+    }
+
+    /// Fails without the fix: `detail` would read "hiatus", the raw wire
+    /// value, rather than `SeriesStatus.label(for:)`'s "On hiatus".
+    @Test("A raw status is shown through SeriesStatus.label")
+    func statusIsHumanised() {
+        #expect(edition(status: "hiatus").detail == "On hiatus")
+    }
+
+    @Test("A missing status is left out rather than printed empty")
+    func missingStatusIsOmitted() {
+        #expect(edition(status: nil).detail == nil)
+        #expect(edition(status: "").detail == nil)
+    }
+}

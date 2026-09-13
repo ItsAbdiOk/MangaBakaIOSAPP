@@ -25,26 +25,7 @@ actor APIClient {
         self.baseURL = baseURL
         self.session = session
         self.tokenProvider = tokenProvider
-
-        let decoder = JSONDecoder()
-        // The API uses snake_case throughout (`is_licensed`, `total_chapters`).
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        // Timestamps are ISO-8601, sometimes with fractional seconds and
-        // sometimes without, so both are accepted rather than failing the whole
-        // response over a missing ".000".
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let text = try decoder.singleValueContainer().decode(String.self)
-            let withFraction = ISO8601DateFormatter()
-            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = withFraction.date(from: text) { return date }
-            let plain = ISO8601DateFormatter()
-            if let date = plain.date(from: text) { return date }
-            throw DecodingError.dataCorruptedError(
-                in: try decoder.singleValueContainer(),
-                debugDescription: "Unrecognised date: \(text)"
-            )
-        }
-        self.decoder = decoder
+        self.decoder = Self.makeDecoder()
     }
 
     /// - Parameter query: query items, as a list rather than a dictionary
@@ -180,9 +161,14 @@ actor APIClient {
             throw APIError.transport(underlying: "Response was not HTTP.")
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let retryAfter = Self.parseRetryAfter(http.value(forHTTPHeaderField: "Retry-After"))
             await limiter.recordRateLimit(retryAfter: retryAfter)
-            throw APIError.rateLimited(retryAfter: retryAfter)
+            // Capped the same way the gate caps what it honours (see
+            // `RateLimitGate.maxHonouredRetryAfter`) — otherwise the gate
+            // could reopen in 15 minutes while the screen still read
+            // "Retrying in 3 hours," which is the app calling itself wrong.
+            let displayed = retryAfter.map { min($0, RateLimitGate.maxHonouredRetryAfter) }
+            throw APIError.rateLimited(retryAfter: displayed)
         }
         return (data, http)
     }
@@ -266,7 +252,18 @@ actor APIClient {
         request.httpMethod = method
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            guard let encoded = try? JSONSerialization.data(withJSONObject: body) else {
+            // `JSONSerialization.data(withJSONObject:)` raises an
+            // Objective-C `NSInvalidArgumentException` for a body containing
+            // `.infinity` or `.nan` — not a Swift error, so the `try?` below
+            // cannot catch it and the process crashes. `isValidJSONObject`
+            // checks for exactly this (a `NSNumber` that is NaN or infinite)
+            // without raising, so it must run first. Reachable from real
+            // input: a chapter field typed as "inf" via a hardware keyboard
+            // or paste parses with `Double("inf")` before it ever reaches
+            // here.
+            guard JSONSerialization.isValidJSONObject(body),
+                  let encoded = try? JSONSerialization.data(withJSONObject: body)
+            else {
                 throw APIError.transport(underlying: "Could not encode the change.")
             }
             request.httpBody = encoded
@@ -398,5 +395,74 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         return request
+    }
+}
+
+/// Decoding and date-parsing helpers, split from the actor body itself so
+/// the primary type stays under `type_body_length` — none of this needs
+/// actor isolation; it is all `static`.
+extension APIClient {
+    /// The decoder every request in this client decodes with.
+    ///
+    /// `nonisolated static` and exposed so tests can decode fixtures through
+    /// the same rules production does, rather than a second, hand-rolled
+    /// decoder that quietly drifts from this one. `Fixture.decoder()` calls
+    /// this rather than building its own — see `FixtureLoading.swift`.
+    nonisolated static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        // The API uses snake_case throughout (`is_licensed`, `total_chapters`).
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        // Timestamps are ISO-8601, sometimes with fractional seconds and
+        // sometimes without, so both are accepted rather than failing the whole
+        // response over a missing ".000".
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let text = try decoder.singleValueContainer().decode(String.self)
+            let withFraction = ISO8601DateFormatter()
+            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = withFraction.date(from: text) { return date }
+            let plain = ISO8601DateFormatter()
+            if let date = plain.date(from: text) { return date }
+            // A bare calendar day, no time at all — `"start_date": "2026-08-27"`,
+            // seen on the wire alongside the two timestamped forms above. Fixed
+            // to UTC for the same reason `SeriesWork.date` is: parsing a
+            // date-only string in the device's own zone can push it onto the
+            // previous day west of UTC.
+            if let date = Self.dateOnlyFormatter.date(from: text) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: try decoder.singleValueContainer(),
+                debugDescription: "Unrecognised date: \(text)"
+            )
+        }
+        return decoder
+    }
+
+    /// A UTC-fixed formatter for a given pattern — both the date-only
+    /// fallback above and `Retry-After`'s HTTP-date form below need one, and
+    /// a shared factory beats two near-identical closures.
+    private static func utcFormatter(_ pattern: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = pattern
+        return formatter
+    }
+
+    /// A bare `yyyy-MM-dd` day. Third and last date-decoding fallback.
+    fileprivate static let dateOnlyFormatter = utcFormatter("yyyy-MM-dd")
+
+    /// `Retry-After`'s HTTP-date form (RFC 7231 §7.1.3), e.g.
+    /// "Wed, 21 Oct 2015 07:28:00 GMT". The delta-seconds form is far more
+    /// common and is tried first; this exists so a server sending the other
+    /// legal form is not silently ignored and quietly falls to the local
+    /// exponential fallback instead of the deadline it actually gave.
+    private static let retryAfterDateFormatter = utcFormatter("EEE, dd MMM yyyy HH:mm:ss zzz")
+
+    /// `Retry-After` may be delta-seconds or an HTTP-date; only the first was
+    /// ever parsed, so the second silently vanished.
+    static func parseRetryAfter(_ header: String?) -> TimeInterval? {
+        guard let header, !header.isEmpty else { return nil }
+        if let seconds = TimeInterval(header) { return max(seconds, 0) }
+        guard let date = retryAfterDateFormatter.date(from: header) else { return nil }
+        return max(date.timeIntervalSinceNow, 0)
     }
 }

@@ -211,7 +211,7 @@ struct SeriesEditionTests {
     /// printed as unknown.
     @Test("Detail lists only what is known")
     func detailOmitsGaps() {
-        #expect(edition(id: "a").detail == "12 volumes · print · complete")
+        #expect(edition(id: "a").detail == "12 volumes · print · Complete")
         #expect(edition(id: "b", volumes: nil, medium: nil, status: nil).detail == nil)
     }
 
