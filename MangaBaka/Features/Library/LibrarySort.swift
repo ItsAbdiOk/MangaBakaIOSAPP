@@ -79,8 +79,22 @@ extension LibraryEntry {
     }
 
     /// The letter this entry files under in a jump index.
+    ///
+    /// Folds diacritics before keying: the title sort
+    /// (`localizedCaseInsensitiveCompare`) collates "Ōoku" among the O's, but
+    /// this used to file it under "Ō" — same letter, different `ForEach` id,
+    /// so a library with an unaccented and a macron'd title starting the same
+    /// letter produced two rail rows for one letter (a duplicate id; L1).
+    /// Folding first keeps this in step with the comparator it is indexing.
+    ///
+    /// A leading character diacritic-folding cannot reduce to A-Z — kana,
+    /// hanja, Cyrillic, and the rest — buckets under one "…" rather than
+    /// growing one 13pt rail row per script letter, which on a 200-entry
+    /// library with 40 Japanese titles was 40 extra rows.
     var indexLetter: String {
         guard let first = sortTitle.first, first.isLetter else { return "#" }
-        return String(first).uppercased()
+        let folded = String(first).folding(options: .diacriticInsensitive, locale: nil).uppercased()
+        guard let letter = folded.first, letter.isASCII, letter.isLetter else { return "…" }
+        return String(letter)
     }
 }

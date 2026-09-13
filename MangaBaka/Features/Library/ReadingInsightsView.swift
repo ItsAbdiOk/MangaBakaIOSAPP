@@ -153,7 +153,7 @@ struct ReadingInsightsView: View {
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
-                    Text(progressLine(item, showEstimate: showEstimate))
+                    Text(Self.progressLine(item, showEstimate: showEstimate))
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textMuted)
                 }
@@ -170,8 +170,12 @@ struct ReadingInsightsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func progressLine(_ item: ReadingInsights.Behind, showEstimate: Bool = false) -> String {
-        let read = Int(item.entry.progressChapter ?? 0)
+    nonisolated static func progressLine(
+        _ item: ReadingInsights.Behind, showEstimate: Bool = false
+    ) -> String {
+        // L7: `Int(...)` truncated a half chapter to a whole one here, though
+        // not in the editor for the same entry.
+        let read = LibraryEditSheet.chapterText(item.entry.progressChapter ?? 0)
         let total = Int(item.series?.totalChapters ?? 0)
         var line = "\(item.entry.state.title) · ch \(read) of \(total)"
         // "Waiting for you" only: a filter, not a promise — see ReadingTime.

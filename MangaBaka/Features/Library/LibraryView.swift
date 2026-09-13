@@ -135,7 +135,15 @@ struct LibraryView: View {
                                 isLoading: continuations.isLoading,
                                 path: $path
                             )
-                            .task(id: model.entries.map(\.id)) {
+                            // L6: keyed on every page's ids, this re-ran the
+                            // whole continuations walk (up to eight
+                            // `/relationships` fetches) once per page — ten
+                            // times on a 939-entry, ten-page library. Keying
+                            // on `isComplete` instead means the walk runs
+                            // once the snapshot has actually settled, not
+                            // once per partial page landing.
+                            .task(id: model.isComplete) {
+                                guard model.isComplete else { return }
                                 await continuations.load(entries: model.entries)
                             }
                         }

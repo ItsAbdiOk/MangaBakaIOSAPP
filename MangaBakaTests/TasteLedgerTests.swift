@@ -126,13 +126,60 @@ struct TasteLedgerTests {
         ])
         let before = try #require(try await ledger.favoured().first).score
 
+        // The whole library again, as `TasteProfile` always passes it: a
+        // series missing from the list is read as removed (R9).
         try await ledger.absorb([
-            entry(1, .dropped, tags: [tag(10, "Murim", weight: "core")])
+            entry(1, .dropped, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
         ])
         let after = try #require(try await ledger.favoured().first).score
 
         #expect(after < before, "one of the two dropped, so the tag matters less")
         #expect(try await ledger.favoured().first?.seriesCount == 2)
+    }
+
+    /// R9: `absorb` only ever added and re-weighted; nothing subtracted a
+    /// series no longer in the library, so it kept its weight forever. Fixed
+    /// by retracting a `TasteSource` row's contribution when the full
+    /// snapshot passed to `absorb` no longer contains it.
+    @Test("A series removed from the library loses its weight")
+    func removalRetractsWeight() async throws {
+        let ledger = try ledger()
+        try await ledger.absorb([
+            entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(3, .completed, tags: [tag(10, "Murim", weight: "core")])
+        ])
+        let before = try #require(try await ledger.favoured().first { $0.name == "Murim" })
+        #expect(before.seriesCount == 3)
+
+        // A full snapshot without series 3 — `absorb` always receives the
+        // whole library, never a page, so this is what "removed" looks like.
+        try await ledger.absorb([
+            entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
+        ])
+
+        let after = try #require(try await ledger.favoured().first { $0.name == "Murim" })
+        #expect(after.seriesCount == 2, "the removed series should stop counting")
+        #expect(after.score < before.score)
+        #expect(try await ledger.countedSeries() == 2)
+    }
+
+    @Test("Removing every series with a tag drops the tag entirely")
+    func fullRemovalDropsTheTag() async throws {
+        let ledger = try ledger()
+        try await ledger.absorb([
+            entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
+        ])
+        #expect(try await ledger.favoured().contains { $0.name == "Murim" })
+
+        try await ledger.absorb([])
+
+        #expect(!(try await ledger.favoured().contains { $0.name == "Murim" }))
+        #expect(try await ledger.countedSeries() == 0)
+        #expect(try await ledger.knownTags() == 0)
     }
 
     @Test("A tag in a single series is a coincidence, not a taste")

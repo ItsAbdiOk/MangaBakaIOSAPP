@@ -215,6 +215,19 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v9_tasteContribution") { db in
+            // What each library series added to the taste ledger, so removing
+            // the series can take exactly that back. Before this a removed
+            // series kept its weight until sign-out (review R9, 2026-09-13).
+            try db.create(table: "tasteContribution") { table in
+                table.column("seriesId", .integer).notNull()
+                table.column("tagId", .integer).notNull()
+                table.column("name", .text).notNull()
+                table.column("score", .double).notNull()
+                table.primaryKey(["seriesId", "tagId"])
+            }
+        }
+
         return migrator
     }
 }

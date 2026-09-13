@@ -70,6 +70,12 @@ actor TasteLedger {
     /// Safe to call with the same entries repeatedly: a series is counted once
     /// per state, and moving it from reading to dropped recounts it at the new
     /// weight rather than adding a second set of tags on top.
+    ///
+    /// `entries` here is always the *whole* current library, not a page — see
+    /// `TasteProfile.buildIDs`. That is what makes it possible to detect a
+    /// removal: a `TasteSource` row whose series is not in `entries` was
+    /// dropped from the library since the last call and its contribution is
+    /// retracted below (R9).
     func absorb(_ entries: [LibraryEntry]) throws {
         try database.writer.write { db in
             for entry in entries {
@@ -83,11 +89,14 @@ actor TasteLedger {
 
                 // Undo the old contribution before adding the new one, or a
                 // series that moved from reading to dropped would keep the
-                // weight of both.
-                if let previous, let old = LibraryEntry.State(rawValue: previous.state) {
-                    try Self.apply(tags, multiplier: -Self.weight(old), to: db)
-                }
-                try Self.apply(tags, multiplier: Self.weight(entry.state), to: db)
+                // weight of both. Reads what was actually added last time
+                // from `tasteContribution` rather than re-deriving it from
+                // `previous.state`, so it stays correct even if the series'
+                // own tags changed between calls.
+                try Self.retract(seriesId: entry.seriesId, in: db)
+                try Self.contribute(
+                    tags, seriesId: entry.seriesId, multiplier: Self.weight(entry.state), to: db
+                )
 
                 try TasteSource(
                     seriesId: entry.seriesId,
@@ -95,6 +104,20 @@ actor TasteLedger {
                     state: entry.state.rawValue
                 ).save(db)
             }
+
+            // R9: a series removed from the library used to keep its weight
+            // forever — `absorb` only ever added and re-weighted, and the
+            // `prune` doc below claimed removal removed influence although no
+            // code path did that. `TasteSource` rows not present in this full
+            // snapshot are exactly the series that dropped out since the last
+            // absorb; retract what they contributed and forget them.
+            let presentIDs = entries.map(\.seriesId)
+            let stale = try TasteSource.filter(!presentIDs.contains(Column("seriesId"))).fetchAll(db)
+            for source in stale {
+                try Self.retract(seriesId: source.seriesId, in: db)
+                try source.delete(db)
+            }
+
             try Self.prune(db)
         }
     }
@@ -163,10 +186,8 @@ actor TasteLedger {
             guard !tags.isEmpty else { return }
             let previous = try TasteSource.fetchOne(db, key: series.id)
             if previous?.state == state.rawValue { return }
-            if let previous, let old = LibraryEntry.State(rawValue: previous.state) {
-                try Self.apply(tags, multiplier: -Self.weight(old), to: db)
-            }
-            try Self.apply(tags, multiplier: Self.weight(state), to: db)
+            try Self.retract(seriesId: series.id, in: db)
+            try Self.contribute(tags, seriesId: series.id, multiplier: Self.weight(state), to: db)
             try TasteSource(
                 seriesId: series.id, countedAt: clock.now, state: state.rawValue
             ).save(db)
@@ -181,10 +202,13 @@ actor TasteLedger {
         _ = try database.writer.write { db in
             try TagAffinity.deleteAll(db)
             try TasteSource.deleteAll(db)
+            try db.execute(sql: "DELETE FROM tasteContribution")
         }
     }
 
-    /// Adds (or subtracts) one series' tags.
+    /// Adds one series' tags to `tagAffinity`, and records exactly what was
+    /// added in `tasteContribution` so it can be taken back later without
+    /// needing the series' tags again — see `retract`.
     ///
     /// **One statement per tag, no read.** This used to fetch each row, add to
     /// it in Swift, and save it back — two round trips per tag, per series.
@@ -195,9 +219,40 @@ actor TasteLedger {
     ///
     /// `MAX(0, ...)` on the count rather than in Swift for the same reason: it
     /// is the database's job and doing it here would need the read back.
-    private static func apply(_ tags: [SeriesTag], multiplier: Double, to db: Database) throws {
+    private static func contribute(
+        _ tags: [SeriesTag], seriesId: Int, multiplier: Double, to db: Database
+    ) throws {
         guard multiplier != 0 else { return }
-        let step = multiplier > 0 ? 1 : -1
+        let affinityStatement = try db.makeStatement(sql: """
+            INSERT INTO tagAffinity (tagId, name, score, seriesCount)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(tagId) DO UPDATE SET
+                score = score + excluded.score,
+                seriesCount = MAX(0, seriesCount + excluded.seriesCount),
+                name = excluded.name
+            """)
+        let contributionStatement = try db.makeStatement(sql: """
+            INSERT INTO tasteContribution (seriesId, tagId, name, score)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(seriesId, tagId) DO UPDATE SET score = excluded.score, name = excluded.name
+            """)
+        for tag in tags {
+            let score = weight(tag.importance) * multiplier
+            try affinityStatement.execute(arguments: [tag.id, tag.name, score, 1])
+            try contributionStatement.execute(arguments: [seriesId, tag.id, tag.name, score])
+        }
+    }
+
+    /// Undoes whatever `tasteContribution` says `seriesId` last added to
+    /// `tagAffinity`, then forgets it. A series with no recorded contribution
+    /// (never counted, or already retracted) leaves nothing to undo here.
+    private static func retract(seriesId: Int, in db: Database) throws {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT tagId, name, score FROM tasteContribution WHERE seriesId = ?",
+            arguments: [seriesId]
+        )
+        guard !rows.isEmpty else { return }
         let statement = try db.makeStatement(sql: """
             INSERT INTO tagAffinity (tagId, name, score, seriesCount)
             VALUES (?, ?, ?, ?)
@@ -206,11 +261,13 @@ actor TasteLedger {
                 seriesCount = MAX(0, seriesCount + excluded.seriesCount),
                 name = excluded.name
             """)
-        for tag in tags {
-            try statement.execute(arguments: [
-                tag.id, tag.name, weight(tag.importance) * multiplier, step
-            ])
+        for row in rows {
+            let tagId: Int = row["tagId"]
+            let name: String = row["name"]
+            let score: Double = row["score"]
+            try statement.execute(arguments: [tagId, name, -score, -1])
         }
+        try db.execute(sql: "DELETE FROM tasteContribution WHERE seriesId = ?", arguments: [seriesId])
     }
 
     /// Drops tags that have fallen to nothing, so removing a series from the

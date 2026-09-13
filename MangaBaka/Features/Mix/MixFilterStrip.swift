@@ -144,6 +144,28 @@ extension MixView {
         return model.filters.tags.filter { !strands.contains($0) }
     }
 
+    /// L10: each filter chip fired its own `Task { await model.run() }` —
+    /// three quick taps were three `/v1/series/mix` requests, undebounced,
+    /// unlike the strand chips (`MixModel.blendAfterEdits`) which were given
+    /// exactly this treatment for the same reason. `MixModel.strandDebounce`
+    /// is reused rather than a second guessed number.
+    ///
+    /// A `static` slot rather than `@State`: this is a `View` extension, and
+    /// an extension cannot add a stored instance property to the type it
+    /// extends — only one Mix screen is ever on screen at a time, so one
+    /// shared slot is what `@State` would have given here anyway.
+    @MainActor
+    private static var pendingFilterBlend: Task<Void, Never>?
+
+    func requestBlend() {
+        Self.pendingFilterBlend?.cancel()
+        Self.pendingFilterBlend = Task {
+            try? await Task.sleep(for: MixModel.strandDebounce)
+            guard !Task.isCancelled else { return }
+            await model.run()
+        }
+    }
+
     func toggleTag(_ name: String) {
         if let index = model.filters.tags.firstIndex(of: name) {
             model.filters.tags.remove(at: index)
@@ -154,12 +176,12 @@ extension MixView {
         if model.filters.tags.count > 1, model.filters.tagMode == nil {
             model.filters.tagMode = "and"
         }
-        Task { await model.run() }
+        requestBlend()
     }
 
     func toggleTagMode() {
         model.filters.tagMode = model.filters.tagMode == "and" ? "or" : "and"
-        Task { await model.run() }
+        requestBlend()
     }
 
     func toggleType(_ type: String) {
@@ -168,6 +190,7 @@ extension MixView {
         } else {
             model.filters.types.append(type)
         }
+        requestBlend()
     }
 
     func chip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

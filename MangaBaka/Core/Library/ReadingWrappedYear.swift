@@ -1,6 +1,18 @@
 import Foundation
 
 extension ReadingWrapped {
+    /// `finish_date`/`start_date` are calendar days, sent as
+    /// `YYYY-MM-DDT00:00:00.000Z` (`docs/schemas/mangabaka_openapi.json:29915-29927`).
+    /// Reading their year/month/day in the device's own calendar moves a
+    /// 1 January finish into the previous year west of UTC — the same trap
+    /// `UpcomingWork.localDay` already works around for release dates. A UTC
+    /// calendar reads the date the API actually meant.
+    static var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar
+    }
+
     // MARK: - The year itself
 
     /// What the reader finished in one calendar year.
@@ -37,7 +49,7 @@ extension ReadingWrapped {
     static func year(
         _ year: Int,
         in entries: [LibraryEntry],
-        calendar: Calendar = .current
+        calendar: Calendar = utcCalendar
     ) -> Year {
         let dated = entries.filter { $0.finishDate != nil }
         // Not "has a finish date in the year": a dropped series may carry one
@@ -62,7 +74,7 @@ extension ReadingWrapped {
     /// is worse.
     static func busiestMonth(
         in year: Year,
-        calendar: Calendar = .current
+        calendar: Calendar = utcCalendar
     ) -> (month: Int, count: Int)? {
         var counts: [Int: Int] = [:]
         for entry in year.finished {
@@ -96,14 +108,20 @@ extension ReadingWrapped {
     /// impossible one is rejected.
     static let plausibleHoursPerDay: Double = 16
 
-    /// The same ceiling for a sprint whose start and finish are one day.
+    /// The same-day ceiling, in chapters rather than hours.
     ///
-    /// **A guess.** A same-day pair is also exactly what an importer stamps
-    /// on a whole series, and at sixteen hours an 80-chapter manga logged that
-    /// way (14.7 hours at 11 minutes) walked through as a binge. Eight hours
-    /// is a long reading day; a genuine 40-chapter manhwa afternoon (4 hours)
-    /// still survives, and a stamped 80-chapter manga does not.
-    static let plausibleHoursInOneDay: Double = 8
+    /// **A guess, restated by R8.** This used to be an hours figure
+    /// (`hoursPerDay <= 8`) built on `ReadingInsights.minutesPerChapter`'s old,
+    /// unlabelled 11-minutes-a-chapter guess: an 80-chapter manga stamped on
+    /// one day came to 14.7 hours and was rejected. R8 replaced that rate with
+    /// `ReadingTime`'s calibrated ~2.8 minutes/chapter for manga, and at that
+    /// pace the same 80 chapters is 3.8 hours — comfortably inside any hour
+    /// ceiling, so the stamped import it was written to catch would have
+    /// walked straight through. A same-day sprint is judged by chapter count
+    /// instead, which the rate correction does not move: a genuine 40-chapter
+    /// manhwa afternoon still survives, a stamped 80-chapter import still does
+    /// not.
+    static let plausibleChaptersInOneDay = 60
 
     /// Fewer chapters than this is not a sprint worth naming. **A guess**:
     /// enough that a one-shot or a short series finished in a sitting does
@@ -128,7 +146,7 @@ extension ReadingWrapped {
     /// it would not.
     static func fastestFinish(
         in entries: [LibraryEntry],
-        calendar: Calendar = .current,
+        calendar: Calendar = utcCalendar,
         minimumChapters: Int = minimumSprintChapters
     ) -> Sprint? {
         entries
@@ -149,10 +167,11 @@ extension ReadingWrapped {
 
     /// Whether a sprint could have been read rather than merely recorded.
     static func isPlausible(_ sprint: Sprint) -> Bool {
+        // A one-day sprint and an import are told apart by nothing but size,
+        // so it is judged by chapter count — see `plausibleChaptersInOneDay`.
+        if sprint.isSameDay { return sprint.chapters <= plausibleChaptersInOneDay }
         let minutes = ReadingInsights.minutesPerChapter(sprint.entry.series?.type)
         let hoursPerDay = Double(sprint.perDay) * minutes / 60
-        // A one-day sprint and an import are told apart by nothing but size.
-        if sprint.isSameDay { return hoursPerDay <= plausibleHoursInOneDay }
         return hoursPerDay <= plausibleHoursPerDay
     }
 

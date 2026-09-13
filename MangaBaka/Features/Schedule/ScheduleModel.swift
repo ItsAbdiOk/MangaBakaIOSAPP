@@ -134,11 +134,20 @@ final class ScheduleModel {
     }
 
     /// What the first run is about to do, said plainly.
+    ///
+    /// L8: "three seconds apart" used to be a copied-out literal beside
+    /// `firstRunEstimate`, which derives from
+    /// `MangaUpdatesClient.minimumInterval` itself — a spacing change there
+    /// (the other three feed clients already space at 3.5s) would leave this
+    /// sentence saying the old number next to an estimate computed from the
+    /// new one.
     var firstRunExplanation: String {
-        """
+        let interval = MangaUpdatesClient.minimumInterval
+        let spacing = interval.formatted(.number.precision(.fractionLength(0...1)))
+        return """
         \(snapshot.inScope) series are in scope. MangaUpdates is asked about \
-        one at a time, three seconds apart, so this takes \(firstRunEstimate). \
-        You can leave the screen — progress is kept.
+        one at a time, \(spacing) second\(interval == 1 ? "" : "s") apart, so \
+        this takes \(firstRunEstimate). You can leave the screen — progress is kept.
         """
     }
     var measuringLine: String { "Reading \(progress.done) of \(progress.total)" }

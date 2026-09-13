@@ -99,4 +99,43 @@ struct ShelfStoreTests {
 
         #expect(try await shelf.entries(.saved).map(\.id) == [2, 1])
     }
+
+    /// L4: `StackModel` used to build its exclusion list as
+    /// `reactedIDs().sorted().suffix(60)` — the numerically largest series
+    /// ids, i.e. the most recently *catalogued*, not the most recently
+    /// *swiped*. A reader whose last session was all low-id (older-catalogue)
+    /// series sent none of them as exclusions.
+    /// Expected to fail without a recency-ordered query: reacting to the
+    /// low-id series *last* would still put the high-id series first under
+    /// `sorted().suffix(...)`.
+    @Test("Recently reacted ids are ordered by when they were reacted to, not by id")
+    func recentlyReactedIsOrderedByTime() async throws {
+        let clock = TestClock()
+        let shelf = ShelfStore(database: try AppDatabase.inMemory(), clock: clock)
+        // Reacted to in ascending id order but descending time — the id sort
+        // and the time sort disagree completely.
+        try await shelf.record(SeriesFactory.make(id: 100), as: .saved)
+        clock.advance(by: 60)
+        try await shelf.record(SeriesFactory.make(id: 50), as: .skipped)
+        clock.advance(by: 60)
+        try await shelf.record(SeriesFactory.make(id: 1), as: .saved)
+
+        let recent = try await shelf.recentlyReactedIDs(limit: 60)
+        #expect(recent == [1, 50, 100], "most recently reacted to first, not highest id first")
+    }
+
+    /// The cap that keeps the exclusion list inside the URL's practical
+    /// length limit.
+    @Test("Recently reacted ids respect the limit")
+    func recentlyReactedRespectsLimit() async throws {
+        let clock = TestClock()
+        let shelf = ShelfStore(database: try AppDatabase.inMemory(), clock: clock)
+        for id in 1...5 {
+            try await shelf.record(SeriesFactory.make(id: id), as: .saved)
+            clock.advance(by: 1)
+        }
+
+        let recent = try await shelf.recentlyReactedIDs(limit: 2)
+        #expect(recent == [5, 4])
+    }
 }

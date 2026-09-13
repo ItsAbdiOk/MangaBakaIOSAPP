@@ -220,3 +220,42 @@ struct StackPersonalisationTests {
         #expect(await model.queue.count == 3)
     }
 }
+
+/// L11: the stack card's caption used to show `series.tags.prefix(3)` — the
+/// flat list, in whatever order the API listed it, unverified as
+/// weight-ordered. Solo Leveling carries 146 tags; opening with whatever
+/// three `tags` happened to list first could show something incidental while
+/// `tags_v2` has "core" tags in the same payload.
+@Suite("Stack caption tag order")
+struct StackCaptionTagOrderTests {
+    private func tag(_ id: Int, _ name: String, weight: String) -> SeriesTag {
+        SeriesTag(
+            id: id, name: name, namePath: nil, isGenre: false, isSpoiler: false,
+            isExplicit: false, impliedByTagIds: nil, contentRating: nil,
+            weight: weight, seriesCount: nil
+        )
+    }
+
+    /// Expected to fail before the fix with: `["Cooking", "Regression",
+    /// "Murim"]` — wire order from `tags`, not importance order from
+    /// `tags_v2`.
+    @Test("richTags, sorted by importance, are preferred over the flat wire order")
+    func prefersRichTagsByImportance() {
+        let series = SeriesFactory.make(
+            id: 1,
+            tags: ["Cooking", "Regression", "Murim"],
+            tagsV2: [
+                tag(1, "Cooking", weight: "incidental"),
+                tag(2, "Regression", weight: "core"),
+                tag(3, "Murim", weight: "defining")
+            ]
+        )
+        #expect(StackCaption.orderedTags(for: series) == ["Regression", "Murim", "Cooking"])
+    }
+
+    @Test("The flat list is the fallback when tags_v2 is empty")
+    func fallsBackToFlatTags() {
+        let series = SeriesFactory.make(id: 1, tags: ["Cooking", "Regression"], tagsV2: [])
+        #expect(StackCaption.orderedTags(for: series) == ["Cooking", "Regression"])
+    }
+}

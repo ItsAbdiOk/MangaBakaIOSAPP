@@ -71,6 +71,25 @@ struct LibraryModelTests {
         #expect(model.inProgress.map(\.seriesId).sorted() == [1, 5])
     }
 
+    /// L7: `PickBackUp` truncated a half chapter to a whole one with
+    /// `Int(read)`, the same number the editor keeps for this entry.
+    /// Expected to fail before the fix with: "ch 12", not "ch 12.5".
+    @Test("Pick back up does not truncate a fractional chapter")
+    func pickBackUpKeepsTheFraction() throws {
+        let subject = try entry(1, .reading, chapter: 12.5)
+        #expect(PickBackUp.chapterLabel(subject) == "ch 12.5")
+    }
+
+    /// L7: `ShelfDetailView.progressLine` truncated the same way.
+    /// Expected to fail before the fix with: "left at 12/179 · 7%", not
+    /// "left at 12.5/179 · 7%".
+    @Test("The shelf detail progress line does not truncate a fractional chapter")
+    func shelfDetailKeepsTheFraction() throws {
+        let subject = try entry(1, .reading, chapter: 12.5, total: 179)
+        let series = try #require(subject.series)
+        #expect(LibraryRow.progressLine(subject, series: series) == "left at 12.5/179 · 7%")
+    }
+
     /// The subtitle used to count shelves. It counts what is rated now: the
     /// shape bar says how the library is divided far better than a number of
     /// shelves did, and how much of it you have formed an opinion on is a thing
@@ -353,5 +372,73 @@ struct LibrarySearchTests {
         subject.searchText = "berserk"
         #expect(subject.matchCount == 0)
         #expect(subject.visibleShelves.isEmpty)
+    }
+}
+
+/// L1: `indexLetter` and the title comparator used to disagree on what a
+/// letter is. `localizedCaseInsensitiveCompare` collates "Ōoku" among the O's
+/// ("Oshi no Ko" < "Ōoku" < "Ouran"), but `indexLetter` filed it under "Ō" —
+/// same rail, two ids, and `ForEach(..., id: \.element.letter)` in
+/// `LibraryList.swift` got a duplicate.
+@Suite("Library A-Z rail")
+@MainActor
+struct LibraryIndexLetterTests {
+    private func entry(_ id: Int, _ title: String) throws -> LibraryEntry {
+        try Fixture.decoder().decode(LibraryEntry.self, from: Data("""
+        {"id":\(id),"series_id":\(id),"state":"reading",
+         "Series":{"id":\(id),"state":"active","cover":{},
+                   "titles":[{"language":"en","traits":["official"],
+                              "title":"\(title)","is_primary":true}]}}
+        """.utf8))
+    }
+
+    private func model(_ entries: [LibraryEntry]) async -> LibraryModel {
+        let model = LibraryModel(library: Stub(entries: entries))
+        model.sort = .title
+        await model.load()
+        return model
+    }
+
+    private final class Stub: LibraryProviding, @unchecked Sendable {
+        let entries: [LibraryEntry]
+        init(entries: [LibraryEntry]) { self.entries = entries }
+        func library(page: Int, limit: Int) async -> [LibraryEntry] { page == 1 ? entries : [] }
+        func recommendationStatus() async -> RecommendationStatus? { nil }
+        func recommendations(
+            limit: Int, page: Int, excluding: [Int]
+        ) async -> [PersonalRecommendation] { [] }
+        func hiddenTagIDs() async -> Set<Int>? { [] }
+        func topGenres() async -> [TopGenre]? { [] }
+        func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
+        func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool { true }
+        func remove(seriesId: Int) async throws(APIError) {}
+    }
+
+    @Test("A macron'd title folds to the same rail letter as its plain neighbours")
+    func diacriticsFoldTogether() throws {
+        let ouran = try entry(1, "Ouran High School Host Club")
+        let ooku = try entry(2, "Ōoku")
+        let oshi = try entry(3, "Oshi no Ko")
+        #expect(ouran.indexLetter == "O")
+        #expect(ooku.indexLetter == "O", "Ō should file with O, not split the rail into a second row")
+        #expect(oshi.indexLetter == "O")
+    }
+
+    @Test("A macron'd title does not duplicate the O row in the jump rail")
+    func jumpRailHasNoDuplicateLetter() async throws {
+        let subject = await model([
+            try entry(1, "Oshi no Ko"),
+            try entry(2, "Ōoku"),
+            try entry(3, "Ouran High School Host Club")
+        ])
+        let letters = subject.jumpTargets.map(\.letter)
+        #expect(letters == ["O"], "one letter, one row — not [O, Ō, O]")
+        #expect(Set(letters).count == letters.count, "no duplicate ForEach id")
+    }
+
+    @Test("A non-Latin leading title buckets under one row, not one per script letter")
+    func nonLatinScriptsShareOneBucket() throws {
+        let hanzi = try entry(1, "\u{79C1}\u{306E}\u{5E78}\u{305B}\u{306A}\u{7D50}\u{5A5A}")
+        #expect(hanzi.indexLetter == "…")
     }
 }

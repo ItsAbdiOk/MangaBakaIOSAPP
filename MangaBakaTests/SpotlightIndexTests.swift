@@ -87,7 +87,7 @@ struct SpotlightWiringTests {
     @Test("Sign-out clears the index, launch rebuilds it after the library walk")
     func sessionWiring() throws {
         let source = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
-        let cancel = try #require(source.range(of: "await reminders.cancelAll()"))
+        let cancel = try #require(source.range(of: "await reminders.forget()"))
         let clear = try #require(source.range(of: "await spotlight.clear()"))
         #expect(cancel.upperBound < clear.lowerBound)
         let reminders = try #require(source.range(of: "await refreshReminders()\n"))

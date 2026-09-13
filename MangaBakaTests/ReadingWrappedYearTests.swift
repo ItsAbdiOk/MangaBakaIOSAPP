@@ -21,6 +21,31 @@ struct ReadingWrappedYearTests: WrappedFixtures {
         #expect(year.chapters == 100)
     }
 
+    /// R6: `finish_date` is a UTC-midnight calendar day
+    /// (`docs/schemas/mangabaka_openapi.json:29915-29927`); reading it with
+    /// `.current` moved a 1 January finish into the previous year west of
+    /// UTC. `year`'s default calendar is now UTC (`utcCalendar`) rather than
+    /// `.current`.
+    @Test("A UTC-midnight finish date counts in the year the API meant, by default")
+    func defaultCalendarIsUTC() throws {
+        let entries = [libraryEntry(1, total: 10, finish: day("2026-01-01"))]
+
+        // Reproduces the bug directly: America/Los_Angeles is behind UTC, so
+        // the same instant reads as 31 December 2025 there.
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        var laCalendar = Calendar(identifier: .gregorian)
+        laCalendar.timeZone = losAngeles
+        let readInLA = ReadingWrapped.year(2026, in: entries, calendar: laCalendar)
+        #expect(readInLA.finished.isEmpty, "LA is behind UTC on 1 January; this is the bug")
+
+        // No `calendar:` argument — the production default this fix changed.
+        let readByDefault = ReadingWrapped.year(2026, in: entries)
+        #expect(
+            readByDefault.finished.map(\.seriesId) == [1],
+            "the default must read the UTC calendar day the API sent, not the device's own zone"
+        )
+    }
+
     @Test("A year is what you finished in it")
     func yearFiltersByFinishDate() {
         let entries = [

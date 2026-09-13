@@ -223,6 +223,65 @@ struct LibraryEditSheetTests {
         // 60 on the wire is three steps in the sheet; unchanged means unsent.
         #expect(sheet(try entry(rating: 60)).changes.rating == nil)
     }
+
+    /// L2: `Int(Double)` traps outside ±9.2e18. Twenty digits on the number
+    /// pad parse as `Double` to 1e20, and the old `chapterText` called
+    /// `Int(value)` on it unconditionally.
+    /// Expected to fail before the fix with: a fatal error ("Double value
+    /// cannot be converted to Int because it is either infinite or NaN") on
+    /// `Int(1e20)`, killing the app rather than returning a string.
+    @Test("A number too big for Int does not crash chapterText")
+    func hugeChapterCountDoesNotTrap() {
+        let text = LibraryEditSheet.chapterText(1e20)
+        #expect(!text.isEmpty)
+    }
+
+    /// `Double("inf")` succeeds and returns `.infinity` — reachable by pasting
+    /// "inf" into the field, per CLAUDE.md's no-force-unwrap-on-real-input
+    /// standard.
+    @Test("A non-finite chapter count does not crash chapterText")
+    func infiniteChapterCountDoesNotTrap() {
+        #expect(LibraryEditSheet.chapterText(.infinity).isEmpty)
+        #expect(LibraryEditSheet.chapterText(.nan).isEmpty)
+    }
+
+    /// L3: `Double("12,5")` is `nil` — a European decimal comma, pasted or
+    /// typed on a hardware keyboard, not garbage.
+    /// Expected to fail before the fix with: `Double("12,5") == nil`, which
+    /// is exactly what the old `changes` read as "clear the field".
+    @Test("A decimal comma parses as a chapter number")
+    func decimalCommaParses() {
+        #expect(LibraryEditSheet.parseChapter("12,5") == 12.5)
+    }
+
+    /// L3: Arabic-Indic digits ("١٢" — 1, 2), which the Arabic keyboard's own
+    /// number pad emits, are not `0`-`9` and `Double` does not read them.
+    @Test("Arabic-Indic digits parse as a chapter number")
+    func arabicIndicDigitsParse() {
+        #expect(LibraryEditSheet.parseChapter("\u{0661}\u{0662}") == 12)
+    }
+
+    /// Genuine garbage is still reported invalid rather than silently
+    /// accepted as some number.
+    @Test("Unparsable text is reported invalid, not read as zero or cleared")
+    func garbageTextIsInvalid() {
+        #expect(LibraryEditSheet.parseChapter("banana") == nil)
+    }
+
+    /// The change set must not send `progress_chapter: null` for a field the
+    /// reader could not finish typing — that was the actual damage in L3.
+    /// Expected to fail before the fix with: `changes.progressChapter ==
+    /// .some(nil)` — the old code read the unparsable text as "clear this",
+    /// which Save then sent as `progress_chapter: null` over the real 12.5.
+    @Test("An unparsable chapter field is left out of the change set, not sent as null")
+    func invalidChapterIsNotSentAsNull() {
+        // `@State` cannot be written outside a view hierarchy, so the rule is
+        // exercised through the statics the property and `changes` both use.
+        #expect(LibraryEditSheet.isInvalidChapter("12,5,6"))
+        #expect(LibraryEditSheet.parseChapter("12,5,6") == nil)
+        #expect(!LibraryEditSheet.isInvalidChapter(""), "empty means no progress, and is sendable")
+        #expect(LibraryEditSheet.parseChapter("12,5") == 12.5)
+    }
 }
 
 /// Adding to the library, which is a different call from editing one.

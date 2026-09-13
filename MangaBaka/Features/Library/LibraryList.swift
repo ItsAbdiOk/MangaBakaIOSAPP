@@ -94,7 +94,7 @@ struct LibraryList: View {
 
                     HStack(spacing: 8) {
                         LibraryStateChip(state: entry.state)
-                        if let progress = progressLine(entry) {
+                        if let progress = Self.progressLine(entry) {
                             Text(progress)
                                 .typeSmallMeta()
                                 .foregroundStyle(Palette.textMuted)
@@ -131,15 +131,29 @@ struct LibraryList: View {
     ///
     /// A plan-to-read entry showing "chapter 0 of 200" is noise about something
     /// nobody has started.
-    private func progressLine(_ entry: LibraryEntry) -> String? {
+    nonisolated static func progressLine(_ entry: LibraryEntry) -> String? {
         guard entry.state.tracksProgress else { return nil }
-        if let volume = entry.progressVolume, volume > 0 {
+        let volume = entry.progressVolume.flatMap { $0 > 0 ? $0 : nil }
+        let chapter = entry.progressChapter.flatMap { $0 > 0 ? $0 : nil }
+
+        // L9 (decision, docs/reviews/library-discovery-ui.md): volume
+        // progress used to win outright and hide chapter progress — a reader
+        // who once set "Vol 1" on the website and has tracked chapters since
+        // saw "Vol 1 / 30" instead of "Ch 112 / 179", the more specific
+        // number. Both are shown when both exist.
+        if let volume, let chapter {
+            return "Vol. \(Int(volume)) · Ch. \(LibraryEditSheet.chapterText(chapter))"
+        }
+        if let volume {
             let total = entry.series?.finalVolume.map { " / \(Int($0))" } ?? ""
             return "Vol \(Int(volume))\(total)"
         }
-        guard let chapter = entry.progressChapter, chapter > 0 else { return nil }
+        // L7: truncated the half chapter the editor takes pains to keep —
+        // "Ch 12" in this list, "12.5" one tap away in the editor for the
+        // same entry. `LibraryEditSheet.chapterText` is the one formatter now.
+        guard let chapter else { return nil }
         let total = entry.series?.totalChapters.map { " / \(Int($0))" } ?? ""
-        return "Ch \(Int(chapter))\(total)"
+        return "Ch \(LibraryEditSheet.chapterText(chapter))\(total)"
     }
 
     /// One star and a number, not five stars.

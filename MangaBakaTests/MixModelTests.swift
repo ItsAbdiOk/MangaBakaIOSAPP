@@ -212,6 +212,31 @@ struct BlendDNATests {
         #expect(repository.lastExcludedTags == [1, 2, 3])
     }
 
+    /// L10: the strand chips (above) were given a debounce for exactly this
+    /// reason; the type/tag filter chips in `MixFilterStrip` were not, and
+    /// each tap fired its own `Task { await model.run() }` undebounced.
+    /// Expected to fail before the fix with: `repository.mixCalls == 4` —
+    /// one for the seed and three more, one per tap, instead of coalescing.
+    @Test("A burst of filter-chip taps is one re-blend, not one per tap")
+    func filterChipBurstBlendsOnce() async throws {
+        let repository = MixRepository()
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+        await model.run()
+
+        let view = MixView(model: model, path: .constant([]))
+        view.toggleType("manga")
+        view.toggleType("novel")
+        view.toggleType("manhwa")
+
+        // Well past MixModel.strandDebounce (350ms), so the coalesced request
+        // has had time to land.
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(repository.mixCalls == 2, "one blend for the seed, one for the whole burst")
+        #expect(model.filters.types == ["manga", "novel", "manhwa"])
+    }
+
     /// The weights re-derive server-side after every edit, so showing how they
     /// moved is the feedback for the edit just made.
     @Test("Movement is reported against the previous blend")

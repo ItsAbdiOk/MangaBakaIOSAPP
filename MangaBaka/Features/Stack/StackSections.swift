@@ -54,7 +54,8 @@ struct StackCaption: View {
                     .padding(.top, 6)
             }
 
-            if let tags = series.tags, !tags.isEmpty {
+            let tags = Self.orderedTags(for: series)
+            if !tags.isEmpty {
                 // One line, always. Three chips wrapped to a second row as soon
                 // as one name was long — "Primarily Adult Cast" beside "Male
                 // Protagonist" is enough — and the extra row pushed the card's
@@ -117,6 +118,23 @@ struct StackCaption: View {
     }
 
     private var metaLine: String? { Self.metaLine(for: series) }
+
+    /// The tags shown on the card, most important first.
+    ///
+    /// L11: this used to be `series.tags.prefix(3)` — the flat list in
+    /// whatever order the API listed it, unverified as weight-ordered. Solo
+    /// Leveling carries 146 tags across `tags` and `tags_v2`; opening the
+    /// card with whichever three `tags` happened to list first could show
+    /// something incidental while `tags_v2` has "core" tags in the same
+    /// payload. `richTags` (`tags_v2`) carries the API's own importance —
+    /// `SeriesTag.Weight`, core first — so it is preferred here when present;
+    /// `tags` remains the fallback for a payload that only has the flat list.
+    nonisolated static func orderedTags(for series: Series) -> [String] {
+        guard !series.richTags.isEmpty else { return series.tags ?? [] }
+        return series.richTags
+            .sorted { $0.importance < $1.importance }
+            .map(\.name)
+    }
 
     /// "Manhwa · 2022 · 7.8 from 6.4k", minus whatever is absent.
     static func metaLine(for series: Series) -> String? {

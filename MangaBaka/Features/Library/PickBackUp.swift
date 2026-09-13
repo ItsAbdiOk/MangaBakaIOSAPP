@@ -70,7 +70,7 @@ struct PickBackUp: View {
                         .frame(height: 3)
                     }
                 }
-                Text(chapterLabel(entry))
+                Text(Self.chapterLabel(entry))
                     .typeFootnote()
                     .foregroundStyle(Palette.textMuted)
             }
@@ -79,7 +79,7 @@ struct PickBackUp: View {
         .buttonStyle(.press)
         .zoomSource("pickup", series.id)
         .accessibilityLabel(
-            "\(series.displayTitle ?? "Untitled series"), \(chapterLabel(entry))"
+            "\(series.displayTitle ?? "Untitled series"), \(Self.chapterLabel(entry))"
         )
     }
 
@@ -90,8 +90,10 @@ struct PickBackUp: View {
         return min(read / total, 1)
     }
 
-    private func chapterLabel(_ entry: LibraryEntry) -> String {
+    nonisolated static func chapterLabel(_ entry: LibraryEntry) -> String {
         guard let read = entry.progressChapter, read > 0 else { return "Not started" }
-        return "ch \(Int(read))"
+        // L7: truncated to "ch 12" for a reader at 12.5, the same number
+        // shown whole one tap away in the editor.
+        return "ch \(LibraryEditSheet.chapterText(read))"
     }
 }

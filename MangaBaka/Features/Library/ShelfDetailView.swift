@@ -221,20 +221,23 @@ struct LibraryRow: View {
     ///
     /// A series with no chapter count still gets a number: an ongoing series
     /// has no denominator, and "left at ch 17" is more use than nothing.
-    static func progressLine(_ entry: LibraryEntry, series: Series) -> String {
+    nonisolated static func progressLine(_ entry: LibraryEntry, series: Series) -> String {
         guard let read = entry.progressChapter, read > 0 else {
             return entry.state.title
         }
+        // L7: `Int(read)` truncated a half chapter to a whole one, unlike the
+        // editor for the same entry. `LibraryEditSheet.chapterText` is the
+        // one formatter for this now.
         guard let total = series.totalChapters, total > 0 else {
-            return "left at ch \(Int(read))"
+            return "left at ch \(LibraryEditSheet.chapterText(read))"
         }
         // A reader can legitimately be past the recorded total: an ongoing
         // series' chapter count lags what has actually released, and the +1
         // button has no ceiling. "left at 205/201 · 102%" is the result, and
         // the progress bar beside it already clamps, so the two disagreed.
-        guard read <= total else { return "left at ch \(Int(read))" }
+        guard read <= total else { return "left at ch \(LibraryEditSheet.chapterText(read))" }
         let percent = Int((read / total * 100).rounded())
-        return "left at \(Int(read))/\(Int(total)) · \(percent)%"
+        return "left at \(LibraryEditSheet.chapterText(read))/\(Int(total)) · \(percent)%"
     }
 }
 

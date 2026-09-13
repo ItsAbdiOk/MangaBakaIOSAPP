@@ -25,6 +25,14 @@ struct WrappedView: View {
         var signatures: [ReadingWrapped.Signature] = []
         var critic: (gap: Double, sample: Int)?
         var loved: [ReadingWrapped.Disagreement] = []
+        /// L5: the caveat below the critic headline used to always read from
+        /// `loved` (the reader's biggest *positive* disagreement), even on
+        /// the "tough crowd of one" card where the headline gap is negative —
+        /// naming the reader's mildest overrating instead of the harsh
+        /// underrating that actually produced the headline. `disliked` is the
+        /// other half of the same comparison, picked by the sign of
+        /// `critic.gap` in `criticCard`.
+        var disliked: [ReadingWrapped.Disagreement] = []
         var busiest: (month: Int, count: Int)?
         var sprint: ReadingWrapped.Sprint?
         var longest: LibraryEntry?
@@ -75,6 +83,7 @@ struct WrappedView: View {
             facts.signatures = ReadingWrapped.signatures(in: entries, catalogueSize: size)
             facts.critic = ReadingWrapped.criticGap(in: entries)
             facts.loved = ReadingWrapped.disagreements(in: entries, liked: true)
+            facts.disliked = ReadingWrapped.disagreements(in: entries, liked: false)
             facts.sprint = ReadingWrapped.fastestFinish(in: entries)
             facts.longest = ReadingWrapped.longestRunning(in: entries)
             facts.formats = ReadingWrapped.formats(in: entries)
@@ -174,10 +183,28 @@ struct WrappedView: View {
             \(String(format: "%.1f", scaled)) stars \
             \(critic.gap < 0 ? "under" : "over") everyone else on average.
             """)
-            if let loved = facts.loved.first, let title = loved.series?.displayTitle {
-                caveat("Furthest apart on \(title) — \(loved.displayGap) against the crowd.")
+            let furthest = Self.furthestDisagreement(
+                critic: critic, loved: facts.loved, disliked: facts.disliked
+            )
+            if let furthest, let title = furthest.series?.displayTitle {
+                caveat("Furthest apart on \(title) — \(furthest.displayGap) against the crowd.")
             }
         }
+    }
+
+    /// Which disagreement the critic card's caveat should name.
+    ///
+    /// L5: this used to always be `loved.first` — the reader's biggest
+    /// *positive* disagreement — even on the "tough crowd of one" card, where
+    /// the headline gap is negative and the disagreement that produced it is
+    /// in `disliked`. Picking by the sign of `critic.gap` keeps the caveat
+    /// pointing at the series that actually explains the headline above it.
+    nonisolated static func furthestDisagreement(
+        critic: (gap: Double, sample: Int),
+        loved: [ReadingWrapped.Disagreement],
+        disliked: [ReadingWrapped.Disagreement]
+    ) -> ReadingWrapped.Disagreement? {
+        critic.gap < 0 ? disliked.first : loved.first
     }
 
     private func longestCard(_ longest: LibraryEntry) -> some View {

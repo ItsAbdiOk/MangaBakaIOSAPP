@@ -71,6 +71,17 @@ struct ScheduleGroupingTests {
         #expect(model.firstRunEstimate == "about 3 minutes")
         #expect(model.firstRunExplanation.contains("55 series"))
         #expect(model.firstRunExplanation.contains("progress is kept"))
+
+        // L8: the spacing named here used to be a copy of
+        // `MangaUpdatesClient.minimumInterval` rather than a read of it, so a
+        // spacing change there could leave this sentence naming the old
+        // number beside an estimate computed from the new one.
+        // Expected to fail before the fix with: the literal "three seconds"
+        // never containing `minimumInterval`'s own formatted value, so a
+        // change to the constant (e.g. 3.0 -> 3.5, matching the other feed
+        // clients) would not move this assertion at all.
+        let spacing = MangaUpdatesClient.minimumInterval.formatted(.number.precision(.fractionLength(0...1)))
+        #expect(model.firstRunExplanation.contains("\(spacing) second"))
     }
 
     @Test("A measured schedule is past its first run")

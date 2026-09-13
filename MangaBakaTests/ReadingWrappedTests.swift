@@ -111,6 +111,48 @@ struct ReadingWrappedTests: WrappedFixtures {
         #expect(ReadingWrapped.disagreements(in: entries, liked: false).map(\.id) == [2])
     }
 
+    /// L5: `WrappedView`'s critic caveat used to always read `loved.first`
+    /// regardless of which way the headline pointed — a harsh critic (a
+    /// negative `critic.gap`, "a tough crowd of one") got a caveat naming
+    /// their mildest *overrating*, never the harsher underrating that
+    /// actually produced the headline.
+    /// Expected to fail with the old `loved.first`-always logic: on a harsh
+    /// critic the caveat would name series 1 (id 1, the overrated pick), not
+    /// series 2 (id 2, the underrated one the negative headline is about).
+    @Test("The critic caveat names the disagreement in the headline's own direction")
+    func caveatMatchesHeadlineDirection() {
+        let overrated = ReadingWrapped.Disagreement(
+            entry: libraryEntry(1, rating: 95, crowdRating: 60), gap: 35
+        )
+        let underrated = ReadingWrapped.Disagreement(
+            entry: libraryEntry(2, rating: 40, crowdRating: 85), gap: -45
+        )
+
+        let harshCritic = WrappedView.furthestDisagreement(
+            critic: (gap: -20, sample: 12), loved: [overrated], disliked: [underrated]
+        )
+        #expect(harshCritic?.id == 2, "a negative headline gap should name the underrated series")
+
+        let generousReader = WrappedView.furthestDisagreement(
+            critic: (gap: 20, sample: 12), loved: [overrated], disliked: [underrated]
+        )
+        #expect(generousReader?.id == 1, "a positive headline gap should name the overrated series")
+    }
+
+    /// If the reader's largest disagreement is negative and they have never
+    /// overrated anything, `loved` is empty — the caveat must not vanish just
+    /// because the wrong list happens to be the one it always read from.
+    @Test("A harsh critic with nothing overrated still gets a caveat")
+    func caveatSurvivesAnEmptyLovedList() {
+        let underrated = ReadingWrapped.Disagreement(
+            entry: libraryEntry(2, rating: 40, crowdRating: 85), gap: -45
+        )
+        let furthest = WrappedView.furthestDisagreement(
+            critic: (gap: -20, sample: 12), loved: [], disliked: [underrated]
+        )
+        #expect(furthest?.id == 2)
+    }
+
     // MARK: - Only what was read counts
 
     /// A 400-entry plan-to-read shelf is ambition, not habit. Every statistic

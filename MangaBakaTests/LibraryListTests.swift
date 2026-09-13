@@ -12,14 +12,20 @@ struct LibraryListTests {
         _ state: LibraryEntry.State,
         title: String = "Series",
         rating: Double? = nil,
-        finished: Date? = nil
+        finished: Date? = nil,
+        progressChapter: Double? = nil,
+        progressVolume: Double? = nil,
+        totalChapters: Double? = nil,
+        finalVolume: Double? = nil
     ) -> LibraryEntry {
         LibraryEntry(
-            id: id, seriesId: id, state: state, progressChapter: nil,
-            progressVolume: nil, rating: rating, note: nil, startDate: nil,
+            id: id, seriesId: id, state: state, progressChapter: progressChapter,
+            progressVolume: progressVolume, rating: rating, note: nil, startDate: nil,
             finishDate: finished, numberOfRereads: nil, priority: nil,
             isPrivate: nil, readLink: nil,
-            series: SeriesFactory.make(id: id, title: title)
+            series: SeriesFactory.make(
+                id: id, title: title, totalChapters: totalChapters, finalVolume: finalVolume
+            )
         )
     }
 
@@ -113,6 +119,47 @@ struct LibraryListTests {
         model.searchText = "solo"
 
         #expect(model.listed.map(\.seriesId) == [1])
+    }
+
+    // MARK: - Progress line
+
+    /// L7: `Int(chapter)` truncated a half chapter to a whole one in this
+    /// list, though not in the editor for the same entry
+    /// (`LibraryEditSheet.chapterText`). Reused here instead.
+    /// Expected to fail before the fix with: "Ch 12 / 179", not "Ch 12.5 / 179".
+    @Test("A fractional chapter is not truncated in the row")
+    func fractionalChapterSurvives() {
+        let subject = entry(
+            1, .reading, progressChapter: 12.5, totalChapters: 179
+        )
+        #expect(LibraryList.progressLine(subject) == "Ch 12.5 / 179")
+    }
+
+    @Test("A plan-to-read entry shows no progress line")
+    func noProgressLineWhereNothingIsTracked() {
+        let subject = entry(1, .planToRead, progressChapter: 12)
+        #expect(LibraryList.progressLine(subject) == nil)
+    }
+
+    /// L9 (decision, docs/reviews/library-discovery-ui.md): volume progress
+    /// used to hide chapter progress outright — a reader who once set "Vol 1"
+    /// on the website and has tracked chapters since saw "Vol 1 / 30" instead
+    /// of the more specific "Ch 112 / 179". Both are shown when both exist.
+    /// Expected to fail before the fix with: "Vol 3 / 10" — the chapter
+    /// number never appears at all.
+    @Test("Volume and chapter progress are both shown when both exist")
+    func bothVolumeAndChapterShow() {
+        let subject = entry(
+            1, .reading, progressChapter: 24, progressVolume: 3,
+            totalChapters: 200, finalVolume: 10
+        )
+        #expect(LibraryList.progressLine(subject) == "Vol. 3 · Ch. 24")
+    }
+
+    @Test("Volume alone still shows its own total")
+    func volumeAloneKeepsItsTotal() {
+        let subject = entry(1, .reading, progressVolume: 3, finalVolume: 10)
+        #expect(LibraryList.progressLine(subject) == "Vol 3 / 10")
     }
 
     private final class StubLibrary: LibraryProviding, @unchecked Sendable {

@@ -56,6 +56,18 @@ struct ReadingInsightsTests {
         #expect(rows.first?.waiting == 40)
     }
 
+    /// L7: `ReadingInsightsView.progressLine` truncated the same read count
+    /// with `Int(...)`, unlike the editor for the same entry.
+    /// Expected to fail before the fix with: "Reading · ch 12 of 179", not
+    /// "Reading · ch 12.5 of 179".
+    @Test("The reading-insights progress line does not truncate a fractional chapter")
+    func progressLineKeepsTheFraction() {
+        let behind = ReadingInsights.Behind(
+            entry: entry(1, .reading, read: 12.5, total: 179), waiting: 5
+        )
+        #expect(ReadingInsightsView.progressLine(behind) == "Reading · ch 12.5 of 179")
+    }
+
     @Test("Only things you were actually reading")
     func waitingIgnoresUnreadStates() {
         // Plan-to-read is not a backlog, it is a wish list. Counting it would
@@ -143,6 +155,24 @@ struct ReadingInsightsTests {
             entry(2, .reading, read: 30, total: 100)
         ])
         #expect(read == 230)
+    }
+
+    /// R8: `ReadingInsights.minutesPerChapter` (11 min/manga, unlabelled) and
+    /// `ReadingTime.secondsPerChapter` (170s/2.8min/manga, the 152-series
+    /// Tachimanga calibration) disagreed four-fold on the same screen
+    /// (`ReadingInsightsView.swift:77,181`). `minutesPerChapter` now derives
+    /// manga/manhwa from `ReadingTime`'s table instead of carrying its own.
+    @Test("hoursRead and ReadingTime.label agree on minutes per chapter")
+    func hoursReadSharesReadingTimesRate() {
+        let types: [String?] = ["manga", "manhwa", "manhua", nil]
+        for type in types {
+            let expectedSeconds = ReadingTime.secondsPerChapter[type ?? ""]
+                ?? ReadingTime.defaultSecondsPerChapter
+            #expect(
+                ReadingInsights.minutesPerChapter(type) == expectedSeconds / 60,
+                "minutesPerChapter(\(type ?? "nil")) should come from ReadingTime, not a second guess"
+            )
+        }
     }
 
     @Test("A manhwa chapter is not a novel chapter")

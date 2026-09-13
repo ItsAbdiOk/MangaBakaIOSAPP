@@ -117,15 +117,20 @@ enum ReadingInsights {
     }
 
     /// Minutes for one chapter of a given format.
+    ///
+    /// Manga and manhwa come from `ReadingTime.secondsPerChapter` — the same
+    /// 152-series Tachimanga calibration `ReadingTime.label` uses — rather
+    /// than a second, disagreeing guess. Before this the two screens showed
+    /// four-fold-different figures for the same chapter (manga: 11 min here,
+    /// 170s/2.8 min there); this card and `ReadingTime.label` now derive from
+    /// one number.
     static func minutesPerChapter(_ type: String?) -> Double {
-        switch type?.lowercased() {
-        // A vertical-scroll chapter is short: 40-70 panels read in one motion.
-        case "manhwa", "manhua": 6
+        let key = type?.lowercased()
         // A prose chapter is the long one, and the most variable.
-        case "novel": 20
-        // A tankōbon chapter is 18-20 pages.
-        default: 11
-        }
+        // **A guess**: the calibration run never sampled novels, so there is
+        // nothing in `ReadingTime` to derive this from.
+        if key == "novel" { return 20 }
+        return (ReadingTime.secondsPerChapter[key ?? ""] ?? ReadingTime.defaultSecondsPerChapter) / 60
     }
 
     // MARK: - What you actually like

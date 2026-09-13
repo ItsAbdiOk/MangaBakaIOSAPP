@@ -330,7 +330,13 @@ final class StackModel {
         // filtered out afterwards. Filtering afterwards wastes the slots: a
         // page of twenty that is half things you have already swiped is a page
         // of ten. Capped because the exclusion list travels in the URL.
-        let excluded = Array(reacted.sorted().suffix(Self.maximumExclusions))
+        //
+        // L4: the sixty most *recently reacted to*, from `ShelfStore`'s own
+        // `addedAt` — not `reacted.sorted().suffix(60)`, which was the sixty
+        // numerically largest series ids (the most recently catalogued, not
+        // the most recently swiped) and, on a long session, sent none of a
+        // reader's actual last few sessions.
+        let excluded = (try? await shelf.recentlyReactedIDs(limit: Self.maximumExclusions)) ?? []
 
         let recommendations = await library.recommendations(
             limit: 20,

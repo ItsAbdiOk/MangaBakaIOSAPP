@@ -19,8 +19,10 @@ import GRDB
 actor LibrarySnapshot {
     /// Pages of a hundred, up to thirty of them — far past any real library and
     /// still bounded. See `LibraryModel` for why the old ten-page cap was a bug.
-    private static let pageSize = 100
-    private static let pageCap = 30
+    /// Not private: `DetailFidelityTests` holds these values rather than
+    /// grepping this file for the loop that uses them.
+    nonisolated static let pageSize = 100
+    nonisolated static let pageCap = 30
 
     /// What one walk produced, including why it stopped.
     ///
