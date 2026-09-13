@@ -68,8 +68,21 @@ enum WebtoonsTitle {
         return (number, season)
     }
 
-    /// "235화" → 235. Naver writes the number and the unit as one token.
+    /// Korean words for a non-episode article — side stories, specials,
+    /// afterwords, prologues — Naver's `articleList` carries alongside the
+    /// numbered episodes. This is the same bug the Afterword rule exists to
+    /// prevent on the English side, reintroduced here: "외전 3화" (side story
+    /// 3) has exactly the shape "[0-9]+화" and would otherwise read as
+    /// episode 3, with the original then reported ahead or behind by exactly
+    /// as much as that side story is wrong. Rejected outright wherever the
+    /// word appears, rather than requiring it be the leading word — unlike
+    /// `episodeWords`, a season prefix ("3부") legitimately comes first.
+    private static let nonEpisodeKoreanWords = ["외전", "특별편", "후기", "프롤로그"]
+
+    /// "235화" → 235, "3부 235화" → 235. Naver writes the number and the unit
+    /// as one token.
     private static func readKorean(_ body: String) -> Int? {
+        guard !nonEpisodeKoreanWords.contains(where: body.contains) else { return nil }
         guard let range = body.range(of: "[0-9]+화", options: .regularExpression) else { return nil }
         return Int(body[range].dropLast())
     }
@@ -77,11 +90,27 @@ enum WebtoonsTitle {
     /// "第33話" → 33, "第12-1話" → 12 (the leading number, a sub-episode
     /// dropped rather than guessed at), "第77話①" → 77 (the circled digit is
     /// not part of the pattern and is simply left after the match).
+    ///
+    /// **Widened 2026-09-13** after a live `shonenjumpplus.com/rss` read found
+    /// roughly a third of 40 titles in shapes this used to reject: full-width
+    /// digits (`第１２２話`), no `第` at all (`106話`), `回` instead of `話`
+    /// (`4375回`), and a bare `#N` (`#96`). Folding full-width digits to
+    /// half-width first is what `GigaViewerFeedClient.normalise` already does
+    /// for the series title — this had been the half of the fix that stayed
+    /// undone for episode titles. `画目`/`歩目`/`おまけN` forms seen in the
+    /// same feed are left unmatched; which of those actually number an
+    /// episode is a judgement call, not made here.
     private static func readJapanese(_ title: String) -> Int? {
-        guard let range = title.range(of: "第[0-9]+(-[0-9]+)?話", options: .regularExpression),
-              let numberRange = title[range].range(of: "[0-9]+", options: .regularExpression)
-        else { return nil }
-        return Int(title[range][numberRange])
+        let folded = title.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? title
+        if let range = folded.range(
+            of: "第?[0-9]+(-[0-9]+)?(話|回)", options: .regularExpression
+        ), let numberRange = folded[range].range(of: "[0-9]+", options: .regularExpression) {
+            return Int(folded[range][numberRange])
+        }
+        if let range = folded.range(of: "#[0-9]+", options: .regularExpression) {
+            return Int(folded[range].dropFirst())
+        }
+        return nil
     }
 
     /// "[Season 3] …" and Naver's "3부 …" both name a season.
@@ -106,7 +135,16 @@ enum WebtoonsTitle {
     /// Worth reading because a series that has just finished a season is
     /// between seasons, not overdue — and to a gap-based estimate those look
     /// identical while meaning opposite things to a reader.
+    ///
+    /// **Anchored 2026-09-13.** The marker used to be searched for anywhere in
+    /// the title, so an ordinary episode whose subtitle happens to contain the
+    /// words ended the season by accident — "Episode 30: The End of Summer"
+    /// is not a finale. The marker now has to sit inside parentheses (the
+    /// shape Webtoons actually writes it in) or right at the end of the
+    /// title; the bare "the end" is dropped entirely rather than anchored,
+    /// since even anchored it is too generic a phrase to trust.
     static func marksFinale(_ title: String) -> Bool {
-        title.range(of: "(?i)finale|final episode|(?i)the end", options: .regularExpression) != nil
+        let pattern = "\\([^)]*(?:finale|final episode)[^)]*\\)|(?:finale|final episode)\\s*$"
+        return title.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 }

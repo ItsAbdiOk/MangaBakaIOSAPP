@@ -166,6 +166,58 @@ struct ReleaseSummaryTests {
         #expect(ReleaseSummary.summarise(feed) == .seasonEnded(season: 1, on: finale.published))
     }
 
+    // MARK: - oldest-first feeds (R1)
+
+    /// True Beauty, measured live 2026-09-13: a completed ~230-episode series
+    /// whose Webtoons feed carries only "Episode 0"-"Episode 7" from 2018 —
+    /// the feed's *oldest* entries, not its newest twenty. Without the known
+    /// chapter count, four-plus weekly-looking dates read as a confident
+    /// `.rhythm`; that is `fourWeeklyEpisodesIsRhythm` above, deliberately
+    /// reused here shape-for-shape. Expected failure before this fix: a
+    /// `.rhythm` case, where this now asserts `.none`.
+    @Test("A feed whose highest number is far below the known chapter count is none, not rhythm")
+    func oldestFirstFeedBelowKnownCountIsNone() {
+        let episodes = [
+            episode(4, daysAgo: 0),
+            episode(3, daysAgo: 7),
+            episode(2, daysAgo: 14),
+            episode(1, daysAgo: 21)
+        ]
+        let feed = ReleaseFeed(title: "True Beauty", entries: episodes, source: .webtoons)
+        #expect(ReleaseSummary.summarise(feed, knownChapterCount: 230) == .none)
+    }
+
+    /// The control: the same four dates, with no known count at all, still
+    /// read as `.rhythm` — this is `fourWeeklyEpisodesIsRhythm` again,
+    /// proving the difference above is the known count, not some other
+    /// change to `summarise`.
+    @Test("Control: without a known chapter count the same feed is still rhythm")
+    func sameFeedWithoutKnownCountIsStillRhythm() {
+        let episodes = [
+            episode(4, daysAgo: 0),
+            episode(3, daysAgo: 7),
+            episode(2, daysAgo: 14),
+            episode(1, daysAgo: 21)
+        ]
+        let feed = ReleaseFeed(title: "True Beauty", entries: episodes, source: .webtoons)
+        guard case .rhythm = ReleaseSummary.summarise(feed) else {
+            Issue.record("expected .rhythm with no known count")
+            return
+        }
+    }
+
+    /// An ongoing series near its known count must not be flagged — the
+    /// check is about a feed far below the count, not merely below it.
+    @Test("A feed close to the known chapter count is not treated as oldest-first")
+    func feedNearKnownCountIsStillRhythm() {
+        let episodes = (1...20).map { episode($0, daysAgo: (20 - $0) * 7) }
+        let feed = ReleaseFeed(title: "Tower of God", entries: episodes, source: .webtoons)
+        guard case .rhythm = ReleaseSummary.summarise(feed, knownChapterCount: 21) else {
+            Issue.record("expected .rhythm for a feed at 20/21 of the known count")
+            return
+        }
+    }
+
     // MARK: - isEmpty
 
     @Test("isEmpty is true only for none")

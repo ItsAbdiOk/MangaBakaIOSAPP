@@ -52,8 +52,20 @@ actor MangaUpdatesClient {
             )
         }
 
+        /// Chapter text MangaUpdates uses for something that is not a
+        /// numbered chapter. "Extra 3" and "Side Story 2" are ordinary
+        /// MangaUpdates chapter strings with exactly the shape a
+        /// leading-digit read mistakes for chapter 3 or chapter 2 — the same
+        /// bug `WebtoonsEpisode`'s Afterword/외전 rules exist to prevent,
+        /// here on MangaUpdates' own numbering. "Omake" carries no leading
+        /// digit at all and would already return nil below, but is listed
+        /// for the same reason.
+        private static let nonChapterWords = ["extra", "side story", "omake", "special"]
+
         /// "57-58" and "c.12 (end)" both start with the number that matters.
         private static func firstNumber(in text: String) -> Double? {
+            let lowered = text.lowercased()
+            guard !nonChapterWords.contains(where: lowered.contains) else { return nil }
             let digits = text.drop { !$0.isNumber }.prefix { $0.isNumber || $0 == "." }
             return Double(digits)
         }

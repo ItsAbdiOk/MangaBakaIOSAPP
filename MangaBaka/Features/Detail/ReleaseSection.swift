@@ -58,8 +58,12 @@ struct ReleaseSection: View {
         case let .recent(entries):
             // At most five: this is a list of what actually arrived, not the
             // whole feed, and five matches what the mockup's other rowed
-            // sections show before a "see more".
-            ForEach(entries.prefix(5), id: \.published) { entry in
+            // sections show before a "see more". Keyed by offset, not
+            // `\.published`: True Beauty's Episode 0-2 and Estate Developer's
+            // Ep. 1-3 all share one timestamp in the live feed (measured
+            // 2026-09-13), and a duplicate SwiftUI id collapses or
+            // mis-renders rows.
+            ForEach(Array(entries.prefix(5).enumerated()), id: \.offset) { _, entry in
                 row(episodeLine(entry))
             }
 
@@ -104,12 +108,23 @@ struct ReleaseSection: View {
         case let .originalPaused(since, _):
             return "The Korean original hasn't released since \(Self.longDate(since)) — " +
                 "the translation will catch up and stop"
+        case let .originalComplete(episodesAhead):
+            return "The Korean original is complete, \(episodesAhead) episode" +
+                "\(episodesAhead == 1 ? "" : "s") ahead — the translation will end there"
         }
     }
 
-    /// "2 Feb".
-    private static func shortDate(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month(.abbreviated))
+    /// "2 Feb", or "19 Sep 2018" when `date` is not from the current year.
+    ///
+    /// Without the year, a 2018 episode (True Beauty's feed, see
+    /// `ReleaseSummary`) printed as "19 Sep" — indistinguishable from last
+    /// week.
+    private static func shortDate(_ date: Date, now: Date = Date()) -> String {
+        let calendar = Calendar.current
+        guard calendar.component(.year, from: date) == calendar.component(.year, from: now) else {
+            return longDate(date)
+        }
+        return date.formatted(.dateTime.day().month(.abbreviated))
     }
 
     /// "2 Feb 2025".

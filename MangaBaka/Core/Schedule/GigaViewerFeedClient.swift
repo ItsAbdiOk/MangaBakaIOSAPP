@@ -56,7 +56,11 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
                 number: read?.number, season: read?.season
             )
         }
-        let hostName = ReleaseSource.gigaViewerHostNames[host] ?? "Shonen Jump+"
+        // `matchingHost` above only ever returns a key of this same
+        // dictionary, so the fallback is unreachable — kept pointing at
+        // `ReleaseSource.gigaViewer.displayName` rather than its own copy of
+        // the string, so there is one name to update, not two.
+        let hostName = ReleaseSource.gigaViewerHostNames[host] ?? ReleaseSource.gigaViewer.displayName
         return ReleaseFeed(title: hostName, entries: entries, source: .gigaViewer, sourceName: hostName)
     }
 

@@ -139,6 +139,29 @@ enum WebtoonsFeedParser {
     /// The feed URL for a page the redirect landed on.
     static func feedURL(fromResolved resolved: URL) -> URL? { feedURL(for: resolved) }
 
+    /// The same feed with its language segment rewritten to `en`, or nil when
+    /// it already is `en` (or the path is not `/<lang>/...` at all).
+    ///
+    /// The redirect in `lookupURL` corrects the language to whatever edition
+    /// Webtoons actually has, which is not always English — `title_no=5188`
+    /// lands on `/fr/`. That edition's feed exists and parses, but its
+    /// `pubDate`s are localised (`ven., 24 mars 2023 15:01:24 GMT`), and
+    /// `docs/release-sources-2026-09-12.md` already says to prefer the
+    /// English feed for schedules. Tried first by the client; the landed
+    /// language is the fallback, not dropped, in case the English edition
+    /// does not exist for a given series.
+    static func englishVariant(of feedURL: URL) -> URL? {
+        var components = URLComponents(url: feedURL, resolvingAgainstBaseURL: false)
+        var segments = feedURL.path().split(separator: "/", omittingEmptySubsequences: false)
+            .map(String.init)
+        // path() starts with "/", so segments[0] is "" and segments[1] is the
+        // language — /fr/fantasy/estatedeveloper/rss → ["", "fr", ...].
+        guard segments.count > 1, segments[1] != "en" else { return nil }
+        segments[1] = "en"
+        components?.path = segments.joined(separator: "/")
+        return components?.url
+    }
+
     static func isWebtoons(_ url: URL) -> Bool {
         guard let host = url.host()?.lowercased() else { return false }
         return host == "webtoons.com" || host.hasSuffix(".webtoons.com")
@@ -182,6 +205,24 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     private static let rfc822: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter
+    }()
+
+    /// The same RFC-822 shape, but read with French weekday/month names.
+    ///
+    /// A non-English Webtoons edition localises `pubDate` — measured live,
+    /// `/fr/fantasy/estatedeveloper/`: "ven., 24 mars 2023 15:01:24 GMT" for
+    /// every entry, which `rfc822` above returns nil for, silently dropping
+    /// the whole feed (`docs/reviews/reader.md`, finding 2, 2026-09-13). The
+    /// client tries the English edition first (`WebtoonsFeedParser
+    /// .englishVariant`) so this is a fallback, not the common path.
+    /// Only French is verified this way; other localised editions (Indonesian,
+    /// Spanish, German, Thai, zh-Hant) are an open question, not yet observed.
+    private static let rfc822French: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
         return formatter
@@ -231,7 +272,9 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     }
 
     private func append() {
-        guard !itemTitle.isEmpty, let date = Self.rfc822.date(from: itemDate) else { return }
+        guard !itemTitle.isEmpty,
+              let date = Self.rfc822.date(from: itemDate) ?? Self.rfc822French.date(from: itemDate)
+        else { return }
         let read = WebtoonsTitle.read(itemTitle)
         entries.append(ReleaseEntry(
             title: itemTitle, published: date, number: read?.number, season: read?.season

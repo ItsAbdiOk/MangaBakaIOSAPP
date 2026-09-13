@@ -22,6 +22,11 @@ enum TranslationGap: Equatable, Sendable {
     /// The original has not released in a long time, measured against its own
     /// rhythm rather than the calendar. The translation will run out.
     case originalPaused(since: Date, episodesAhead: Int)
+    /// The original is *done*, not stalled. Naver's own `finished` flag says
+    /// so directly, so this is read from the source rather than guessed at
+    /// from silence — see `originalPaused`, which is what an ordinary
+    /// completed original used to be misread as.
+    case originalComplete(episodesAhead: Int)
 
     var isEmpty: Bool {
         if case .none = self { return true }
@@ -47,14 +52,22 @@ enum TranslationGap: Equatable, Sendable {
     ///     exists to have measured one. Without it nothing is called paused:
     ///     "quiet for six weeks" means one thing for a weekly series and
     ///     nothing at all for an irregular one.
+    ///   - originalFinished: Naver's own completion flag. Checked before the
+    ///     silence-based pause logic below, because a completed original is
+    ///     not a hiatus that happens to look permanent — it is the ordinary
+    ///     end state of every finished webtoon, and reading it as `.paused`
+    ///     told the reader to worry about the wrong thing.
     static func between(
         translated: Int?,
         original: (number: Int, lastRelease: Date)?,
         originalCadence: Cadence?,
+        originalFinished: Bool = false,
         now: Date
     ) -> TranslationGap {
         guard let original, let translated, original.number > translated else { return .none }
         let ahead = original.number - translated
+
+        if originalFinished { return .originalComplete(episodesAhead: ahead) }
 
         guard let cadence = originalCadence, cadence.medianGapDays > 0 else {
             return .ahead(episodes: ahead)

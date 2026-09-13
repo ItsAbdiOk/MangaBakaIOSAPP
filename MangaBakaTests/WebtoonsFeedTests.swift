@@ -152,6 +152,75 @@ struct WebtoonsTitleTests {
         // prefix to an episode word that follows it.
         #expect(WebtoonsTitle.read("[第33話] カテナチオ")?.number == 33)
     }
+
+    /// R4/finding 4 (`docs/reviews/reader.md`, 2026-09-13): a live
+    /// `shonenjumpplus.com/rss` read found roughly a third of 40 titles in
+    /// these shapes, and every one used to fail — full-width digits, no `第`
+    /// at all, `回` instead of `話`, and a bare `#N`. Every title quoted here
+    /// is copied verbatim from that read.
+    @Test("Japanese titles without the exact 第N話 ASCII shape are still read")
+    func japaneseWidenedForms() {
+        #expect(WebtoonsTitle.read("[第１２２話]ふつうの軽音部")?.number == 122)
+        #expect(WebtoonsTitle.read("[106話]クソ女に幸あれ")?.number == 106)
+        #expect(WebtoonsTitle.read("[69話]英雄機関")?.number == 69)
+        #expect(WebtoonsTitle.read("[4375回]猫田びより")?.number == 4375)
+        #expect(WebtoonsTitle.read("[#96]ゴーストフィクサーズ")?.number == 96)
+    }
+
+    /// F6/DECISION (`docs/reviews/tests.md`, 2026-09-13): the Afterword bug,
+    /// reintroduced on the Korean side. "외전 3화" (side story 3) has exactly
+    /// the shape `[0-9]+화` and used to read as episode 3. Expected failure
+    /// before the fix: `WebtoonsTitle.read("외전 3화")?.number == 3`, where
+    /// this now asserts nil.
+    @Test("Korean side stories and specials are not episodes")
+    func koreanNonEpisodesRejected() {
+        #expect(WebtoonsTitle.read("외전 3화") == nil)
+        #expect(WebtoonsTitle.read("특별편 2화") == nil)
+        #expect(WebtoonsTitle.read("후기 1화") == nil)
+        // The forms that must keep working: a season prefix legitimately
+        // comes before the number, unlike the disqualifying words above.
+        #expect(WebtoonsTitle.read("235화")?.number == 235)
+        #expect(WebtoonsTitle.read("3부 235화")?.number == 235)
+    }
+
+    /// R11/F10 (`docs/reviews/reader.md`, `tests.md`, 2026-09-13):
+    /// `marksFinale` used to match "finale"/"the end" anywhere in the title,
+    /// so an ordinary episode whose subtitle happened to contain those words
+    /// ended the season. Expected failure before the fix:
+    /// `WebtoonsTitle.marksFinale("Episode 30: The End of Summer")` was
+    /// `true`; this now asserts `false`.
+    @Test("An ordinary title is not read as a finale")
+    func ordinaryTitlesAreNotFinales() {
+        #expect(!WebtoonsTitle.marksFinale("Episode 30: The End of Summer"))
+        #expect(!WebtoonsTitle.marksFinale("Episode 30: Until the end"))
+    }
+
+    /// The marker still fires inside parentheses, which is the shape
+    /// Webtoons actually writes it in.
+    @Test("A finale marker in parentheses, or at the end of the title, still fires")
+    func finaleStillDetectedInParenthesesOrAtEnd() {
+        #expect(WebtoonsTitle.marksFinale("Episode 112 (Season 1 Finale)"))
+        #expect(WebtoonsTitle.marksFinale("Episode 50 - Final Episode"))
+    }
+}
+
+/// A non-English edition's localised `pubDate`. See finding 2,
+/// `docs/reviews/reader.md`, 2026-09-13.
+///
+/// Before the fix, `WebtoonsFeedParser.parse` returned a feed with a channel
+/// title and **zero** entries for this fixture — every `pubDate` failed
+/// `en_US_POSIX` RFC-822 parsing and was silently dropped. Expected failure
+/// before the fix: `feed.entries.count == 0` (not 7), which is exactly what
+/// this test's positive assertion below now rules out.
+@Suite("Webtoons feed — localised editions")
+struct WebtoonsFeedLocalisationTests {
+    @Test("A French edition's localised pubDate still parses")
+    func frenchPubDateParses() throws {
+        let data = try Fixture.data("estate-developer-fr", extension: "rss")
+        let feed = try #require(WebtoonsFeedParser.parse(data))
+        #expect(feed.entries.count == 7)
+        #expect(feed.entries.map(\.title).sorted() == (1...7).map { "Ep. \($0)" })
+    }
 }
 
 /// Turning a stored series link into a feed URL. See `WebtoonsFeedParser.feedURL`.
@@ -222,5 +291,31 @@ struct WebtoonsFeedURLTests {
     func stripsOtherQueryItems() {
         let derived = url("https://www.webtoons.com/en/drama/x/list?title_no=7&from=share&uid=99")
         #expect(derived?.query() == "title_no=7")
+    }
+}
+
+/// Rewriting a landed feed URL's language to English. See
+/// `WebtoonsFeedParser.englishVariant` and finding 2 in
+/// `docs/reviews/reader.md`, 2026-09-13.
+@Suite("Webtoons feed language rewriting")
+struct WebtoonsFeedEnglishVariantTests {
+    /// The exact redirect landing spot from the live capture: `title_no=5188`
+    /// resolves to `/fr/`.
+    @Test("A non-English landed feed is rewritten to /en/")
+    func rewritesToEnglish() throws {
+        let landed = try #require(
+            URL(string: "https://www.webtoons.com/fr/fantasy/estatedeveloper/rss?title_no=5188")
+        )
+        let english = try #require(WebtoonsFeedParser.englishVariant(of: landed))
+        #expect(english.absoluteString
+                == "https://www.webtoons.com/en/fantasy/estatedeveloper/rss?title_no=5188")
+    }
+
+    @Test("An already-English feed has no variant to try")
+    func englishHasNoVariant() throws {
+        let landed = try #require(
+            URL(string: "https://www.webtoons.com/en/fantasy/tower-of-god/rss?title_no=95")
+        )
+        #expect(WebtoonsFeedParser.englishVariant(of: landed) == nil)
     }
 }

@@ -202,3 +202,29 @@ own results carried the disproof: `dongmanmanhua.cn`, the same platform's Chines
 arm, passed the identical `/list` → `/rss` probe because MangaBaka happens to
 store a real slug for it. The conclusion would have written off 59% of the
 library on a sampling artefact.
+
+## 2026-09-13 review
+
+Two more measured facts about the Webtoons feed, both live GETs, recorded here
+because they change what a bare "20 entries" answer is worth.
+
+**Not every feed is the twenty most recent — some are the oldest.** True
+Beauty (`title_no=1436`, completed, ~230 episodes) answers with 8 entries,
+"Episode 0"–"Episode 7", all dated August–September 2018 — the *start* of the
+series, not its end. The French Estate Developer feed (`title_no=5188`) is the
+same shape: `Ep. 1`–`Ep. 7`, 2023. Nothing in the feed itself flags this; the
+only tell is comparing the feed's highest number against the series' own known
+chapter count. `ReleaseSummary.summarise` now takes that count and reports
+`.none` rather than a confident rhythm when the feed sits far below it.
+
+**A non-English edition localises `pubDate`, and the parser used to drop every
+entry.** The redirect that recovers a placeholder link's real path also
+corrects the language segment — `title_no=5188` lands on `/fr/`, not `/en/`
+— and that edition's RSS writes French weekday/month names: `ven., 24 mars
+2023 15:01:24 GMT`. The `en_US_POSIX` RFC-822 formatter returns nil for that
+string, so every entry silently failed to parse and the feed cached itself
+empty for a week. The client now tries the English edition first (rewriting
+the landed URL's language segment) and falls back to the landed language only
+if that fails; the parser also accepts the French weekday/month forms as a
+second line of defence. Other localised editions (Indonesian, Spanish, German,
+Thai, zh-Hant) are not yet verified either way.

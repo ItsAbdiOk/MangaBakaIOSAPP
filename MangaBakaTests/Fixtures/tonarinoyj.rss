@@ -1,0 +1,588 @@
+<?xml version="1.0"?>
+<!-- Captured live 2026-09-13: https://tonarinoyj.jp/rss — the magazine-wide GigaViewer feed.
+     72 items across many series; <description> and <enclosure> carry thumbnails and are never rendered. -->
+<rss version="2.0" xmlns:giga="https://gigaviewer.com">
+    <channel>
+        <title>となりのヤングジャンプ</title>
+        <pubDate>Sun, 13 Sep 2026 03:00:00 +0000</pubDate>
+        <link>https://tonarinoyj.jp/</link>
+        <description>ヤングジャンプ編集部が運営する無料Webマンガサイト、となりのヤングジャンプ。編集部が厳選したオリジナル漫画が楽しめます。オリジナル漫画だけでなく、ヤンジャン作品の試し読みも公開中です。</description>
+        <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+        <item>
+            <title>[10Pショート読切] 怪異解決屋</title>
+            <link>https://tonarinoyj.jp/episode/12207421984217413438</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984217413438</guid>
+            <pubDate>Sun, 13 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Sun, 13 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>怪異解決屋</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984217413438-a8bbcaf3046c7b3c8154af419872199a?1789117758" length="0" type="image/jpeg" />
+            <author>蜜谷遥</author>
+        </item>
+        <item>
+            <title>[第77話①] 超人X</title>
+            <link>https://tonarinoyj.jp/episode/12207421984223900405</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984223900405</guid>
+            <pubDate>Sat, 12 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Sat, 12 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>超人X</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984223900405-0c9c0c7d4ba1bb8bb8a25978bb48a80d?1789137960" length="0" type="image/jpeg" />
+            <author>石田スイ</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] 少しずつでも帰るとこ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984209114157</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984209114157</guid>
+            <pubDate>Sat, 12 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Sat, 12 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>少しずつでも帰るとこ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984209114157-02270e56732bbc637f1457a2e728e858?1789018234" length="0" type="image/jpeg" />
+            <author>赤井ゆうき</author>
+        </item>
+        <item>
+            <title>[第65話]やめろ好きになってしまう</title>
+            <link>https://tonarinoyj.jp/episode/12207421984174363297</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984174363297</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>やめろ好きになってしまう</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984174363297-422b3e57fd8a7d5d706d0b99bc9d47fa?1788955247" length="0" type="image/jpeg" />
+            <author>もりぐちあきら</author>
+        </item>
+        <item>
+            <title>[理想郷裏女子図鑑③] 理想郷女子図鑑～私の結婚生活、とっても幸せです～</title>
+            <link>https://tonarinoyj.jp/episode/12207421984173978531</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984173978531</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>理想郷女子図鑑～私の結婚生活、とっても幸せです～</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984173978531-2f49840c25da715f938b8e596b0777d9?1788326705" length="0" type="image/jpeg" />
+            <author>江坂純/山田シロ彦</author>
+        </item>
+        <item>
+            <title>[第12-1話] メランコ・キリング</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595410</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595410</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>メランコ・キリング</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595410-052a2a19ab9afa89288192c90dffcda3?1788954094" length="0" type="image/jpeg" />
+            <author>おうじ</author>
+        </item>
+        <item>
+            <title>[第25話 前編] 高みの鷹見さん</title>
+            <link>https://tonarinoyj.jp/episode/12207421984212870790</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984212870790</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>高みの鷹見さん</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984212870790-de0f801e4eb6aa6f44fb75ea219dfc92?1788956354" length="0" type="image/jpeg" />
+            <author>谷垣岳</author>
+        </item>
+        <item>
+            <title>[第17話②] みんな〇んじゃえ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984143313431</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984143313431</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>みんな〇んじゃえ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984143313431-f26afa46a343a2efe9b4dfa865f5f38c?1787741117" length="0" type="image/jpeg" />
+            <author>宮月新/藤村緋二</author>
+        </item>
+        <item>
+            <title>[第31話] 勇者遺族</title>
+            <link>https://tonarinoyj.jp/episode/12207421984208929865</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984208929865</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>勇者遺族</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984208929865-e91237908a63981d60238a90d6479c92?1788955139" length="0" type="image/jpeg" />
+            <author>印牧巻</author>
+        </item>
+        <item>
+            <title>[おまけイラスト1] つづら先輩は元カノだから</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595414</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595414</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>つづら先輩は元カノだから</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595414-716b2e086c6aaa7782d8cf2f6bf523b2?1788955551" length="0" type="image/jpeg" />
+            <author>すずの志侑</author>
+        </item>
+        <item>
+            <title>[特別読切] 影薄希の友霊ノート</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595425</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595425</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>影薄希の友霊ノート</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595425-5c91c7315df827b2b1ffbd3766ce2af5?1789025848" length="0" type="image/jpeg" />
+            <author>永本優友</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] 恒河沙ゆえるが神でないことの証明をせよ。</title>
+            <link>https://tonarinoyj.jp/episode/12207421984209114153</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984209114153</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>恒河沙ゆえるが神でないことの証明をせよ。</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984209114153-79144a70d57e73f1a4d8185e3ba1dae1?1788952656" length="0" type="image/jpeg" />
+            <author>森数機</author>
+        </item>
+        <item>
+            <title>[63発目 ②] こういうのがいい</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595421</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595421</guid>
+            <pubDate>Fri, 11 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Fri, 11 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>こういうのがいい</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595421-8d7fa9b5a1233051ae49fd2ff3ab25ab?1788954443" length="0" type="image/jpeg" />
+            <author>双龍</author>
+        </item>
+        <item>
+            <title>[第33話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484908</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484908</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484908-d54a96a3060d586722a78d86c8c8240e?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第32話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484904</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484904</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484904-1a43103a43bda813e68becffbef89df5?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第31話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484900</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484900</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484900-41ad2bc21fb241036483ea7966902fc8?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第30話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484896</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484896</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484896-a1a338d85590bc50fe07db50dfda6279?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第29話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484892</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484892</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484892-a93d7bc3267e1b06f16f5da9aadd8ee1?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第28話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484888</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484888</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484888-b0b8865d5b88d5ea8a409aa1d19e5f74?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第27話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484883</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484883</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484883-82d6c84613de0e372ff00794b42ac01c?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第26話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484879</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484879</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484879-b568880845a29b088e4b94b716872d1b?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第25話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484874</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484874</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484874-5963a4fbacf2dfdea01777432bd5d56b?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第24話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484870</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484870</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484870-7f8557bec8bec439780be25353510be4?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第23話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484866</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484866</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484866-3cd77711515726f535e652700ca8e7d3?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第22話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484862</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484862</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484862-3a5de6afb5efce3d6eacf1f43f0c72fd?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第21話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484858</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484858</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484858-f70b947f38d5d4e4f2cf4b876b026780?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第20話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484854</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484854</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484854-a09e5c9097c4c4e509ed78632ae65acc?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第19話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984126484850</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984126484850</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984126484850-6e6f72619c0c1905796164737adec7b9?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第18話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4856001361050392513</link>
+            <guid isPermalink="false">tonarino_yj:episode:4856001361050392513</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4856001361050392513-c32ff173d653b34140bdf9a4747c4bd5?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第17話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4856001361025683293</link>
+            <guid isPermalink="false">tonarino_yj:episode:4856001361025683293</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4856001361025683293-4626df36dec85af4c8c2308394b4bfa7?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第16話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4856001360999718799</link>
+            <guid isPermalink="false">tonarino_yj:episode:4856001360999718799</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4856001360999718799-28caae75fc157981ae9a16fb8b562c04?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第15話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4855956445075145446</link>
+            <guid isPermalink="false">tonarino_yj:episode:4855956445075145446</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4855956445075145446-425c323c22a4b9d97d172f5727e8c198?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第14話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4855956445056488422</link>
+            <guid isPermalink="false">tonarino_yj:episode:4855956445056488422</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4855956445056488422-65896ff16e05ab3a56a02c11b1089fda?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第13話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/4855956445047910208</link>
+            <guid isPermalink="false">tonarino_yj:episode:4855956445047910208</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/4855956445047910208-8d2d61873291a53df793f0bf0b9bfa98?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第12話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247131079178</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247131079178</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247131079178-528bcf72f617bc7b86525e8629254f59?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第11話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247107468955</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247107468955</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247107468955-8ab7a5435f178531c251483daa3f4547?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第10話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247049337210</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247049337210</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247049337210-d2b1722bf35aa2d3dfd09b25efac7a54?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第9話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247030577467</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247030577467</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247030577467-4d1e2c07aafc53abbba199bf314ced7d?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第8話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247018759092</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247018759092</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247018759092-cdebfa1f390f659867317d78b37c136a?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第7話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190247005080931</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190247005080931</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190247005080931-9c4c0547448cf1a52d3549483daa8eda?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第6話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190246989632726</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190246989632726</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190246989632726-7abaa8452a17318520b074ecf4542b7f?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第5話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190246973057438</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190246973057438</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190246973057438-0508f9dbee0ac5fbc59cad81129cef00?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第4話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190246951116000</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190246951116000</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190246951116000-015bd14bf28df47216ae8ce3f8f95b87?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第3話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190246926599862</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190246926599862</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190246926599862-722ece5754e3258ef134b879831986c7?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[第2話] カテナチオ</title>
+            <link>https://tonarinoyj.jp/episode/316190246910625906</link>
+            <guid isPermalink="false">tonarino_yj:episode:316190246910625906</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>カテナチオ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/316190246910625906-d3ed97cc560772280008c40374b5c707?1787742219" length="0" type="image/jpeg" />
+            <author>森本大輔</author>
+        </item>
+        <item>
+            <title>[恋太郎ファミリーのファミリーの日常 第8話] 君のことが大大大大大好きな100人の彼女</title>
+            <link>https://tonarinoyj.jp/episode/12207421984213501187</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984213501187</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 02:56:00 +0000</giga:freeTermStartDate>            <description>君のことが大大大大大好きな100人の彼女</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984213501187-9b5df61d8629d0a8b5ba637a67cd10eb?1788954595" length="0" type="image/jpeg" />
+            <author>中村力斗/野澤ゆき子</author>
+        </item>
+        <item>
+            <title>[第5話] モンキーハンティング</title>
+            <link>https://tonarinoyj.jp/episode/12207421984213501179</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984213501179</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 02:57:00 +0000</giga:freeTermStartDate>            <description>モンキーハンティング</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984213501179-c325912b2cc1ce5240071b8119eb23c1?1788930062" length="0" type="image/jpeg" />
+            <author>増田俊也/邪魔リキ/平岡滉史</author>
+        </item>
+        <item>
+            <title>[第3話] チクビ×バディ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984213501183</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984213501183</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 02:58:00 +0000</giga:freeTermStartDate>            <description>チクビ×バディ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984213501183-1c193c0b4dab7a6c5aee7b85c0b10d99?1788930061" length="0" type="image/jpeg" />
+            <author>影賄児</author>
+        </item>
+        <item>
+            <title>[第2話] 森野さんだるがらむ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984213501175</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984213501175</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 02:59:00 +0000</giga:freeTermStartDate>            <description>森野さんだるがらむ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984213501175-009a66101b83295f3d3e1397b0ea4694?1788930061" length="0" type="image/jpeg" />
+            <author>バラ子</author>
+        </item>
+        <item>
+            <title>[第1話] サラマンダ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984191831309</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984191831309</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>サラマンダ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984191831309-b84f371af944fc4a5106e24e012ed3b5?1788930061" length="0" type="image/jpeg" />
+            <author>中山敦支</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] GreNADE</title>
+            <link>https://tonarinoyj.jp/episode/12207421984209114149</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984209114149</guid>
+            <pubDate>Thu, 10 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Thu, 10 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>GreNADE</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984209114149-efcea9f584614e27a7e549db0a621dad?1788945270" length="0" type="image/jpeg" />
+            <author>五十嵐トモ</author>
+        </item>
+        <item>
+            <title>[第284話] ワンパンマン </title>
+            <link>https://tonarinoyj.jp/episode/12207421984214112687</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984214112687</guid>
+            <pubDate>Wed, 09 Sep 2026 15:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 15:00:00 +0000</giga:freeTermStartDate>            <description>ワンパンマン</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984214112687-bb45a496dc4669501952167f2316496d?1788944182" length="0" type="image/jpeg" />
+            <author>ＯＮＥ/村田雄介</author>
+        </item>
+        <item>
+            <title>[第27話] ホストと魔王</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595400</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595400</guid>
+            <pubDate>Wed, 09 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>ホストと魔王</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595400-8c4d14841296536e4a98a4a4c7550154?1788782141" length="0" type="image/jpeg" />
+            <author>ホン・トク</author>
+        </item>
+        <item>
+            <title>[ポン太たちの日々(51)] ポン太がヒトになりまして。</title>
+            <link>https://tonarinoyj.jp/episode/12207421984173978556</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984173978556</guid>
+            <pubDate>Wed, 09 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>ポン太がヒトになりまして。</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984173978556-a1472f2d5ff23290a601360855e398d2?1788780172" length="0" type="image/jpeg" />
+            <author>濱田賢治</author>
+        </item>
+        <item>
+            <title>[おまけイラスト] 蜜月大正浪漫譚</title>
+            <link>https://tonarinoyj.jp/episode/12207421984208929853</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984208929853</guid>
+            <pubDate>Wed, 09 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>蜜月大正浪漫譚</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984208929853-725e277782070cd236c06692274161ab?1788855928" length="0" type="image/jpeg" />
+            <author>小石川珠子</author>
+        </item>
+        <item>
+            <title>[第5話 後編] シュガーハイに放課後</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595406</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595406</guid>
+            <pubDate>Wed, 09 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>シュガーハイに放課後</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595406-c11fbc595927dccc435d306714f44db3?1788782178" length="0" type="image/jpeg" />
+            <author>ふじさちこ</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] 見たことのない景色</title>
+            <link>https://tonarinoyj.jp/episode/12207421984131093249</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984131093249</guid>
+            <pubDate>Wed, 09 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Wed, 09 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>見たことのない景色</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984131093249-7d0b5365f0bfc78bc6a574435000305b?1788499191" length="0" type="image/jpeg" />
+            <author>中山カンナ</author>
+        </item>
+        <item>
+            <title>[第24話 後編] 転生アラサー女子の異世改活 政略結婚は嫌なので、雑学知識で楽しい改革ライフを決行しちゃいます！</title>
+            <link>https://tonarinoyj.jp/episode/12207421984131677209</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984131677209</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>転生アラサー女子の異世改活 政略結婚は嫌なので、雑学知識で楽しい改革ライフを決行しちゃいます！</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984131677209-574361f67aa5fd61d3abd8a952eb35e7?1787543952" length="0" type="image/jpeg" />
+            <author>清水ゆりか（HJノベルス）/日野彰/すざく</author>
+        </item>
+        <item>
+            <title>[第19話 後編] 社畜テイマー、可愛いスライムのおかげで無自覚なまま無双する～うっかり国内トップの配信に映り込んで最強がバレました～</title>
+            <link>https://tonarinoyj.jp/episode/12207421984131677201</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984131677201</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>社畜テイマー、可愛いスライムのおかげで無自覚なまま無双する～うっかり国内トップの配信に映り込んで最強がバレました～</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984131677201-1ed8630bbb13449f37eaa0be3537bd83?1788513989" length="0" type="image/jpeg" />
+            <author>すかいふぁーむ/染井惣介</author>
+        </item>
+        <item>
+            <title>[第38話] 左遷された第三王女は『辺境改革』を始めます!!</title>
+            <link>https://tonarinoyj.jp/episode/12207421984156562316</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984156562316</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>左遷された第三王女は『辺境改革』を始めます!!</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984156562316-89a05d8912b54941355c6bc37ce9e628?1788508521" length="0" type="image/jpeg" />
+            <author>日之影ソラ/あずまたま</author>
+        </item>
+        <item>
+            <title>[第14話 前編]最強の剣聖と賢者のもとに転生した俺は無自覚無双する</title>
+            <link>https://tonarinoyj.jp/episode/12207421984204595387</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984204595387</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>最強の剣聖と賢者のもとに転生した俺は無自覚無双する</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984204595387-cce979751374ca22821139896643f210?1788761299" length="0" type="image/jpeg" />
+            <author>岸本和葉/IsII</author>
+        </item>
+        <item>
+            <title>[第16-2話] 二周目賢者の英雄譚 ～生まれ変わった最強、前世で鍛えた魔法で学園無双する～</title>
+            <link>https://tonarinoyj.jp/episode/12207421984187040696</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984187040696</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>二周目賢者の英雄譚 ～生まれ変わった最強、前世で鍛えた魔法で学園無双する～</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984187040696-d2a7ed8a35d1bcf96767f4c18bae97ac?1788509809" length="0" type="image/jpeg" />
+            <author>岸本和葉/蛍幻飛鳥</author>
+        </item>
+        <item>
+            <title>[第23話] 剣と魔法とNTR</title>
+            <link>https://tonarinoyj.jp/episode/12207421984187040706</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984187040706</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>剣と魔法とNTR</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984187040706-a34d93171c0d4c6c7ffd144718b48245?1788508754" length="0" type="image/jpeg" />
+            <author>あかほりさとる/カズ山本/居候</author>
+        </item>
+        <item>
+            <title>[第119話] 最後の不良</title>
+            <link>https://tonarinoyj.jp/episode/12207421984177816539</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984177816539</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>最後の不良</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984177816539-5273a0e14fc125bbd27591de1102b874?1788514878" length="0" type="image/jpeg" />
+            <author>山本隆一郎</author>
+        </item>
+        <item>
+            <title>[第60話] 【世界最強の執事】ブラック職場を追放された俺、氷の令嬢に拾われる</title>
+            <link>https://tonarinoyj.jp/episode/12207421984173978548</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984173978548</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>【世界最強の執事】ブラック職場を追放された俺、氷の令嬢に拾われる</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984173978548-8f1eb6e6cafd9468c0f27c76d0b51018?1788511456" length="0" type="image/jpeg" />
+            <author>昼行燈/kamui</author>
+        </item>
+        <item>
+            <title>[第87話] ゴールデンエッグ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984205035437</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984205035437</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>ゴールデンエッグ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984205035437-3b00d02f1e4886ffe158eb6a22074a39?1788764481" length="0" type="image/jpeg" />
+            <author>横幕智裕/鈴木大四郎</author>
+        </item>
+        <item>
+            <title>[第151話] 転生ゴブリンだけど質問ある？</title>
+            <link>https://tonarinoyj.jp/episode/12207421984173978552</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984173978552</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>転生ゴブリンだけど質問ある？</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984173978552-89fb08f249c2516c6a1fc0e536309c79?1788511728" length="0" type="image/jpeg" />
+            <author>三木なずな/荒木宰</author>
+        </item>
+        <item>
+            <title>[第7-2話] 読心貴族～男女比1：99世界の悪役令息～</title>
+            <link>https://tonarinoyj.jp/episode/12207421984187040710</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984187040710</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>読心貴族～男女比1：99世界の悪役令息～</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984187040710-8e00a1ca1bcead95681408e2bc664f1d?1788509504" length="0" type="image/jpeg" />
+            <author>マサイ/ウエダマサヒロ</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] サプライズ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984131093245</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984131093245</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>サプライズ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984131093245-6c4c738779798b19c4029d7c14871dfc?1788240262" length="0" type="image/jpeg" />
+            <author>ワリイシジュン</author>
+        </item>
+        <item>
+            <title>[第65-2話] 皇帝の孫に転生する皇帝</title>
+            <link>https://tonarinoyj.jp/episode/12207421984187040702</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984187040702</guid>
+            <pubDate>Tue, 08 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Tue, 08 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>皇帝の孫に転生する皇帝</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984187040702-11c266be0cad82f4906b0f3530499d2a?1788508098" length="0" type="image/jpeg" />
+            <author>三木なずな/おおもりあめ</author>
+        </item>
+        <item>
+            <title>[10Pショート読切] 海へ</title>
+            <link>https://tonarinoyj.jp/episode/12207421984131093241</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984131093241</guid>
+            <pubDate>Mon, 07 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Mon, 07 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>海へ</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984131093241-f670c34c2a5868959877c10661b68144?1788240162" length="0" type="image/jpeg" />
+            <author>沖尚樹</author>
+        </item>
+        <item>
+            <title>こんなんでも本屋です。</title>
+            <link>https://tonarinoyj.jp/episode/12207421984192069391</link>
+            <guid isPermalink="false">tonarino_yj:episode:12207421984192069391</guid>
+            <pubDate>Mon, 07 Sep 2026 03:00:00 +0000</pubDate>                <giga:freeTermStartDate>Mon, 07 Sep 2026 03:00:00 +0000</giga:freeTermStartDate>            <description>こんなんでも本屋です。</description>
+            <enclosure url="https://cdn-img.tonarinoyj.jp/public/episode-thumbnail/12207421984192069391-2ec5bcccee0090356e9265d4f7bd8d8e?1788516797" length="0" type="image/jpeg" />
+            <author>趣味カメレオン</author>
+        </item>
+    </channel>
+</rss>

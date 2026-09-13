@@ -58,7 +58,7 @@ struct ReleaseFeedService: Sendable {
         // so the summary is Naver's own feed rather than staying empty.
         guard let edition = primary ?? naver else { return .empty }
 
-        let summary = ReleaseSummary.summarise(edition)
+        let summary = ReleaseSummary.summarise(edition, knownChapterCount: series.totalChapters)
         guard !summary.isEmpty else { return .empty }
 
         let gap = Self.gap(primary: primary, naver: naver, now: now)
@@ -85,10 +85,15 @@ struct ReleaseFeedService: Sendable {
         let originalNumber: Int?
         switch (primary.latestSeason, naver.latestSeason) {
         case (nil, nil):
-            // No seasons anywhere: `totalCount` is the official figure and
-            // survives a paywalled series' thin public list, where the
-            // highest listed number understates the original.
-            originalNumber = naver.totalCount ?? naver.latestEpisodeNumber
+            // No seasons anywhere: the title-parsed number is the free
+            // episode a Korean reader would give. `totalCount` counts every
+            // article — paid-ahead episodes and non-episode posts alike —
+            // and runs 6-11 past that: measured 2026-09-13, 화산귀환
+            // (`totalCount` 185, newest free `174화`) and Lookism
+            // (`totalCount` 624, newest free `617화`). It is used only when
+            // no title parsed at all, so a thin paywalled list with no
+            // parseable subtitle still has a number to fall back to.
+            originalNumber = naver.latestEpisodeNumber ?? naver.totalCount
         case let (translated?, original?) where translated == original:
             originalNumber = naver.latestEpisodeNumber
         default:
@@ -100,6 +105,7 @@ struct ReleaseFeedService: Sendable {
             translated: primary.latestEpisodeNumber,
             original: (number: originalNumber, lastRelease: lastRelease),
             originalCadence: cadence,
+            originalFinished: naver.finished == true,
             now: now
         )
     }

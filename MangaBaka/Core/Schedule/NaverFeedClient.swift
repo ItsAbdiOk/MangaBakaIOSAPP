@@ -90,7 +90,11 @@ actor NaverFeedClient: ReleaseFeedProvider {
         let articleList: [Article]?
 
         struct Article: Codable {
-            let no: Int
+            // Deliberately optional and unread outside decoding: Naver's own
+            // list position, never the episode number — see the type header.
+            // A required `Int` here meant one article missing `no` failed the
+            // whole feed for a field nothing consults.
+            let no: Int?
             let subtitle: String?
             let serviceDateDescription: String?
         }
@@ -122,7 +126,10 @@ actor NaverFeedClient: ReleaseFeedProvider {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
             let parts = description.split(separator: ".").compactMap { Int($0) }
-            guard parts.count == 3 else { return nil }
+            // `YY.MM.DD` only: seen as such in every article fetched
+            // (2026-09-13). A four-digit year here would otherwise become
+            // 2000 + that year — e.g. 2025 read as `parts[0]` yields 4025.
+            guard parts.count == 3, parts[0] < 100 else { return nil }
             var components = DateComponents()
             components.year = 2000 + parts[0]
             components.month = parts[1]

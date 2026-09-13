@@ -133,6 +133,52 @@ struct NaverFeedClientTests {
         #expect(URLProtocolStub.requests.isEmpty)
     }
 
+    /// F18 (`docs/reviews/tests.md`, 2026-09-13): the 429 back-off path had no
+    /// test. This proves the observable half — the client answers nil rather
+    /// than throwing or crashing on a rate-limited response — and stops
+    /// there: `RequestSpacing.backOff` really suppressing a *later* request
+    /// cannot be proved without either a real 60-second wait (the back-off
+    /// window is hardcoded, and `Task.sleep` runs on wall-clock time,
+    /// unaffected by `TestClock` — see `Clock.swift`) or giving `Clock` a
+    /// `sleep` of its own, which is a bigger change than this file's fixes.
+    /// Flagged rather than half-tested.
+    @Test("A 429 response answers nil rather than crashing")
+    func rateLimitedResponseAnswersNil() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
+        defer { URLProtocolStub.reset() }
+        let client = makeClient(clock: TestClock())
+        let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+        let feed = await client.feed(for: series, links: [link])
+        #expect(feed == nil)
+        #expect(URLProtocolStub.requests.count == 1)
+    }
+
+    /// The one shape the docs call out as thin: a paywalled `dailyPass`
+    /// series' public list is three articles. Below `Cadence.minimumDates`
+    /// (4), so it must still summarise to something listable, not `.none`.
+    @Test("A dailyPass feed's three public entries still summarise, not .none")
+    func dailyPassThinListSummarises() throws {
+        let payload = try JSONDecoder().decode(NaverFeedClient.Payload.self, from: Data(#"""
+        {
+          "totalCount": 653,
+          "finished": false,
+          "dailyPass": true,
+          "articleList": [
+            {"no": 654, "subtitle": "3부 236화", "serviceDateDescription": "25.02.09", "volumeNo": 3},
+            {"no": 653, "subtitle": "3부 235화", "serviceDateDescription": "25.02.02", "volumeNo": 3},
+            {"no": 652, "subtitle": "3부 234화", "serviceDateDescription": "25.01.26", "volumeNo": 3}
+          ]
+        }
+        """#.utf8))
+        let summary = ReleaseSummary.summarise(payload.releaseFeed)
+        #expect(!summary.isEmpty)
+        guard case .recent = summary else {
+            Issue.record("expected .recent for three thin entries, got \(summary)")
+            return
+        }
+    }
+
     @Test("A second look inside a week costs no request")
     func cache() async {
         URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }

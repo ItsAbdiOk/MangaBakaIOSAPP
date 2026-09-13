@@ -85,8 +85,26 @@ actor ReleaseScheduleService {
     private let clock: any Clock
 
     /// A cadence built from release history a fortnight old has probably missed
-    /// a release since.
+    /// a release since. **A guess** — a fortnight is a round number chosen to
+    /// outlast a weekly series' own cadence a couple of times over; it has not
+    /// been checked against how often a real estimate turns out to be missing
+    /// a release at that age.
     static let staleAfter: TimeInterval = 14 * 86_400
+
+    /// The cadence `run` and `cadence(for:)` both measure from the same
+    /// release history, with the season set the same way in both. Split out
+    /// after `cadence(for:)` was found measuring a cadence without ever
+    /// setting `season` — the series opened from Search rather than the
+    /// Schedule tab settled without one, and the settled row then blocked a
+    /// later build from adding it.
+    private static func measuredCadence(from releases: [MangaUpdatesClient.Release]) -> Cadence? {
+        var cadence = Cadence.estimate(from: releases.compactMap(\.date))
+        // Only set where the release history actually shows seasons — see
+        // SeasonReading. A volume number is not a season just because the
+        // series is a manhwa.
+        cadence?.season = SeasonReading.currentSeason(releases.compactMap(\.sample))
+        return cadence
+    }
 
     private(set) var progress = ScheduleProgress()
     private var buildTask: Task<Void, Never>?
@@ -303,11 +321,7 @@ actor ReleaseScheduleService {
 
             do {
                 let releases = try await mangaUpdates.releases(seriesNumber: number)
-                var cadence = Cadence.estimate(from: releases.compactMap(\.date))
-                // Only set where the release history actually shows seasons —
-                // see SeasonReading. A volume number is not a season just
-                // because the series is a manhwa.
-                cadence?.season = SeasonReading.currentSeason(releases.compactMap(\.sample))
+                let cadence = Self.measuredCadence(from: releases)
                 try? write(seriesId: series.id, cadence: cadence, failure: nil)
             } catch {
                 // Recorded as a failure so the next build retries it, rather
@@ -352,7 +366,7 @@ actor ReleaseScheduleService {
 
         do {
             let releases = try await mangaUpdates.releases(seriesNumber: number)
-            let cadence = Cadence.estimate(from: releases.compactMap(\.date))
+            let cadence = Self.measuredCadence(from: releases)
             try? write(seriesId: series.id, cadence: cadence, failure: nil)
             return cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
         } catch {

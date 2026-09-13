@@ -32,12 +32,27 @@ enum ReleaseSummary: Equatable, Sendable {
         return false
     }
 
+    /// Below this fraction of the series' known chapter count, the feed's
+    /// highest number is read as the oldest-first shape (see below) rather
+    /// than trusted as current. **A guess**: True Beauty's 8-entry feed tops
+    /// out at 3% of its 230 chapters, so 50% has a wide margin either way —
+    /// nothing here fits it against a corpus of both feed shapes.
+    private static let oldestFirstThreshold = 0.5
+
     /// Decides which of the above the feed supports.
     ///
     /// - A nil feed, a feed with no entries, or a feed whose entries are all
     ///   non-episodes (afterwords, notices) all collapse to `.none`: there is
     ///   no episode date to show, only entries that would render as an empty
     ///   list.
+    /// - A feed whose highest episode number sits far below the series' own
+    ///   known chapter count is not "the twenty most recent" — it is the
+    ///   *oldest* few. Measured live 2026-09-13: True Beauty (completed,
+    ///   ~230 episodes) answers with "Episode 0"–"Episode 7" from 2018, and
+    ///   without this check that reads as a confident weekly rhythm for a
+    ///   series that ended years ago. `knownChapterCount` is optional because
+    ///   not every caller has it (tests, series with no catalogue count yet);
+    ///   without it this check simply does not fire.
     /// - A finished season is checked before anything gap-based, because it
     ///   outranks a rhythm claim rather than sitting alongside it — see the
     ///   case comment above.
@@ -46,10 +61,16 @@ enum ReleaseSummary: Equatable, Sendable {
     ///   whether that is enough for a schedule. When it says no, that is
     ///   `.recent`, not `.none` — the episodes themselves are still real and
     ///   worth listing.
-    static func summarise(_ feed: ReleaseFeed?) -> ReleaseSummary {
+    static func summarise(_ feed: ReleaseFeed?, knownChapterCount: Double? = nil) -> ReleaseSummary {
         guard let feed else { return .none }
         let episodes = feed.episodes
         guard !episodes.isEmpty else { return .none }
+
+        if let knownChapterCount, knownChapterCount > 0,
+           let highest = feed.latestEpisodeNumber,
+           Double(highest) < knownChapterCount * oldestFirstThreshold {
+            return .none
+        }
 
         // Checked first: a finished season is not a gap to estimate over, it
         // is the reason the gap exists.

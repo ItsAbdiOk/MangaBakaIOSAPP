@@ -107,6 +107,52 @@ struct ScheduleServiceTests {
         #expect(await !service.progress.isRunning)
     }
 
+    /// R10 (`docs/reviews/reader.md`, 2026-09-13): `cadence(for:)` — the
+    /// single-series path used when a series is opened from Search rather
+    /// than measured by a full `build()` — measured a cadence without ever
+    /// setting `season`, unlike `run`. A series settled that way then printed
+    /// "chapter 235" instead of "Season 3 · about every 7 days" and, being
+    /// settled, was never picked up by a later build either. Expected
+    /// failure before the fix: `cadence.season == nil`, where this now
+    /// asserts 3 — the same Tower of God shape (`v.3 c.235` restarting from
+    /// `v.2`) `SeasonReadingTests` measures against the live endpoint.
+    /// Chapter numbering restarts at the new volume, which is what
+    /// `SeasonReading` reads as a season — MangaUpdates lists Tower of God as
+    /// "v.3 c.1" after "v.2 c.337". A fixture that kept counting up would
+    /// correctly report no season at all.
+    @Test("cadence(for:) sets the season the same way a full build does")
+    func cadenceForSeriesSetsSeason() async throws {
+        let releases = Data(#"""
+        {"results": [
+          {"record": {"volume": "3", "chapter": "4", "release_date": "2026-09-06"}},
+          {"record": {"volume": "3", "chapter": "3", "release_date": "2026-08-30"}},
+          {"record": {"volume": "3", "chapter": "2", "release_date": "2026-08-23"}},
+          {"record": {"volume": "3", "chapter": "1", "release_date": "2026-08-16"}},
+          {"record": {"volume": "2", "chapter": "337", "release_date": "2026-01-01"}}
+        ]}
+        """#.utf8)
+        URLProtocolStub.setHandler { _ in .respond(.init(body: releases)) }
+        defer { URLProtocolStub.reset() }
+
+        let series = SeriesFactory.make(
+            id: 1, title: "Tower of God", status: "releasing",
+            source: ["manga_updates": Series.TrackerEntry(id: "abc1", rating: nil, ratingNormalized: nil)]
+        )
+        let service = ReleaseScheduleService(
+            library: LibrarySnapshot(library: OneEntryLibrary(entries: [])),
+            mangaUpdates: MangaUpdatesClient(
+                baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
+                session: URLProtocolStub.makeSession()
+            ),
+            database: try AppDatabase.inMemory()
+        )
+        guard case let .measured(cadence) = await service.cadence(for: series) else {
+            Issue.record("expected a measured cadence")
+            return
+        }
+        #expect(cadence.season == 3)
+    }
+
     private final class OneEntryLibrary: LibraryProviding, @unchecked Sendable {
         let entries: [LibraryEntry]
         init(entry: LibraryEntry) { entries = [entry] }

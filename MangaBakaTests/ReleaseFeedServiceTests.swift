@@ -130,17 +130,21 @@ struct ReleaseFeedServiceTests {
         #expect(!report.summary.isEmpty)
     }
 
-    @Test("The gap uses Naver's totalCount rather than its latest episode number")
-    func gapUsesTotalCountOverLatestNumber() async {
+    /// R3/F8 (`docs/reviews/reader.md`, `tests.md`, 2026-09-13): live GET,
+    /// 화산귀환 (`titleId=769209`, no seasons): `totalCount` 185, newest free
+    /// episode `174화` — five paid-ahead episodes and six non-episode
+    /// articles sit between them. `totalCount` used to be preferred, so the
+    /// gap read as 185 - translated, overstating the original by 11.
+    /// Expected failure before the fix: `episodes == 85` (185 - 100), where
+    /// this now asserts 74 (174 - 100).
+    @Test("The gap uses Naver's title-parsed episode number, not its article-count totalCount")
+    func gapPrefersTitleParsedNumberOverTotalCount() async {
         let webtoons = ReleaseFeed(
             title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
         )
-        // Naver's public article list is thin (paywalled), so its highest
-        // *listed* number is only 105 — but totalCount says the real original
-        // is at 140, and that is the number the gap must be measured against.
         let naver = ReleaseFeed(
-            title: "Naver", entries: (1...4).map { episode($0 + 100, daysAgo: (4 - $0) * 7) },
-            source: .naverWebtoon, totalCount: 140
+            title: "Naver", entries: (0..<4).map { episode(174 - $0, daysAgo: $0 * 7) },
+            source: .naverWebtoon, totalCount: 185
         )
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: webtoons),
@@ -151,8 +155,91 @@ struct ReleaseFeedServiceTests {
             Issue.record("expected .ahead, got \(report.gap)")
             return
         }
-        // 140 (totalCount) - 100 (translated) = 40, not 104 (latest listed) - 100 = 4.
-        #expect(episodes == 40)
+        #expect(episodes == 74, "174 (title-parsed) - 100 (translated), not 185 (totalCount) - 100")
+    }
+
+    // Note: `naver.totalCount` as a fallback for when no title parses at all
+    // is, by inspection, unreachable through `Self.gap` as written —
+    // `naver.lastEpisodeAt` (computed from the same `episodes` filter as
+    // `latestEpisodeNumber`) is nil exactly when `latestEpisodeNumber` is,
+    // and `gap` already returns `.none` on a nil `lastEpisodeAt` before the
+    // fallback is ever consulted. Left in place rather than removed — a
+    // future feed shape might decouple the two — but a test exercising it
+    // would be exercising dead code, so none is added here. Flagged for
+    // whoever owns this file next rather than silently dropped.
+
+    /// F7 (`docs/reviews/tests.md`, 2026-09-13): only the "both seasoned,
+    /// different season" branch of the switch in `Self.gap` had a test. The
+    /// two branches where exactly one side names a season landed on the same
+    /// `default: return .none` and had never been exercised — this is the
+    /// case the finale rule is written for: a series that has just finished
+    /// a season shows up seasoned on Webtoons and, in the fixture available
+    /// here, unseasoned on Naver.
+    @Test("A season on one side only says nothing, not a wrong number")
+    func onlyPrimarySeasonedSaysNothing() async {
+        let webtoons = ReleaseFeed(
+            title: "Webtoons", entries: [episode(112, daysAgo: 0, season: 1)], source: .webtoons
+        )
+        let naver = ReleaseFeed(
+            title: "Naver", entries: (0..<4).map { episode(112 - $0, daysAgo: $0 * 7) },
+            source: .naverWebtoon, totalCount: 112
+        )
+        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
+        #expect(report.gap == .none)
+    }
+
+    @Test("A season on the original only says nothing, not a wrong number")
+    func onlyNaverSeasonedSaysNothing() async {
+        let webtoons = ReleaseFeed(
+            title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
+        )
+        let naver = ReleaseFeed(
+            title: "Naver", entries: (0..<4).map { episode(112 - $0, daysAgo: $0 * 7, season: 1) },
+            source: .naverWebtoon, totalCount: 112
+        )
+        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
+        #expect(report.gap == .none)
+    }
+
+    /// R5 (`docs/reviews/reader.md`, 2026-09-13): `finished` was decoded and
+    /// never read, so a completed Korean original read as `.originalPaused` —
+    /// a hiatus, not a completion, and the opposite thing to tell a reader.
+    /// Expected failure before the fix: `report.gap == .originalPaused(...)`
+    /// where this now asserts `.originalComplete`.
+    @Test("A finished original reports complete, not paused")
+    func finishedOriginalIsComplete() async {
+        let webtoons = ReleaseFeed(
+            title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
+        )
+        // Stale by any pause threshold (last release 400 days ago) — the
+        // fixture that would otherwise land on `.originalPaused`.
+        let naver = ReleaseFeed(
+            title: "Naver", entries: (0..<4).map { episode(140 - $0, daysAgo: 400 + $0 * 7) },
+            source: .naverWebtoon, totalCount: 140, finished: true
+        )
+        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
+        #expect(report.gap == .originalComplete(episodesAhead: 40))
+    }
+
+    /// R1 (`docs/reviews/reader.md`, 2026-09-13), through the whole service:
+    /// True Beauty's real feed shape (4+ entries, "Episode 0"-"Episode 7",
+    /// years old) against MangaBaka's own chapter count for the series.
+    /// Expected failure before the fix: `report.summary` a `.rhythm` (and
+    /// therefore `report != .empty`), where this now asserts `.empty`.
+    @Test("A completed series' oldest-first feed reports empty, not a false rhythm")
+    func oldestFirstFeedReportsEmpty() async {
+        let completed = SeriesFactory.make(id: 1, title: "True Beauty", totalChapters: 230)
+        let webtoons = ReleaseFeed(
+            title: "Webtoons", entries: [
+                episode(7, daysAgo: 0), episode(6, daysAgo: 7),
+                episode(5, daysAgo: 14), episode(4, daysAgo: 21)
+            ], source: .webtoons
+        )
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: webtoons)
+        ])
+        let report = await service.report(for: completed, links: [], now: now)
+        #expect(report == .empty)
     }
 
     @Test("Nothing from any provider is .empty")

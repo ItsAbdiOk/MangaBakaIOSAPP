@@ -47,13 +47,22 @@ struct GigaViewerFeedParsingTests {
 
     /// The whole point of using RSS over per-episode JSON: the thumbnail in
     /// `<description>` must never reach anything that could render it.
+    ///
+    /// F11 (`docs/reviews/tests.md`, 2026-09-13): this used to assert only
+    /// `!items.isEmpty`, which cannot fail — the fixture's first item's
+    /// `<description>` (with its `<img src=".../page1.jpg">`) was never
+    /// actually checked against the parsed fields. Expected failure before
+    /// this fix existed: none — that is the bug, a test that cannot fail.
     @Test("The description, and therefore the thumbnail, is dropped")
     func descriptionDropped() throws {
         let items = try #require(MagazineFeedParser.parse(fixture))
-        // GigaViewerFeedClient.Item has no field a thumbnail URL could occupy
-        // at all — this is a structural guarantee, not a runtime check, but a
-        // regression that added one back would still need a `description`
-        // read out of the XML, which this proves does not happen.
+        let first = try #require(items.first)
+        // `Item` has no field a thumbnail URL could occupy at all — a
+        // structural guarantee — but that is only as strong as this check
+        // that the description's own content never lands in a field by
+        // string accident.
+        #expect(!first.episodeTitle.contains("page1.jpg"))
+        #expect(!first.seriesTitle.contains("page1.jpg"))
         #expect(!items.isEmpty)
     }
 
@@ -135,6 +144,21 @@ struct GigaViewerFeedClientTests {
         #expect(feed == nil)
     }
 
+    /// F18 (`docs/reviews/tests.md`, 2026-09-13): see the sibling test on
+    /// `NaverFeedClient` for why this stops at "answers nil" rather than also
+    /// proving the back-off window suppresses a later request.
+    @Test("A 429 response answers nil rather than crashing")
+    func rateLimitedResponseAnswersNil() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
+        defer { URLProtocolStub.reset() }
+        let client = makeClient(clock: TestClock())
+        let series = SeriesFactory.make(id: 1, title: "カテナチオ")
+
+        let feed = await client.feed(for: series, links: [link])
+        #expect(feed == nil)
+        #expect(URLProtocolStub.requests.count == 1)
+    }
+
     @Test("The magazine feed is cached a day, shared across series on the same host")
     func cachedPerHost() async {
         URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
@@ -153,5 +177,29 @@ struct GigaViewerFeedClientTests {
         clock.advance(by: GigaViewerFeedClient.cacheLife + 1)
         _ = await client.feed(for: catenaccio, links: [link])
         #expect(URLProtocolStub.requests.count == 2)
+    }
+}
+
+/// The real magazine feed, not a hand-shaped one. Captured 2026-09-13 from
+/// `tonarinoyj.jp/rss`: 72 items across many series, each with a thumbnail
+/// `<description>` and an `<enclosure>`. A fixture the parser was written
+/// against cannot fail the parser; this one was written by the publisher.
+@Suite("GigaViewer magazine feed — live capture")
+struct GigaViewerLiveCaptureTests {
+    @Test("Every item parses, and no thumbnail or description survives into an item")
+    func liveCaptureParses() throws {
+        let data = try Fixture.data("tonarinoyj", extension: "rss")
+        let items = try #require(MagazineFeedParser.parse(data))
+        #expect(items.count == 72)
+        for item in items {
+            #expect(!item.episodeTitle.contains("<"))
+            #expect(!item.seriesTitle.contains("<"))
+            #expect(!item.seriesTitle.contains("cdn-img"))
+        }
+        // カテナチオ was serialised in a run of 32 episodes on the day of capture.
+        let wanted = GigaViewerFeedClient.normalise("カテナチオ")
+        let matched = items.filter { GigaViewerFeedClient.normalise($0.seriesTitle) == wanted }
+        #expect(matched.count == 32)
+        #expect(matched.allSatisfy { WebtoonsTitle.read($0.episodeTitle)?.number != nil })
     }
 }
