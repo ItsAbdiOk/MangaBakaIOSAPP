@@ -49,11 +49,10 @@ struct StackHeader: View {
                 .typeStackTitle()
                 .foregroundStyle(Palette.textEmphasis)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(provenance)
-                .typeInstruction()
-                .foregroundStyle(Palette.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .contentTransition(.opacity)
+            // The provenance line ("Picked from your MangaBaka library")
+            // used to sit here. Abdi, 2026-09-13: dead space — the reason
+            // under each card already says where it came from, and the
+            // header's job is the count and the ring.
             if showsInstruction {
                 Text("Drag the cover aside · tap it to open")
                     .typeInstruction()

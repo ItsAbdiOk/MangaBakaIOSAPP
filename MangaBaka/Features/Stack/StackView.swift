@@ -430,7 +430,7 @@ extension StackView {
             .buttonStyle(.press)
             .accessibilityLabel("Save")
         }
-        .padding(.top, 22)
+        .padding(.top, 14)
     }
 
     /// Run out, or failed to load. Two different things, said differently:

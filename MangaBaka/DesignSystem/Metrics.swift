@@ -92,7 +92,10 @@ enum Metrics {
     // MARK: The stack, as the mockup specifies it
 
     /// The card area's fixed height. The cards centre inside it.
-    static let stackArea: CGFloat = 452
+    /// The card is 268 wide → 402 tall; 12 more for the deck's peeking
+    /// neighbours. Was 452, which left ~50pt of nothing under the card and
+    /// pushed the action row under the tab bar (Abdi, 2026-09-13).
+    static let stackArea: CGFloat = 414
     static let stackCardWidth: CGFloat = 268
     /// The neighbouring covers that peek in from either side.
     static let stackNeighbourWidth: CGFloat = 132
