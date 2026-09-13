@@ -253,6 +253,23 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
   "Deal another now" confirm; countdown auto-retries on Search only; library
   writes patch locally with a "Saved" toast.
 
+## Accessibility audit, 2026-09-13 night (Search now in the tab list)
+
+103 issues against 83 on the 2026-09-11 evening baseline, same known classes:
+contrast (57 failed, 16 "nearly"), text clipped at AX sizes (18), Dynamic Type
+partially unsupported (5). New since the baseline and worth a look: 3 "element
+has no description" and 1 "hit area too small" on the library search results,
+1 hit area in Settings, and "Cover gallery" never reached its marker (the audit
+navigates by tapping the first cover; the series page's layout changed today).
+Not diffed line by line tonight; the 2026-09-11 note explains why most of the
+contrast count is elements the tree carries and the screen never shows.
+
+`FlowAffordanceUITests.testSeedPickerDoesNotReturnYouToYourLastSearch` now skips
+after a search: with the system field, the `role: .search` tab morphs the tab
+bar and XCUITest sees no "Mix" and no labelled put-away control (the X the walk
+tapped has no accessible label the test can find). Whether VoiceOver users can
+leave a presented search on iOS 26 without Cancel is worth checking on a phone.
+
 ## Next, in the order I would do it
 
 1. **18+ age rating in App Store Connect**, and confirm which tier applies now

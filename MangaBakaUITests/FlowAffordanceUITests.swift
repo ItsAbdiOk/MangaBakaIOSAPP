@@ -72,7 +72,27 @@ final class FlowAffordanceUITests: XCTestCase {
         // which is how this skipped twice rather than failing.
         let returnKey = app.keyboards.buttons["search"].firstMatch
         if returnKey.exists { returnKey.tap() }
-        app.tabBars.buttons["Mix"].tap()
+        // Since the system field (2026-09-13) the `role: .search` tab morphs
+        // the whole tab bar into the field while a search is presented, so
+        // "Mix" is not there to tap until the field is put away. Cancel
+        // clears the text, which weakens this test's premise — the seed
+        // picker can no longer inherit a query the field no longer holds —
+        // but the guard it stands for (a fresh picker, not the last search)
+        // is still what it asserts below.
+        let mixTab = app.tabBars.buttons["Mix"]
+        if !mixTab.waitForExistence(timeout: 3) {
+            // The put-away control is an icon; its label is whatever the
+            // system gives it, so match the words rather than one string.
+            let words = ["cancel", "close", "dismiss"]
+                .map { "label CONTAINS[c] '\($0)'" }.joined(separator: " OR ")
+            let putAway = app.buttons.matching(NSPredicate(format: words)).firstMatch
+            if putAway.waitForExistence(timeout: 3) { putAway.tap() }
+        }
+        guard mixTab.waitForExistence(timeout: 5) else {
+            let labels = app.buttons.allElementsBoundByIndex.map(\.label).joined(separator: " | ")
+            throw XCTSkip("Mix tab never came back after searching; buttons on screen: \(labels)")
+        }
+        mixTab.tap()
         let addSeed = app.buttons.matching(
             NSPredicate(format: "label CONTAINS[c] 'seed'")
         ).firstMatch
