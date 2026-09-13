@@ -13,7 +13,14 @@ final class SearchModel {
     var query = SearchQuery()
     private(set) var results: [Series] = []
     private(set) var isSearching = false
-    private(set) var message: String?
+    /// The most recent search's failure, when it had one — kept distinct from
+    /// `results.isEmpty` on purpose (gap 7). A `nil` failure with empty
+    /// results is a real answer: nothing matched. A failure with *non-empty*
+    /// results means the ask that just ran did not land, but whatever the
+    /// previous successful search found is still good and stays on screen —
+    /// see `search()`'s catch branch below, which for exactly that reason
+    /// does not touch `results` at all when the failure is blocking.
+    private(set) var failure: APIError?
     private(set) var isLoadingMore = false
     /// Bumped by every fresh search. A page that comes back for an older
     /// generation belongs to a search the reader has since replaced, and is
@@ -22,6 +29,29 @@ final class SearchModel {
     /// False once a page comes back short or empty. Starts false so the first
     /// page has to actually arrive before the view offers to fetch a second.
     private(set) var hasMore = false
+    /// A page-2+ request that failed outright (gap 15). Kept separate from
+    /// `failure`, which is about the current *search*: a reader thirty rows
+    /// into good results who hits a throttled page 4 has not had their search
+    /// fail, just its next page, and the two must not render as the same
+    /// thing — `failure` would clear the whole grid via `FailureState`, where
+    /// this instead becomes one trailing `InlineFailure` under the rows that
+    /// did load.
+    private(set) var pageFailure: APIError?
+    /// True once `loadMore` has given up after `maxConsecutiveEmptyPages`
+    /// filtered-empty pages in a row (gap 51). Distinct from a genuine
+    /// end-of-feed (`hasMore == false` with this still `false`): the API may
+    /// still have more, this just stopped looking for it, and the view owes
+    /// the reader a line saying so rather than looking identical to having
+    /// reached the real end.
+    private(set) var stoppedEarly = false
+
+    /// Compatibility for a caller not yet reading `failure` directly —
+    /// `SeedPickerSheet.swift` (owned by the Mix batch, gap 44) still reads
+    /// `search.message` for its empty-state copy. Kept as a thin derivation
+    /// rather than dropped outright so that file keeps compiling unchanged
+    /// while its own fix lands separately; delete once that caller reads
+    /// `failure` itself.
+    var message: String? { failure?.userFacingMessage }
 
     private let repository: any SeriesRepositoryProtocol
     private var debounceTask: Task<Void, Never>?
@@ -61,7 +91,9 @@ final class SearchModel {
         }
         guard !query.isEmpty else {
             results = []
-            message = nil
+            failure = nil
+            pageFailure = nil
+            stoppedEarly = false
             isSearching = false
             hasMore = false
             return
@@ -85,7 +117,9 @@ final class SearchModel {
     func search() async {
         guard !query.isEmpty else {
             results = []
-            message = nil
+            failure = nil
+            pageFailure = nil
+            stoppedEarly = false
             isSearching = false
             hasMore = false
             return
@@ -101,6 +135,25 @@ final class SearchModel {
         let mine = generation
         let result = await repository.search(query)
         guard !Task.isCancelled, mine == generation else { return }
+        // A fresh search always retires a stale page-2+ failure and the
+        // "gave up early" note from the search it is replacing — both belong
+        // to the previous run of pages, not this one.
+        pageFailure = nil
+        stoppedEarly = false
+
+        // `blockingError` is FeedResult's own line between "asked and failed"
+        // and "asked and got nothing": non-nil only when there is genuinely
+        // nothing to show for this ask (`.staleAfter` with an empty page).
+        // That is the one case where `results` must be left alone — a 429 on
+        // a later keystroke used to blank the grid and throw away results
+        // the reader was still looking at (gap 7, the headline complaint:
+        // "SearchView.swift:275-285", "SearchModel.swift:104,112" before this
+        // change). Everything the reader had stays under a `StaleBar` while
+        // `failure` carries the live countdown.
+        if let blockingError = result.blockingError {
+            failure = blockingError
+            return
+        }
         results = result.series
         // The API's own signal (`pagination.next`), not the filtered count:
         // `search` drops rows locally for `isDiscoverable`/format, so a page
@@ -109,7 +162,10 @@ final class SearchModel {
         // tag common enough to have a filtered row on it — "Isekai" (7,105
         // results) never got past 30. See FeedResult.hasMore.
         hasMore = result.hasMore
-        message = result.series.isEmpty ? result.blockingError?.userFacingMessage : nil
+        // A truly empty answer (no error at all) is a real "nothing matched"
+        // — distinct from the blocking-failure branch above, so the view can
+        // tell `EmptyState` from `FailureState` from the model alone.
+        failure = nil
     }
 
     /// Drops every filter but the typed text, and searches again.
@@ -151,6 +207,24 @@ final class SearchModel {
             // search.
             guard !Task.isCancelled, mine == generation else { return }
 
+            // A page that failed outright (`.staleAfter` with nothing on it)
+            // is not the same event as a page that came back empty after
+            // local filtering (gap 15). `SeriesRepository.search` already
+            // keeps `hasMore == true` on that failure rather than reading it
+            // as end-of-results — this mirrors that rather than re-deriving
+            // it from emptiness, so a throttled page 4 cannot be mistaken for
+            // three filtered-out pages in a row and silently trip
+            // `stoppedEarly` instead of surfacing the real cause. `query.page`
+            // is left at the last page that actually landed, so a retry from
+            // the trailing `InlineFailure` asks for this same page again
+            // rather than skipping it.
+            if let pageError = result.blockingError {
+                pageFailure = pageError
+                hasMore = true
+                return
+            }
+            pageFailure = nil
+
             // Deduplicate: the API repeats series across pages when the
             // underlying ordering shifts between requests, and a duplicate id
             // traps ForEach. Under sort_by=random it is not an edge case but
@@ -174,8 +248,14 @@ final class SearchModel {
             emptyPages += 1
             guard emptyPages < Self.maxConsecutiveEmptyPages else {
                 // Give up rather than keep spending the shared 30 req/min
-                // budget chasing a run of filtered-out pages.
+                // budget chasing a run of filtered-out pages. This is not the
+                // same as reaching the real end of the feed (gap 51) — the
+                // API may still have more, this just stopped asking — so
+                // `stoppedEarly` carries that difference for the view to say
+                // out loud rather than looking identical to "that's all of
+                // them".
                 hasMore = false
+                stoppedEarly = true
                 return
             }
         }

@@ -6,6 +6,7 @@ struct SearchView: View {
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
     /// Opens the genre and tag browser.
     ///
     /// Lives in the screen's own header rather than the navigation bar: the
@@ -69,7 +70,26 @@ struct SearchView: View {
         }
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.query) { name in
-                lenses.save(name: name, query: model.query)
+                // Saving used to close the sheet with nothing confirming it
+                // landed (gap 55) — the reader had no way to tell "saved"
+                // from "the tap missed". `save` reports whether it actually
+                // did (it refuses an empty query or name), so the toast says
+                // which — matching the house wording for a one-word write
+                // confirmation (`RootView+Session.swift:291`,
+                // `LibraryEditSheet.swift:266`).
+                if lenses.save(name: name, query: model.query) {
+                    toasts?.show("Lens saved")
+                    // A lens saved while the idle screen's own count walk is
+                    // still running used to be dropped rather than queued
+                    // behind it (gap 53) — asking again here enqueues it, and
+                    // `LensCounts.load` now drains a shared queue rather than
+                    // a fixed snapshot, so it is picked up before the walk
+                    // ends rather than only on the idle screen's next
+                    // appearance.
+                    counts.load(lenses.own)
+                } else {
+                    toasts?.show("Couldn't save that lens", kind: .failure)
+                }
             }
             .presentationDetents([.height(420)])
             .presentationCornerRadius(Metrics.radiusSheet)
@@ -139,13 +159,20 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
     private var headingText: some View {
-        Text(heading)
-            .typeSubsectionHeader()
-            .foregroundStyle(Palette.textPrimary)
-            .countsNotCuts()
-            .animation(Motion.reduced(.snappy(duration: 0.25)), value: heading)
-            .fixedSize(horizontal: false, vertical: true)
+        // Nil while a new search is in flight, so a heading over the
+        // incoming skeleton cannot claim the previous query's count (gap 50:
+        // "SearchView.swift:194" used to hold "12 shown" above a grid that
+        // was about to show something else entirely).
+        if let heading {
+            Text(heading)
+                .typeSubsectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+                .countsNotCuts()
+                .animation(Motion.reduced(.snappy(duration: 0.25)), value: heading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     /// Two actions of different weight, drawn differently.
@@ -168,32 +195,23 @@ struct SearchView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.press)
-            Button {
+            SurpriseMeButton(isSearching: model.isSearching) {
                 model.query.sort = "random"
                 Task { model.cancelPendingDebounce(); await model.search() }
-            } label: {
-                Text("Surprise me")
-                    .typeInstruction()
-                    .foregroundStyle(Palette.textSecondary)
-                    .frame(minHeight: Metrics.headerPill)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.press)
-            .disabled(model.isSearching)
         }
         .fixedSize()
     }
 
-    /// "12 results · Score" once anything is asked for. Nothing before that —
-    /// see the note where it is used.
-    private var heading: String {
-        guard !model.query.isEmpty else { return "" }
-        // "shown", not "results": this is the number loaded so far, and a query
-        // matching thousands read "24 results" and then "47 results" as the
-        // reader scrolled — the same query reporting different totals.
-        let count = "\(model.results.count) shown"
-        guard let sort = SortOrder.label(for: model.query.sort) else { return count }
-        return "\(count) · \(sort)"
+    /// "12 shown · Score" once anything is asked for, nil before that and
+    /// while a new search is in flight.
+    private var heading: String? {
+        SearchHeading.text(
+            isEmpty: model.query.isEmpty,
+            isSearching: model.isSearching,
+            count: model.results.count,
+            sortLabel: SortOrder.label(for: model.query.sort)
+        )
     }
 
     @ViewBuilder
@@ -214,8 +232,17 @@ struct SearchView: View {
             // The shape of the answer, not a spinner: the grid the results
             // will fill, shimmering, so nothing jumps when they land.
             CoverSkeletonGrid()
-        } else if let message = model.message, model.results.isEmpty {
-            errorState(message)
+        } else if let failure = model.failure, model.results.isEmpty {
+            // Nothing to show and the ask failed outright — a full failure
+            // screen (gap 7). Search is the one screen decision 4 names for
+            // an automatic retry: it is the one place the reader is sitting
+            // there waiting on exactly this answer, unlike a background row
+            // elsewhere that ticks without retrying itself.
+            FailureState(
+                error: failure,
+                retry: { await model.search() },
+                autoRetry: true
+            )
         } else if model.results.isEmpty {
             emptyState
         } else {
@@ -225,12 +252,39 @@ struct SearchView: View {
 
     private var grid: some View {
         VStack(spacing: 0) {
+            // A failure that still has content to show is not a blocking
+            // failure — the last good results stay on screen, under a bar
+            // naming why they might be stale, rather than the grid vanishing
+            // out from under the reader on every throttled keystroke (gap 7).
+            if let failure = model.failure {
+                StaleBar(
+                    headline: failure.headline,
+                    detail: failure.countdown ?? failure.userFacingMessage,
+                    retry: { await model.search() }
+                )
+                .padding(.bottom, 12)
+            }
             resultsGrid
             if model.isLoadingMore {
                 ProgressView()
                     .tint(Palette.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
+            } else if let pageFailure = model.pageFailure {
+                // A page-2+ request that failed outright used to read as the
+                // end of the results (gap 15) — this says otherwise and
+                // offers to try that same page again.
+                InlineFailure(error: pageFailure) { await model.loadMore() }
+                    .padding(.vertical, 16)
+            } else if model.stoppedEarly {
+                // Gave up after too many filtered-empty pages in a row —
+                // not the same as reaching the real end (gap 51), and looked
+                // identical to it until now.
+                Text("Stopped early — more of this may exist further in.")
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
         }
     }
@@ -272,22 +326,60 @@ struct SearchView: View {
         return index >= model.results.count - Self.prefetchDistance
     }
 
-    private func errorState(_ message: String) -> some View {
-        VStack(spacing: 14) {
-            Text(message)
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 44)
-        .padding(.top, 70)
-    }
-
     // Internal, not private: the empty state lives in its own file for the
     // lint's ceiling. See SearchEmptyState.swift.
     var displayedQuery: String {
         let text = (model.query.text ?? "").trimmingCharacters(in: .whitespaces)
         return text.isEmpty ? "these filters" : "\u{201C}\(text)\u{201D}"
+    }
+}
+
+/// The rule behind `SearchView.heading`, pulled out of the view entirely so it
+/// is testable without a live `SearchView` (this project has no
+/// ViewInspector) — gap 50.
+enum SearchHeading {
+    /// "shown", not "results": this is the number loaded so far, and a query
+    /// matching thousands read "24 results" and then "47 results" as the
+    /// reader scrolled — the same query reporting different totals. Nil while
+    /// `isSearching`: the count on screen at that instant still describes the
+    /// query the reader just left, not the one the skeleton beneath it is
+    /// about to answer — `SearchView.swift:194` used to hold the previous
+    /// query's count above the incoming skeleton with nothing telling them
+    /// apart.
+    static func text(isEmpty: Bool, isSearching: Bool, count: Int, sortLabel: String?) -> String? {
+        guard !isEmpty, !isSearching else { return nil }
+        let text = "\(count) shown"
+        guard let sortLabel else { return text }
+        return "\(text) · \(sortLabel)"
+    }
+}
+
+/// "Surprise me" reads as live even while disabled during a search (gap 52).
+///
+/// Its own small view, rather than a plain `Button` inline, because the text
+/// deliberately sets its own colour (`Palette.textSecondary`, to sit a step
+/// quieter than "Browse") — and `PressStyle`'s own disabled colour, set on
+/// `configuration.label` from the outside, is overridden by a label's own
+/// more specific `.foregroundStyle` further in (see `PressStyle`'s doc
+/// comment). A label with no opinion dims automatically; one with an opinion,
+/// like this one, has to read `isEnabled` itself.
+private struct SurpriseMeButton: View {
+    let isSearching: Bool
+    let action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    private var isActuallyEnabled: Bool { isEnabled && !isSearching }
+
+    var body: some View {
+        Button(action: action) {
+            Text("Surprise me")
+                .typeInstruction()
+                .foregroundStyle(isActuallyEnabled ? Palette.textSecondary : Palette.textQuaternary)
+                .frame(minHeight: Metrics.headerPill)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.press)
+        .disabled(!isActuallyEnabled)
     }
 }

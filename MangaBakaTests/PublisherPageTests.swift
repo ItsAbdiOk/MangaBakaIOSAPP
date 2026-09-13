@@ -121,12 +121,69 @@ struct PublisherWiringTests {
         // The header is the count endpoint's total, not the page's length,
         // and the grid pages: Shueisha said "100" when it is thousands.
         #expect(view.contains("async let counted = repository.count(query)"))
-        #expect(view.contains("Text((total ?? series.count).formatted())"))
+        // Gap 57: this used to be `Text((total ?? series.count).formatted())`
+        // unconditionally — `series.count` is the *page* size, and that is
+        // exactly what printed "100" for a publisher with thousands. See
+        // `PublisherHeaderCountTests` for the fixed decision itself.
+        #expect(view.contains("Self.headerCount(total: total, seriesCount: series.count, hasMore: hasMore)"))
         #expect(view.contains("hasMore = result.hasMore"))
         #expect(view.contains(".task(id: order) { await load() }"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
         #expect(credits.contains("onOpenPublisher(publishers[0].name.trimmingCharacters(in: .whitespaces))"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(root.contains(".navigationDestination(item: $openPublisher)"))
+    }
+}
+
+/// Gap 56/57/58 (`FAILURES-SUMMARY.md` §6, batch 2): the publisher page used
+/// to show a bare sentence for any failure, print the page size as the total
+/// when the count endpoint failed, and let `.refreshable` and
+/// `.task(id: order)` interleave their answers.
+@Suite("The publisher page tells a failure apart from an empty answer")
+struct PublisherScreenStateTests {
+    @Test("A failed first page with nothing to fall back on is .failed")
+    func failedWithNothingToShow() {
+        #expect(
+            PublisherView.state(series: [], origin: .staleAfter(.offline), isLoading: false)
+                == .failed(.offline)
+        )
+    }
+
+    @Test("Stale content that survived the failure is shown as .list, not .failed")
+    func staleContentIsShown() {
+        let series = SeriesFactory.make(id: 1)
+        #expect(
+            PublisherView.state(series: [series], origin: .staleAfter(.offline), isLoading: false) == .list
+        )
+    }
+
+    @Test("A genuinely empty answer is .empty, not .failed")
+    func emptyIsNotFailed() {
+        #expect(PublisherView.state(series: [], origin: .network, isLoading: false) == .empty)
+    }
+
+    @Test("Loading wins while nothing has landed yet")
+    func loadingWins() {
+        #expect(PublisherView.state(series: [], origin: .network, isLoading: true) == .loading)
+    }
+}
+
+@Suite("The publisher header count is never the page size")
+struct PublisherHeaderCountTests {
+    @Test("The real total is shown when the count endpoint answered")
+    func realTotalShown() {
+        #expect(PublisherView.headerCount(total: 4_231, seriesCount: 100, hasMore: true) == 4_231)
+    }
+
+    /// The exact bug this replaces: falling back to the page's own count
+    /// prints "100" for a publisher with thousands of series.
+    @Test("An unknown total with more pages left is hidden, not guessed")
+    func unknownTotalWithMoreHidden() {
+        #expect(PublisherView.headerCount(total: nil, seriesCount: 100, hasMore: true) == nil)
+    }
+
+    @Test("An unknown total with every page in is the real count")
+    func unknownTotalCompleteIsAccurate() {
+        #expect(PublisherView.headerCount(total: nil, seriesCount: 42, hasMore: false) == 42)
     }
 }

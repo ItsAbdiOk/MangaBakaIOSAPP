@@ -23,6 +23,11 @@ struct StackView: View {
     /// Commit counts, for the symbol bounces on the two circles.
     @State private var saves = 0
     @State private var skips = 0
+    /// Guards "Deal another now" (gap 12, FAILURES-SUMMARY.md K3): it used to
+    /// call `resetStack()` directly and erase every local save with no
+    /// confirmation and no toast, unlike the header's own reset. Behind the
+    /// same `ConfirmDestructive` dialog as that one now.
+    @State private var isConfirmingDealAnother = false
     private let onOpenShelf: () -> Void
     /// Says a thing happened. A reset otherwise succeeds in silence, which is
     /// indistinguishable from a tap that missed.
@@ -76,11 +81,11 @@ struct StackView: View {
     private var header: some View {
         StackHeader(
             savedCount: model.savedCount,
-            provenance: model.source.caption,
+            provenance: model.caption,
             showsInstruction: !hint.hasDragged
         ) {
-            await model.resetStack()
-            onConfirm("The stack has been reset")
+            let succeeded = await model.resetStack()
+            onConfirm(succeeded ? "The stack has been reset" : "Couldn't reset — try again")
         }
     }
 
@@ -123,12 +128,23 @@ struct StackView: View {
                     .accessibilityAction(named: "Save") { Task { await react(.saved) } }
                     .accessibilityAction(named: "Skip") { Task { await react(.skipped) } }
             } else if model.isLoading {
-                ProgressView().tint(Palette.textTertiary)
+                // A card-shaped placeholder rather than a bare spinner: the
+                // spinner collapsed the card area to zero height, so the
+                // layout jumped the instant a real card landed (gap 38,
+                // FAILURES-SUMMARY.md K12).
+                RoundedRectangle(cornerRadius: Metrics.radiusStackCard, style: .continuous)
+                    .fill(Palette.imagePlaceholder)
+                    .frame(
+                        width: Metrics.stackCardWidth,
+                        height: Metrics.stackCardWidth / Metrics.coverAspect
+                    )
+                    .shimmering()
+                    .accessibilityHidden(true)
             } else {
                 emptyState
             }
         }
-        .frame(height: model.current == nil ? nil : Metrics.stackArea)
+        .frame(height: (model.current != nil || model.isLoading) ? Metrics.stackArea : nil)
         .frame(maxWidth: .infinity)
         .clipped()
     }
@@ -237,7 +253,10 @@ struct StackView: View {
     private func react(_ kind: ShelfEntry.Kind) async {
         if kind == .saved { saves += 1 } else { skips += 1 }
         await model.react(kind)
-        if kind == .saved { onConfirm(model.saveConfirmation) }
+        // `shouldConfirmSave` is false only when the local shelf write itself
+        // failed — confirming "Saved here" for that write used to be
+        // unconditional (gap 36, FAILURES-SUMMARY.md K8).
+        if kind == .saved, model.shouldConfirmSave { onConfirm(model.saveConfirmation) }
     }
 
     /// The card's offset is reset the moment the queue advances, not when
@@ -285,39 +304,52 @@ struct StackView: View {
         .padding(.top, 22)
     }
 
-    /// Run out, or failed to load. Two different things, said differently.
+    /// Run out, or failed to load. Two different things, said differently:
+    /// a real failure gets `FailureState` — a countdown for a rate limit, but
+    /// no auto-retry, since Stack is not Search (decision 4,
+    /// FAILURES-SUMMARY.md §3) — and genuine exhaustion gets the calmer
+    /// `EmptyState`, which used to be shown for both (gap 33, K1).
     ///
-    /// The board draws this as a finished thing — no filled button, because
-    /// nothing is broken and nothing needs fixing. It also says a new stack is
-    /// dealt tomorrow morning, which is true: the rising feed this is built
-    /// from has a one-day cache life.
+    /// This used to say "a new one is dealt tomorrow morning", crediting the
+    /// rising feed's one-day cache life — but the queue here is built from
+    /// `.mix` (1 h) or `.surprise` (never cached), not the rising feed, so
+    /// nothing was actually scheduled for the morning (gap 35, K4). Dropped
+    /// rather than made true, because the header's own reset already re-deals
+    /// immediately and is what a reader who has just run out actually wants.
     ///
-    /// But the header already carries a reset that re-deals immediately, and a
-    /// reader who has just run out is exactly the person who wants it. Abdi's
-    /// call, 2026-09-10: keep tomorrow as the expectation and offer the reset
-    /// here rather than making them find the ... menu.
+    /// The header already carries a reset, and a reader who has just run out
+    /// is exactly the person who wants it. Abdi's call, 2026-09-10: keep the
+    /// reset reachable from here rather than making them find the ... menu —
+    /// now behind the same confirmation as the header's own reset (gap 12,
+    /// K3), since it throws away every local save exactly as that one does.
     @ViewBuilder
     private var emptyState: some View {
-        if let message = model.message {
-            EmptyState(
-                title: "Can't load the stack",
-                message: message,
-                actionTitle: "Try again",
-                actionWeight: .wayOut,
-                action: { Task { await model.refill() } }
-            )
+        if let failure = model.failure {
+            FailureState(error: failure, retry: { await model.refill() })
+                .padding(.top, Metrics.sectionGap)
         } else {
             EmptyState(
                 title: "That's today's stack",
-                message: """
-                \(model.seenThisRun) seen, \(model.savedThisRun) saved. \
-                A new one is dealt tomorrow morning.
-                """,
+                message: "\(model.seenThisRun) seen, \(model.savedThisRun) saved.",
                 actionTitle: "See what you saved",
                 actionWeight: .aside,
                 action: onOpenShelf,
                 secondaryTitle: "Deal another now",
-                secondaryAction: { Task { await model.resetStack() } }
+                secondaryAction: { isConfirmingDealAnother = true }
+            )
+            .confirmDestructive(
+                isPresented: $isConfirmingDealAnother,
+                title: "Deal a new stack now?",
+                consequence: """
+                Forgets every save and skip on this device, and deals a fresh \
+                stack. Anything already added to your MangaBaka library stays \
+                there.
+                """,
+                label: "Deal another",
+                action: {
+                    let succeeded = await model.resetStack()
+                    onConfirm(succeeded ? "The stack has been reset" : "Couldn't reset — try again")
+                }
             )
         }
     }

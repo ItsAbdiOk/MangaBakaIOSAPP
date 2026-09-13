@@ -1,5 +1,38 @@
 import SwiftUI
 
+/// The Keychain operations `SettingsView` needs, seamed behind a protocol so
+/// a save failure (gap 118) can be driven from a test double — the real
+/// Keychain cannot be made to refuse a write on demand the way a network
+/// stub can be made to answer any status code.
+protocol TokenPersisting: Sendable {
+    func read() -> String?
+    @discardableResult func write(_ token: String) -> Bool
+    @discardableResult func clear() -> Bool
+}
+
+extension TokenStore: TokenPersisting {}
+
+extension APIError {
+    /// A short phrase for the account card's cramped "not checked yet" line,
+    /// where `userFacingMessage`'s full paragraph — written to stand alone
+    /// on a whole failure screen — read like a mismatched sentence bolted on
+    /// after "Saved on this phone but not checked yet:" (gap 119: "You're
+    /// offline. Showing what was downloaded. Nothing new can load until
+    /// you're back." is feed wording, not a reason clause).
+    ///
+    /// Not on `APIError` itself — that type belongs to batch 0, already
+    /// shipped — so this lives with its one caller instead of widening a
+    /// type other work depends on.
+    var shortReason: String {
+        switch self {
+        case .offline: "you're offline"
+        case .rateLimited: "MangaBaka asked for a pause"
+        case .cancelled: "that check didn't finish"
+        case .server, .decoding, .transport: "of a server problem"
+        }
+    }
+}
+
 /// Settings, including entering a personal access token.
 ///
 /// The token is a stopgap until OAuth exists: a PAT never expires and is not
@@ -25,10 +58,52 @@ struct SettingsView: View {
 
     @State private var entry = ""
     @State private var status: TokenStatus = .idle
-    @State private var storedTokenExists = TokenStore().read() != nil
+    @State private var storedTokenExists: Bool
     /// The rating awaiting confirmation, set while the opt-in alert is up.
     @State private var pendingOptIn: ContentPreferences.Rating?
-    private let store = TokenStore()
+    private let store: any TokenPersisting
+    private let defaults: UserDefaults
+    /// Gap 121: re-checking on every appearance meant a 429 hit at exactly
+    /// the wrong moment flipped a genuinely connected card to "Not checked
+    /// yet" — a check that failed to run is not the same fact as a token
+    /// that stopped working, and the card could not tell them apart. A check
+    /// less than an hour old is trusted rather than repeated.
+    private static let lastCheckedNameKey = "settings.tokenCheck.name"
+    private static let lastCheckedAtKey = "settings.tokenCheck.at"
+    private static let recheckInterval: TimeInterval = 60 * 60
+
+    init(
+        validate: @escaping () async -> TokenCheck,
+        content: ContentPreferencesStore,
+        formats: FormatPreferencesStore,
+        blockedTags: BlockedTagsStore,
+        catalogue: CatalogueService,
+        focusAccount: Bool = false,
+        reminders: ReleaseReminders,
+        onRemindersChanged: @escaping () async -> Void,
+        history: HistoryStore,
+        taste: TasteProfile,
+        onAccountChanged: @escaping () async -> Void,
+        titleRevision: Binding<Int>,
+        store: any TokenPersisting = TokenStore(),
+        defaults: UserDefaults = .standard
+    ) {
+        self.validate = validate
+        self.content = content
+        self.formats = formats
+        self.blockedTags = blockedTags
+        self.catalogue = catalogue
+        self.focusAccount = focusAccount
+        self.reminders = reminders
+        self.onRemindersChanged = onRemindersChanged
+        self.history = history
+        self.taste = taste
+        self.onAccountChanged = onAccountChanged
+        self._titleRevision = titleRevision
+        self.store = store
+        self.defaults = defaults
+        self._storedTokenExists = State(initialValue: store.read() != nil)
+    }
 
     var body: some View {
         ScrollView {
@@ -77,8 +152,35 @@ struct SettingsView: View {
             Text(optInWarning)
         }
         .task {
-            if storedTokenExists, case .idle = status { await check() }
+            guard storedTokenExists, case .idle = status else { return }
+            // Gap 121: a check less than an hour old is trusted rather than
+            // repeated on every appearance of this screen — each push
+            // rebuilds `SettingsView` fresh, so without this every visit
+            // re-asked MangaBaka, and a 429 landing at exactly that moment
+            // flipped "Connected" to "Not checked yet" for a token that had
+            // done nothing wrong.
+            if let cached = recentlyCheckedName() {
+                status = .signedIn(cached.isEmpty ? nil : cached)
+                return
+            }
+            await check()
         }
+    }
+
+    /// The name from the last check, if that check happened inside
+    /// `recheckInterval`. Nil forces an actual re-check — including the
+    /// first one ever, since `lastCheckedAtKey` is absent then.
+    private func recentlyCheckedName() -> String? {
+        let lastCheckedAt = defaults.double(forKey: Self.lastCheckedAtKey)
+        guard lastCheckedAt > 0 else { return nil }
+        let age = Date().timeIntervalSince1970 - lastCheckedAt
+        guard age >= 0, age < Self.recheckInterval else { return nil }
+        return defaults.string(forKey: Self.lastCheckedNameKey) ?? ""
+    }
+
+    private func rememberCheck(name: String?) {
+        defaults.set(name ?? "", forKey: Self.lastCheckedNameKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: Self.lastCheckedAtKey)
     }
 
     private var accountSection: some View {
@@ -94,6 +196,7 @@ struct SettingsView: View {
                     storedTokenExists = false
                     entry = ""
                     status = .idle
+                    defaults.removeObject(forKey: Self.lastCheckedAtKey)
                     // The third way to change account, and the one that called
                     // none of this. Removing a token and entering a different
                     // one left the previous person's taste ledger, profile id
@@ -101,6 +204,7 @@ struct SettingsView: View {
                     // path was fixed for, in the path nobody wired.
                     await onAccountChanged()
                 },
+                onReplace: { status = .idle },
                 focusOnAppear: focusAccount
             )
         }
@@ -191,7 +295,14 @@ struct SettingsView: View {
     private func save() async {
         status = .checking
         guard store.write(entry) else {
-            status = .failed("Could not save to the Keychain.")
+            // Gap 118: this used to be `.failed`, the same state MangaBaka
+            // itself answers a rejected token with — so a Keychain write
+            // refusal (storage full, the item locked by another process)
+            // read as "That token was not accepted by MangaBaka" and sent
+            // the reader to generate a new one for a problem no new token
+            // could fix. `.notStored` says what actually happened: the
+            // token never left this phone.
+            status = .notStored
             return
         }
         storedTokenExists = true
@@ -218,8 +329,10 @@ struct SettingsView: View {
         case let .accepted(name):
             status = .signedIn(name)
             entry = ""
+            rememberCheck(name: name)
         case .rejected:
             status = .failed("That token was not accepted by MangaBaka.")
+            defaults.removeObject(forKey: Self.lastCheckedAtKey)
         case let .unknown(reason):
             // Not a verdict on the token. Saying so matters twice over: the
             // reader is not told their token is bad when it is not, and `save`

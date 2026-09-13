@@ -33,6 +33,7 @@ struct SeedPickerSheet: View {
             VStack(spacing: 0) {
                 field
                 chosen
+                capFootnote
                 results
             }
             .background(Palette.ground)
@@ -87,6 +88,27 @@ struct SeedPickerSheet: View {
         .padding(.vertical, 12)
     }
 
+    /// Shown once the seeds are full, so the dimmed, untappable rows below
+    /// have a reason rather than looking broken.
+    ///
+    /// Rows past the cap were left at `opacity(0.4)` with hit-testing off and
+    /// nothing saying why (gap 45, FAILURES-SUMMARY.md M10) — indistinguishable
+    /// from a row that simply failed to render.
+    nonisolated static func capFootnoteText(isFull: Bool) -> String? {
+        isFull ? "Three seeds is the limit — remove one to swap." : nil
+    }
+
+    @ViewBuilder
+    private var capFootnote: some View {
+        if let text = Self.capFootnoteText(isFull: isFull) {
+            Text(text)
+                .typeFootnote()
+                .foregroundStyle(Palette.textMuted)
+                .padding(.horizontal, Metrics.gutter)
+                .padding(.bottom, 8)
+        }
+    }
+
     /// What is already picked, so the reader can see when they are done rather
     /// than closing the sheet to check.
     @ViewBuilder
@@ -121,6 +143,25 @@ struct SeedPickerSheet: View {
         }
     }
 
+    /// `SearchModel.message` is only ever non-nil when `result.blockingError`
+    /// fired — `SearchModel.swift`'s `search()` sets it to
+    /// `result.blockingError?.userFacingMessage` when `series.isEmpty`, and
+    /// `blockingError` is nil for a genuine empty answer. So a non-nil
+    /// `message` here always means a real failure, never a real zero-result
+    /// search — but the old code showed the same idle copy, "Type a title you
+    /// love.", for a failure, an untouched field, AND a search that ran and
+    /// matched nothing (gap 44, FAILURES-SUMMARY.md M9), so a reader who had
+    /// just typed a title was told to type one.
+    ///
+    /// `nonisolated static` rather than a computed property so
+    /// `MixModelTests` can drive the three branches directly — this project
+    /// has no ViewInspector to render the sheet and read its text back.
+    nonisolated static func emptyCopy(message: String?, queryText: String?) -> String {
+        if let message { return message }
+        guard let queryText, !queryText.isEmpty else { return "Type a title you love." }
+        return "Nothing called \u{201C}\(queryText)\u{201D}."
+    }
+
     @ViewBuilder
     private var results: some View {
         if search.isSearching && search.results.isEmpty {
@@ -128,12 +169,21 @@ struct SeedPickerSheet: View {
             ProgressView().tint(Palette.textQuaternary)
             Spacer()
         } else if search.results.isEmpty {
+            let isFailure = search.message != nil
             Spacer()
-            Text(search.message ?? "Type a title you love.")
-                .typeSmallMeta()
-                .foregroundStyle(Palette.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Metrics.gutter)
+            VStack(spacing: 10) {
+                Text(Self.emptyCopy(message: search.message, queryText: search.query.text))
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .multilineTextAlignment(.center)
+                if isFailure {
+                    Button("Try again") { Task { await search.search() } }
+                        .buttonStyle(.press)
+                        .typeInstruction()
+                        .foregroundStyle(Palette.accent)
+                }
+            }
+            .padding(.horizontal, Metrics.gutter)
             Spacer()
         } else {
             List(search.results) { series in

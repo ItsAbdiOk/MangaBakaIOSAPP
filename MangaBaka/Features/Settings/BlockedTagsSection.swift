@@ -102,9 +102,28 @@ struct BlockTagPicker: View {
     let blockedTags: BlockedTagsStore
     let catalogue: CatalogueService
 
+    /// What the vocabulary fetch produced, so the picker can tell "still
+    /// asking", "asking failed with a bundled copy to fall back on", and
+    /// "asking failed with nothing at all" apart — a blank list used to be
+    /// the only outcome a failed fetch ever showed (gap 40, 68).
+    ///
+    /// Its own type rather than reusing `TagPickerSheet`'s — that sheet
+    /// belongs to a sibling agent working on it in parallel, and the two
+    /// pickers' status is the same *shape* of problem without being the same
+    /// code.
+    enum Status: Equatable {
+        case loading
+        /// The live fetch answered — nothing is stale.
+        case live
+        /// The live fetch failed, but the bundled taxonomy filled the list.
+        case bundledOnly(APIError)
+        /// The live fetch failed and there is nothing bundled either.
+        case failed(APIError)
+    }
+
     @State private var query = ""
     @State private var tags: [Tag] = []
-    @State private var isLoading = true
+    @State private var status: Status = .loading
     @State private var search: TagSearch?
     @Environment(\.dismiss) private var dismiss
 
@@ -120,6 +139,11 @@ struct BlockTagPicker: View {
     var body: some View {
         NavigationStack {
             List {
+                if case let .failed(error) = status {
+                    InlineFailure(error: error) { await load() }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
                 ForEach(matches) { tag in
                     row(tag)
                 }
@@ -132,13 +156,24 @@ struct BlockTagPicker: View {
                     .foregroundStyle(Palette.textMuted)
                     .listRowBackground(Color.clear)
                 }
-                if isLoading {
+                if status == .loading {
                     HStack {
                         Spacer()
                         ProgressView().tint(Palette.textTertiary)
                         Spacer()
                     }
                     .listRowBackground(Color.clear)
+                }
+                if case let .bundledOnly(error) = status {
+                    // A footnote, not a full failure: the list on screen is
+                    // real and usable, just a year-old bundled copy rather
+                    // than today's answer (gap 68) — mirrors what the
+                    // vocabulary fetch's other pickers do, in this picker's
+                    // own state rather than one shared across screens.
+                    Text("Showing a bundled copy of the tag list — \(error.headline.lowercased()).")
+                        .typeFootnote()
+                        .foregroundStyle(Palette.textMuted)
+                        .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
@@ -159,10 +194,43 @@ struct BlockTagPicker: View {
         .task {
             let search = TagSearch(catalogue: catalogue)
             self.search = search
-            tags = await catalogue.tags(limit: 500).value ?? []
-            search.loaded = tags
-            isLoading = false
+            await load()
         }
+    }
+
+    /// Bundled first, so the sheet opens instantly and offline, mirroring
+    /// `TagPickerSheet`'s own local strategy; the live fetch then either
+    /// confirms the bundled copy was enough or replaces it, and `status`
+    /// records which of the two happened for the footnote above.
+    private func load() async {
+        status = .loading
+        let bundled = TagTaxonomy.bundled().filter(\.isUsable)
+        if !bundled.isEmpty {
+            tags = bundled
+            search?.loaded = tags
+        }
+
+        let fetched = await catalogue.tags(limit: 500)
+        status = Self.status(bundled: bundled, fetched: fetched)
+        if let value = fetched.value, !value.isEmpty {
+            tags = value.filter(\.isUsable)
+            search?.loaded = tags
+        }
+    }
+
+    /// The pure classification behind `status`, pulled out of `load()` so it
+    /// can be driven directly from a test — this project has no
+    /// ViewInspector, so logic that only lives inside a `@State` mutation
+    /// cannot be proven any other way. `nonisolated` because a test calls it
+    /// off the main actor without wanting to spin up a whole view.
+    nonisolated static func status(bundled: [Tag], fetched: Fetched<[Tag]>) -> Status {
+        if let value = fetched.value, !value.isEmpty { return .live }
+        if let error = fetched.error {
+            return bundled.isEmpty ? .failed(error) : .bundledOnly(error)
+        }
+        // Asked and got nothing back, rather than asked and failed — an
+        // empty vocabulary is a real, if strange, answer.
+        return .live
     }
 
     private func row(_ tag: Tag) -> some View {

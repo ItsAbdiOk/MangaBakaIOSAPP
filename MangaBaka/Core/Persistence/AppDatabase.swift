@@ -53,6 +53,84 @@ struct AppDatabase: Sendable {
         try AppDatabase(writer: try DatabaseQueue())
     }
 
+    /// What opening the on-disk database actually did.
+    struct OpenResult: Sendable {
+        let database: AppDatabase
+        /// True when the file that was already there could not be opened or
+        /// migrated and was renamed aside so a fresh one could take its
+        /// place. `AppServices.makeDatabase` uses this to show a one-shot
+        /// toast — gap 3: without it, a corrupt file fell back to an
+        /// in-memory database *silently*, on every single launch, which read
+        /// to the reader as "the app forgets my stack every day" with no
+        /// explanation and no way to notice why.
+        let wasReset: Bool
+    }
+
+    /// Opens the on-disk database, recovering from a file that exists but
+    /// cannot be opened or migrated — corruption, a schema from a future
+    /// version this build cannot read — by renaming it aside and starting
+    /// fresh, rather than leaving that to `onDisk`'s caller to fall back to
+    /// an in-memory database (which remembers nothing between launches) with
+    /// no attempt to recover the on-disk path at all.
+    ///
+    /// The bad file is renamed, not deleted. It is disposable cache data —
+    /// see the type's own doc comment — so nothing is lost that the app
+    /// cannot rebuild, but renaming rather than deleting still leaves the
+    /// actual bytes on disk for on-device diagnosis, which a `DELETE` would
+    /// throw away permanently for no benefit over a rename.
+    ///
+    /// Returns `nil` only when even a fresh file at the same path cannot be
+    /// opened — a directory that cannot be created, say — at which point the
+    /// caller's own in-memory fallback is what runs.
+    static func onDiskResettingIfCorrupt(
+        named name: String = "mangabaka.sqlite",
+        now: () -> Date = Date.init
+    ) -> OpenResult? {
+        if let opened = try? onDisk(named: name) {
+            return OpenResult(database: opened, wasReset: false)
+        }
+
+        guard let directory = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ) else { return nil }
+        let url = directory.appendingPathComponent(name)
+
+        // Nothing to rename means the failure was not "an existing file is
+        // corrupt" — a fresh attempt at the same path would fail identically,
+        // so this is not a case `wasReset` should claim to have fixed.
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+
+        // Colons are not valid in a filename on APFS; ISO 8601's own
+        // separator has to go.
+        let stamp = ISO8601DateFormatter().string(from: now()).replacingOccurrences(of: ":", with: "-")
+        let renamed = directory.appendingPathComponent("\(name).corrupt-\(stamp)")
+        try? FileManager.default.removeItem(at: renamed)
+        try? FileManager.default.moveItem(at: url, to: renamed)
+        // WAL mode leaves sidecar files next to the main one; they belong to
+        // the file that was just moved aside, and letting SQLite find them
+        // beside a brand new file would have it try to replay someone else's
+        // write-ahead log against a database that never made those writes.
+        for suffix in ["-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name + suffix))
+        }
+
+        guard let fresh = try? onDisk(named: name) else { return nil }
+        return OpenResult(database: fresh, wasReset: true)
+    }
+
+    /// **Downgrade note.** `DatabaseMigrator` only ever moves forward: it has
+    /// no notion of a database that already carries a migration this build
+    /// does not know about (an App Store rollback, TestFlight build N+1 on
+    /// disk then N reinstalled). GRDB does not fail that case, because it
+    /// never runs a migration whose name is already recorded — the file just
+    /// opens as-is, with whatever extra tables or columns the newer build
+    /// left behind and this build's code never reads. Nothing in this app
+    /// currently drops a column or renames a table between migrations, so
+    /// there is no case on record where that silence has hidden data loss;
+    /// flagged here rather than fixed because building for a downgrade this
+    /// project has never shipped would be solving a problem that does not
+    /// exist yet.
     private static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 

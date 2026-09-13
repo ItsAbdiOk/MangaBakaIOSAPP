@@ -61,7 +61,7 @@ struct BlendDNAView: View {
             HStack(spacing: 7) {
                 Text(strand.name)
                     .strikethrough(isOff)
-                Text(percent(strand.weight))
+                Text(Self.percent(strand.weight))
                     .typeGridMeta()
                     .opacity(0.55)
             }
@@ -83,13 +83,21 @@ struct BlendDNAView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.press)
-        .accessibilityLabel("\(strand.name), \(percent(strand.weight)) of the blend")
+        .accessibilityLabel("\(strand.name), \(Self.percent(strand.weight)) of the blend")
         .accessibilityValue(isOff ? "Excluded" : "Included")
         .accessibilityHint(isOff ? "Double tap to include" : "Double tap to exclude")
     }
 
-    private func percent(_ weight: Double) -> String {
-        "\(Int((weight * 100).rounded()))%"
+    /// `nonisolated static` so `BlendDNATests` can call it directly.
+    ///
+    /// `weight` comes straight off the wire (`/v1/series/mix`'s `dna[].weight`,
+    /// `BlendDNA.swift:15`). `JSONDecoder` rejects NaN/Inf, but a finite value
+    /// at or past roughly ±9.2×10¹⁸ still traps a bare `Int(Double)` — a
+    /// malformed answer would crash this row rather than misrender it (gap
+    /// 1(g), FAILURES-SUMMARY.md). `Int(wholeOrClamped:)` is the same fix used
+    /// at the other 26 sites in that family.
+    nonisolated static func percent(_ weight: Double) -> String {
+        "\(Int(wholeOrClamped: (weight * 100).rounded()))%"
     }
 
     /// What the last edit did. Absent on a first blend, because there is
@@ -116,13 +124,13 @@ struct BlendDNAView: View {
                                     .typeInstruction()
                                     .foregroundStyle(Palette.textBody)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(percent(move.from))
+                                Text(Self.percent(move.from))
                                     .typeSmallMeta()
                                     .foregroundStyle(Palette.textMuted)
                                 Image(systemName: "arrow.right")
                                     .font(.system(size: 9, weight: .semibold))
                                     .foregroundStyle(Palette.accent)
-                                Text(percent(move.to))
+                                Text(Self.percent(move.to))
                                     .typeSmallMeta()
                                     .foregroundStyle(Palette.accent)
                             }

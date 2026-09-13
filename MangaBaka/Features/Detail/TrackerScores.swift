@@ -51,8 +51,8 @@ struct TrackerScores: View {
 
         if spread >= divisiveSpread {
             return .divisive(
-                high: Extreme(name: name(highest.name), score: Int(highest.score.rounded())),
-                low: Extreme(name: name(lowest.name), score: Int(lowest.score.rounded()))
+                high: Extreme(name: name(highest.name), score: Int(wholeOrClamped: highest.score.rounded())),
+                low: Extreme(name: name(lowest.name), score: Int(wholeOrClamped: lowest.score.rounded()))
             )
         }
         if spread <= agreedSpread {

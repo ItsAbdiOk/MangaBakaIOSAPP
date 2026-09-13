@@ -463,6 +463,25 @@ struct StackSourceTests {
 
         #expect(await model.currentReason == nil)
     }
+
+    /// `StubLibrary(status: nil)` throws `.offline` from `recommendationStatus()`
+    /// — a failed check, not a real cold-start answer. Caching that as the
+    /// same `false` a genuine cold start produces told a reader with a real
+    /// library on file "save a few to make it yours" until relaunch (gap 107,
+    /// FAILURES-SUMMARY.md K6). Expected to fail today with:
+    /// `canUseProfile == false` — the failure is cached exactly like a real
+    /// answer.
+    @Test("A failed profile check is not cached as \"no profile\"")
+    func failedStatusCheckIsNotCachedAsNoProfile() async throws {
+        let library = StubLibrary(status: nil)
+        let model = await StackModel(
+            repository: SilentRepository(), shelf: try makeShelf(), library: library
+        )
+
+        await model.loadIfNeeded()
+
+        #expect(await model.canUseProfile == nil)
+    }
 }
 
 /// A request that carries the reader's identity must not be written to the

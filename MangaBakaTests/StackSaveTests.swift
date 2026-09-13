@@ -97,4 +97,63 @@ struct StackSaveWritesThroughTests {
 
         #expect(model.saveWarning == nil)
     }
+
+    /// A shelf write is the one place a save is guaranteed to land — unlike
+    /// the library push above (K9, done well already), which already has its
+    /// own warning. `try?` used to let this pass silently: `saved.insert` and
+    /// the "Saved here" toast fired even when the write never reached disk
+    /// (gap 36, FAILURES-SUMMARY.md K8). Expected to fail today with:
+    /// `model.saved.map(\.id) == [1]` (inserted anyway) and
+    /// `model.shouldConfirmSave == true` (that property does not exist yet).
+    @Test("A local shelf write failure keeps the id out of `saved` and blocks the toast")
+    func shelfWriteFailureIsSurfaced() async throws {
+        let database = try AppDatabase.inMemory()
+        // Dropping the table is the write failing, not a mock: `record`
+        // throws a real GRDB error the moment the table it targets is gone.
+        try await database.writer.write { db in try db.drop(table: "shelfEntry") }
+        let shelf = ShelfStore(database: database)
+        let model = StackModel(repository: SilentRepository(), shelf: shelf)
+        await model.loadIfNeeded()
+
+        await model.react(.saved)
+
+        #expect(model.saved.isEmpty, "the write never landed, so nothing should show as saved")
+        #expect(model.saveWarning != nil)
+        #expect(!model.shouldConfirmSave, "a local failure must not be confirmed as \"Saved here\"")
+    }
+}
+
+/// Gap 37 (K11): `resetStack` used to be `Void` and `try?` swallowed
+/// `shelf.clear()` throwing, so the caller confirmed "The stack has been
+/// reset" while the database still held every save.
+@Suite("Stack reset reports whether the shelf actually cleared")
+@MainActor
+struct StackResetReportsFailureTests {
+    private final class SilentRepository: StubRepositoryBase, @unchecked Sendable {}
+
+    /// Expected to fail to compile today: `resetStack()` returns `Void`, so
+    /// `let succeeded = await model.resetStack()` does not type-check.
+    @Test("A reset whose shelf clear fails is not reported as a success")
+    func failedClearIsReported() async throws {
+        let database = try AppDatabase.inMemory()
+        try await database.writer.write { db in try db.drop(table: "shelfEntry") }
+        let shelf = ShelfStore(database: database)
+        let model = StackModel(repository: SilentRepository(), shelf: shelf)
+
+        let succeeded = await model.resetStack()
+
+        #expect(!succeeded)
+    }
+
+    @Test("An ordinary reset reports success")
+    func ordinaryResetIsReported() async throws {
+        let model = StackModel(
+            repository: SilentRepository(),
+            shelf: ShelfStore(database: try AppDatabase.inMemory())
+        )
+
+        let succeeded = await model.resetStack()
+
+        #expect(succeeded)
+    }
 }

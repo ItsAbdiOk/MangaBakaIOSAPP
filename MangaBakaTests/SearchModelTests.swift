@@ -108,6 +108,112 @@ struct SearchModelTests {
         #expect(model.results.isEmpty)
         #expect(model.isSearching == false)
     }
+
+    /// Gap 7, the headline reader complaint: a 429 mid-typing used to blank
+    /// the grid behind a static sentence with no countdown
+    /// (`SearchView.swift:275-285`) and `message` (`SearchModel.swift:16`)
+    /// could not tell "nothing matched" from "the ask failed" apart from an
+    /// empty string either way. `FeedResult.blockingError` is the line
+    /// `SeriesRepository`'s other callers already draw between the two —
+    /// non-nil only when there is genuinely nothing to show for this ask —
+    /// and `search()` now leaves `results` untouched when it is set, so the
+    /// last good page stays on screen under a `StaleBar` rather than being
+    /// thrown away on every further keystroke.
+    @Test("A rate-limited search keeps the previous results and surfaces a live countdown")
+    func rateLimitedSearchKeepsPreviousResults() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [series(1), series(2)], origin: .network)
+        let model = SearchModel(repository: repository)
+        model.query.text = "one"
+        await model.search()
+        #expect(model.results.count == 2, "Sanity: the first search must actually land")
+        #expect(model.failure == nil)
+
+        let until = Date().addingTimeInterval(30)
+        repository.result = FeedResult(
+            series: [],
+            origin: .staleAfter(.rateLimited(until: until)),
+            hasMore: true
+        )
+        model.query.text = "one two"
+        await model.search()
+
+        #expect(
+            model.results.count == 2,
+            "The previous results must stay on screen through a rate limit, not be thrown away"
+        )
+        #expect(model.failure == .rateLimited(until: until))
+        #expect(model.failure?.countdown != nil, "Expected a live countdown, not a frozen sentence")
+    }
+
+    /// The control for the test above: a genuinely empty answer (no error at
+    /// all) is a real "nothing matched" and must not be confused with a
+    /// failure — the two need to render as `EmptyState` and `FailureState`
+    /// respectively, which the view can only do if the model tells them apart.
+    @Test("A truly empty answer clears any previous failure")
+    func emptyAnswerIsNotAFailure() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [], origin: .network)
+        let model = SearchModel(repository: repository)
+        model.query.text = "nothing at all matches this"
+
+        await model.search()
+
+        #expect(model.results.isEmpty)
+        #expect(model.failure == nil, "An empty, non-failing answer must not read as a failure")
+    }
+}
+
+/// A search whose page 2 fails outright, rather than merely coming back
+/// empty after local filtering — the distinction gap 15 is about.
+private final class PagedFailureRepository: StubRepositoryBase, @unchecked Sendable {
+    private(set) var searchCount = 0
+
+    override func search(_ query: SearchQuery) async -> FeedResult {
+        searchCount += 1
+        guard query.page > 1 else {
+            return FeedResult(
+                series: [SeriesFactory.make(id: 1, title: "S1", cover: .sized)],
+                origin: .network,
+                hasMore: true
+            )
+        }
+        // Mirrors what `SeriesRepository.search`'s own catch branch actually
+        // returns on a real failure: `hasMore: true`, not the default
+        // `false` — see `SeriesRepository+Paging.swift`.
+        return FeedResult(series: [], origin: .staleAfter(.offline), hasMore: true)
+    }
+}
+
+@Suite("Search pages that fail outright are not the end of the results")
+@MainActor
+struct SearchPageFailureTests {
+    /// Gap 15: `loadMore`'s loop used to read `result.hasMore` at face value
+    /// regardless of *why* a page came back empty, so a page that failed
+    /// outright (`.staleAfter`) was folded into the same "filtered-empty
+    /// page" counter as a page that genuinely had nothing after local
+    /// filtering — three of either in a row flipped `hasMore` to `false` and
+    /// the failed page read as the end of the results, while also spending
+    /// the shared 30 req/min budget retrying pages 3 and 4 it should not
+    /// have touched at all.
+    @Test("A failed page 2 stays retryable and stops the walk immediately")
+    func failedPageStaysRetryable() async {
+        let repository = PagedFailureRepository()
+        let model = SearchModel(repository: repository)
+        model.query.text = "solo"
+        await model.search()
+        #expect(model.results.count == 1)
+        #expect(model.hasMore == true)
+
+        await model.loadMore()
+
+        #expect(model.hasMore == true, "A failed page must not be read as the end of the results")
+        #expect(model.pageFailure == .offline)
+        #expect(
+            repository.searchCount == 2,
+            "Must stop at the first failed page rather than burning the empty-page budget on it"
+        )
+    }
 }
 
 /// Filters that outlive the screen they were set on.

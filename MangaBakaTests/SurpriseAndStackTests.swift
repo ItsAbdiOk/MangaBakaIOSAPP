@@ -219,6 +219,34 @@ struct StackPersonalisationTests {
         #expect(repository.seedGroups[0] != repository.seedGroups[1])
         #expect(await model.queue.count == 3)
     }
+
+    /// `FeedResult.blockingError` only fires when `series` itself came back
+    /// empty — but a `.staleAfter` batch that is non-empty on the wire and
+    /// empty only after local filtering (every entry already reacted to) is
+    /// still an offline/rate-limited answer the reader cannot see. It used to
+    /// read as "That's today's stack" instead (gap 34, FAILURES-SUMMARY.md
+    /// K2). Expected to fail today with: `failure == nil` — `StackModel` has
+    /// no such property yet.
+    @Test("A stale batch that is empty only after filtering is a failure, not exhaustion")
+    func staleBatchFullyReactedIsAFailure() async throws {
+        let shelf = try makeShelf()
+        try await shelf.record(SeriesFactory.make(id: 1, title: "Seen"), as: .skipped)
+
+        final class StaleFullyReactedRepository: StubRepositoryBase, @unchecked Sendable {
+            override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
+                FeedResult(
+                    series: [SeriesFactory.make(id: 1, title: "Seen")],
+                    origin: .staleAfter(.offline)
+                )
+            }
+        }
+
+        let model = await StackModel(repository: StaleFullyReactedRepository(), shelf: shelf)
+        await model.loadIfNeeded()
+
+        #expect(await model.failure == .offline)
+        #expect(await model.queue.isEmpty)
+    }
 }
 
 /// L11: the stack card's caption used to show `series.tags.prefix(3)` — the

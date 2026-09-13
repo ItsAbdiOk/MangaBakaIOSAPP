@@ -100,6 +100,16 @@ struct DetailCredits: View {
     }
 
     var body: some View {
+        // Gap 79: with no rows, this used to still lay out the card's own
+        // padding, clip shape and hairline border — an empty rounded
+        // rectangle taking up the space (and the row gap above and below it)
+        // of a section with nothing in it.
+        if !rows.isEmpty {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 // Label and value share a row until they cannot. At

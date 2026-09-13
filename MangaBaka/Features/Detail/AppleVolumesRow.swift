@@ -74,11 +74,21 @@ struct AppleVolumesRow: View {
 
     /// "15" when the store has them all or the series has not ended;
     /// "15 of 27 on Apple Books" when it has and the store is behind.
+    ///
+    /// Gap 66: the "on Apple Books" half used to be dropped — "15 of 27" read
+    /// as the series being incomplete, when it is this one store that is.
     var countLine: String {
         if let expected, !Self.covers(volumes, through: expected) {
-            return "\(volumes.count) of \(expected)"
+            return "\(volumes.count) of \(expected) on \(sourceStoreName)"
         }
         return "\(volumes.count)"
+    }
+
+    /// The store this count is short against — Apple's own, unless the shelf
+    /// is the Japanese fallback, which is Apple's Japanese storefront either
+    /// way.
+    private var sourceStoreName: String {
+        edition == .japanese ? "the Japanese Apple Books" : "Apple Books"
     }
 
     /// Whether the shelf holds every number from 1 to `expected` — a count
@@ -105,9 +115,16 @@ struct AppleVolumesRow: View {
                 radius: Metrics.radiusSeed,
                 accessibilityText: "Volume \(volume.number)"
             )
+            // Gap 65: with no link at all, this button did nothing on tap and
+            // looked exactly like every spine that opens the store — the
+            // `PressStyle` `.press` gives every button the same highlight
+            // regardless of whether `disabled(volume.link == nil)` above ever
+            // fires. Dimmed here, at the one call site that actually knows
+            // which spines have nowhere to go, rather than widening
+            // `PressStyle` itself for a case only this row has today.
             Text("Vol. \(volume.number)")
                 .typeCardTitle()
-                .foregroundStyle(Palette.textPrimary)
+                .foregroundStyle(volume.link == nil ? Palette.textMuted : Palette.textPrimary)
             // Apple's price beside the cover: what it costs is the first
             // thing a reader deciding whether to buy wants to know.
             if edition == nil, let price = volume.formattedPrice {
@@ -117,14 +134,16 @@ struct AppleVolumesRow: View {
             }
         }
         .frame(width: Metrics.coverSeedWidth, alignment: .leading)
+        .opacity(volume.link == nil ? 0.6 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             ["Volume \(volume.number)", edition == nil ? volume.formattedPrice : nil]
                 .compactMap { $0 }.joined(separator: ", ")
         )
         .accessibilityHint(
-            volume.source == .googleBooks ? "Opens it on Google Books" : "Opens it in Apple Books"
+            volume.link == nil ? ""
+                : volume.source == .googleBooks ? "Opens it on Google Books" : "Opens it in Apple Books"
         )
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(volume.link == nil ? [] : .isButton)
     }
 }

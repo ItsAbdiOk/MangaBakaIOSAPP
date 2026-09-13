@@ -16,12 +16,24 @@ struct AccountCard: View {
     let onSave: () async -> Void
     let onCheck: () async -> Void
     let onRemove: () async -> Void
+    /// Gap 120: "Replace" used to only clear the text field, while the card
+    /// stayed in its `.signedIn` rendering — which shows no field at all —
+    /// so the tap had no visible effect whatsoever. This tells the caller to
+    /// drop `status` back to `.idle`, which is what actually reveals the
+    /// field to type the new token into.
+    let onReplace: () -> Void
     /// Set when the reader arrived here from onboarding's "Connect an account".
     /// Dropping them at the top of Settings after they said yes is the version
     /// that loses them.
     var focusOnAppear = false
 
     @FocusState private var isFieldFocused: Bool
+    /// Gap 90: "Remove token" used to fire on the first tap, `role:
+    /// .destructive` one tap below a dead "Replace" — one undefended tap
+    /// forgot seven account-scoped stores (the library, taste ledger,
+    /// reminders, Spotlight index and more; see
+    /// `RootView+Session.forgetPreviousAccount`) with nothing to undo it.
+    @State private var isConfirmingRemoval = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -61,6 +73,14 @@ struct AccountCard: View {
             try? await Task.sleep(for: .milliseconds(350))
             isFieldFocused = true
         }
+        .confirmDestructive(
+            isPresented: $isConfirmingRemoval,
+            title: "Remove this token?",
+            consequence: "Library sync, personal recommendations and your taste profile stop. "
+                + "Nothing on mangabaka.org is affected, and pasting the same token back restores all of it.",
+            label: "Remove token",
+            action: onRemove
+        )
     }
 
     private var header: some View {
@@ -98,7 +118,7 @@ struct AccountCard: View {
     private var dot: Color {
         switch status {
         case .signedIn: Palette.positive
-        case .failed: Palette.accent
+        case .failed, .notStored: Palette.accent
         case .checking: Palette.accent.opacity(0.45)
         case .idle, .unverified: Palette.textQuaternary
         }
@@ -108,6 +128,11 @@ struct AccountCard: View {
         switch status {
         case .signedIn: "Connected"
         case .failed: "Token rejected"
+        // Gap 118: distinct from "Token rejected" — MangaBaka never saw this
+        // token, so telling the reader it was "rejected" points them at
+        // generating a new one on the site, which does nothing for a local
+        // Keychain write failure.
+        case .notStored: "Couldn't save it here"
         case .checking: "Checking…"
         case .unverified: "Not checked yet"
         case .idle: hasStoredToken ? "Not checked yet" : "No account"
@@ -123,6 +148,8 @@ struct AccountCard: View {
             \(reason) Tokens are revoked when you regenerate one on the site. \
             Discovery, search and the stack keep working without it.
             """
+        case .notStored:
+            "The token itself may be fine — this phone's secure storage couldn't be written to just now."
         case .checking:
             "Checking the token with MangaBaka."
         case let .unverified(reason):
@@ -151,6 +178,11 @@ struct AccountCard: View {
                 field
                 TokenLink()
             }
+        case .notStored:
+            // No `TokenLink` here: the token was never sent anywhere, so
+            // "Get a token" would send someone whose token is fine off to
+            // generate a new one for a local storage problem.
+            field
         case .idle, .unverified:
             VStack(alignment: .leading, spacing: 10) {
                 if hasStoredToken {
@@ -175,11 +207,14 @@ struct AccountCard: View {
                     ))
                     .accessibilityLabel("Token, hidden")
 
-                StateAction(title: "Replace", weight: .wayOut) { entry = "" }
+                StateAction(title: "Replace", weight: .wayOut) {
+                    entry = ""
+                    onReplace()
+                }
             }
 
             Button("Remove token", role: .destructive) {
-                Task { await onRemove() }
+                isConfirmingRemoval = true
             }
                 .typeRowTitle()
                 .foregroundStyle(Palette.accent)
@@ -187,29 +222,41 @@ struct AccountCard: View {
     }
 
     private var field: some View {
-        HStack(spacing: 10) {
-            SecureField("mb-…", text: $entry)
-                .focused($isFieldFocused)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .typeBody()
-                .foregroundStyle(Palette.textPrimary)
-                .padding(.horizontal, 12)
-                // 40pt was the mockup's field height and Apple's audit
-                // measured the text field inside it at 225x19. A field you
-                // have to aim at is a field people mistype into.
-                .frame(height: max(Metrics.field, Metrics.tapTarget))
-                .background(Palette.surfaceField, in: RoundedRectangle(
-                    cornerRadius: Metrics.radiusChip, style: .continuous
-                ))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                SecureField("mb-…", text: $entry)
+                    .focused($isFieldFocused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .typeBody()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, 12)
+                    // 40pt was the mockup's field height and Apple's audit
+                    // measured the text field inside it at 225x19. A field you
+                    // have to aim at is a field people mistype into.
+                    .frame(height: max(Metrics.field, Metrics.tapTarget))
+                    .background(Palette.surfaceField, in: RoundedRectangle(
+                        cornerRadius: Metrics.radiusChip, style: .continuous
+                    ))
 
-            StateAction(
-                title: status.isRejection ? "Paste a new one" : "Save",
-                weight: TokenStore.looksValid(entry) ? .fixes : .wayOut
-            ) {
-                Task { await onSave() }
+                StateAction(
+                    title: status.isRejection ? "Paste a new one" : "Save",
+                    weight: TokenStore.looksValid(entry) ? .fixes : .wayOut
+                ) {
+                    Task { await onSave() }
+                }
+                .disabled(!TokenStore.looksValid(entry))
             }
-            .disabled(!TokenStore.looksValid(entry))
+
+            // Gap 69: Save used to grey itself out with nothing saying why —
+            // a reader who had typed something that merely wasn't a token
+            // yet (still pasting, or the wrong thing entirely) had no way to
+            // tell "not yet" from "this app is broken".
+            if !entry.isEmpty, !TokenStore.looksValid(entry) {
+                Text("Tokens start with mb-")
+                    .typeFootnote()
+                    .foregroundStyle(Palette.textMuted)
+            }
         }
     }
 }

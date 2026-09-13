@@ -1,6 +1,11 @@
 import Foundation
 
 /// What the release section says, and who it is saying it about.
+struct ReleaseFailure: Equatable, Sendable {
+    let source: ReleaseSource
+    let error: APIError
+}
+
 struct ReleaseReport: Equatable, Sendable {
     /// From the edition the reader actually follows — never from Naver alone
     /// unless Naver is all that answered.
@@ -19,10 +24,14 @@ struct ReleaseReport: Equatable, Sendable {
     /// e.g. a series not in this issue of a magazine). `ReleaseSection`
     /// (batch 2) reads this to show `InlineFailure` instead of silently
     /// having no release row for a series that clearly has a Webtoons link.
-    let failedSources: [ReleaseSource]
+    /// Each source that was asked and failed, with the error it failed with,
+    /// so the section can say "Webtoons had a problem" in the error's own
+    /// words rather than reconstructing one from the source name.
+    let failures: [ReleaseFailure]
+    var failedSources: [ReleaseSource] { failures.map(\.source) }
 
     static let empty = ReleaseReport(
-        summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: []
+        summary: .none, source: nil, sourceName: nil, gap: .none, failures: []
     )
 }
 
@@ -57,8 +66,8 @@ struct ReleaseFeedService: Sendable {
             return slots
         }
         let answers = zip(providers.map(\.source), indexed)
-        let failedSources: [ReleaseSource] = answers.compactMap { source, answer in
-            if case .failed = answer { return source }
+        let failures: [ReleaseFailure] = answers.compactMap { source, answer in
+            if case let .failed(error) = answer { return ReleaseFailure(source: source, error: error) }
             return nil
         }
         let feeds = indexed.compactMap(\.feed)
@@ -72,21 +81,21 @@ struct ReleaseFeedService: Sendable {
         // so the summary is Naver's own feed rather than staying empty.
         guard let edition = primary ?? naver else {
             return ReleaseReport(
-                summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: failedSources
+                summary: .none, source: nil, sourceName: nil, gap: .none, failures: failures
             )
         }
 
         let summary = ReleaseSummary.summarise(edition, knownChapterCount: series.totalChapters)
         guard !summary.isEmpty else {
             return ReleaseReport(
-                summary: .none, source: nil, sourceName: nil, gap: .none, failedSources: failedSources
+                summary: .none, source: nil, sourceName: nil, gap: .none, failures: failures
             )
         }
 
         let gap = Self.gap(primary: primary, naver: naver, now: now)
         return ReleaseReport(
             summary: summary, source: edition.source, sourceName: edition.sourceName, gap: gap,
-            failedSources: failedSources
+            failures: failures
         )
     }
 

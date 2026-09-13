@@ -16,23 +16,45 @@ struct VolumesSection: View {
     let volumes: [SeriesWork.Volume]
     /// Why this is MangaBaka's shelf rather than the store's, when there is
     /// a reason worth saying: "Apple Books couldn't be reached". A failure
-    /// shown as silence looks like the feature does not exist.
+    /// shown as silence looks like the feature does not exist — gap 21: with
+    /// no volumes here either, this used to be the whole section's only
+    /// reason to exist, and it was dropped exactly when it was needed most.
     var note: String?
+    /// A store is still being asked, so the final shape (its shelf, or this
+    /// one with `note`) is not decided yet. Shown as a skeleton rather than
+    /// letting MangaBaka's own shelf flash on screen and then be replaced —
+    /// gap 22, "shelf swaps content under the reader".
+    var isCheckingStore: Bool = false
 
     @State private var opened: SeriesWork.Volume?
 
+    /// Whether there is anything worth a "Volumes" header for: real volumes,
+    /// a reason there are none from the store, or a check still running.
+    /// Zero volumes and no note is the one case with nothing to say.
+    nonisolated static func shows(
+        volumes: [SeriesWork.Volume], note: String?, isCheckingStore: Bool = false
+    ) -> Bool {
+        isCheckingStore || !volumes.isEmpty || note != nil
+    }
+
     var body: some View {
-        if !volumes.isEmpty {
+        if Self.shows(volumes: volumes, note: note, isCheckingStore: isCheckingStore) {
             VStack(alignment: .leading, spacing: 11) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Volumes")
                         .typeDetailSectionHeader()
                         .foregroundStyle(Palette.textPrimary)
-                    Text("\(volumes.count)")
-                        .typeChip()
-                        .foregroundStyle(Palette.textMuted)
+                    if !volumes.isEmpty {
+                        Text("\(volumes.count)")
+                            .typeChip()
+                            .foregroundStyle(Palette.textMuted)
+                    }
                     Spacer(minLength: 0)
-                    if let note {
+                    if isCheckingStore {
+                        Text("Checking Apple Books…")
+                            .typeGridMeta()
+                            .foregroundStyle(Palette.textMuted)
+                    } else if let note {
                         Text(note)
                             .typeGridMeta()
                             .foregroundStyle(Palette.textMuted)
@@ -40,18 +62,24 @@ struct VolumesSection: View {
                 }
                 .padding(.horizontal, Metrics.gutter)
 
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
-                        ForEach(volumes) { volume in
-                            Button { opened = volume } label: {
-                                spine(volume)
+                if isCheckingStore {
+                    CoverSkeletonRow(count: 3, width: Metrics.coverSeedWidth)
+                } else if !volumes.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                            ForEach(volumes) { volume in
+                                Button { opened = volume } label: {
+                                    spine(volume)
+                                }
+                                .buttonStyle(.press)
                             }
-                            .buttonStyle(.press)
                         }
+                        .padding(.horizontal, Metrics.gutter)
                     }
-                    .padding(.horizontal, Metrics.gutter)
+                    .scrollIndicators(.hidden)
                 }
-                .scrollIndicators(.hidden)
+                // Zero volumes, not checking, and a note: the header alone
+                // says why (gap 21) — no empty row of spines to draw.
             }
             .sheet(item: $opened) { volume in
                 VolumeSheet(volume: volume)

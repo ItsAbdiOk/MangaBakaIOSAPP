@@ -18,7 +18,16 @@ enum TokenStatus: Equatable {
     /// Could not be checked — offline, rate limited, a server error. The
     /// token is kept, because none of that is evidence against it.
     case unverified(String)
+    /// Gap 118: the Keychain itself refused the write — full storage, the
+    /// item locked by another process — before the token ever reached
+    /// MangaBaka. `AccountCard` used to have no way to say this differently
+    /// from `.failed`, so a local write failure and MangaBaka's own
+    /// rejection both surfaced as "Token rejected", which sent the reader to
+    /// mangabaka.org to generate a new token for a problem a new token could
+    /// not fix.
+    case notStored
 
+    /// Only ever true for `.failed`: `.notStored` is not a verdict on the
+    /// token at all, and treating it as one is exactly gap 118.
     var isRejection: Bool { if case .failed = self { true } else { false } }
-
 }

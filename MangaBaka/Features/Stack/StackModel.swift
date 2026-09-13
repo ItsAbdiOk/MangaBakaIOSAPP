@@ -1,38 +1,73 @@
 import Foundation
 
+/// What the current queue is actually built from.
+///
+/// Exposed so the screen can say so. "Are you sure it's using my tastes?" is
+/// a fair question to ask of any recommender, and the honest answer depends
+/// entirely on which of these it is — a random queue is not personalised at
+/// all, and the app should not imply otherwise.
+///
+/// Declared outside `StackModel`'s own braces (in an extension below) rather
+/// than nested directly in the class, so its body does not count against
+/// `type_body_length` on a class already carrying most of the Stack's logic.
+enum StackModelSource: Equatable {
+    /// MangaBaka's own profile-based recommendations, built from the
+    /// reader's whole library rather than from a handful of seeds.
+    case yourProfile
+    /// Blended from series saved on this device.
+    case yourSaves
+    /// Blended from the reader's MangaBaka library.
+    case yourLibrary
+    /// A random sample. Nothing to personalise from yet.
+    case random
+    /// The profile recommender could not even be asked — offline, rate
+    /// limited, a server error — as distinct from `.random`, which means
+    /// there is genuinely nothing on file to personalise from. A failed
+    /// check used to collapse to the same `false` as a real cold-start
+    /// answer and stay cached for the rest of the session, so a reader with
+    /// 300 series on file was told "save a few to make it yours" until
+    /// relaunch (gap 107/108, FAILURES-SUMMARY.md K6/K7).
+    case unavailable(APIError)
+
+    /// One line under the title saying where the cards came from. This was
+    /// stored "so the screen can say" and the screen never said it — a
+    /// random queue and a personalised one looked identical.
+    var caption: String {
+        switch self {
+        case .yourProfile: "Picked from your MangaBaka library"
+        case .yourSaves: "Blended from what you have saved here"
+        case .yourLibrary: "Blended from your MangaBaka library"
+        case .random: "A random sample — save a few to make it yours"
+        case .unavailable: "Couldn't reach your library — showing a random sample"
+        }
+    }
+}
+
+/// A warning about the save that just happened, and the series it happened to.
+///
+/// Paired with the id because `react` advances the queue before the write
+/// completes, so a bare string was rendered under the *next* card — a series
+/// the reader had not saved — and stayed there through every subsequent skip
+/// until a later save cleared it.
+///
+/// `localFailure` is true only when the on-device shelf write itself failed
+/// — as opposed to the write landing locally but not reaching the reader's
+/// MangaBaka library. That distinction is what `StackModel.shouldConfirmSave`
+/// reads: a local failure must not be confirmed as "Saved here" (gap 36,
+/// FAILURES-SUMMARY.md K8), but a library-only failure still is, because the
+/// local save is real. A struct rather than a tuple so `swiftlint`'s
+/// `large_tuple` stays quiet and so `StackSaveTests` has a name to construct.
+struct StackSaveWarning: Equatable {
+    let seriesId: Int
+    let message: String
+    let localFailure: Bool
+}
+
 /// Backing state for the swipe stack.
 @MainActor
 @Observable
 final class StackModel {
-    /// What the current queue is actually built from.
-    ///
-    /// Exposed so the screen can say so. "Are you sure it's using my tastes?"
-    /// is a fair question to ask of any recommender, and the honest answer
-    /// depends entirely on which of these it is — a random queue is not
-    /// personalised at all, and the app should not imply otherwise.
-    enum Source: Equatable {
-        /// MangaBaka's own profile-based recommendations, built from the
-        /// reader's whole library rather than from a handful of seeds.
-        case yourProfile
-        /// Blended from series saved on this device.
-        case yourSaves
-        /// Blended from the reader's MangaBaka library.
-        case yourLibrary
-        /// A random sample. Nothing to personalise from yet.
-        case random
-
-        /// One line under the title saying where the cards came from. This
-        /// was stored "so the screen can say" and the screen never said it —
-        /// a random queue and a personalised one looked identical.
-        var caption: String {
-            switch self {
-            case .yourProfile: "Picked from your MangaBaka library"
-            case .yourSaves: "Blended from what you have saved here"
-            case .yourLibrary: "Blended from your MangaBaka library"
-            case .random: "A random sample — save a few to make it yours"
-            }
-        }
-    }
+    typealias Source = StackModelSource
 
     /// What to tell the reader after a save, once the model knows where it
     /// went. A save that reached the MangaBaka library and one that only the
@@ -45,8 +80,32 @@ final class StackModel {
     private(set) var queue: [Series] = []
     private(set) var isLoading = false
     private var refillTask: Task<Void, Never>?
-    private(set) var message: String?
+    /// Set when the queue is empty because the last fetch actually failed —
+    /// offline, rate-limited, a server error — as opposed to being genuinely
+    /// exhausted. `EmptyState` used to be shown for both (gap 33,
+    /// FAILURES-SUMMARY.md K1): no mark, no countdown, and a reader who was
+    /// simply offline read "Can't load the stack" as if nothing were left to
+    /// try.
+    ///
+    /// Also set when a stale batch's every entry had already been reacted to:
+    /// `FeedResult.blockingError` only fires when `series` itself came back
+    /// empty, but a `.staleAfter` batch that is non-empty on the wire and
+    /// empty only after local filtering is still a failure the reader cannot
+    /// see (gap 34, K2) — "That's today's stack" the offline network never
+    /// actually answered.
+    private(set) var failure: APIError?
     private(set) var source: Source = .random
+    /// Set when the profile recommender came back explicitly cold-start on a
+    /// signed-in reader with a real library — not "nothing to personalise
+    /// from" (which `.random` already says), just "not enough yet". Read by
+    /// `caption` so this is not silently indistinguishable from a plain
+    /// fallback (gap 108, K7).
+    private(set) var isColdStart = false
+    /// The `caption` the header actually shows: usually `source.caption`,
+    /// overridden while `isColdStart` is true.
+    var caption: String {
+        isColdStart ? "Dealing from the catalogue while your library is small" : source.caption
+    }
     /// Set when a save reached the reader's MangaBaka library, so the screen
     /// can say where it went rather than leaving them to guess.
     private(set) var lastSaveWentToLibrary = false
@@ -60,14 +119,13 @@ final class StackModel {
         saveWarning?.seriesId == series.id ? saveWarning?.message : nil
     }
 
-    /// A warning about the save that just happened, and the series it happened
-    /// to.
-    ///
-    /// Paired with the id because `react` advances the queue before the write
-    /// completes, so a bare string was rendered under the *next* card — a
-    /// series the reader had not saved — and stayed there through every
-    /// subsequent skip until a later save cleared it.
-    private(set) var saveWarning: (seriesId: Int, message: String)?
+    /// See `StackSaveWarning`'s doc comment.
+    private(set) var saveWarning: StackSaveWarning?
+    /// Whether `saveConfirmation` should actually be shown after the save
+    /// that just happened. False only when the local shelf write failed —
+    /// `try?` used to let that pass silently and the toast said "Saved here"
+    /// for a write that never reached disk (gap 36, K8).
+    var shouldConfirmSave: Bool { saveWarning?.localFailure != true }
     /// Why the current card was suggested, when the source can say. Only the
     /// profile recommender explains itself; a blend does not, and inventing a
     /// reason for it would be worse than showing none.
@@ -123,9 +181,18 @@ final class StackModel {
     /// unlike a blend it never repeats and never runs out.
     private var recommendationPage = 0
     /// Whether the profile recommender is usable for this reader. Nil until
-    /// asked; false when there is no token, or the library is too small to
-    /// build a profile from.
-    private var canUseProfile: Bool?
+    /// asked, or when the last check failed rather than answered; false when
+    /// there is no token, or the library is too small to build a profile
+    /// from. `private(set)` so `StackSourceTests` can pin gap 107 directly —
+    /// a failed check must leave this nil, not cache the same `false` a real
+    /// cold-start answer produces (see `profileIsUsable`'s doc comment).
+    private(set) var canUseProfile: Bool?
+    /// Set when `recommendationStatus()` or `recommendations()` threw, as
+    /// opposed to answering with a genuinely small or empty library. Read by
+    /// `buildSeedPoolIfNeeded` so a random fallback caused by a failed check
+    /// says so (`Source.unavailable`) instead of reading identically to a
+    /// reader with nothing on file yet (gap 107/108, K6/K7).
+    private var profileFailure: APIError?
 
     init(
         repository: any SeriesRepositoryProtocol,
@@ -174,6 +241,10 @@ final class StackModel {
         defer { isLoading = false }
 
         reacted = (try? await shelf.reactedIDs()) ?? []
+        // Reset each cycle rather than left over from a previous refill —
+        // otherwise a caption earned by a cold-start answer minutes ago could
+        // outlive it and mislabel an ordinary blend fallback.
+        isColdStart = false
 
         // The profile recommender first, when the reader has one. It draws on
         // their whole library rather than three seeds, it explains each pick,
@@ -184,11 +255,13 @@ final class StackModel {
             if !fresh.isEmpty {
                 append(fresh)
                 source = .yourProfile
-                message = nil
+                failure = nil
                 return
             }
             // Exhausted or failed: fall through to a blend rather than showing
             // an empty stack to someone who plainly has taste on file.
+            // `fetchProfilePage` has already recorded `profileFailure` if that
+            // was the reason, for `buildSeedPoolIfNeeded`'s fallback caption.
         }
 
         await buildSeedPoolIfNeeded()
@@ -200,15 +273,15 @@ final class StackModel {
             let fresh = await fetchBatch()
             if !fresh.isEmpty {
                 append(fresh)
-                message = nil
+                failure = nil
                 return
             }
             guard advanceSeeds() else { break }
         }
 
-        // Nothing left to offer. `message` is whatever the last fetch set: an
+        // Nothing left to offer. `failure` is whatever the last fetch set: an
         // error if one occurred, nil if the queue is genuinely exhausted. The
-        // empty state reads those two cases differently.
+        // empty state reads those two cases differently (gap 33/34, K1/K2).
     }
 
     /// Adds to the queue rather than replacing it.
@@ -244,8 +317,17 @@ final class StackModel {
     /// It does not touch the reader's MangaBaka library: a save also wrote
     /// `plan_to_read` there, and silently deleting rows from someone's account
     /// is a bigger action than the one being asked for.
-    func resetStack() async {
-        try? await shelf.clear()
+    ///
+    /// - Returns: whether the shelf actually cleared. `try?` used to let a
+    ///   throw (a full disk, a locked file) pass silently: the in-memory state
+    ///   was wiped and the caller confirmed "The stack has been reset" while
+    ///   the database still held every save, which came back on next launch
+    ///   (gap 37, FAILURES-SUMMARY.md K11). `(try? await shelf.clear()) !=
+    ///   nil` keeps the same `try?` call — read by `NonsenseGuardTests` — while
+    ///   still reporting success, since `shelf.clear()` throws `Void`.
+    @discardableResult
+    func resetStack() async -> Bool {
+        let cleared = (try? await shelf.clear()) != nil
         reacted = []
         saved = []
         queue = []
@@ -253,6 +335,7 @@ final class StackModel {
         seedPool = []
         saveWarning = nil
         await loadIfNeeded()
+        return cleared
     }
 
     func react(_ kind: ShelfEntry.Kind) async {
@@ -264,15 +347,28 @@ final class StackModel {
         if kind == .saved { savedThisRun += 1 }
         // The card just dealt with becomes the one peeking in from behind.
         previous = series
-        try? await shelf.record(series, as: kind)
+        // `Void?` from `try?` doubles as a success flag here: `shelf.record`
+        // throws no value to inspect, but `!= nil` still tells success from
+        // failure. `try?` used to be the whole story — `saved.insert` and the
+        // "Saved here" toast fired even when this write never reached disk
+        // (gap 36, FAILURES-SUMMARY.md K8).
+        let recorded = (try? await shelf.record(series, as: kind)) != nil
         if kind == .saved {
-            saved.insert(series, at: 0)
-            await pushSaveToLibrary(series)
+            if recorded {
+                saved.insert(series, at: 0)
+                await pushSaveToLibrary(series)
+                // A save changes what the next blend should be built from, so
+                // the pool is rebuilt rather than left pointing at the shelf
+                // as it was on load. Only when the save actually landed —
+                // nothing changed on disk otherwise.
+                seedPool = []
+            } else {
+                lastSaveWentToLibrary = false
+                saveWarning = StackSaveWarning(
+                    seriesId: series.id, message: "Couldn't save — try again.", localFailure: true
+                )
+            }
         }
-
-        // A save changes what the next blend should be built from, so the pool
-        // is rebuilt rather than left pointing at the shelf as it was on load.
-        if kind == .saved { seedPool = [] }
 
         if queue.count <= 2 { await refill() }
     }
@@ -303,23 +399,44 @@ final class StackModel {
             // The shelf already has it, so this is worth mentioning rather than
             // undoing. Losing the save would be worse than a stale library.
             lastSaveWentToLibrary = false
-            saveWarning = (series.id, "Saved here, but not to your MangaBaka library.")
+            saveWarning = StackSaveWarning(
+                seriesId: series.id,
+                message: "Saved here, but not to your MangaBaka library.",
+                localFailure: false
+            )
         }
     }
 
     // MARK: - Profile recommendations
 
+    /// Whether the profile recommender is usable for this reader.
+    ///
+    /// A typed throw rather than `try?` into `nil`: `recommendationStatus()`
+    /// throwing (offline, rate-limited, a server error) is not the same fact
+    /// as it answering with a real cold-start library, but collapsing both to
+    /// `false` — and then caching that `false` for the rest of the session —
+    /// told a reader with 300 series on file "save a few to make it yours"
+    /// until relaunch (gap 107, FAILURES-SUMMARY.md K6). Only a genuine answer
+    /// is cached; a failure leaves `canUseProfile` nil so the next `refill()`
+    /// asks again, and records `profileFailure` so the fallback caption can
+    /// say the check failed rather than pretend nothing is there yet.
     private func profileIsUsable() async -> Bool {
         if let canUseProfile { return canUseProfile }
         guard let library else {
             canUseProfile = false
             return false
         }
-        // cold_start means the library is too small to build a profile from.
-        // Asking anyway would spend a request to be told nothing.
-        let usable = (try? await library.recommendationStatus())?.canPersonalise ?? false
-        canUseProfile = usable
-        return usable
+        do {
+            // cold_start means the library is too small to build a profile
+            // from. Asking anyway would spend a request to be told nothing.
+            let status = try await library.recommendationStatus()
+            canUseProfile = status.canPersonalise
+            profileFailure = nil
+            return status.canPersonalise
+        } catch {
+            profileFailure = error
+            return false
+        }
     }
 
     private func fetchProfilePage() async -> [Series] {
@@ -338,18 +455,32 @@ final class StackModel {
         // reader's actual last few sessions.
         let excluded = (try? await shelf.recentlyReactedIDs(limit: Self.maximumExclusions)) ?? []
 
-        let recommendations = await library.recommendations(
+        // `PersonalRecommendations` carries `failure`/`coldStart` alongside
+        // `items` precisely so this does not have to guess why a page is
+        // short. Reading `.items` alone (the compile-patch this replaces)
+        // silently flipped `source` to a blend or `.random` with no
+        // explanation for either cause (gap 108, K7).
+        let answer = await library.recommendations(
             limit: 20,
             page: recommendationPage,
             excluding: excluded
-        ).items
-        guard !recommendations.isEmpty else { return [] }
+        )
+        if let error = answer.failure {
+            // The page never landed: give it back so the next refill asks for
+            // the same page again rather than silently skipping it.
+            recommendationPage -= 1
+            profileFailure = error
+            return []
+        }
+        profileFailure = nil
+        isColdStart = answer.coldStart
+        guard !answer.items.isEmpty else { return [] }
 
         // Nil means the answer is not known, and an unverified tag name is the
         // one outcome worth avoiding here — so an unknown answer hides every
         // named tag rather than none.
         let hidden = await library.hiddenTagIDs()
-        for recommendation in recommendations {
+        for recommendation in answer.items {
             guard let hidden,
                   let summary = recommendation.reason?.summary(hiding: hidden)
             else { continue }
@@ -357,7 +488,7 @@ final class StackModel {
         }
         // Still filtered locally: exclude_ids is capped, and a skip made on
         // this device is not necessarily known to the server.
-        return recommendations.map(\.asSeries).filter { !reacted.contains($0.id) }
+        return answer.items.map(\.asSeries).filter { !reacted.contains($0.id) }
     }
 
     /// A URL has a practical length limit and each id costs about 18
@@ -401,7 +532,11 @@ final class StackModel {
         }
 
         seedPool = []
-        source = .random
+        // A random queue caused by a failed profile check is a different fact
+        // from a random queue because there is genuinely nothing on file yet
+        // — `.unavailable` says so instead of reading as the latter (gap
+        // 107/108, K6/K7).
+        source = profileFailure.map(Source.unavailable) ?? .random
     }
 
     /// Moves to the next group of seeds. False when the pool is exhausted.
@@ -425,7 +560,20 @@ final class StackModel {
         // take the random path rather than fail.
         let feed: FeedKind = seeds.isEmpty ? .surprise : .mix(seeds: seeds)
         let result = await repository.feed(feed, forceRefresh: queue.isEmpty)
-        message = result.blockingError?.userFacingMessage
-        return result.series.filter { !reacted.contains($0.id) }
+        let fresh = result.series.filter { !reacted.contains($0.id) }
+        if let blocking = result.blockingError {
+            failure = blocking
+        } else if fresh.isEmpty, case let .staleAfter(error) = result.origin {
+            // `blockingError` only fires when `series` itself came back
+            // empty. Here the network failed but the stale cache it fell
+            // back to happened to be full of entries already reacted to —
+            // filtering emptied it, and the screen used to read that as an
+            // honest "that's today's stack" instead of the offline/rate-
+            // limited answer it actually is (gap 34, FAILURES-SUMMARY.md K2).
+            failure = error
+        } else {
+            failure = nil
+        }
+        return fresh
     }
 }

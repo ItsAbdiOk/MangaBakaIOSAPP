@@ -9,26 +9,83 @@ struct MixResults: View {
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
 
+    /// What the section actually shows, decided in one pure place so the
+    /// branching can be tested without ViewInspector (this project has none).
+    ///
+    /// `.grid` wins whenever there is a previous blend to show, even mid
+    /// re-run or mid failure — a re-blend used to replace the grid outright
+    /// with a bare spinner, and the count line and covers popped back in
+    /// once it finished (gap 43, FAILURES-SUMMARY.md M6). Only a blend that
+    /// has never produced a result falls through to `.loading`/`.failure`.
+    enum ResultsState: Equatable {
+        case grid(dimmed: Bool)
+        case failure(APIError)
+        case loading
+        case empty(String)
+        /// Nothing to show yet: no seeds picked, no blend ever run.
+        case idle
+    }
+
+    nonisolated static func state(
+        isRunning: Bool,
+        resultsEmpty: Bool,
+        failure: APIError?,
+        message: String?
+    ) -> ResultsState {
+        if !resultsEmpty { return .grid(dimmed: isRunning) }
+        if let failure { return .failure(failure) }
+        if isRunning { return .loading }
+        if let message { return .empty(message) }
+        return .idle
+    }
+
     var body: some View {
-        if model.isRunning {
+        switch Self.state(
+            isRunning: model.isRunning,
+            resultsEmpty: model.results.isEmpty,
+            failure: model.failure,
+            message: model.message
+        ) {
+        case .loading:
             HStack {
                 Spacer()
                 ProgressView().tint(Palette.textTertiary)
                 Spacer()
             }
             .padding(.top, Metrics.sectionGap)
-        } else if let message = model.message {
+        case let .failure(error):
+            FailureState(error: error, retry: { await model.run() })
+                .padding(.top, Metrics.sectionGap)
+        case let .empty(message):
             Text(message)
                 .typeSmallMeta()
                 .foregroundStyle(Palette.textMuted)
                 .padding(.horizontal, Metrics.gutter)
-        } else if !model.results.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("\(model.results.count) in the blend")
-                        .typeSectionHeader()
-                        .foregroundStyle(Palette.textPrimary)
-                    Spacer(minLength: 0)
+        case .idle:
+            EmptyView()
+        case let .grid(dimmed):
+            grid(dimmed: dimmed)
+        }
+    }
+
+    private func grid(dimmed: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("\(model.results.count) in the blend")
+                    .typeSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                Spacer(minLength: 0)
+                if dimmed {
+                    // The re-run itself, said in the header row rather than
+                    // over the grid it would otherwise replace — a StaleBar's
+                    // wording for a blend, not a fetch.
+                    HStack(spacing: 6) {
+                        ProgressView().tint(Palette.textTertiary)
+                        Text("Re-blending…")
+                            .typeInstruction()
+                            .foregroundStyle(Palette.textMuted)
+                    }
+                } else {
                     Button { Task { await model.run() } } label: {
                         Text("Reshuffle")
                             .typeInstruction()
@@ -36,31 +93,34 @@ struct MixResults: View {
                     }
                     .buttonStyle(.press)
                 }
-                .padding(.horizontal, 2)
-                .padding(.bottom, 12)
+            }
+            .padding(.horizontal, 2)
+            .padding(.bottom, 12)
 
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
-                        count: 3
-                    ),
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    ForEach(model.results) { recommendation in
-                        Button {
-                            zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
-                            path.append(recommendation.series)
-                        } label: {
-                            card(recommendation)
-                        }
-                        .buttonStyle(.press)
-                        .zoomSource("mix", recommendation.series.id)
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(), spacing: Metrics.gapCovers),
+                    count: 3
+                ),
+                alignment: .leading,
+                spacing: 16
+            ) {
+                ForEach(model.results) { recommendation in
+                    Button {
+                        zoomRoute?.source = ZoomRoute.id("mix", recommendation.series.id)
+                        path.append(recommendation.series)
+                    } label: {
+                        card(recommendation)
                     }
+                    .buttonStyle(.press)
+                    .zoomSource("mix", recommendation.series.id)
                 }
             }
-            .padding(.horizontal, Metrics.gutter)
         }
+        .padding(.horizontal, Metrics.gutter)
+        .opacity(dimmed ? 0.45 : 1)
+        .animation(Motion.reduced(.default), value: dimmed)
+        .disabled(dimmed)
     }
 
     /// The mockup puts the reason in the accent under each cover, where a

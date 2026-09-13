@@ -221,3 +221,48 @@ struct CharacterProfileTests {
         #expect(description.blocks == [.init(spans: expectedSpans, isSpoiler: false)])
     }
 }
+
+/// Gap 59/60/82 (`FAILURES-SUMMARY.md` §6, batch 2). No ViewInspector exists
+/// in this project (`CLAUDE.md`'s Health Stack), so the view's own state
+/// machine is pinned at the source level, the way the rest of this suite's
+/// sibling `SourceTree`-gated tests already do for wiring that cannot be
+/// driven headlessly.
+@Suite("Character profile sheet failure and retry", .enabled(if: SourceTree.isAvailable))
+struct CharacterProfileFailureTests {
+    /// Gap 59: retry used to call `load()` directly with no `state = .loading`
+    /// at its start, so the sheet stayed on `FailureState` — its own button
+    /// disabled by `RetryGate` — for the whole retry instead of showing a
+    /// spinner. Fails without the fix: `load()` began with the network calls,
+    /// not with resetting `state`.
+    @Test("A retry shows loading, not a frozen failure screen")
+    func retrySetsLoadingFirst() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/CharacterProfileView.swift")
+        let loadRange = try #require(source.range(of: "private func load() async {"))
+        let body = source[loadRange.upperBound...]
+        let firstStatement = body
+            .split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
+            .first.map(String.init) ?? ""
+        #expect(firstStatement.contains("state = .loading"))
+    }
+
+    /// Gap 60: a Shikimori description that could not be translated used to
+    /// leave the profile with no description and nothing explaining why —
+    /// indistinguishable from a character with no description at all.
+    @Test("An untranslatable description leaves a note, not silence")
+    func untranslatableDescriptionExplainsItself() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/CharacterProfileView.swift")
+        #expect(source.contains("descriptionNote = \"\"\""))
+        #expect(source.contains("} else if let descriptionNote {"))
+    }
+
+    /// Gap 82: this state is unreachable today (`CharacterSource` has exactly
+    /// two cases and both have a profile path), but the copy it would show —
+    /// "Nothing knows this character by this id." — read as a debug message
+    /// rather than words written for a reader.
+    @Test("The unavailable state uses real EmptyState copy, not developer wording")
+    func unavailableStateHasRealCopy() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/CharacterProfileView.swift")
+        #expect(!source.contains("Nothing knows this character by this id."))
+        #expect(source.contains("EmptyState("))
+    }
+}

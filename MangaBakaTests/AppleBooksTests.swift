@@ -431,7 +431,7 @@ struct AppleVolumesRowTests {
             id: 1, number: 1, title: "x", artworkURL: nil, storeURL: nil,
             price: nil, formattedPrice: nil, releaseDate: nil
         )
-        #expect(row(volume, expected: 27).countLine == "1 of 27")
+        #expect(row(volume, expected: 27).countLine == "1 of 27 on Apple Books")
         #expect(row(volume, expected: 1).countLine == "1")
         #expect(row(volume, expected: nil).countLine == "1")
     }
@@ -452,7 +452,10 @@ struct AppleVolumesRowTests {
             )
         }
         let built = AppleVolumesRow(volumes: VolumeShelf.merge(apple: volumes, google: []), expected: 15)
-        #expect(built.countLine == "15 of 15", "15 numbered volumes, but volume 15 itself is missing")
+        #expect(
+            built.countLine == "15 of 15 on Apple Books",
+            "15 numbered volumes, but volume 15 itself is missing"
+        )
     }
 
     /// The phone showed MangaBaka's seven One Piece editions with no hint

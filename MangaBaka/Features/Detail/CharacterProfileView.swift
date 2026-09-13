@@ -32,6 +32,12 @@ struct CharacterProfileView: View {
     /// already-translated result.
     @State private var pendingTranslation: CharacterDescription?
     @State private var translationConfiguration: TranslationSession.Configuration?
+    /// Set when a Shikimori profile had a description but this device could
+    /// not translate it — an already-installed language pack is the only
+    /// path that does not risk the crash `TranslationGate` documents, so a
+    /// reader without one used to simply never see a description with
+    /// nothing saying why (gap 60).
+    @State private var descriptionNote: String?
     @Environment(\.dismiss) private var dismiss
 
     /// Russian is the only source language this view ever asks the
@@ -94,29 +100,26 @@ struct CharacterProfileView: View {
         case .unavailable:
             unavailableState
         case let .loaded(profile):
-            CharacterProfileContent(profile: profile)
+            CharacterProfileContent(profile: profile, descriptionNote: descriptionNote)
         }
     }
 
+    /// Gap 82: the copy this replaced ("Nothing knows this character by this
+    /// id.") read as a debug message rather than words written for a reader.
+    /// Not reachable today — `CharacterSource` has exactly two cases and both
+    /// now have a profile path — but the state the type system still allows
+    /// deserves real wording rather than none.
     private var unavailableState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "person.crop.circle.badge.questionmark")
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(Palette.textTertiary)
-            Text("No profile")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-            Text("Nothing knows this character by this id.")
-                .typeSubtitle()
-                .foregroundStyle(Palette.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 40)
-        }
-        .padding(.top, 60)
+        EmptyState(
+            title: "No profile",
+            message: "This character isn't linked to a profile on AniList or Shikimori."
+        )
+        .padding(.top, 40)
     }
 
     private func load() async {
+        state = .loading
+        descriptionNote = nil
         if let aniListID = CharacterProfileRequest.aniListID(for: character) {
             do {
                 state = .loaded(try await aniList.characterProfile(characterID: aniListID))
@@ -155,7 +158,19 @@ struct CharacterProfileView: View {
         let availability = await LanguageAvailability().status(
             from: Self.sourceLanguage, to: Self.targetLanguage
         )
-        guard TranslationGate.allows(availability) else { return }
+        guard TranslationGate.allows(availability) else {
+            // Gap 60: this used to return here in silence — the description
+            // simply never appeared, with nothing telling a reader Shikimori
+            // actually had one. Asking for a session anyway is what raises
+            // the system download prompt `TranslationGate`'s doc comment
+            // traces to a crash, so the description stays dropped either
+            // way; the difference is only whether the reader is told why.
+            descriptionNote = """
+            This character's description is in Russian, and this device \
+            hasn't downloaded the language pack needed to translate it.
+            """
+            return
+        }
 
         pendingTranslation = description
         translationConfiguration = TranslationSession.Configuration(
@@ -199,6 +214,9 @@ struct CharacterProfileView: View {
 /// loading state and this only holds spoiler-reveal state.
 private struct CharacterProfileContent: View {
     let profile: CharacterProfile
+    /// Why there is no description below the facts, when there should have
+    /// been one — see `CharacterProfileView.descriptionNote`.
+    var descriptionNote: String?
     /// Indices into `profile.description.blocks`. Once revealed a spoiler
     /// stays revealed, matching `DetailTagSections`' own spoiler chips —
     /// hiding it again after the reader chose to see it would be the
@@ -213,6 +231,12 @@ private struct CharacterProfileContent: View {
             }
             if let description = profile.description, !description.isEmpty {
                 descriptionSection(description)
+            } else if let descriptionNote {
+                Text(descriptionNote)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Metrics.gutter)
             }
             if let siteURL = profile.siteURL {
                 sourceLink(siteURL, source: profile.source)

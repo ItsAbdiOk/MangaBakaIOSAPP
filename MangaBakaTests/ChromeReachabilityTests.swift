@@ -27,11 +27,19 @@ struct ChromeReachabilityTests {
     }
 
     /// Every other route into Settings goes through a screen that has to exist.
+    ///
+    /// Gap 64 (batch 6) moved this push out of `RootView.body` into
+    /// `RootView+Failures.onboardingCompletionChanged`, deferred behind an
+    /// `onChange` rather than fired inline from `onConnectAccount` — see
+    /// that file for why. The route itself is unchanged; only which file it
+    /// lives in moved.
     @Test("Onboarding's account route still lands on Settings")
     func onboardingRouteSurvives() throws {
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
-        #expect(root.contains("selection = .library"))
-        #expect(root.contains("showsSettings = true"))
+        #expect(root.contains(".onChange(of: onboarding.hasCompleted)"))
+        let failures = try SourceTree.read("MangaBaka/App/RootView+Failures.swift")
+        #expect(failures.contains("selection = .library"))
+        #expect(failures.contains("showsSettings = true"))
     }
 
     /// The floating tab bar is the only chrome now. A second bar above it would

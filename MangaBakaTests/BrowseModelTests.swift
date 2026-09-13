@@ -81,3 +81,53 @@ struct BrowseModelTests {
         #expect(sections.first?.tags.first?.name == "Boxing")
     }
 }
+
+/// Gap 39 (FAILURES-SUMMARY.md): the subtitle used to check only whether the
+/// vocabulary was empty, never whether it had failed or was still loading —
+/// so a fetch that failed with nothing cached left "Loading the vocabulary"
+/// on screen forever, because that string is exactly what "empty" always
+/// produced regardless of cause.
+@Suite("Browse vocabulary failure", .serialized)
+@MainActor
+struct BrowseVocabularyFailureTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeModel() -> BrowseModel {
+        BrowseModel(catalogue: CatalogueService(client: APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        )))
+    }
+
+    /// Expected to fail before the fix with: `subtitle` equal to
+    /// "Loading the vocabulary" — the old subtitle only ever checked
+    /// `genres.isEmpty && tags.isEmpty`, which stays true after a failed
+    /// fetch with nothing cached, so the claim to still be loading never
+    /// went away. `isLoading`/`failed` did not exist as a pair at all: the
+    /// model only exposed `failure`, and nothing read it.
+    @Test("A failed fetch with nothing cached stops claiming to load")
+    func failedFetchStopsClaimingToLoad() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
+        defer { URLProtocolStub.reset() }
+
+        let model = makeModel()
+        await model.load()
+
+        #expect(model.isLoading == false)
+        #expect(model.failed == true)
+        #expect(model.subtitle != "Loading the vocabulary")
+    }
+
+    @Test("A successful fetch is never reported as failed")
+    func successIsNotFailure() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8))) }
+        defer { URLProtocolStub.reset() }
+
+        let model = makeModel()
+        await model.load()
+
+        #expect(model.failed == false)
+        #expect(model.subtitle != "Loading the vocabulary")
+    }
+}

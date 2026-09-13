@@ -229,7 +229,11 @@ struct DetailOrderTests {
         #expect(root.contains("onOpenTag:"))
         #expect(root.contains("onUseAsSeed:"))
         #expect(root.contains("onOpenSchedule:"))
-        #expect(root.contains("mixModel?.addSeed(series)"))
+        // Gap 77 (batch 6) moved the actual seed-adding into
+        // `RootView+Failures.useAsSeedTapped`, behind a guard on `mixModel`
+        // being built yet — see that file for why.
+        let failures = try SourceTree.read("MangaBaka/App/RootView+Failures.swift")
+        #expect(failures.contains("mixModel.addSeed(series)"))
     }
 }
 
@@ -369,12 +373,27 @@ struct LibraryLookupTests {
                 "the cap has to clear a real library, not sit on top of one")
     }
 
-    /// A write has to refresh the shared copy, or the Library tab and the
+    /// A write has to update the shared copy, or the Library tab and the
     /// series page disagree about the same entry.
-    @Test("Writes refresh the shared copy, not a local one")
-    func writesRefreshShared() throws {
+    ///
+    /// Superseded by the failure-fix work (gap 87, decision 5, 2026-09-13):
+    /// a write used to call `store.reload()`, a full re-walk of the library
+    /// (13 requests on a real account) just to reflect one changed field —
+    /// and if that walk failed partway, the control flipped from "Reading ·
+    /// ch 68" back to "Add to library" despite the write itself having
+    /// landed. `LibraryModel.apply(_:to:)` patches the one entry in place
+    /// instead, in both the shared store and this control, with no re-walk
+    /// at all. `LibraryControlTests.writeNeverReWalks` pins the case this
+    /// test used to miss entirely: a write is visible immediately and never
+    /// costs another page read of the library.
+    @Test("Writes patch the shared store in place, not a full re-walk")
+    func writesPatchShared() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/LibraryControl.swift")
-        #expect(source.contains("await store.reload()"))
+        #expect(source.contains("await store.apply(change, to: seriesId)"))
+        #expect(
+            !source.contains("await store.reload()"),
+            "a write should patch the shared store in place, not re-walk the whole library"
+        )
     }
 }
 

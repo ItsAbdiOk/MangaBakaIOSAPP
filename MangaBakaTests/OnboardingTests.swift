@@ -88,6 +88,39 @@ struct OnboardingCopyTests {
     }
 }
 
+/// Gap 63: the six placeholder rectangles on the first screen rendered
+/// identically whether the rising feed was still in flight or had already
+/// answered (empty, or failed) — a reader on a bad connection saw what
+/// looked like a stuck loading screen rather than the deliberate
+/// colour-wash fallback the design already has for exactly that case.
+@Suite("Onboarding covers distinguish loading from settled", .enabled(if: SourceTree.isAvailable))
+struct OnboardingCoverLoadingTests {
+    private func source() throws -> String {
+        try SourceTree.read("MangaBaka/Features/Onboarding/OnboardingView.swift")
+    }
+
+    /// Expected to fail before the fix with: no `isLoading` parameter on
+    /// `CoversFirstPage` and no `.shimmering()` call anywhere in the file —
+    /// the placeholder was a bare `RoundedRectangle` in every state.
+    @Test("The placeholder shimmers only while still loading")
+    func shimmersOnlyWhileLoading() throws {
+        let source = try source()
+        #expect(source.contains("var isLoading = false"))
+        #expect(source.contains("placeholder.shimmering()"))
+        let ifLoading = try #require(source.range(of: "if isLoading {"))
+        let shimmering = try #require(source.range(of: "placeholder.shimmering()"))
+        #expect(ifLoading.upperBound < shimmering.lowerBound)
+    }
+
+    @Test("RootView threads whether the rising feed has actually answered")
+    func rootThreadsLoadingState() throws {
+        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        #expect(root.contains("isLoadingCovers: isLoadingCovers"))
+        let session = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
+        #expect(session.contains("isLoadingCovers = false"))
+    }
+}
+
 /// The flag behind first run. Behaviour rather than copy, so it is not gated on
 /// a source tree.
 @Suite("Onboarding state", .serialized)

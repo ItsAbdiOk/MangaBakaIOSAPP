@@ -15,6 +15,7 @@ struct SearchIdleView: View {
     let onRunTerm: (String) -> Void
 
     @State private var isEditing = false
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     private var own: [SearchLens] { lenses.own }
 
@@ -98,7 +99,15 @@ struct SearchIdleView: View {
             if isEditing {
                 Button {
                     counts.invalidate(lens.id)
+                    let name = lens.name
                     Motion.run(.snappy(duration: 0.2)) { lenses.delete(id: lens.id) }
+                    // Deleting a lens used to give no sign it happened (gap
+                    // 54). Decision 3 reserves a confirmation dialog for the
+                    // two truly irreversible actions elsewhere ("Remove
+                    // token", "Deal another now") — a lens is one line the
+                    // reader can recreate in seconds, so a toast is the right
+                    // weight, not a dialog in front of a dialog.
+                    toasts?.show("\(name) deleted")
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 20))
@@ -154,10 +163,16 @@ struct SearchIdleView: View {
                 // onward"; throwing away your own search history is not one,
                 // and three same-weight accent links told the reader nothing
                 // about which to reach for.
-                Button("Clear") { recents.clear() }
-                    .typeInstruction()
-                    .foregroundStyle(Palette.textMuted)
-                    .buttonStyle(.press)
+                Button("Clear") {
+                    recents.clear()
+                    // Same gap as the lens delete above (gap 54) — low
+                    // stakes, no confirmation needed, but silence still read
+                    // as a missed tap.
+                    toasts?.show("Recent searches cleared")
+                }
+                .typeInstruction()
+                .foregroundStyle(Palette.textMuted)
+                .buttonStyle(.press)
             }
 
             FlowLayout(spacing: 8) {

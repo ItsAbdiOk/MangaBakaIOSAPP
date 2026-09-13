@@ -14,6 +14,9 @@ struct DetailHero: View {
     /// Whether MangaUpdates is still being asked.
     let isScheduleLoading: Bool
     let onOpenSchedule: (() -> Void)?
+    /// Set when the schedule ask itself failed — see `DetailScheduleBlock`.
+    var scheduleFailure: APIError?
+    var onRetrySchedule: (() async -> Void)?
     /// The series' other covers, for the fan and the gallery.
     var otherCovers: [SeriesImage] = []
     /// Overrides the series' own cover — an English edition where one exists.
@@ -186,12 +189,14 @@ struct DetailHero: View {
     /// column's natural height.
     private func column(_ form: Form, fill: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if schedule != nil || isScheduleLoading {
+            if schedule != nil || isScheduleLoading || scheduleFailure != nil {
                 DetailScheduleBlock(
                     estimate: schedule,
                     isLoading: isScheduleLoading,
                     onOpen: onOpenSchedule,
-                    isExpanded: form.isExpanded
+                    isExpanded: form.isExpanded,
+                    failure: scheduleFailure,
+                    retry: onRetrySchedule
                 )
                 .padding(.bottom, form.isExpanded ? 13 : 9)
                 if fill { Spacer(minLength: 0) }
@@ -310,7 +315,7 @@ struct DetailHero: View {
     /// on new series that the line has to be able to not exist.
     private var chapterCount: String? {
         guard let chapters = series.totalChapters, chapters > 0 else { return nil }
-        let whole = Int(chapters)
+        let whole = Int(wholeOrClamped: chapters)
         return "\(whole) \(whole == 1 ? "chapter" : "chapters")"
     }
 

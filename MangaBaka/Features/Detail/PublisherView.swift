@@ -55,7 +55,19 @@ struct PublisherView: View {
     @State private var hasMore = false
     @State private var isLoadingMore = false
     @State private var isLoading = true
-    @State private var failed = false
+    /// Where the current `series` came from — cache, network, or a network
+    /// failure that fell back to cache. Distinct from a bare `failed` flag
+    /// so a stale list can still be shown, labelled, instead of collapsing
+    /// to the same bare sentence a genuinely empty answer gets (gap 56).
+    @State private var origin: FeedResult.Origin = .network
+    /// Bumped on every `load()`, so a pull-to-refresh started while
+    /// `.task(id: order)` is still landing its own results cannot have the
+    /// older call's answer overwrite the newer one (gap 58).
+    @State private var loadGeneration = 0
+    /// Set when the *next* page failed outright — offline, throttled — kept
+    /// separate from `origin` (which describes the first page) so a working
+    /// first page and a failed second page can both be shown at once (gap 15).
+    @State private var loadMoreFailure: APIError?
     @Environment(\.openURL) private var openURL
     @Environment(\.zoomRoute) private var zoomRoute
 
@@ -63,21 +75,54 @@ struct PublisherView: View {
         repeating: GridItem(.flexible(), spacing: Metrics.gapCovers), count: 3
     )
 
+    /// What the page shows, decided in one place — the same shape
+    /// `LibraryModel.screenState` uses, so a publisher's list reads the same
+    /// way the library does: loading first, a failure only when there is
+    /// nothing to fall back on, and a real empty answer distinguished from
+    /// both (gap 56).
+    enum ScreenState: Equatable {
+        case loading
+        case failed(APIError)
+        case empty
+        case list
+    }
+
+    nonisolated static func state(
+        series: [Series], origin: FeedResult.Origin, isLoading: Bool
+    ) -> ScreenState {
+        if isLoading && series.isEmpty { return .loading }
+        if case let .staleAfter(error) = origin, series.isEmpty { return .failed(error) }
+        if series.isEmpty { return .empty }
+        return .list
+    }
+
+    private var screenState: ScreenState { Self.state(series: series, origin: origin, isLoading: isLoading) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.detailRowGap) {
                 header
                 links
-                if !isLoading || !series.isEmpty { orderPicker }
-                if isLoading {
+                if screenState != .loading { orderPicker }
+                if case let .staleAfter(error) = origin, !series.isEmpty {
+                    StaleBar(
+                        headline: "Showing what you had",
+                        detail: error.userFacingMessage,
+                        retry: { await load() }
+                    )
+                    .padding(.horizontal, Metrics.gutter)
+                }
+                switch screenState {
+                case .loading:
                     CoverSkeletonGrid()
-                } else if series.isEmpty {
-                    Text(failed ? "Couldn't reach MangaBaka. Pull to try again."
-                                : "MangaBaka lists nothing under this name yet.")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                        .padding(.horizontal, Metrics.gutter)
-                } else {
+                case let .failed(error):
+                    FailureState(error: error) { await load() }
+                case .empty:
+                    EmptyState(
+                        title: "Nothing here yet",
+                        message: "MangaBaka lists nothing under this name yet."
+                    )
+                case .list:
                     grid
                 }
             }
@@ -181,16 +226,34 @@ struct PublisherView: View {
         link.safeURL?.host()?.replacingOccurrences(of: "www.", with: "") ?? "Link"
     }
 
-    private var grid: some View {
+    /// The number beside "From {name}". The real total when the count
+    /// endpoint answered; `series.count` only when every page has already
+    /// landed, which is the one case that count happens to equal the real
+    /// total; nil — hidden, not a guess — otherwise (gap 57: this used to
+    /// fall back to `series.count` unconditionally, which is the *page*
+    /// size, and printed "100" for a publisher with thousands).
+    nonisolated static func headerCount(total: Int?, seriesCount: Int, hasMore: Bool) -> Int? {
+        if let total { return total }
+        return hasMore ? nil : seriesCount
+    }
+}
+
+/// The grid, paging, and the loads that fill both — split from the type
+/// above purely for the lint's body-length ceiling; `private` members stay
+/// reachable from an extension in the same file.
+extension PublisherView {
+    var grid: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("From \(name)")
                     .typeDetailSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
-                Text((total ?? series.count).formatted())
-                    .typeChip()
-                    .foregroundStyle(Palette.textMuted)
-                    .countsNotCuts()
+                if let count = Self.headerCount(total: total, seriesCount: series.count, hasMore: hasMore) {
+                    Text(count.formatted())
+                        .typeChip()
+                        .foregroundStyle(Palette.textMuted)
+                        .countsNotCuts()
+                }
             }
             .padding(.horizontal, Metrics.gutter)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
@@ -223,11 +286,18 @@ struct PublisherView: View {
                     .tint(Palette.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
+            } else if let loadMoreFailure {
+                // Gap 15: a failed page 2+ used to leave `hasMore` however the
+                // failed `FeedResult` happened to default it, which read
+                // identically to having reached the real end of the list —
+                // nothing on screen told the two apart.
+                InlineFailure(error: loadMoreFailure) { await loadMore() }
+                    .padding(.vertical, 12)
             }
         }
     }
 
-    private var query: SearchQuery {
+    var query: SearchQuery {
         var query = SearchQuery()
         switch kind {
         case .publisher: query.publisher = name
@@ -241,27 +311,44 @@ struct PublisherView: View {
     /// The series list first — it is what the page is for — the total beside
     /// it, and the directory record when the name is known there. A name the
     /// directory lacks (a studio, most often) is not a failure.
-    private func load() async {
+    ///
+    /// Guarded by `loadGeneration` throughout (gap 58): `.refreshable` and
+    /// `.task(id: order)` can both call this, and a slower, older call
+    /// landing after a newer one started used to be able to overwrite it —
+    /// pull-to-refresh finishing after an order change, or the reverse.
+    func load() async {
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        failed = false
+        loadMoreFailure = nil
         page = 1
         async let found = repository.search(query)
         async let counted = repository.count(query)
         let result = await found
+        guard generation == loadGeneration else { return }
         series = result.series
+        origin = result.origin
         // The API's own signal (`pagination.next`), not the filtered count:
         // this list is filtered for `isDiscoverable`/format after the fetch,
         // so a page with one filtered row made `count >= limit` false and
         // stopped paging after page one for any publisher common enough to
         // have one. See FeedResult.hasMore.
         hasMore = result.hasMore
-        if case .staleAfter = result.origin { failed = series.isEmpty }
-        total = await counted
+        let countedValue = await counted
+        guard generation == loadGeneration else { return }
+        // Gap 57: falling back to `series.count` here is what printed "100"
+        // for Shueisha — the page size, not the total. Hidden instead until
+        // the real count answers; see `headerCount`.
+        total = countedValue
         // The directory knows publishers, not people.
         if kind == .publisher, detail == nil,
            let id = await catalogue.findPublisher(named: name)?.publisherID {
-            detail = await catalogue.publisher(id: id)
+            guard generation == loadGeneration else { return }
+            let found = await catalogue.publisher(id: id)
+            guard generation == loadGeneration else { return }
+            detail = found
         }
+        guard generation == loadGeneration else { return }
         isLoading = false
     }
 
@@ -271,6 +358,7 @@ struct PublisherView: View {
     func loadMore() async {
         guard hasMore, !isLoadingMore else { return }
         isLoadingMore = true
+        loadMoreFailure = nil
         defer { isLoadingMore = false }
         page += 1
         let result = await repository.search(query)
@@ -287,5 +375,12 @@ struct PublisherView: View {
         // publisher's list is narrow enough that a wholly filtered page is
         // rare, and the alternative is a second copy of the search loop.
         hasMore = result.hasMore
+        // Gap 15: a failed page read identically to the real end of the
+        // list — `hasMore` on a `.staleAfter` result with nothing new
+        // defaults `false`, same as a genuinely finished feed. `blockingError`
+        // is nil whenever there is anything to show (including what this
+        // page already had), so this only fires when the page truly added
+        // nothing and the reason was a real failure.
+        if additions.isEmpty { loadMoreFailure = result.blockingError }
     }
 }

@@ -13,6 +13,14 @@ final class MixModel {
     private(set) var results: [Recommendation] = []
     private(set) var isRunning = false
     private(set) var message: String?
+    /// Set when the blend request itself failed — offline, rate-limited, a
+    /// server error — as opposed to succeeding with nothing to recommend.
+    /// `run()` used to overwrite `results`/`dna`/`moves` on every answer,
+    /// `MixResult.failure` included, so a throttled reader lost the blend and
+    /// DNA chips they were looking at and was told "Nothing matched. Try
+    /// loosening the filters." for a request that never reached the server
+    /// (gap 11, FAILURES-SUMMARY.md).
+    private(set) var failure: APIError?
 
     /// The ten weighted tags the blend was derived from.
     private(set) var dna: BlendDNA = .empty
@@ -93,13 +101,24 @@ final class MixModel {
             excludedTags: Array(excludedTags)
         )
         guard mine == generation else { return }
+        defer { isRunning = false }
+
+        if let error = blended.failure {
+            // The request itself failed. The last-good blend and its DNA are
+            // still true — they just have not been refreshed — so they stay
+            // on screen rather than being wiped and replaced with a sentence
+            // that blames the reader's filters for a request that never
+            // reached the server.
+            failure = error
+            return
+        }
+        failure = nil
         results = blended.recommendations
         dna = blended.dna
         // Only meaningful against a previous blend; the first run has nothing
         // to compare with and shows no movement rather than fake movement.
         moves = previous.isEmpty ? [] : BlendDNA.moves(from: previous, to: blended.dna)
         message = results.isEmpty ? "Nothing matched. Try loosening the filters." : nil
-        isRunning = false
     }
 
     /// Switches a strand off, or back on, and re-blends.
@@ -151,5 +170,6 @@ final class MixModel {
         excludedTags.removeAll()
         excludedStrands.removeAll()
         message = nil
+        failure = nil
     }
 }

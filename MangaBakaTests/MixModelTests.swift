@@ -8,6 +8,9 @@ private final class MixRepository: StubRepositoryBase, @unchecked Sendable {
     var results: [Recommendation] = []
     /// Handed back as the blend's DNA, so a test can drive the strand controls.
     var dna: BlendDNA = .empty
+    /// Set to make the next `mix` answer read as a failed request rather
+    /// than a successful, empty one — see `MixResult.failure`'s doc comment.
+    var failure: APIError?
     private(set) var lastExcludedTags: [Int] = []
 
     override func mix(
@@ -18,7 +21,7 @@ private final class MixRepository: StubRepositoryBase, @unchecked Sendable {
         mixCalls += 1
         lastSeeds = seeds
         lastExcludedTags = excludedTags.sorted()
-        return MixResult(recommendations: results, dna: dna)
+        return MixResult(recommendations: results, dna: dna, failure: failure)
     }
 }
 
@@ -123,6 +126,35 @@ struct MixModelTests {
         let model = MixModel(repository: MixRepository(), shelf: shelf)
 
         #expect(await model.suggestedSeeds().isEmpty)
+    }
+
+    /// Gap 11 (FAILURES-SUMMARY.md): `mix` used to collapse a failed request
+    /// and a genuinely empty one into the same `.empty`, so a throttled
+    /// reader was told "Nothing matched. Try loosening the filters." and lost
+    /// the DNA chips and "Start over" button they were looking at. Expected
+    /// to fail today with: `model.dna.isEmpty == true` (wiped) and
+    /// `model.message == "Nothing matched. Try loosening the filters."`
+    /// instead of nil.
+    @Test("A failed re-blend keeps the last-good DNA and does not say nothing matched")
+    func failedBlendPreservesPreviousState() async throws {
+        let repository = MixRepository()
+        repository.dna = BlendDNA(
+            strands: [BlendDNA.Strand(tagId: 1, name: "A", weight: 0.2)],
+            seedCount: 1
+        )
+        repository.results = [recommendation(9)]
+        let model = MixModel(repository: repository, shelf: try makeShelf())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+        await model.run()
+        #expect(!model.dna.isEmpty, "the setup blend must have landed before the failure is tested")
+
+        repository.failure = .rateLimited(until: nil, party: .mangaBaka)
+        await model.run()
+
+        #expect(model.failure == .rateLimited(until: nil, party: .mangaBaka))
+        #expect(!model.dna.isEmpty, "the last-good DNA must survive a failed re-blend")
+        #expect(!model.results.isEmpty, "the last-good results must survive a failed re-blend")
+        #expect(model.message == nil, "a request that never reached the server is not an empty answer")
     }
 }
 

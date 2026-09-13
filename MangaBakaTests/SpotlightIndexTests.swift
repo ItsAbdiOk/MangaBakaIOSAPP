@@ -108,8 +108,24 @@ struct SpotlightWiringTests {
         let clear = try #require(source.range(of: "await spotlight.clear()"))
         #expect(cancel.upperBound < clear.lowerBound)
         let reminders = try #require(source.range(of: "await refreshReminders()\n"))
-        let reindex = try #require(source.range(of: "await spotlight.reindex(await librarySnapshot.all())"))
+        // Batch 6 wired gap 104 here: `reindex` used to run off `.all()`,
+        // which throws away whether the walk that produced it failed, so a
+        // reader offline on launch had yesterday's index wiped and replaced
+        // with nothing. It now reads `.load()` and skips the reindex outright
+        // when `.failure` is set, leaving yesterday's index standing.
+        let reindex = try #require(source.range(of: "await spotlight.reindex(walk.entries)"))
         #expect(reminders.upperBound < reindex.lowerBound)
+    }
+
+    /// Gap 104: a failed walk must not wipe yesterday's index.
+    @Test("A failed library walk leaves the Spotlight index untouched")
+    func skipsReindexOnFailure() throws {
+        let source = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
+        let guardLine = try #require(source.range(of: "guard walk.failure == nil else { return }"))
+        let load = try #require(source.range(of: "let walk = await librarySnapshot.load()"))
+        let reindex = try #require(source.range(of: "await spotlight.reindex(walk.entries)"))
+        #expect(load.upperBound < guardLine.lowerBound)
+        #expect(guardLine.upperBound < reindex.lowerBound)
     }
 
     @Test("A tapped result opens the series in the Library tab")

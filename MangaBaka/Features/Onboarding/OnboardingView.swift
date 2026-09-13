@@ -17,6 +17,11 @@ import SwiftUI
 /// the exit should not be something you discover on screen three.
 struct OnboardingView: View {
     let covers: [Series]
+    /// Gap 63: while true, the placeholder rectangles on `CoversFirstPage`
+    /// shimmer rather than sitting static — static from the first frame made
+    /// "still asking the rising feed" indistinguishable from "asked, and
+    /// this is the deliberate colourless fallback".
+    var isLoadingCovers = false
     let onFinish: () -> Void
     let onConnectAccount: () -> Void
 
@@ -25,7 +30,7 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $page) {
-                CoversFirstPage(covers: covers).tag(0)
+                CoversFirstPage(covers: covers, isLoading: isLoadingCovers).tag(0)
                 StackMechanicPage(cover: covers.first).tag(1)
                 AccountPage(onConnect: onConnectAccount, onDecline: onFinish).tag(2)
             }
@@ -104,6 +109,7 @@ private struct PageDots: View {
 /// nothing is redistributed. Flagged to Abdi 2026-09-10.
 private struct CoversFirstPage: View {
     let covers: [Series]
+    var isLoading = false
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
@@ -120,12 +126,22 @@ private struct CoversFirstPage: View {
                             accessibilityText: series.displayTitle ?? "Cover art"
                         )
                     } else {
-                        RoundedRectangle(
+                        let placeholder = RoundedRectangle(
                             cornerRadius: Metrics.radiusCoverRow, style: .continuous
                         )
                         .fill(Palette.surface)
                         .aspectRatio(Metrics.coverAspect, contentMode: .fit)
                         .accessibilityHidden(true)
+                        // Shimmering only while the rising feed is still in
+                        // flight — once it has answered, empty is either a
+                        // real (short) list or the deliberate colour-wash
+                        // fallback for offline (see this type's doc
+                        // comment), and neither of those is "still loading".
+                        if isLoading {
+                            placeholder.shimmering()
+                        } else {
+                            placeholder
+                        }
                     }
                 }
             }

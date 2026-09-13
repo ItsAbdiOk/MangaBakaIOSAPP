@@ -32,6 +32,10 @@ struct WhatsNewTests {
     func freshInstall() {
         let store = defaults()
         let state = WhatsNewState(defaults: store)
+        // What Discover's `.task` does on first appearance, before onboarding
+        // has completed: stamp the current notes as seen (gap 49 moved the
+        // write out of `isDue`, which is pure now).
+        state.markSeenOnFreshInstall(hasCompletedOnboarding: false)
         #expect(!state.isDue(hasCompletedOnboarding: false))
         #expect(!WhatsNewState(defaults: store).isDue(hasCompletedOnboarding: true))
     }

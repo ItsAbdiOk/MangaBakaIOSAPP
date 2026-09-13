@@ -41,6 +41,7 @@ struct MangaBakaApp: App {
                 calendar: services.calendar,
                 librarySnapshot: services.librarySnapshot,
                 reminders: services.reminders,
+                databaseWasReset: services.databaseWasReset,
                 onboarding: services.onboarding
             )
         }

@@ -24,12 +24,18 @@ struct RemindersSection: View {
                             title: "Tell me when something is due",
                             caption: "Nothing leaves this phone. iOS schedules these locally."
                         ) {
-                            SwitchIndicator(isOn: reminders.isEnabled)
+                            // Gap 102: this read `reminders.isEnabled` alone,
+                            // which is only what the reader asked this app
+                            // for — a reader who denied (or later revoked)
+                            // the system permission still saw the switch On
+                            // with nothing actually scheduled behind it.
+                            // `effectiveEnabled` also checks `systemStatus`.
+                            SwitchIndicator(isOn: reminders.effectiveEnabled)
                         }
                     }
                     .buttonStyle(.press)
                     .accessibilityLabel("Release reminders")
-                    .accessibilityValue(reminders.isEnabled ? "On" : "Off")
+                    .accessibilityValue(reminders.effectiveEnabled ? "On" : "Off")
                 }
 
                 // Only shown once iOS has actually refused. Offering a trip to

@@ -113,6 +113,16 @@ extension RootView {
         await library.forgetProfile()
         await taste.forgetEverything()
         await librarySnapshot.invalidate()
+        // Gap 89: the previous account's shelves stayed on screen — in
+        // `session.library.entries` — until relaunch, because nothing here
+        // told the Library tab's own model to drop them. `forget()` clears
+        // the entries, the shared snapshot and the generation counter that
+        // guards a straggling page from the old walk.
+        await session.library.forget()
+        // The taste ranker built from the previous account's library keeps
+        // weighting the stack toward tags that were never this account's
+        // until the next relaunch rebuilds it, otherwise.
+        stackModel?.ranker = nil
         // The reader's own id, used to keep series they already track out of a
         // blend. Left behind, it excludes somebody else's library from their
         // recommendations — and because it is only ever written at launch,
@@ -135,16 +145,40 @@ extension RootView {
     /// depend on the same library the rest of the app is about to read, and
     /// running them as separate tasks meant two library walks on every launch.
     func startSession() async {
+        // Gap 3: told once, here, rather than left as a silent fall-through
+        // to a database that remembers nothing between launches. One-shot
+        // because `startSession` itself only ever runs once per launch — see
+        // `RootView.body`'s `.task { await startSession() }`.
+        if databaseWasReset {
+            toasts.show(
+                "A local file couldn't be read, so your saved stack and library cache were reset. "
+                    + "Anything in your MangaBaka account is unaffected.",
+                kind: .failure
+            )
+        }
         if !onboarding.hasCompleted, onboardingCovers.isEmpty {
             onboardingCovers = await repository.feed(.rising, forceRefresh: false).series
         }
+        // Gap 63: told apart from the settled state — empty because the feed
+        // genuinely failed, or because onboarding was already finished and
+        // nothing was asked for — only once this has actually run.
+        isLoadingCovers = false
         // Dates move and series leave the library, and iOS holds the pending
         // list between launches — so it is corrected on return rather than kept
         // alive by anything running in the background.
         await refreshReminders()
         // After the reminders, which already walked the library: the snapshot
         // is cached now, so this costs no request.
-        await spotlight.reindex(await librarySnapshot.all())
+        //
+        // Gap 104: a walk that failed used to still wipe and rebuild the
+        // index from whatever partial (or empty) result it produced — a
+        // reader offline on launch had yesterday's index erased and replaced
+        // with nothing. `load()` (not `all()`, which throws the failure
+        // away) is checked first so a failed walk leaves yesterday's index
+        // standing, the same rule `reschedule` already applies to reminders.
+        let walk = await librarySnapshot.load()
+        guard walk.failure == nil else { return }
+        await spotlight.reindex(walk.entries)
     }
 
     /// Opens the series a Spotlight result named, from the library walk.
@@ -163,14 +197,39 @@ extension RootView {
             shelfPath = [mine]
             return
         }
-        guard let series = await repository.extras(for: id).full else { return }
+        // Gap 76: a second "Open X" arriving while this one is still awaiting
+        // `extras` cancels this task (`.task(id: bridge.pendingSeriesID)` in
+        // `RootView.body` restarts on a new id) but nothing here noticed —
+        // the cancelled call kept running to completion and could still land
+        // its own `discoverPath` assignment after the newer one had already
+        // set the right series, leaving the reader on the wrong page.
+        guard !Task.isCancelled else { return }
+        // One read for one series (gap 62) — the page it opens fetches the
+        // rest itself.
+        guard let series = await repository.series(id: id) else {
+            // Gap 61: this used to `return` with nothing said, so a link to a
+            // merged, removed, or momentarily unreachable series looked like
+            // a dead tap — Siri, Spotlight and a mangabaka.org link all
+            // landed on whichever tab was already open, in silence.
+            toasts.show("That series isn't available right now", kind: .failure)
+            return
+        }
+        guard !Task.isCancelled else { return }
         selection = .discover
         discoverPath = [series]
     }
 
     func openFromSpotlight(seriesID: Int) async {
         let entries = await librarySnapshot.all()
-        guard let series = entries.first(where: { $0.seriesId == seriesID })?.series else { return }
+        guard !Task.isCancelled else { return }
+        guard let series = entries.first(where: { $0.seriesId == seriesID })?.series else {
+            // Gap 61: a series Spotlight indexed yesterday that has since
+            // left the library (a state changed on another device, a
+            // removal) tapped in silence rather than saying why nothing
+            // opened.
+            toasts.show("That series isn't available right now", kind: .failure)
+            return
+        }
         selection = .library
         shelfPath = [series]
     }
@@ -206,15 +265,31 @@ extension RootView {
         )
     }
 
-    /// Writes a change to the reader's real library, then re-reads so the
-    /// screen shows what the server now holds rather than what was typed.
+    /// Writes a change to the reader's real library, then patches the entry
+    /// in place rather than re-walking the whole library to see it.
+    ///
+    /// Gap 88 / decision 5: this used to call `session.library.reload()` on
+    /// every save — thirteen requests and 24.7 MB on a real account, to
+    /// reflect one changed row, and the sheet stayed open the whole time.
+    /// `LibraryModel.apply(_:to:)` patches the entry in memory and in the
+    /// shared snapshot's disk cache for one request's cost: the write
+    /// itself. A full `reload()` only runs when the entry was not already
+    /// loaded — a series added for the first time has no local row to patch
+    /// — so the common case (editing something already on screen) is the
+    /// cheap path and the uncommon one still ends up correct.
     func saveLibraryChange(seriesId: Int, change: LibraryChange) async -> String? {
         do {
             try await library.update(seriesId: seriesId, change: change)
         } catch {
             return error.userFacingMessage
         }
-        await session.library.reload()
+        let wasLoaded = session.library.entries.contains { $0.seriesId == seriesId }
+        if wasLoaded {
+            await session.library.apply(change, to: seriesId)
+        } else {
+            await session.library.reload()
+        }
+        toasts.show("Saved")
         openShelf = session.library.shelves.first { $0.state == openShelf?.state }
         return nil
     }

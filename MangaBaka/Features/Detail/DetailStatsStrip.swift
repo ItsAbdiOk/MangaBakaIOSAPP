@@ -55,10 +55,10 @@ struct DetailStatsStrip: View {
             out.append(Stat(id: "Season", value: String(season)))
         }
         if let chapters = series.totalChapters, chapters > 0 {
-            out.append(Stat(id: "Chapters", value: String(Int(chapters))))
+            out.append(Stat(id: "Chapters", value: String(Int(wholeOrClamped: chapters))))
         }
         if let volumes = series.finalVolume, volumes > 0 {
-            out.append(Stat(id: "Volumes", value: String(Int(volumes))))
+            out.append(Stat(id: "Volumes", value: String(Int(wholeOrClamped: volumes))))
         }
         if let year = year ?? series.year, year > 0 {
             out.append(Stat(id: "Started", value: String(year)))

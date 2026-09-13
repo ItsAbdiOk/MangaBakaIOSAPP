@@ -13,8 +13,64 @@ struct ReleaseSection: View {
     /// Nothing is shown while loading either, for the same reason `.none`
     /// shows nothing: a placeholder box reads as an answer, not as "asking".
     let isLoading: Bool
+    /// The series' own links, so the loading skeleton (gap 20) only appears
+    /// for a series a provider is actually matched to — every other series
+    /// would otherwise flash an empty "Releases" skeleton on every visit
+    /// while the providers answer `.notCarried`.
+    var links: [SeriesLink] = []
+    var retry: (() async -> Void)?
+
+    enum State: Equatable {
+        case hidden
+        case loading
+        case failed(APIError)
+        case shown
+    }
+
+    /// Whether any of the series' links belong to a publisher this app reads
+    /// releases from at all.
+    nonisolated static func isMatched(links: [SeriesLink]) -> Bool {
+        links.contains { ReleaseSource.serving($0.safeURL) != nil }
+    }
+
+    /// A pure decision over the report — no `isMatched` here, since a report
+    /// with a real answer or a real failure already implies a provider was
+    /// asked; `isMatched` only gates the loading skeleton in `body`, where
+    /// nothing has answered yet.
+    nonisolated static func sectionState(report: ReleaseReport, isLoading: Bool) -> State {
+        if !report.summary.isEmpty, report.source != nil { return .shown }
+        if isLoading { return .loading }
+        // Gap 19: `.notCarried` providers are excluded from `failedSources`
+        // (`ReleaseFeedService.report`) — only a provider that actually had a
+        // link for this series and then failed lands here, so this branch
+        // never fires for a series no provider serves at all.
+        if let failure = report.failures.first {
+            return .failed(failure.error)
+        }
+        return .hidden
+    }
 
     var body: some View {
+        switch Self.sectionState(report: report, isLoading: isLoading) {
+        case .hidden:
+            EmptyView()
+        case .loading:
+            if Self.isMatched(links: links) { loadingSkeleton }
+        case let .failed(error):
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Releases")
+                    .typeDetailSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, Metrics.gutter)
+                InlineFailure(error: error, retry: retry)
+            }
+        case .shown:
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if !report.summary.isEmpty, let source = report.source {
             VStack(alignment: .leading, spacing: 11) {
                 Text(header(source))
@@ -31,6 +87,23 @@ struct ReleaseSection: View {
                 .padding(.horizontal, Metrics.gutter)
             }
         }
+    }
+
+    /// A single muted line where the content would be, so the section does
+    /// not pop in after the page has already settled (gap 20).
+    private var loadingSkeleton: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("Releases")
+                .typeDetailSectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+                .padding(.horizontal, Metrics.gutter)
+            Capsule()
+                .fill(Palette.surface)
+                .frame(width: 160, height: 12)
+                .padding(.horizontal, Metrics.gutter)
+                .shimmering()
+        }
+        .accessibilityHidden(true)
     }
 
     /// "Releases · Tonari no Young Jump" for a GigaViewer feed matched to a

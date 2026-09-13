@@ -41,6 +41,13 @@ struct AppServices {
     let librarySnapshot: LibrarySnapshot
     let reminders = ReleaseReminders()
     let onboarding = OnboardingState()
+    /// True when the on-disk cache existed but could not be opened or
+    /// migrated, and was renamed aside so a fresh one could be opened in its
+    /// place (gap 3). `RootView.startSession` shows a one-shot toast off
+    /// this so the reader is told their local saves were reset, instead of
+    /// the old silent fall-through to an in-memory database that simply
+    /// forgot everything on every relaunch with no explanation.
+    let databaseWasReset: Bool
 
     init() {
         // Cover art dominates this app's network use and is highly re-requested
@@ -51,7 +58,9 @@ struct AppServices {
 
         let apiClient = Self.makeClient()
         client = apiClient
-        let database = Self.makeDatabase()
+        let opened = Self.makeDatabase()
+        let database = opened.database
+        databaseWasReset = opened.wasReset
 
         repository = SeriesRepository(client: apiClient, database: database)
         shelf = ShelfStore(database: database)
@@ -148,18 +157,23 @@ struct AppServices {
 
     /// The on-device cache.
     ///
-    /// A cache that cannot be opened is not worth crashing over: fall back to
-    /// an in-memory one so the app still works, just without offline support
-    /// until the next launch.
-    private static func makeDatabase() -> AppDatabase {
+    /// A cache that cannot be opened is not worth crashing over. Gap 3: a
+    /// corrupt file used to fall through to an in-memory database — one that
+    /// remembers nothing between launches — with no attempt to recover the
+    /// on-disk path and no word to the reader about why their stack and
+    /// library cache reset every day. `onDiskResettingIfCorrupt` renames a
+    /// bad file aside and opens a fresh one in its place first; only when
+    /// even that fails does this fall back to in-memory.
+    private static func makeDatabase() -> AppDatabase.OpenResult {
         // The one unbounded piece of the launch path: a SQLite open, plus a
         // migration on a version change. Measured on the simulator, cold,
         // 2026-09-11: see the commit that added this interval.
-        let opened = Signposts.measure("Database open") { try? AppDatabase.onDisk() }
+        let opened = Signposts.measure("Database open") { AppDatabase.onDiskResettingIfCorrupt() }
         if let opened { return opened }
-        return (try? AppDatabase.inMemory()) ?? {
+        let fallback = (try? AppDatabase.inMemory()) ?? {
             preconditionFailure("An in-memory SQLite database could not be opened.")
         }()
+        return AppDatabase.OpenResult(database: fallback, wasReset: true)
     }
 
     /// Cover art dominates this app's network use and is highly re-requested —

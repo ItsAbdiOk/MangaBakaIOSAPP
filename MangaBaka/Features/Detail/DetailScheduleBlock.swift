@@ -17,16 +17,45 @@ struct DetailScheduleBlock: View {
     /// cadence sentence below it. The hero asks for it only when the column
     /// has the room; see `DetailHero.Form`.
     var isExpanded: Bool = false
+    /// Set when the ask itself failed — a 503, a rate limit — as opposed to
+    /// MangaUpdates answering with too little history to estimate from
+    /// (`ReleaseScheduleService.SeriesCadence.none`, which this block still
+    /// renders nothing for). Before this the two read identically: both were
+    /// "too few dated releases" by omission (gap 18, FAILURES-SUMMARY.md).
+    var failure: APIError?
+    var retry: (() async -> Void)?
+
+    enum State: Equatable {
+        case hidden
+        case loading
+        case failed(APIError)
+        case measured(Cadence)
+    }
+
+    /// A pure decision so the four outcomes can be pinned without building a
+    /// view. `estimate` wins over `failure` — a settled measurement from a
+    /// previous ask outranks a state a retry has not yet cleared.
+    nonisolated static func blockState(estimate: Cadence?, isLoading: Bool, failure: APIError?) -> State {
+        if let estimate { return .measured(estimate) }
+        if let failure { return .failed(failure) }
+        if isLoading { return .loading }
+        return .hidden
+    }
 
     var body: some View {
-        if let estimate {
+        switch Self.blockState(estimate: estimate, isLoading: isLoading, failure: failure) {
+        case let .measured(estimate):
             Button { onOpen?() } label: { content(estimate) }
                 .buttonStyle(.press)
                 .disabled(onOpen == nil)
                 .accessibilityElement(children: .combine)
                 .accessibilityHint(onOpen == nil ? "" : "Opens the release schedule")
-        } else if isLoading {
+        case .loading:
             waiting
+        case let .failed(error):
+            InlineFailure(error: error, retry: retry)
+        case .hidden:
+            EmptyView()
         }
     }
 

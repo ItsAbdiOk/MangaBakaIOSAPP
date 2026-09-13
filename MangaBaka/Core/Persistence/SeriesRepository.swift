@@ -47,6 +47,9 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// it rather than assuming an empty section means there was nothing to
     /// show (gap 9, FAILURES-SUMMARY.md).
     func extras(for seriesId: Int) async -> SeriesExtras
+    /// One series by id, for a deep link, Siri or Spotlight — a single read,
+    /// not the six `extras` legs. Nil when it cannot be fetched.
+    func series(id: Int) async -> Series?
 
     /// Every cover the series has, filtered to what the reader has allowed.
     /// Nil when the fetch failed, distinct from a series that genuinely has
@@ -690,6 +693,14 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Six hours, which is longer than a reading session and shorter than
     /// anything on a series page meaningfully changes. News is the most
     /// volatile thing here and it is a sidebar, not the point of the screen.
+    func series(id: Int) async -> Series? {
+        // The cached extras already carry the full record when they exist;
+        // otherwise one GET rather than the six concurrent legs `extras`
+        // pays for a page this caller is about to open anyway (gap 62).
+        if let cached = try? readDetailCache(id), let full = cached.full { return full }
+        return try? await client.get("/v1/series/\(id)")
+    }
+
     func extras(for seriesId: Int) async -> SeriesExtras {
         if let cached = try? readDetailCache(seriesId) { return cached }
         let fresh = await fetchExtras(for: seriesId)
@@ -808,4 +819,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     private static func combinedFailure(_ perLeg: [APIError?]) -> APIError? {
         perLeg.compactMap { $0 }.first { $0 != .cancelled }
     }
+}
+
+extension SeriesRepositoryProtocol {
+    /// Stubs and any repository without a cheaper path fall back to the
+    /// full record `extras` fetches.
+    func series(id: Int) async -> Series? { await extras(for: id).full }
 }

@@ -54,14 +54,29 @@ final class WhatsNewState {
 
     /// Whether the card is due: the notes have an id this reader has not
     /// put away, and the reader has used the app before.
+    ///
+    /// **Pure on purpose.** `DiscoverView.body` calls this directly to decide
+    /// whether to draw the card, and SwiftUI evaluates `body` at times of its
+    /// own choosing — a write here used to fire silently mid-render (gap 49:
+    /// "Modifying state during view update" is a warning precisely because
+    /// SwiftUI makes no promise about when, or how many times, that render
+    /// happens). See `markSeenOnFreshInstall` for the write this used to do.
     func isDue(hasCompletedOnboarding: Bool) -> Bool {
-        guard hasCompletedOnboarding else {
-            // A fresh install: mark the current notes as seen silently, so
-            // the card first appears on the update after this one.
-            if lastSeen == nil { dismiss() }
-            return false
-        }
+        guard hasCompletedOnboarding else { return false }
         return lastSeen != ReleaseNotes.current.id
+    }
+
+    /// A fresh install has nothing to call "new" — everything in the app is
+    /// new to them — so the current notes are marked seen silently, and the
+    /// card first appears on the update after this one.
+    ///
+    /// Split out of `isDue` (gap 49) so the write happens from a lifecycle
+    /// callback (`DiscoverView`'s `.task`) rather than from `body`. Does
+    /// nothing once `lastSeen` is set, so calling it again on every relaunch
+    /// costs nothing.
+    func markSeenOnFreshInstall(hasCompletedOnboarding: Bool) {
+        guard !hasCompletedOnboarding, lastSeen == nil else { return }
+        dismiss()
     }
 
     func dismiss() {

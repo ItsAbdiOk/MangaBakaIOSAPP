@@ -16,12 +16,17 @@ extension SeriesDetailView {
         if shelf.isEmpty {
             VolumesSection(
                 volumes: extras.volumes,
-                note: appleUnreachable ? "Apple Books couldn't be reached" : nil
+                note: appleUnreachable ? "Apple Books couldn't be reached" : nil,
+                // gap 22: while the store is still being asked, the section
+                // shows a skeleton instead of MangaBaka's own shelf — showing
+                // that first and swapping it for the store's the moment it
+                // answers reads as content changing under the reader.
+                isCheckingStore: isLoadingVolumes
             )
         } else {
             AppleVolumesRow(
                 volumes: shelf,
-                expected: shown.finalVolume.map { Int($0) },
+                expected: shown.finalVolume.map { Int(wholeOrClamped: $0) },
                 edition: appleEdition
             )
         }
@@ -31,6 +36,8 @@ extension SeriesDetailView {
     /// below the fold and the store is a third party with its own limit.
     func loadAppleVolumes() async {
         guard let appleBooks else { return }
+        isLoadingVolumes = true
+        defer { isLoadingVolumes = false }
         let country = Locale.current.region?.identifier ?? "us"
         let language = Locale.current.language.languageCode?.identifier
         var answer = await appleBooks.volumes(for: shown, country: country, language: language)
@@ -50,7 +57,9 @@ extension SeriesDetailView {
         // The Japanese shelf is left alone: it is one store's single edition,
         // and splicing a second store's covers into it would misrepresent it.
         guard appleEdition == nil,
-              VolumeShelf.needsGoogle(apple: appleVolumes, expected: shown.finalVolume.map { Int($0) })
+              VolumeShelf.needsGoogle(
+                apple: appleVolumes, expected: shown.finalVolume.map { Int(wholeOrClamped: $0) }
+              )
         else { return }
         googleVolumes = await googleBooks?.volumes(for: shown, language: language) ?? []
     }

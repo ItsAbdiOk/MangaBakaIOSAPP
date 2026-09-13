@@ -38,7 +38,14 @@ struct SeriesDetailView: View {
     var onOpenTag: ((String) -> Void)?
     var onOpenSchedule: (() -> Void)?
 
-    @State private var similar: [Series] = []
+    @State var similar: [Series] = []
+    /// Set only when `.similar` asked and failed with nothing to fall back
+    /// on. Internal, not private, so `+Releases.swift`-style extensions could
+    /// reach it if this screen grows another one; today only this file reads
+    /// it.
+    @State var similarFailure: APIError?
+    @State var alsoLike: [Series] = []
+    @State var alsoLikeFailure: APIError?
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
     @State var appleVolumes: [AppleBooksVolume] = []
@@ -47,23 +54,62 @@ struct SeriesDetailView: View {
     /// The store was asked and did not answer — distinct from "asked, and it
     /// has none", which shows MangaBaka's editions with no note.
     @State var appleUnreachable = false
+    /// True while a store is still being asked for volumes — see
+    /// `VolumesSection.isCheckingStore`.
+    @State var isLoadingVolumes = false
     /// Which store's edition the shelf shows, when not the reader's own.
     @State var appleEdition: AppleVolumesRow.Edition?
     /// The release section's report. Internal, not private, so
     /// `SeriesDetailView+Releases.swift` can write to it.
     @State var releases: ReleaseReport = .empty
     @State var isReleasesLoading = false
-    @State private var alsoLike: [Series] = []
     @State var extras = SeriesExtras()
     @State var covers: [SeriesImage] = []
+    /// Set only when the image fetch itself failed — nil for a series that
+    /// genuinely has none. `SeriesRepositoryProtocol.images(for:)` already
+    /// draws this line (nil vs. `[]`); this just keeps it past `loadCore`
+    /// instead of collapsing both into `covers = []` (gap 32/16).
+    @State private var coversFailure: APIError?
     @State private var openCoversAt: GalleryStart?
+    /// The gallery's images, captured the moment it opens rather than read
+    /// live from `otherCovers` — gap 67: Apple's volumes can still be landing
+    /// after the reader has already opened the fan, and a computed property
+    /// that keeps growing under an open pager reads as the page shifting
+    /// under a finger mid-swipe.
+    @State private var openCoversImages: [SeriesImage] = []
     @State private var favouredTags: Set<String> = []
     @State private var favouredTagIDs: Set<Int> = []
-    @State private var cast: [SeriesCharacter] = []
-    @State private var isCastLoading = false
-    @State private var cadence: Cadence?
-    @State private var isCadenceLoading = false
+    @State var cast: [SeriesCharacter] = []
+    @State var isCastLoading = false
+    /// Set only when every source `CharacterService` asked failed outright —
+    /// see `CharacterService.CharacterCast.failed`.
+    @State var castFailure: APIError?
+    @State var cadence: Cadence?
+    /// Set only when the cadence ask itself failed — see
+    /// `ReleaseScheduleService.SeriesCadence.failed`.
+    @State var cadenceFailure: APIError?
+    @State var isCadenceLoading = false
     @State private var isLoading = true
+
+    /// The page-level fact worth a `StaleBar`: the six-way `extras` fetch, or
+    /// either onward feed, answered from a stale cache or not at all. A
+    /// section-level `InlineFailure` says which piece is missing; this says
+    /// the page as a whole may be out of date (gap 10, worst afternoon #2).
+    nonisolated static func pageFailure(
+        extras: SeriesExtras, similarOrigin: FeedResult.Origin, alsoOrigin: FeedResult.Origin
+    ) -> APIError? {
+        if let failure = extras.failure { return failure }
+        for origin in [similarOrigin, alsoOrigin] {
+            if case let .staleAfter(error) = origin { return error }
+        }
+        return nil
+    }
+
+    @State var similarOrigin: FeedResult.Origin = .network
+    @State var alsoOrigin: FeedResult.Origin = .network
+    private var pageFailure: APIError? {
+        Self.pageFailure(extras: extras, similarOrigin: similarOrigin, alsoOrigin: alsoOrigin)
+    }
 
     /// The series as this screen shows it: the copy the reader arrived with,
     /// with anything it was missing filled in from the full v1 record fetched
@@ -90,11 +136,27 @@ struct SeriesDetailView: View {
                     schedule: cadence,
                     isScheduleLoading: isCadenceLoading,
                     onOpenSchedule: onOpenSchedule,
+                    scheduleFailure: cadenceFailure,
+                    onRetrySchedule: { await loadCadence() },
                     otherCovers: otherCovers,
                     preferredCover: frontCover,
-                    onOpenCovers: { openCoversAt = GalleryStart(value: $0) }
+                    onOpenCovers: openCovers
                 )
                 .padding(.top, 4)
+                // Gap 10: a series page opened offline or throttled used to
+                // say nothing at all — title and cover rendered, and every
+                // section that needed a network answer simply had none, with
+                // no line anywhere naming why. `pageFailure` is nil the
+                // instant any one of the three legs it watches has a real
+                // answer, so this never sits over content that is actually
+                // current.
+                if !isLoading, let pageFailure {
+                    StaleBar(
+                        headline: pageFailure.headline,
+                        detail: pageFailure.userFacingMessage,
+                        retry: { await load() }
+                    )
+                }
                 actions
                 // Under the actions, before the numbers: starting to read is
                 // the other thing to do about a series, and the full list of
@@ -104,12 +166,18 @@ struct SeriesDetailView: View {
                 if let description = shown.description, !description.isEmpty {
                     DetailSynopsis(text: Self.prose(from: description))
                 }
-                CharacterRow(characters: cast, isLoading: isCastLoading)
+                CharacterRow(
+                    characters: cast, isLoading: isCastLoading, failure: castFailure,
+                    retry: { await loadCast() }
+                )
                 tagSection
                 DetailCredits(
                     series: shown, onOpenPublisher: onOpenPublisher, onOpenAuthor: onOpenAuthor
                 )
-                ReleaseSection(report: releases, isLoading: isReleasesLoading)
+                ReleaseSection(
+                    report: releases, isLoading: isReleasesLoading, links: extras.links,
+                    retry: { await loadReleases() }
+                )
                 volumesShelf
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
@@ -117,6 +185,10 @@ struct SeriesDetailView: View {
                     similar: similar,
                     alsoLike: alsoLike,
                     isLoading: isLoading,
+                    similarFailure: similarFailure,
+                    alsoLikeFailure: alsoLikeFailure,
+                    onRetrySimilar: { await loadSimilar() },
+                    onRetryAlsoLike: { await loadAlsoLike() },
                     path: $path
                 )
                 TrackerScores(series: shown)
@@ -138,11 +210,33 @@ struct SeriesDetailView: View {
             CoverGallery(
                 series: shown,
                 frontCover: frontCover ?? shown.cover,
-                images: otherCovers,
+                // A snapshot taken when the gallery opened (gap 67), not a
+                // live read of `otherCovers`: Apple's volumes can still be
+                // landing after the fan is tapped, and a pager whose page
+                // count grows under a reader's finger mid-swipe is the worse
+                // failure than showing the count as it was at the moment of
+                // the tap.
+                images: openCoversImages,
                 startAt: start.value
             )
         }
         .task(id: series.id) { await load() }
+    }
+}
+
+/// Everything below moved out of the primary struct into this same-file
+/// extension purely for the lint's 250-line body-length ceiling — `private`
+/// members stay reachable from an extension in the same file.
+extension SeriesDetailView {
+    /// Snapshots the gallery's images at the moment of the tap — see
+    /// `openCoversImages` — and refuses to open on a series with nothing to
+    /// show, where a full-screen cover over an empty pager was a dead end
+    /// with a close button and nothing else.
+    private func openCovers(startingAt index: Int) {
+        let images = otherCovers
+        guard !images.isEmpty else { return }
+        openCoversImages = images
+        openCoversAt = GalleryStart(value: index)
     }
 
     /// The mockup pairs the primary action with "Use as seed", which is the
@@ -277,12 +371,29 @@ struct SeriesDetailView: View {
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
         async let extrasResult = repository.extras(for: series.id)
         async let imagesResult = repository.images(for: series.id)
-        similar = await similarResult.series
-        alsoLike = await alsoResult.series
+        let similarAnswer = await similarResult
+        similar = similarAnswer.series
+        similarOrigin = similarAnswer.origin
+        similarFailure = similarAnswer.blockingError
+        let alsoAnswer = await alsoResult
+        alsoLike = alsoAnswer.series
+        alsoOrigin = alsoAnswer.origin
+        alsoLikeFailure = alsoAnswer.blockingError
         extras = await extrasResult
-        // nil is "asked and failed"; batch 2 gives it a branch. Until then
-        // the gallery treats a failure like an empty answer.
-        covers = await imagesResult ?? []
+        // nil is "asked and failed" — the gallery no longer treats it like an
+        // empty answer (gap 16/32): `coversFailure` carries the reason so the
+        // fan and the gallery can tell "no covers" from "couldn't ask".
+        let imagesAnswer = await imagesResult
+        covers = imagesAnswer ?? []
+        // `images(for:)` answers `[SeriesImage]?`, not a `Fetched`, so the
+        // real `APIError` behind a nil is lost before it reaches here — a
+        // change this batch does not own (`SeriesRepository.swift`, batch 1,
+        // already landed). Recorded anyway, even without detail, so a future
+        // caller has *something* rather than reconstructing "nil happened"
+        // from `covers.isEmpty` alone the way this file used to.
+        coversFailure = imagesAnswer == nil
+            ? .transport(underlying: "images(for:) returned nil", party: .mangaBaka)
+            : nil
         isLoading = false
     }
 
@@ -338,38 +449,4 @@ struct SeriesDetailView: View {
         favouredTagIDs = await taste?.favouredTagIDs() ?? []
     }
 
-    /// Both tracker ids come from MangaBaka's own `source` block, so no lookup
-    /// is needed to find them. A series carrying neither has no cast to show,
-    /// and in that case nothing is asked and no row appears.
-    private func loadCast() async {
-        guard let characters,
-              shown.aniListID != nil || shown.shikimoriID != nil
-        else { return }
-        isCastLoading = true
-        defer { isCastLoading = false }
-        cast = await characters.characters(
-            aniListID: shown.aniListID,
-            shikimoriID: shown.shikimoriID
-        ).characters
-    }
-
-    /// Asked separately from everything else, and after it.
-    ///
-    /// MangaUpdates spaces requests at one every three seconds, so this can
-    /// take noticeably longer than the rest of the page. Awaiting it alongside
-    /// the others would hold the whole screen on the slowest thing on it; the
-    /// hero shows a spinner in its place instead.
-    private func loadCadence() async {
-        // Nothing is asked, and no spinner shown, for a series that has
-        // finished or stopped — see `canPredict`.
-        guard let schedule,
-              shown.mangaUpdatesID != nil,
-              ReleaseScheduleService.canPredict(status: shown.status)
-        else { return }
-        isCadenceLoading = true
-        defer { isCadenceLoading = false }
-        if case let .measured(estimate) = await schedule.cadence(for: shown) {
-            cadence = estimate
-        }
-    }
 }

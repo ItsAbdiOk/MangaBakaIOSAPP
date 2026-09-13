@@ -27,9 +27,22 @@ final class DiscoverModel {
         /// no paging at all. `rising` and `hidden-gems` are capped at 20 by the
         /// API with no page parameter, so those rows genuinely end.
         var hasReachedEnd = false
+        /// This row's own failure from the initial load, distinct from the
+        /// screen-wide `DiscoverModel.failure`.
+        ///
+        /// A shared, first-failure-wins property used to mean one row's
+        /// `.offline` (with nothing cached) painted every other, perfectly
+        /// fine row as "showing stale" the instant any row on screen had
+        /// content — the two facts had nothing to do with each other
+        /// (gap 13). Each row now carries its own answer.
+        var failure: APIError?
+        /// A trailing page fetch (`loadMore`) failed. Shown as an
+        /// `InlineFailure` at the end of the row rather than read as the end
+        /// of the feed — see `loadMore`'s doc comment (gap 15).
+        var pageFailure: APIError?
 
         var canLoadMore: Bool {
-            kind.supportsPaging && !hasReachedEnd && !isLoading && !isLoadingMore
+            kind.supportsPaging && !hasReachedEnd && !isLoading && !isLoadingMore && pageFailure == nil
         }
 
         var id: String { kind.cacheKey }
@@ -62,6 +75,14 @@ final class DiscoverModel {
 
     private let repository: any SeriesRepositoryProtocol
 
+    /// Bumped at the start of every `loadRows`, so a call that is still in
+    /// flight when a newer one starts (a pull-to-refresh landing on top of
+    /// the initial `.task` load, say) can tell its own results are stale and
+    /// drop them instead of overwriting what the newer call already wrote —
+    /// the interleaving that made the `StaleBar` flicker between runs
+    /// (gap 47).
+    private var loadGeneration = 0
+
     init(repository: any SeriesRepositoryProtocol) {
         self.repository = repository
     }
@@ -73,6 +94,8 @@ final class DiscoverModel {
     }
 
     private func loadRows(forceRefresh: Bool) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         defer { Task { await refreshCachedCount() } }
         // A successful refresh has to clear this, or the bar outlives the
         // failure it describes.
@@ -85,6 +108,10 @@ final class DiscoverModel {
             }
             var firstFailure: APIError?
             for await (index, result) in group {
+                // A newer `loadRows` has started since this one did — its
+                // results win, and this one's are dropped rather than
+                // clobbering them out of order.
+                guard generation == loadGeneration else { continue }
                 rows[index].series = result.series
                 rows[index].isLoading = false
                 // A reload replaces the row, so paging starts over with it.
@@ -92,8 +119,10 @@ final class DiscoverModel {
                 // page 5 of a row that currently holds page 1.
                 rows[index].page = 1
                 rows[index].hasReachedEnd = false
+                rows[index].pageFailure = nil
                 rows[index].reloads += 1
                 if case let .staleAfter(error) = result.origin {
+                    rows[index].failure = error
                     firstFailure = firstFailure ?? error
                     // One bar for the screen, not one per row. Four rows all
                     // failing the same refresh produced four identical banners
@@ -101,8 +130,11 @@ final class DiscoverModel {
                     if !result.series.isEmpty {
                         staleSince = [staleSince, result.cachedAt].compactMap { $0 }.min()
                     }
+                } else {
+                    rows[index].failure = nil
                 }
             }
+            guard generation == loadGeneration else { return }
             failure = firstFailure
         }
     }
@@ -116,20 +148,34 @@ final class DiscoverModel {
 
     /// Whether there is content on screen that a failed refresh left behind.
     ///
-    /// Both halves matter: a failure with nothing to show is a `FailureState`,
-    /// and content with no failure is just the app working.
+    /// Both halves matter, and they have to come from the *same* row: a
+    /// screen-wide "some row somewhere failed" combined with "some other row
+    /// happens to have content" used to read as the whole screen showing
+    /// stale content, even when the failing row itself had nothing cached
+    /// (gap 13) — three fine rows do not make a fourth, empty, offline row
+    /// "stale". A row only counts once its own failed refresh still left
+    /// something on screen.
     var isShowingStale: Bool {
-        failure != nil && rows.contains { !$0.series.isEmpty }
+        rows.contains { $0.failure != nil && !$0.series.isEmpty }
     }
 
-    /// "Last updated 19 hours ago · refresh failed".
-    var staleDetail: String? {
+    /// The failure behind a stale screen, for the view to build a `StaleBar`
+    /// with the real cause — and, for a rate limit, a live countdown — rather
+    /// than the generic wording this used to carry regardless of what
+    /// actually happened (gap 46). Nil unless `isShowingStale`.
+    var staleFailure: APIError? {
         guard isShowingStale else { return nil }
-        guard let staleSince else { return "Refresh failed" }
+        return failure
+    }
+
+    /// "Last updated 19 hours ago · Too many requests, briefly".
+    var staleDetail: String? {
+        guard let staleFailure else { return nil }
+        guard let staleSince else { return staleFailure.headline }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         let age = formatter.localizedString(for: staleSince, relativeTo: Date())
-        return "Last updated \(age) · refresh failed"
+        return "Last updated \(age) · \(staleFailure.headline)"
     }
 
     private func refreshCachedCount() async {
@@ -162,23 +208,39 @@ final class DiscoverModel {
         // (Tried first; the test caught it.)
         guard rows[index].reloads == reloads else { return }
 
-        // Deduplicate against what is already on screen. The API can and does
-        // repeat a series across pages when the underlying ordering shifts
-        // between requests, and SwiftUI's ForEach traps on duplicate IDs.
-        let known = Set(rows[index].series.map(\.id))
-        let additions = result.series.filter { !known.contains($0.id) }
+        // `feedPage` now answers a failed page with `hasMore: true` (its own
+        // contract, `SeriesRepository+Paging.swift`), so a page failure no
+        // longer reads as the end of the feed on its own — but leaving it
+        // there also meant `canLoadMore` would fire the very same failing
+        // page again on every scroll frame near the row's end. Recorded as
+        // `pageFailure` and shown as a trailing `InlineFailure` instead
+        // (gap 15); `canLoadMore` excludes a row with one set, so only an
+        // explicit `retryPage` tries again.
+        guard case let .staleAfter(error) = result.origin else {
+            rows[index].pageFailure = nil
+            // Deduplicate against what is already on screen. The API can and
+            // does repeat a series across pages when the underlying ordering
+            // shifts between requests, and SwiftUI's ForEach traps on
+            // duplicate IDs.
+            let known = Set(rows[index].series.map(\.id))
+            let additions = result.series.filter { !known.contains($0.id) }
+            rows[index].hasReachedEnd = !result.hasMore
+            // Advanced even when the page added nothing, so the next scroll
+            // asks for the page after it rather than the same one again.
+            rows[index].page = nextPage
+            rows[index].series.append(contentsOf: additions)
+            return
+        }
+        rows[index].pageFailure = error
+    }
 
-        // The API's own end-of-list signal, now that `feedPage` carries it
-        // (`pagination.next`). A page is filtered locally for
-        // `isDiscoverable`/format after it arrives, so a page can add nothing
-        // while the feed still has thousands behind it — that used to end the
-        // row. A failure also arrives as `hasMore == false`, which stops the
-        // asking, as before: re-requesting into a per-IP rate limit shared
-        // with everyone on the network costs more than a short row.
-        rows[index].hasReachedEnd = !result.hasMore
-        // Advanced even when the page added nothing, so the next scroll asks
-        // for the page after it rather than the same one again.
-        rows[index].page = nextPage
-        rows[index].series.append(contentsOf: additions)
+    /// Retries a failed page after `loadMore` recorded a `pageFailure`.
+    /// `canLoadMore` excludes a row with one set, so the automatic
+    /// near-the-end trigger cannot loop on the same failing page — only this,
+    /// wired to the trailing `InlineFailure`'s Retry, tries again.
+    func retryPage(_ rowID: Row.ID) async {
+        guard let index = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        rows[index].pageFailure = nil
+        await loadMore(rowID)
     }
 }

@@ -166,6 +166,50 @@ struct BlockedTagsRequestTests {
     }
 }
 
+/// Gaps 40, 68 (FAILURES-SUMMARY.md): the tag picker inside Settings used to
+/// show a blank list on a failed fetch, with no way to tell "still asking",
+/// "failed but the bundled taxonomy filled the list", and "failed with
+/// nothing at all" apart.
+@Suite("Blocked tags picker status")
+struct BlockTagPickerStatusTests {
+    private func tag(_ id: Int) throws -> MangaBaka.Tag {
+        try Fixture.decoder().decode(MangaBaka.Tag.self, from: Data("""
+        {"id":\(id),"name":"Tag \(id)","name_path":"Tag \(id)",
+         "series_count":10,"is_spoiler":false,"merged_with":null}
+        """.utf8))
+    }
+
+    /// Expected to fail before the fix: `BlockTagPicker.Status` and its
+    /// `status(bundled:fetched:)` classifier did not exist — the view held
+    /// only `isLoading`/`tags` and rendered a bare, unexplained empty list
+    /// once a failed fetch left both empty.
+    @Test("A failed fetch with nothing bundled is a failure, not a blank list")
+    func failedWithNoBundleIsFailed() throws {
+        let status = BlockTagPicker.status(bundled: [], fetched: .failed(.offline, stale: nil))
+        #expect(status == .failed(.offline))
+    }
+
+    @Test("A failed fetch with a bundled copy is a footnote, not a failure")
+    func failedWithBundleIsBundledOnly() throws {
+        let status = BlockTagPicker.status(bundled: [try tag(1)], fetched: .failed(.offline, stale: nil))
+        #expect(status == .bundledOnly(.offline))
+    }
+
+    @Test("A successful fetch is live, even if a bundled copy also loaded")
+    func successIsLive() throws {
+        let fetched = Fetched.loaded([try tag(2)], fetchedAt: Date(), isPartial: false)
+        let status = BlockTagPicker.status(bundled: [try tag(1)], fetched: fetched)
+        #expect(status == .live)
+    }
+
+    @Test("A fetch that answers with nothing is not a failure")
+    func emptyAnswerIsLive() {
+        let fetched = Fetched<[MangaBaka.Tag]>.loaded([], fetchedAt: Date(), isPartial: false)
+        let status = BlockTagPicker.status(bundled: [], fetched: fetched)
+        #expect(status == .live)
+    }
+}
+
 /// A blocked list the reader cannot find is indistinguishable from a broken
 /// app: things are missing and there is no way to learn why.
 @Suite("Blocked tags are findable", .enabled(if: SourceTree.isAvailable))

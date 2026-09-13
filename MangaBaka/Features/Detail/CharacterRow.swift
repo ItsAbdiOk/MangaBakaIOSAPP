@@ -8,6 +8,31 @@ import SwiftUI
 struct CharacterRow: View {
     let characters: [SeriesCharacter]
     let isLoading: Bool
+    /// Set only when every source that was asked failed outright — see
+    /// `CharacterService.CharacterCast.failed`. Nil for "asked and found
+    /// nobody", which stays silent; the row used to vanish for both alike
+    /// (gap 17, FAILURES-SUMMARY.md).
+    var failure: APIError?
+    var retry: (() async -> Void)?
+
+    enum CastState: Equatable {
+        case hidden
+        case loading
+        case failed(APIError)
+        case list
+    }
+
+    /// A pure decision, testable without building the row: a cast that
+    /// answered wins even over a stored failure (a retry that then loaded
+    /// something real should show it, not the stale error).
+    nonisolated static func state(
+        characters: [SeriesCharacter], isLoading: Bool, failure: APIError?
+    ) -> CastState {
+        if isLoading { return .loading }
+        if !characters.isEmpty { return .list }
+        if let failure { return .failed(failure) }
+        return .hidden
+    }
 
     /// The portrait the reader tapped, presented as a profile sheet.
     ///
@@ -25,9 +50,20 @@ struct CharacterRow: View {
     private static let radius: CGFloat = 16
 
     var body: some View {
-        if isLoading {
+        switch Self.state(characters: characters, isLoading: isLoading, failure: failure) {
+        case .hidden:
+            EmptyView()
+        case .loading:
             placeholders
-        } else if !characters.isEmpty {
+        case let .failed(error):
+            VStack(alignment: .leading, spacing: 11) {
+                Text("Characters")
+                    .typeDetailSectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(.horizontal, Metrics.gutter)
+                InlineFailure(error: error, retry: retry)
+            }
+        case .list:
             VStack(alignment: .leading, spacing: 11) {
                 Text("Characters")
                     .typeDetailSectionHeader()

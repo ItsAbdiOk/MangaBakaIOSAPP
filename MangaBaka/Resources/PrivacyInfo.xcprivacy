@@ -12,8 +12,21 @@
        account the token names) and other user content, linked to the
        reader, for the app's function only, never for tracking. Declared
        2026-09-11 before the first submission; the App Store Connect
-       questionnaire must say the same. Nothing is sent to MangaUpdates,
-       AniList, Shikimori or Apple's store search that identifies anyone. -->
+       questionnaire must say the same.
+
+       Every host this build actually contacts, verified 2026-09-13 by
+       grepping every network client for its base URL (the constant
+       `PrivacyManifestTests.declaredHosts` mirrors, and checks, this list):
+       api.mangabaka.org (the account above); graphql.anilist.co and
+       shikimori.io (cast data, no reader identifier sent); itunes.apple.com
+       and www.googleapis.com (volume search, unauthenticated, no reader
+       identifier sent); www.webtoons.com and comic.naver.com (release
+       feeds); the seven GigaViewer magazine hosts — tonarinoyj.jp,
+       shonenjumpplus.com, comic-days.com, magcomi.com, shonenmagazine.com,
+       comic-gardo.com, comic-earthstar.com — read as plain RSS with no
+       request parameters at all; api.mangaupdates.com (release cadence,
+       unauthenticated). None of the nine non-MangaBaka hosts receives
+       anything that identifies the reader. -->
   <key>NSPrivacyCollectedDataTypes</key>
   <array>
     <dict>

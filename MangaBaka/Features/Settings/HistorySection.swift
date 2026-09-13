@@ -14,6 +14,12 @@ struct HistorySection: View {
 
     @State private var held = 0
     @State private var isConfirming = false
+    /// From the environment, the same instance `RootView` puts every toast
+    /// through — see `.environment(toasts)` at the tab tree's root. Optional
+    /// like every other reader of it (`LibraryList`, `SearchView`, …): a
+    /// preview or a future host that never sets the environment value must
+    /// not crash reaching for it.
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     var body: some View {
         SettingsSection(title: "Recently viewed", caption: caption) {
@@ -48,7 +54,17 @@ struct HistorySection: View {
         ) {
             Button("Clear", role: .destructive) {
                 Task {
-                    try? await history.clear()
+                    // Gap 122: `try?` swallowed a real failure — a disk
+                    // error, a locked file — and `refresh()` after it still
+                    // ran, so the list either stayed exactly as full as
+                    // before with nothing said, or (worse) looked cleared
+                    // for the rest of the session while the row remained on
+                    // disk.
+                    do {
+                        try await history.clear()
+                    } catch {
+                        toasts?.show("Couldn't clear the list", kind: .failure)
+                    }
                     await refresh()
                 }
             }

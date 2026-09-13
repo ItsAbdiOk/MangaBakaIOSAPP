@@ -61,8 +61,21 @@ struct DiscoverView: View {
                 // both. Pinned, it would be a permanent accusation about a
                 // screen that is working.
                 if let detail = model.staleDetail {
-                    StaleBar(headline: "Showing what you had", detail: detail) {
-                        await model.load(forceRefresh: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        StaleBar(headline: "Showing what you had", detail: detail) {
+                            await model.load(forceRefresh: true)
+                        }
+                        // The live half of a rate limit: `staleDetail` can
+                        // only carry a headline, frozen at render time, since
+                        // `StaleBar.detail` is a plain `String` — so a
+                        // countdown that ticks needs its own line rather than
+                        // living inside that string (gap 46).
+                        if case let .rateLimited(until, _)? = model.staleFailure, let until {
+                            Countdown(until: until)
+                                .typeSmallMeta()
+                                .foregroundStyle(Palette.textMuted)
+                                .padding(.horizontal, Metrics.gutter + 18)
+                        }
                     }
                 }
 
@@ -114,6 +127,12 @@ struct DiscoverView: View {
         .task { await model.load() }
         .task { await recentlyViewed?.load() }
         .task { await pulse?.load() }
+        // Marking a fresh install's notes as seen used to happen inline in
+        // `body` via `WhatsNewState.isDue` — a write during view evaluation,
+        // which SwiftUI warns about and does not promise to run at any
+        // particular time (gap 49). `.task` runs outside the render pass, so
+        // the same one-time stamp happens safely here instead.
+        .task { whatsNew?.markSeenOnFreshInstall(hasCompletedOnboarding: hasCompletedOnboarding) }
     }
 
     private var header: some View {
@@ -190,6 +209,12 @@ struct DiscoverView: View {
 
             if row.isLoading && row.series.isEmpty {
                 CoverSkeletonRow()
+            } else if row.series.isEmpty, let failure = row.failure {
+                // This row asked and failed, rather than asking and getting
+                // nothing back — the two used to look identical (gap 13).
+                InlineFailure(error: failure) {
+                    await model.load(forceRefresh: true)
+                }
             } else if row.series.isEmpty {
                 Text("Nothing here right now.")
                     .typeSmallMeta()
@@ -234,6 +259,17 @@ struct DiscoverView: View {
                 .scrollIndicators(.hidden)
                 // A row settles on a card, not between two.
                 .scrollTargetBehavior(.viewAligned)
+
+                // A page-2-or-later failure used to read as the end of the
+                // feed with nothing said about it (gap 15) — this is the one
+                // line that says a page failed to load rather than the row
+                // simply running out.
+                if let pageFailure = row.pageFailure {
+                    InlineFailure(error: pageFailure) {
+                        await model.retryPage(row.id)
+                    }
+                    .padding(.top, 8)
+                }
             }
         }
         // The covers' colour, faintly, on the ground behind them.
@@ -275,9 +311,23 @@ struct DiscoverView: View {
         return index >= row.series.count - Self.prefetchDistance
     }
 
+    /// `model.failure` is only ever set from an actual `.staleAfter` error
+    /// (see `DiscoverModel.loadRows`) — never invented. A reader online with
+    /// tight filters and four legitimately empty feeds used to be told
+    /// "You're offline" purely because `?? .offline` needed *some* error to
+    /// hand `FailureState`; that is no longer true here, so a genuinely empty
+    /// screen gets a plain `EmptyState` instead of a guessed cause (gap 14).
+    @ViewBuilder
     private var emptyState: some View {
-        FailureState(error: model.failure ?? .offline) {
-            await model.load(forceRefresh: true)
+        if let failure = model.failure {
+            FailureState(error: failure) {
+                await model.load(forceRefresh: true)
+            }
+        } else {
+            EmptyState(
+                title: "Nothing to show right now",
+                message: "These feeds are empty at the moment. Pull to check again."
+            )
         }
     }
 }

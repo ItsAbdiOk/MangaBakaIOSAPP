@@ -32,7 +32,7 @@ struct DetailTagSections: View {
     /// sections of up to eight chips each is more on screen than the flat list
     /// ever was. These four answer what a series *is*; the other thirteen
     /// answer questions a reader has only after deciding to read it.
-    private static let leadingGroups: Set<String> = [
+    nonisolated private static let leadingGroups: Set<String> = [
         "Genres", "Themes", "Narrative Tropes", "Settings"
     ]
 
@@ -42,7 +42,19 @@ struct DetailTagSections: View {
     @State private var revealedSpoilers: Set<String> = []
 
     private var visibleGroups: [TagGroup] {
-        showsAllGroups ? groups : groups.filter { Self.leadingGroups.contains($0.name) }
+        Self.visibleGroups(groups, showsAll: showsAllGroups)
+    }
+
+    /// Gap 80: for a series whose tags fall entirely outside the four leading
+    /// groups (Genres, Themes, Narrative Tropes, Settings), the collapsed
+    /// filter used to leave nothing visible at all — a header-less section
+    /// that was just a "more groups" button, with no tag anywhere above it to
+    /// explain what it was for. Showing everything in that one case is the
+    /// smaller surprise than a button with nothing behind it.
+    nonisolated static func visibleGroups(_ groups: [TagGroup], showsAll: Bool) -> [TagGroup] {
+        if showsAll { return groups }
+        let leading = groups.filter { leadingGroups.contains($0.name) }
+        return leading.isEmpty ? groups : leading
     }
 
     var body: some View {

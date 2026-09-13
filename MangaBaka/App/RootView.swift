@@ -35,6 +35,10 @@ struct RootView: View {
     let calendar: ReleaseCalendar
     let librarySnapshot: LibrarySnapshot
     let reminders: ReleaseReminders
+    /// True when the on-disk cache had to be reset before this launch — see
+    /// `AppServices.makeDatabase` and gap 3. Told to the reader once, from
+    /// `startSession`, rather than shown here directly.
+    let databaseWasReset: Bool
     /// The library in iOS search. A struct with no state, so it is built here
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
@@ -47,7 +51,11 @@ struct RootView: View {
     private let bridge = IntentBridge.shared
     let onboarding: OnboardingState
 
-    @State private var toasts = ToastCentre()
+    /// Internal rather than private: `RootView+Session.swift` needs to raise
+    /// a toast from `startSession` (gap 3, the database-reset notice) and
+    /// from the dead-tap paths on `openSeries`/`openFromSpotlight` (gap 61),
+    /// and a stored `@State` cannot be reached across files at `private`.
+    @State var toasts = ToastCentre()
     // Internal rather than private so the Library tab, which lives in
     // RootView+Session.swift, can reach them. The split is the lint's doing:
     // that one tab carries five destinations and was more than half this
@@ -66,14 +74,21 @@ struct RootView: View {
     @State private var searchModel: SearchModel?
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
-    @State private var mixModel: MixModel?
+    /// Internal rather than private: `RootView+Failures.swift` reads this to
+    /// guard "Use as seed" against a tap landing before the tab's own
+    /// `.task` has built the model (gap 77).
+    @State var mixModel: MixModel?
     /// Held here for the same reason as the three above, and for one more:
     /// the `.id(titleRevision)` on the tab tree rebuilds it when the title
     /// preference changes, and a model built inline in the body went with it
     /// — the stack's queue and its "seen this run" counts were reset by a
     /// display setting. Models above the `.id` survive it.
     @State private var discoverModel: DiscoverModel?
-    @State private var stackModel: StackModel?
+    /// Internal rather than private: `forgetPreviousAccount` (in
+    /// `RootView+Session.swift`) has to clear `ranker` on an account change
+    /// (gap 89) — a taste ranker built from the previous account's library
+    /// otherwise keeps weighting the new account's stack until relaunch.
+    @State var stackModel: StackModel?
     /// The cover the detail page should grow out of, and the namespace the
     /// source and destination share. See `ZoomRoute`.
     @State private var zoomRoute = ZoomRoute()
@@ -81,8 +96,21 @@ struct RootView: View {
     /// Real covers behind the first onboarding screen. Empty until the rising
     /// feed answers, which is the case the screen is built to survive.
     @State var onboardingCovers: [Series] = []
+    /// True until the rising feed has actually answered — success or
+    /// failure. Gap 63: the six placeholder rectangles rendered identically
+    /// whether the covers were still in flight or the fetch had already
+    /// failed (or come back empty), so a reader on a bad connection saw what
+    /// looked like the first screen stuck loading forever rather than the
+    /// deliberate colour-wash fallback the design already has for exactly
+    /// that case — see `CoversFirstPage`'s doc comment.
+    @State var isLoadingCovers = true
     /// Whether Settings should open with the token field already focused.
     @State var wantsAccountFocus = false
+    /// Set when onboarding's "Connect an account" is tapped, and acted on
+    /// only once `onboarding.hasCompleted` has actually flipped — see
+    /// `RootView+Failures.onboardingCompletionChanged` and gap 64. Internal
+    /// so that method, in another file, can read and clear it.
+    @State var wantsAccountAfterOnboarding = false
     /// Bumped when the title preference changes, so every screen redraws with
     /// the new names. Titles are read in a hundred places and changed roughly
     /// never; a version number is cheaper than making all of them observe.
@@ -126,15 +154,18 @@ struct RootView: View {
             .fullScreenCover(isPresented: .constant(!onboarding.hasCompleted)) {
                 OnboardingView(
                     covers: onboardingCovers,
+                    isLoadingCovers: isLoadingCovers,
                     onFinish: { onboarding.complete() },
                     onConnectAccount: {
+                        wantsAccountAfterOnboarding = true
                         onboarding.complete()
-                        selection = .library
-                        wantsAccountFocus = true
-                        showsSettings = true
                     }
                 )
             }
+            // Gap 64: see `onboardingCompletionChanged` in
+            // `RootView+Failures.swift` for why this is deferred rather than
+            // acted on inside `onConnectAccount` directly.
+            .onChange(of: onboarding.hasCompleted) { _, completed in onboardingCompletionChanged(completed) }
     }
 
     /// The tab selection, with a re-tap of the current tab popping it to its
@@ -303,11 +334,8 @@ struct RootView: View {
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),
             path: path,
-            onUseAsSeed: { series in
-                mixModel?.addSeed(series)
-                selection = .mix
-                toasts.show("Added to the mix")
-            },
+            // Gap 77: see `useAsSeedTapped` in `RootView+Failures.swift`.
+            onUseAsSeed: useAsSeedTapped,
             onOpenTag: { tag in
                 // `applyBrowse`, not a raw assignment plus `search()`. Tapping
                 // a tag is the same gesture as picking one on the browse
@@ -362,7 +390,15 @@ struct RootView: View {
             // Only MangaBaka saying no means the token is bad. Everything else
             // is a statement about the network, and the token is still whatever
             // it was before the reader lost signal.
-            return error.needsAccount ? .rejected : .unknown(error.userFacingMessage)
+            //
+            // Gap 119: this used to pass `error.userFacingMessage` straight
+            // through, which is copy written to stand alone on a full-screen
+            // failure ("Showing what was downloaded. Nothing new can load
+            // until you're back.") — feed wording, sitting after "Saved on
+            // this phone but not checked yet:" on the account card, where it
+            // read like a mismatched sentence rather than a reason.
+            // `shortReason` is the phrase built for that cramped spot.
+            return error.needsAccount ? .rejected : .unknown(error.shortReason)
         }
     }
 }

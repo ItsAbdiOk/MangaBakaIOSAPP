@@ -16,6 +16,11 @@ struct LibraryControlTests {
         private(set) var removed: [Int] = []
         private(set) var reads = 0
         var failure: APIError?
+        /// Set to make the *walk itself* fail — distinct from `failure`,
+        /// which only affects `add`/`update`/`remove` — so a test can prove
+        /// gap 86: the control must not read "not in the library" out of a
+        /// walk that never actually got anywhere.
+        var walkFailure: APIError?
 
         func recommendationStatus() async throws(APIError) -> RecommendationStatus {
             throw APIError.offline
@@ -29,6 +34,11 @@ struct LibraryControlTests {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             reads += 1
             return entries
+        }
+
+        func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] {
+            if let walkFailure { throw walkFailure }
+            return await library(page: page, limit: limit)
         }
 
         func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool {
@@ -102,6 +112,40 @@ struct LibraryControlTests {
         #expect(subject.current == nil)
     }
 
+    /// Gap 86: `isKnown && current == nil` used to be indistinguishable from
+    /// "the walk finished and this series genuinely is not saved" — which is
+    /// exactly what a walk that never got anywhere also looks like from
+    /// `entries.first { … }` against an empty array. A series the reader
+    /// already has, opened while offline, offered "Add to library" live.
+    @Test("A failed walk is reported as unknown, not as 'not in the library'")
+    func failedWalkIsUnknown() async {
+        let library = FakeLibrary()
+        library.walkFailure = .offline
+        let subject = model(library)
+
+        await subject.load()
+        #expect(!subject.isKnown, "today this reads isKnown == true — the bug")
+        #expect(subject.current == nil)
+        #expect(subject.checkFailure == .offline)
+    }
+
+    /// The retry `InlineFailure` offers has to actually walk again, not sit on
+    /// the first failure forever.
+    @Test("Retrying after a failed walk asks again")
+    func retryAsksAgain() async {
+        let library = FakeLibrary()
+        library.walkFailure = .offline
+        let subject = model(library)
+        await subject.load()
+        #expect(subject.checkFailure == .offline)
+
+        library.walkFailure = nil
+        library.entries = [FakeLibrary.entry(seriesId: 7, state: .reading, chapter: 3)]
+        await subject.load()
+        #expect(subject.checkFailure == nil)
+        #expect(subject.current?.progressChapter == 3)
+    }
+
     @Test("A series already in the library shows its real state, not Add")
     func findsExistingEntry() async {
         let library = FakeLibrary()
@@ -155,6 +199,30 @@ struct LibraryControlTests {
         #expect(library.changes.count == 1)
         #expect(library.changes[0].change.progressChapter == .some(13))
         #expect(subject.current?.progressChapter == 13)
+    }
+
+    /// Gap 87/96(j): a write used to trigger `refresh()` — a full re-walk of
+    /// the shared library, 13 requests on a real account — just to reflect
+    /// one changed field, and if that walk failed partway the control
+    /// flipped from "Reading · ch 68" back to "Add to library" despite the
+    /// write itself having landed. `apply(_:)` now patches the entry in
+    /// place through `LibraryModel.apply(_:to:)` and never re-reads a page at
+    /// all: `library.reads` — bumped once per page `library(page:limit:)`
+    /// answers — must not move after a write.
+    @Test("A write patches the entry in place; it never re-walks the library")
+    func writeNeverReWalks() async {
+        let library = FakeLibrary()
+        library.entries = [FakeLibrary.entry(seriesId: 7, state: .reading, chapter: 68)]
+        let subject = model(library)
+        await subject.load()
+        let readsAfterLoad = library.reads
+
+        await subject.advanceChapter()
+        #expect(subject.current?.progressChapter == 69, "the write should be visible immediately")
+        #expect(
+            library.reads == readsAfterLoad,
+            "a write should never trigger another page read of the library"
+        )
     }
 
     /// An entry with no progress recorded starts at one, not at two and not at

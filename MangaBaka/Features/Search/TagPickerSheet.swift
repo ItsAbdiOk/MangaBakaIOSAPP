@@ -26,6 +26,12 @@ struct TagPickerSheet: View {
     @State private var isLoading = true
     @State private var openGroup: Int?
     @State private var search: TagSearch?
+    /// Where `tags` came from, once loading finishes. See `TagPickerStatus`.
+    @State private var status: TagPickerStatus = .nothing
+    /// The live fetch's own failure, kept only for `.nothing`'s
+    /// `FailureState` — a bundled fallback still on screen (`.bundledOnly`)
+    /// gets a footnote instead, since there is something to show either way.
+    @State private var liveFailure: APIError?
     @Environment(\.dismiss) private var dismiss
 
     /// How many tags a group shows before asking.
@@ -35,16 +41,39 @@ struct TagPickerSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    field
-                    if !selected.isEmpty {
-                        chosen
-                        matchMode
-                    }
-                    breadthLegend
-                    if query.isEmpty {
-                        groups
+                    if !isLoading, status == .nothing, let liveFailure {
+                        // Both the bundled fallback and the live fetch failed
+                        // — gap 42, where the sheet used to render a blank
+                        // list with no explanation at all.
+                        FailureState(error: liveFailure, retry: { await reload() })
+                    } else if !isLoading, status == .nothing {
+                        // No failure and still nothing: a real, if unlikely,
+                        // "there is no tag catalogue" rather than a broken
+                        // request. `EmptyState`, not `FailureState` with a
+                        // guessed cause — the fix this whole family exists
+                        // for is telling the two apart (systemic cause (m):
+                        // no `?? .offline` standing in for an absent error).
+                        EmptyState(
+                            title: "No tags to show",
+                            message: "Nothing came back from the catalogue. Try again in a moment.",
+                            actionTitle: "Try again",
+                            action: { Task { await reload() } }
+                        )
                     } else {
-                        matches
+                        field
+                        if !selected.isEmpty {
+                            chosen
+                            matchMode
+                        }
+                        if !isLoading, status == .bundledOnly {
+                            bundledFootnote
+                        }
+                        breadthLegend
+                        if query.isEmpty {
+                            groups
+                        } else {
+                            matches
+                        }
                     }
                 }
                 .padding(.horizontal, Metrics.gutter)
@@ -63,32 +92,21 @@ struct TagPickerSheet: View {
         }
         .preferredColorScheme(.dark)
         .edgeSwipeToDismiss()
-        .task {
-            let search = TagSearch(catalogue: catalogue)
-            self.search = search
-
-            // Bundled first, so the sheet opens instantly and offline; the
-            // network answer replaces it below once it lands.
-            let bundled = TagTaxonomy.bundled().filter(\.isUsable)
-            if !bundled.isEmpty {
-                tags = bundled
-                sortedCounts = TagBreadth.sortedCounts(of: tags)
-                search.loaded = tags
-                isLoading = false
-            }
-
-            let fetched = (await catalogue.tags(limit: 500).value ?? []).filter(\.isUsable)
-            if !fetched.isEmpty {
-                tags = fetched
-                sortedCounts = TagBreadth.sortedCounts(of: tags)
-                search.loaded = tags
-            }
-            isLoading = false
-        }
+        .task { await load() }
         .onChange(of: query) { _, new in search?.update(query: new) }
     }
 
     // MARK: - Pieces
+
+    /// Gap 41: the bundled fallback used to render with no label at all, so
+    /// a reader filtering by a tag renamed or merged since 2026-08-27 had no
+    /// idea the list in front of them might not match what the API would
+    /// say today.
+    private var bundledFootnote: some View {
+        Text("Showing a bundled tag list from 2026-08-27 — the live catalogue couldn't be reached.")
+            .typeFootnote()
+            .foregroundStyle(Palette.textMuted)
+    }
 
     /// What the little orange bar on each row means.
     ///
@@ -295,6 +313,48 @@ struct TagPickerSheet: View {
     }
 }
 
+/// Split out of the struct body to stay under the lint's `type_body_length`
+/// ceiling — not a widening of who is meant to touch these, same as the
+/// repository's own `+Cache`/`+Count` splits.
+extension TagPickerSheet {
+    /// Bundled first, so the sheet opens instantly and offline; the network
+    /// answer replaces it once it lands. Sets `status` from what actually
+    /// ended up on screen (gap 41, 42), rather than leaving a stale or an
+    /// unlabelled list with nothing saying which one the reader is looking
+    /// at.
+    func load() async {
+        let searchState = search ?? TagSearch(catalogue: catalogue)
+        search = searchState
+
+        let bundled = TagTaxonomy.bundled().filter(\.isUsable)
+        if !bundled.isEmpty {
+            tags = bundled
+            sortedCounts = TagBreadth.sortedCounts(of: tags)
+            searchState.loaded = tags
+            isLoading = false
+            status = .bundledOnly
+        }
+
+        let fetched = await catalogue.tags(limit: 500)
+        let live = (fetched.value ?? []).filter(\.isUsable)
+        liveFailure = fetched.error
+        if !live.isEmpty {
+            tags = live
+            sortedCounts = TagBreadth.sortedCounts(of: tags)
+            searchState.loaded = tags
+        }
+        status = TagPickerStatus.resolve(bundled: bundled, live: live)
+        isLoading = false
+    }
+
+    /// Retried from `FailureState` when both sources came back with nothing
+    /// (gap 42) — the same load, run again.
+    func reload() async {
+        isLoading = true
+        await load()
+    }
+}
+
 /// One tag: its name, how broad it is, and whether it is chosen.
 struct TagPickerRow: View {
     let tag: Tag
@@ -373,6 +433,34 @@ struct TagPickerRow: View {
 ///
 /// Its own type so the rule can be tested. It was wrong first time round in a
 /// way no test would have caught by construction — see `step(for:among:)`.
+/// Whether `TagPickerSheet`'s tag list is fresh, a bundled fallback, or
+/// nothing at all.
+///
+/// Three cases where there used to be none: the bundled 2026-08-27 list
+/// rendered with no label saying it might be stale when the live fetch
+/// failed (gap 41), and a blank sheet when both it and the fallback came
+/// back empty (gap 42). Its own top-level type, not nested, so resolving it
+/// is testable without pulling in the whole sheet's `type_body_length`
+/// budget — `TagPickerSheet` is a NavigationStack-wrapped sheet already near
+/// SwiftLint's 250-line ceiling on a type body.
+enum TagPickerStatus: Equatable {
+    /// The live catalogue answered with something to show.
+    case live
+    /// Only the bundled fallback has anything — the live fetch failed or
+    /// returned nothing.
+    case bundledOnly
+    /// Neither source has anything at all.
+    case nothing
+
+    /// Pure, so it is testable without the network task in `TagPickerSheet`
+    /// actually running.
+    static func resolve(bundled: [Tag], live: [Tag]) -> TagPickerStatus {
+        if !live.isEmpty { return .live }
+        if !bundled.isEmpty { return .bundledOnly }
+        return .nothing
+    }
+}
+
 enum TagBreadth {
     /// Which quarter of the loaded tags this one is broader than.
     ///

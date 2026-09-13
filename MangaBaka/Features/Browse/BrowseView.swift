@@ -31,31 +31,45 @@ struct BrowseView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header
-                genreChips
 
-                // Publishers, above the tag tree: "everything Seven Seas
-                // licenses" is a coarser question than any tag, and a reader
-                // who came here to browse should meet the coarse ones first.
-                if let catalogue, let onOpenPublisher {
-                    PublisherBrowser(catalogue: catalogue, onOpen: onOpenPublisher)
-                        .padding(.horizontal, -Metrics.gutter)
-                        .padding(.bottom, 24)
-                }
+                // The vocabulary either hasn't answered yet, failed outright
+                // with nothing to show, or is here — never all three drawn at
+                // once, and never "Loading the vocabulary" standing in for a
+                // failure that already came back (gap 39).
+                if model.isLoading, model.genres.isEmpty, model.tags.isEmpty {
+                    vocabularySkeleton
+                } else if let failure = model.failure, model.genres.isEmpty, model.tags.isEmpty {
+                    FailureState(error: failure) {
+                        await model.load()
+                    }
+                } else {
+                    genreChips
 
-                tagHeader
-                blockedSummary
-                ForEach(model.sections, id: \.name) { section in
-                    sectionView(section.name, tags: section.tags)
+                    // Publishers, above the tag tree: "everything Seven Seas
+                    // licenses" is a coarser question than any tag, and a
+                    // reader who came here to browse should meet the coarse
+                    // ones first.
+                    if let catalogue, let onOpenPublisher {
+                        PublisherBrowser(catalogue: catalogue, onOpen: onOpenPublisher)
+                            .padding(.horizontal, -Metrics.gutter)
+                            .padding(.bottom, 24)
+                    }
+
+                    tagHeader
+                    blockedSummary
+                    ForEach(model.sections, id: \.name) { section in
+                        sectionView(section.name, tags: section.tags)
+                    }
+                    Text("""
+                    Counts dim below 100. Spoiler tags stay hidden until asked for, \
+                    and merged tags are never listed — they lead nowhere.
+                    """)
+                    .typeFootnote()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 2)
+                    .padding(.top, 20)
                 }
-                Text("""
-                Counts dim below 100. Spoiler tags stay hidden until asked for, \
-                and merged tags are never listed — they lead nowhere.
-                """)
-                .typeFootnote()
-                .foregroundStyle(Palette.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 2)
-                .padding(.top, 20)
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, Metrics.scrollTopInset)
@@ -77,6 +91,24 @@ struct BrowseView: View {
         }
         .padding(.horizontal, 2)
     }
+
+    /// Chip-shaped placeholders while genres and tags are in flight, so the
+    /// screen keeps the layout it is about to fill rather than saying
+    /// "Loading" over blank space (gap 39).
+    private var vocabularySkeleton: some View {
+        FlowLayout(spacing: 7) {
+            ForEach(Self.skeletonChipWidths, id: \.self) { width in
+                Capsule()
+                    .fill(Palette.surfaceChip)
+                    .frame(width: width, height: Metrics.headerPill)
+            }
+        }
+        .padding(.top, 20)
+        .shimmering()
+        .accessibilityHidden(true)
+    }
+
+    private static let skeletonChipWidths: [CGFloat] = [64, 88, 52, 96, 70, 60, 84]
 
     private var genreChips: some View {
         FlowLayout(spacing: 7) {

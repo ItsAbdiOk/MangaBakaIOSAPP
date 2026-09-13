@@ -116,14 +116,23 @@ struct NewsSection: View {
 
     @Environment(\.openURL) private var openURL
 
+    /// Gap 78: an item whose URL `safeURL` refused (a `javascript:` scheme, an
+    /// unparseable string) used to reach the row anyway, drawn identically to
+    /// a live link — a dead control with no way for a reader to tell it apart
+    /// before tapping it and having nothing happen.
+    nonisolated static func visible(_ items: [NewsItem]) -> [NewsItem] {
+        items.filter { $0.safeURL != nil }
+    }
+
     var body: some View {
-        if !items.isEmpty {
+        let shown = Self.visible(items)
+        if !shown.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("News")
                     .typeDetailSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
 
-                ForEach(items.prefix(4)) { item in
+                ForEach(shown.prefix(4)) { item in
                     Button {
                         if let url = item.safeURL { openURL(url) }
                     } label: {
