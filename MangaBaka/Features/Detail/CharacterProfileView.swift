@@ -238,10 +238,109 @@ private struct CharacterProfileContent: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, Metrics.gutter)
             }
+            if !profile.voiceActors.isEmpty {
+                voiceActorsSection
+            }
+            if !profile.appearances.isEmpty {
+                appearancesSection
+            }
             if let siteURL = profile.siteURL {
                 sourceLink(siteURL, source: profile.source)
             }
         }
+    }
+
+    /// One row per Japanese voice actor, portrait and name — AniList only
+    /// ever asked in Japanese (`AniListClient.profileQuery`), so there is no
+    /// language to disambiguate here.
+    private var voiceActorsSection: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("Voice")
+                .typeDetailSectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(profile.voiceActors) { actor in
+                    HStack(spacing: 10) {
+                        AsyncImage(url: actor.portraitURL) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Palette.imagePlaceholder
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                        .accessibilityHidden(true)
+
+                        Text(actor.name)
+                            .typeSmallMeta()
+                            .foregroundStyle(Palette.textPrimary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(.horizontal, Metrics.gutter)
+    }
+
+    /// Titles this character also appears in, grouped Anime then Manga —
+    /// AniList's own `POPULARITY_DESC` order is kept within each group.
+    ///
+    /// Chips are plain text, not tappable: turning an AniList media id into a
+    /// MangaBaka series id would need a reverse tracker-id lookup, and
+    /// neither `SeriesRepository` nor `CatalogueService` has one (checked
+    /// 2026-09-13) — only the forward direction exists (`Series.aniListID`,
+    /// `CharacterService.swift`). A guess at a "tappable someday" affordance
+    /// was rejected in favour of shipping what the data actually supports.
+    private var appearancesSection: some View {
+        let anime = profile.appearances.filter { $0.kind == .anime }
+        let manga = profile.appearances.filter { $0.kind == .manga }
+
+        return VStack(alignment: .leading, spacing: 11) {
+            Text("Also in")
+                .typeDetailSectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+
+            if !anime.isEmpty { appearanceGroup(label: "Anime", items: anime) }
+            if !manga.isEmpty { appearanceGroup(label: "Manga", items: manga) }
+        }
+        .padding(.horizontal, Metrics.gutter)
+    }
+
+    private func appearanceGroup(label: String, items: [CharacterProfile.Appearance]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Eyebrow(text: label)
+            FlowLayout(spacing: Metrics.gapChips) {
+                ForEach(items) { appearance in
+                    appearanceChip(appearance)
+                }
+            }
+        }
+    }
+
+    private func appearanceChip(_ appearance: CharacterProfile.Appearance) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(appearance.title)
+                .typeChip()
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let role = appearance.role {
+                Text(role)
+                    .typeFootnote()
+                    .foregroundStyle(Palette.textMuted)
+            }
+        }
+        .foregroundStyle(Palette.textSecondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Palette.surfaceChip,
+            in: RoundedRectangle(cornerRadius: Metrics.radiusCard / 2, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Metrics.radiusCard / 2, style: .continuous)
+                .strokeBorder(Palette.border, lineWidth: 0.5)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     private var header: some View {

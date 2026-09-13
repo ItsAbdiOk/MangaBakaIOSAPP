@@ -33,10 +33,46 @@ struct CharacterProfile: Equatable, Sendable {
     /// English; Shikimori's are Russian and must be translated before this
     /// profile's description is ever shown — see `CharacterDescriptionTranslator`.
     let source: CharacterSource
+    /// Other manga and anime this character shows up in, most popular first
+    /// (AniList's own `POPULARITY_DESC` sort). Empty for a Shikimori profile —
+    /// Shikimori's character endpoint carries no cross-media data at all, the
+    /// same reason `gender`/`age`/etc. are nil for it above.
+    var appearances: [Appearance] = []
+    /// Japanese voice actors credited on any of `appearances`, deduplicated by
+    /// AniList's own staff id — the same actor is credited separately on every
+    /// season of a long-running anime, and a reader does not need to see
+    /// Yuuki Kaji's row three times for three seasons of the same show. Empty
+    /// for a Shikimori profile, same reason as `appearances`.
+    var voiceActors: [VoiceActor] = []
 
     /// Russian text must never reach the screen untranslated (Abdi's rule,
     /// 2026-09-12). AniList's own description needs no such gate.
     var requiresTranslation: Bool { source == .shikimori }
+
+    /// One anime or manga this character appears in.
+    struct Appearance: Equatable, Sendable, Identifiable {
+        enum Kind: Equatable, Sendable { case anime, manga }
+
+        let id: Int
+        let title: String
+        let kind: Kind
+        /// "TV", "Movie", "One Shot" — AniList's own format, shown as a
+        /// caption under the title so "Manga" and "One Shot" read differently
+        /// even though both are `.manga`.
+        let format: String?
+        /// "Main", "Supporting", "Background" — AniList shouts these in caps,
+        /// capitalised the same way `SeriesCharacter.role` already is.
+        let role: String?
+    }
+
+    /// One person who voiced this character in Japanese. AniList also tracks
+    /// other dub languages, but the query only ever asks for Japanese — see
+    /// `AniListClient.profileQuery`.
+    struct VoiceActor: Equatable, Sendable, Identifiable {
+        let id: Int
+        let name: String
+        let portraitURL: URL?
+    }
 
     /// A copy with the description swapped out, used once translation
     /// finishes (or is given up on) so the rest of the profile — portrait,
@@ -56,7 +92,9 @@ struct CharacterProfile: Equatable, Sendable {
             favourites: favourites,
             siteURL: siteURL,
             description: description,
-            source: source
+            source: source,
+            appearances: appearances,
+            voiceActors: voiceActors
         )
     }
 

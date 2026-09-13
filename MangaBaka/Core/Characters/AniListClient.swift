@@ -241,6 +241,14 @@ extension AniListClient {
     /// tracks, and the description. Verified live against character 138789
     /// (Cha Hae-In) on 2026-09-12 — this is the real response shape, not only
     /// the published schema.
+    /// `media`'s shape captured live on 2026-09-13 against character 40882
+    /// (Eren Yeager): `perPage: 12` is a guess (AniList's max is 25, the same
+    /// cap `characters(mediaId:)` above already applies, but a character
+    /// profile is a single screen, not a scrollable cast list, so a dozen
+    /// entries seemed enough without checking against a character with more).
+    /// `voiceActors(language: JAPANESE)` only makes sense on an ANIME edge —
+    /// AniList returns an empty array for a MANGA edge rather than an error,
+    /// so nothing here has to branch on `type` to know when to expect one.
     static let profileQuery = """
     query Profile($id: Int) {
       Character(id: $id) {
@@ -254,6 +262,13 @@ extension AniListClient {
         dateOfBirth { year month day }
         favourites
         siteUrl
+        media(perPage: 12, sort: POPULARITY_DESC) {
+          edges {
+            characterRole
+            voiceActors(language: JAPANESE) { id name { full } image { medium } }
+            node { id title { romaji } type format }
+          }
+        }
       }
     }
     """
@@ -283,6 +298,12 @@ extension AniListClient {
         let dateOfBirth: ProfileDate?
         let favourites: Int?
         let siteUrl: String?
+        /// Absent entirely, not merely empty, on a fixture recorded before
+        /// this field existed — `Decodable` already treats a missing key as
+        /// nil for an `Optional` property, so no extra handling is needed to
+        /// keep decoding the rest of the profile (fail-first test:
+        /// `CharacterProfileTests.decodingToleratesAMissingMediaKey`).
+        let media: ProfileMediaConnection?
     }
 
     struct ProfileName: Decodable, Sendable {
@@ -295,6 +316,45 @@ extension AniListClient {
         let year: Int?
         let month: Int?
         let day: Int?
+    }
+
+    struct ProfileMediaConnection: Decodable, Sendable {
+        let edges: [ProfileMediaEdge]?
+    }
+
+    struct ProfileMediaEdge: Decodable, Sendable {
+        /// "MAIN", "SUPPORTING", "BACKGROUND" — same shout-cased vocabulary
+        /// as the cast query's `CharacterEdge.role`.
+        let characterRole: String?
+        /// Only ever non-empty on an ANIME edge in practice — AniList sends
+        /// an empty array, not null, for a MANGA edge asked the same way.
+        let voiceActors: [ProfileVoiceActor]?
+        let node: ProfileMediaNode?
+    }
+
+    /// Same shape as `CharacterName` above (AniList's voice-actor staff
+    /// record only ever carries a `full` name here) — kept as its own type
+    /// rather than reused, since a media edge's cast and a character's own
+    /// name are different things that only coincidentally look alike.
+    struct ProfileVoiceActor: Decodable, Sendable {
+        let id: Int?
+        let name: CharacterName?
+        let image: CharacterImage?
+    }
+
+    struct ProfileMediaNode: Decodable, Sendable {
+        let id: Int?
+        let title: ProfileMediaTitle?
+        /// "ANIME" or "MANGA".
+        let type: String?
+        /// "TV", "MOVIE", "MANGA", "ONE_SHOT", etc. — shown verbatim as a
+        /// caption rather than mapped, since AniList's own enum names read
+        /// fine once capitalised the same way roles already are.
+        let format: String?
+    }
+
+    struct ProfileMediaTitle: Decodable, Sendable {
+        let romaji: String?
     }
 
     /// Fetches one character's AniList profile.
@@ -388,8 +448,64 @@ extension AniListClient {
             favourites: node.favourites,
             siteURL: node.siteUrl.flatMap(URL.init(string:)),
             description: node.description.map(CharacterDescriptionParser.parse),
-            source: .aniList
+            source: .aniList,
+            appearances: Self.appearances(from: node.media),
+            voiceActors: Self.voiceActors(from: node.media)
         )
+    }
+
+    /// Every media edge that names a real title, in whatever order AniList
+    /// sent them (`POPULARITY_DESC`, per `profileQuery`). An edge with no
+    /// romaji title or an unrecognised `type` is dropped — AniList's schema
+    /// documents only ANIME and MANGA, so a third value would be a schema
+    /// change the mapping should ignore rather than guess at.
+    static func appearances(from media: ProfileMediaConnection?) -> [CharacterProfile.Appearance] {
+        (media?.edges ?? []).compactMap { edge -> CharacterProfile.Appearance? in
+            guard let node = edge.node,
+                  let id = node.id,
+                  let title = node.title?.romaji, !title.isEmpty
+            else { return nil }
+
+            let kind: CharacterProfile.Appearance.Kind
+            switch node.type {
+            case "ANIME": kind = .anime
+            case "MANGA": kind = .manga
+            default: return nil
+            }
+
+            return CharacterProfile.Appearance(
+                id: id,
+                title: title,
+                kind: kind,
+                format: node.format,
+                role: edge.characterRole?.capitalized
+            )
+        }
+    }
+
+    /// Every Japanese voice actor across all of `media`'s edges, deduplicated
+    /// by AniList's own staff id — the same actor is credited separately on
+    /// every season of a long-running anime (Yuuki Kaji appears on all three
+    /// Attack on Titan season edges in the recorded fixture), and a reader
+    /// does not need to see the same name three times.
+    static func voiceActors(from media: ProfileMediaConnection?) -> [CharacterProfile.VoiceActor] {
+        var seenIDs = Set<Int>()
+        var out: [CharacterProfile.VoiceActor] = []
+        for edge in media?.edges ?? [] {
+            for actor in edge.voiceActors ?? [] {
+                guard let id = actor.id,
+                      let name = actor.name?.full, !name.isEmpty,
+                      !seenIDs.contains(id)
+                else { continue }
+                seenIDs.insert(id)
+                out.append(CharacterProfile.VoiceActor(
+                    id: id,
+                    name: name,
+                    portraitURL: actor.image?.medium.flatMap(URL.init(string:))
+                ))
+            }
+        }
+        return out
     }
 
     /// The cheapest real request AniList will answer, asking for `id` alone
