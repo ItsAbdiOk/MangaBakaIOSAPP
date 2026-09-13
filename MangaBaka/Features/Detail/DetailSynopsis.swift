@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The synopsis, clamped to eight lines, tap anywhere on it to open or close.
+/// The synopsis, clamped to a few lines, tap anywhere on it to open or close.
 ///
 /// MangaBaka descriptions are not one paragraph. A real one carries the
 /// publisher's blurb, a source line, then a second blurb from a different
@@ -14,7 +14,18 @@ struct DetailSynopsis: View {
     @State private var clampedHeight: CGFloat = 0
     @State private var fullHeight: CGFloat = 0
 
-    static let collapsedLines = 8
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// How many lines the synopsis shows before "View more", by text size.
+    ///
+    /// Eight lines at an accessibility size is several screens of enlarged
+    /// text before the control that lets a reader stop appears — by the time
+    /// "View more" scrolls into view they have already read past where they
+    /// would have stopped. Four lines keeps the same judgment ("is this worth
+    /// reading in full") reachable without the long detour.
+    nonisolated static func collapsedLines(for dynamicTypeSize: DynamicTypeSize) -> Int {
+        dynamicTypeSize.isAccessibilitySize ? 4 : 8
+    }
 
     /// Whether the clamp actually cut anything.
     ///
@@ -30,7 +41,7 @@ struct DetailSynopsis: View {
             Text(text)
                 .typeBody()
                 .foregroundStyle(Palette.textBody)
-                .lineLimit(isExpanded ? nil : Self.collapsedLines)
+                .lineLimit(isExpanded ? nil : Self.collapsedLines(for: typeSize))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background { clampedProbe }
@@ -41,7 +52,7 @@ struct DetailSynopsis: View {
                     Text(isExpanded ? "View less" : "View more")
                         .typeChip()
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .foregroundStyle(Palette.accent)

@@ -15,7 +15,7 @@ struct InlineSearchField: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(.subheadline, weight: .medium))
                 .foregroundStyle(Palette.textMuted)
             TextField(prompt, text: $text)
                 .textInputAutocapitalization(.never)
@@ -25,7 +25,11 @@ struct InlineSearchField: View {
             SearchClearButton(text: $text)
         }
         .padding(.horizontal, 13)
-        .frame(height: Metrics.field)
+        // Apple's 44pt minimum, not the mockup's 40 (`Metrics.field`): a hard
+        // height there clipped the text the moment Dynamic Type grew past it.
+        // `minHeight` keeps the same look at the default text size (the row's
+        // content is shorter than 44pt there) and lets it grow with the text.
+        .frame(minHeight: Metrics.tapTarget)
         .background(Palette.surfaceField, in: RoundedRectangle(
             cornerRadius: 13, style: .continuous
         ))
