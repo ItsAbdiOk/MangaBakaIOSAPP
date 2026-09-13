@@ -11,9 +11,9 @@ import Testing
 /// finale.
 @Suite("Webtoons feed")
 struct WebtoonsFeedTests {
-    private func feed() throws -> WebtoonsFeed {
+    private func feed() throws -> ReleaseFeed {
         let data = try Fixture.data("knight-only-lives-today", extension: "rss")
-        return try #require(WebtoonsFeed.parse(data))
+        return try #require(WebtoonsFeedParser.parse(data))
     }
 
     @Test("The channel and every entry are read")
@@ -136,14 +136,30 @@ struct WebtoonsTitleTests {
         #expect(WebtoonsTitle.read("Hiatus Announcement") == nil)
         #expect(WebtoonsTitle.read("Season 2 Announcement") == nil)
     }
+
+    /// GigaViewer magazine RSS titles: `第N話`, the marker a Japanese
+    /// publisher uses for "episode". Read for `GigaViewerFeedClient`.
+    @Test("Japanese 第N話 forms are read")
+    func japaneseForms() {
+        #expect(WebtoonsTitle.read("第33話")?.number == 33)
+        // A sub-episode suffix: the leading number is kept, the "-1" dropped
+        // rather than guessed at.
+        #expect(WebtoonsTitle.read("第12-1話")?.number == 12)
+        // A circled digit trailing the marker does not stop the match.
+        #expect(WebtoonsTitle.read("第77話①")?.number == 77)
+        // The marker sits inside its own brackets ahead of the series' own
+        // title, unlike Webtoons' "[Season 3] Ep. 235" where the bracket is a
+        // prefix to an episode word that follows it.
+        #expect(WebtoonsTitle.read("[第33話] カテナチオ")?.number == 33)
+    }
 }
 
-/// Turning a stored series link into a feed URL. See `WebtoonsFeed.feedURL`.
+/// Turning a stored series link into a feed URL. See `WebtoonsFeedParser.feedURL`.
 @Suite("Webtoons feed URLs")
 struct WebtoonsFeedURLTests {
     private func url(_ text: String) -> URL? {
         guard let link = URL(string: text) else { return nil }
-        return WebtoonsFeed.feedURL(for: link)
+        return WebtoonsFeedParser.feedURL(for: link)
     }
 
     @Test("A real series link becomes its feed")
@@ -167,14 +183,14 @@ struct WebtoonsFeedURLTests {
     @Test("A placeholder link becomes a lookup that the redirect resolves")
     func placeholderBecomesLookup() throws {
         let link = try #require(URL(string: "https://www.webtoons.com/-/-/-/list?title_no=5188"))
-        let lookup = try #require(WebtoonsFeed.lookupURL(for: link))
+        let lookup = try #require(WebtoonsFeedParser.lookupURL(for: link))
         #expect(lookup.absoluteString == "https://www.webtoons.com/en/x/y/list?title_no=5188")
 
         // What the redirect lands on, and what it is worth once it does.
         let landed = try #require(
             URL(string: "https://www.webtoons.com/fr/fantasy/estatedeveloper/list?title_no=5188")
         )
-        #expect(WebtoonsFeed.feedURL(fromResolved: landed)?.absoluteString
+        #expect(WebtoonsFeedParser.feedURL(fromResolved: landed)?.absoluteString
                 == "https://www.webtoons.com/fr/fantasy/estatedeveloper/rss?title_no=5188")
     }
 
@@ -184,13 +200,13 @@ struct WebtoonsFeedURLTests {
         let link = try #require(
             URL(string: "https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95")
         )
-        #expect(WebtoonsFeed.lookupURL(for: link) == nil)
+        #expect(WebtoonsFeedParser.lookupURL(for: link) == nil)
     }
 
     @Test("A placeholder with no series number cannot be looked up")
     func lookupNeedsASeriesNumber() throws {
         let link = try #require(URL(string: "https://www.webtoons.com/-/-/-/list"))
-        #expect(WebtoonsFeed.lookupURL(for: link) == nil)
+        #expect(WebtoonsFeedParser.lookupURL(for: link) == nil)
     }
 
     @Test("Only Webtoons links, and only ones naming a series")

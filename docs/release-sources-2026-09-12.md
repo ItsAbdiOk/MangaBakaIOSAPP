@@ -157,6 +157,43 @@ Each `<item>`'s `description` is not text — it contains the first two panels o
 the episode as `<img>` tags pointing at Webtoons' CDN. Rendering those
 republishes the comic. Parse `pubDate`, `title` and `author`; drop `description`.
 
+## 2026-09-13 — building the three adapters
+
+**Tapas: negative result, do not retest.** `tapas.io/series/<slug>.json`
+answers 200 but carries no episode list at all — just the series' own blurb
+and metadata. Every episode-list URL shape tried against it answered either
+400 or 302: `/episodes`, `/episode-list`, an RSS-style `/rss/<slug>`, and a
+paginated `?page=1` variant. Tapas is not built into `ReleaseFeedProvider`;
+see the comment on the protocol itself.
+
+**GigaViewer per-episode JSON: tried, rejected.** `<episode url>.json` answers
+real data — `publishedAt`, `number`, `title`, the series block — but reading a
+series' *history* that way costs one request per episode, and the payload
+carries the page image URLs alongside it. Those must never be rendered
+(the same rule that already governs Webtoons' `<description>`), and one
+request per chapter is a request budget no other adapter here pays.
+
+**Magazine-wide RSS chosen instead.** `<host>/rss` costs one request for an
+entire magazine's current lineup and carries no page images at all — titles,
+links and dates only. The cost is that it is a magazine feed, not a series
+feed: it turns over daily rather than weekly, so `GigaViewerFeedClient` caches
+it a day, not a week, and every series read off the same host shares that one
+cached fetch rather than paying for its own.
+
+**The seven hosts, re-verified.** All seven still answer
+`application/rss+xml` at `/rss`: tonarinoyj.jp, shonenjumpplus.com,
+comic-days.com, magcomi.com, shonenmagazine.com (a 301 to follow, not a
+failure), comic-gardo.com, comic-earthstar.com. Item titles are the shape
+`[第33話] カテナチオ` — the episode marker in its own brackets ahead of the
+series' own title, unlike Webtoons' `[Season 3] Ep. 235` where the bracket is
+a prefix to a following episode word. Splitting at the first `]` and matching
+the remainder against a series' own titles (case/width-folded) is how one
+provider serves all seven without per-publisher special-casing.
+
+"Magazine Pocket" for shonenmagazine.com is carried as a guess in
+`ReleaseSource.gigaViewerHostNames` — it is the site's own English branding as
+best determined, not independently confirmed the way the other six were.
+
 ## Method note, because it nearly went wrong
 
 A subagent probing 87 platforms reported Webtoons as having no endpoint. It had

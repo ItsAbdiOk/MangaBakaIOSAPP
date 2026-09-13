@@ -18,7 +18,7 @@ struct ReleaseSourceTests {
         #expect(source("https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95")
                 == .webtoons)
         #expect(source("https://comic.naver.com/webtoon/list?titleId=183559") == .naverWebtoon)
-        #expect(source("https://tonarinoyj.jp/episode/13932016480028985383") == .youngJump)
+        #expect(source("https://tonarinoyj.jp/episode/13932016480028985383") == .gigaViewer)
     }
 
     /// The header the reader actually sees, and the reason the section exists:
@@ -28,7 +28,7 @@ struct ReleaseSourceTests {
     func headerNamesPublisher() {
         #expect(ReleaseSource.webtoons.attribution == "Releases · Webtoons")
         #expect(ReleaseSource.naverWebtoon.attribution == "Releases · Naver Webtoon")
-        #expect(ReleaseSource.youngJump.displayName == "Tonari no Young Jump")
+        #expect(ReleaseSource.gigaViewerHostNames["tonarinoyj.jp"] == "Tonari no Young Jump")
     }
 
     /// An unnamed source is one the reader cannot weigh, so it gets no section
@@ -40,13 +40,14 @@ struct ReleaseSourceTests {
         #expect(ReleaseSource.serving(nil) == nil)
     }
 
-    /// Same engine, endpoint switched off: both answered
-    /// `{"error":{"message":"wrong feature"}}` when probed on 2026-09-12, so
-    /// naming them would promise data that never arrives.
-    @Test("GigaViewer siblings with the endpoint disabled are excluded")
-    func disabledSiblingsExcluded() {
-        #expect(source("https://shonenjumpplus.com/episode/3269632237275906867") == nil)
-        #expect(source("https://comic-days.com/episode/13932016480029466292") == nil)
+    /// Once switched off per-publisher (2026-09-12); now all seven serve the
+    /// magazine-wide RSS instead of the per-episode JSON — see
+    /// `GigaViewerFeedClient` and docs/release-sources-2026-09-12.md.
+    @Test("Every confirmed GigaViewer host is recognised")
+    func gigaViewerHostsRecognised() {
+        for host in ReleaseSource.gigaViewerHostNames.keys {
+            #expect(source("https://\(host)/episode/1") == .gigaViewer, Comment(rawValue: host))
+        }
     }
 
     /// Matching on a label boundary, the same rule `ReadingPlatforms` uses, or

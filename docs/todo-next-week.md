@@ -196,25 +196,29 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
 - **TestFlight build 64 crash fixed** — `3e603ca`. The Translation framework's
   download prompt was being raised from inside a sheet.
 
+## Done 2026-09-13
+
+- **Release section on the detail page** — Webtoons, Naver and the seven
+  GigaViewer magazine feeds behind one `ReleaseFeedProvider`, merged by
+  `ReleaseFeedService`, shown before the volumes shelf as "Releases · <source>".
+  Tapas dropped: no episode endpoint (see `release-sources-2026-09-12.md`,
+  2026-09-13 section). The Korean-vs-English gap compares title-parsed numbers
+  within one season only — `totalCount` (653) against "[Season 3] Ep. 235" would
+  have claimed Tower of God's original was 418 ahead. Proved by revert.
+- **Language-pack download offered from Settings** — the crash fix left readers
+  without ru→en silently getting no character text.
+- **Dynamic Type leftovers** — only two real defects were left in the four
+  audit classes (a 10pt chevron in the synopsis, a fixed 40pt search field);
+  the stats strip and hero were already scaled by `459c926`. Muted labels
+  measure 4.66:1, so no colour change. Residual project-wide: 63 fixed-point
+  fonts and 44 fixed heights outside the detail page, listed by the agent, not
+  fixed. **Not verified on a device at AX sizes.**
+
 ## Next, in the order I would do it
 
-1. **Wire the release section to the detail page.** Everything behind it exists
-   and is tested — `WebtoonsFeedClient`, `ReleaseSummary`, `ReleaseSource`,
-   `TranslationGap` — and none of it is on screen. `Series` carries no links, so
-   the caller has to be the detail page, where `extras.links` exists. The header
-   names the platform, like the volumes shelf does.
-2. **Offer the translation language-pack download from outside a sheet.** The
-   crash fix means a reader without the ru→en pack now silently gets no character
-   description and is never asked. Settings is the obvious home.
-3. **Naver adapter**, for the Korean original's `totalCount`, `finished` and
-   hiatus comparison. 172 series in the library, and it is the only way to learn
-   the source has stopped while the translation is still running.
-4. **GigaViewer and Tapas adapters**, behind one `ReleaseSource` protocol so the
-   per-platform differences stay in the adapters. Enabled per publisher — check
-   before assuming a host answers.
-5. **18+ age rating in App Store Connect**, and confirm which tier applies now
+1. **18+ age rating in App Store Connect**, and confirm which tier applies now
    that Apple has moved to 13+/16+/18+.
-6. **App Store screenshots without real manga covers.** Nothing exists yet, so
+2. **App Store screenshots without real manga covers.** Nothing exists yet, so
    nothing is wrong yet; the constraint applies to the icon and promo text too.
 
 ## Explicitly not doing

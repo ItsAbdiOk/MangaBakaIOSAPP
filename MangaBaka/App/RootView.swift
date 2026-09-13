@@ -21,6 +21,7 @@ struct RootView: View {
     let characters: CharacterService
     let appleBooks: AppleBooksClient
     let googleBooks: GoogleBooksClient
+    let releaseFeeds: ReleaseFeedService
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -297,6 +298,7 @@ struct RootView: View {
             taste: taste,
             appleBooks: appleBooks,
             googleBooks: googleBooks,
+            releaseFeeds: releaseFeeds,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),

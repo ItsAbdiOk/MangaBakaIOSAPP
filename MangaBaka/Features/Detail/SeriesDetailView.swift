@@ -19,6 +19,10 @@ struct SeriesDetailView: View {
     /// Fills volume gaps Apple does not carry. Nil in a build with no Google
     /// Books key, which is every Release build — see Secrets.example.xcconfig.
     var googleBooks: GoogleBooksClient?
+    /// Reads a publisher's own release feed — Webtoons, a GigaViewer magazine,
+    /// or Naver Webtoon for the Korean original. Optional like the stores
+    /// above: a page without it simply shows no release section.
+    var releaseFeeds: ReleaseFeedService?
     /// Opens a publisher's or studio's page from the credits.
     var onOpenPublisher: ((String) -> Void)?
     /// Opens a creator's page — everything they wrote or drew.
@@ -45,6 +49,10 @@ struct SeriesDetailView: View {
     @State var appleUnreachable = false
     /// Which store's edition the shelf shows, when not the reader's own.
     @State var appleEdition: AppleVolumesRow.Edition?
+    /// The release section's report. Internal, not private, so
+    /// `SeriesDetailView+Releases.swift` can write to it.
+    @State var releases: ReleaseReport = .empty
+    @State var isReleasesLoading = false
     @State private var alsoLike: [Series] = []
     @State var extras = SeriesExtras()
     @State var covers: [SeriesImage] = []
@@ -101,6 +109,7 @@ struct SeriesDetailView: View {
                 DetailCredits(
                     series: shown, onOpenPublisher: onOpenPublisher, onOpenAuthor: onOpenAuthor
                 )
+                ReleaseSection(report: releases, isLoading: isReleasesLoading)
                 volumesShelf
                 DetailEditions(editions: extras.editions)
                 DetailOnwardRows(
@@ -280,7 +289,11 @@ struct SeriesDetailView: View {
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()
         async let store: Void = loadAppleVolumes()
-        _ = await (cast, cadence, taste, store)
+        // After `store` in the argument list only for readability; it does
+        // not depend on it. It does depend on `extras.links`, which `loadCore`
+        // has already populated by the time `loadOnward` runs.
+        async let onward: Void = loadReleases()
+        _ = await (cast, cadence, taste, store, onward)
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it

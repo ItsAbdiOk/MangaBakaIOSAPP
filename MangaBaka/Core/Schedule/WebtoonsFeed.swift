@@ -1,6 +1,7 @@
 import Foundation
 
-/// A Webtoons series feed, parsed.
+/// A release feed, parsed — Webtoons' per-series RSS, Naver's per-series JSON,
+/// or a GigaViewer publisher's magazine-wide RSS filtered to one series.
 ///
 /// Webtoons publishes an RSS feed per series — an official one, meant to be
 /// read by other software, unlike scraping the page. It carries the twenty most
@@ -8,13 +9,39 @@ import Foundation
 /// this app can get a *real* release schedule: everything else it knows about
 /// timing is inferred from when scanlations appeared. See `Cadence`, whose own
 /// documentation says no source publishes real schedules — true everywhere
-/// except here.
-struct WebtoonsFeed: Equatable, Sendable, Codable {
+/// except here and Naver, which has the same guarantee for the original.
+struct ReleaseFeed: Equatable, Sendable, Codable {
     let title: String
-    let entries: [WebtoonsEntry]
+    let entries: [ReleaseEntry]
+    /// Who this feed is from — set by the provider that fetched it, so
+    /// `ReleaseSummary`/`ReleaseFeedService` never have to guess it back out
+    /// of the shape of the data.
+    let source: ReleaseSource
+    /// The official episode count. Naver only: it is the one endpoint that
+    /// states this rather than leaving it to be counted from entries.
+    let totalCount: Int?
+    /// The official completion flag. Naver only, for the same reason.
+    let finished: Bool?
+    /// The GigaViewer host this feed was matched from, e.g. "Tonari no Young
+    /// Jump" — GigaViewer has no single brand name, only seven publisher
+    /// sites on one engine, so the header names whichever one answered rather
+    /// than a name fixed on `ReleaseSource`. Nil for every other source.
+    let sourceName: String?
+
+    init(
+        title: String, entries: [ReleaseEntry], source: ReleaseSource,
+        totalCount: Int? = nil, finished: Bool? = nil, sourceName: String? = nil
+    ) {
+        self.title = title
+        self.entries = entries
+        self.source = source
+        self.totalCount = totalCount
+        self.finished = finished
+        self.sourceName = sourceName
+    }
 
     /// Entries that are actually episodes, newest first.
-    var episodes: [WebtoonsEntry] { entries.filter(\.isEpisode) }
+    var episodes: [ReleaseEntry] { entries.filter(\.isEpisode) }
 
     /// Release dates for `Cadence.estimate`, episodes only.
     ///
@@ -29,6 +56,13 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
     /// afterword, and taking its position would report episode 3 for a series
     /// on 112.
     var latestEpisodeNumber: Int? { episodes.compactMap(\.number).max() }
+
+    /// The highest season the feed names, or nil when its titles carry none.
+    ///
+    /// Needed because episode numbers restart per season on both Webtoons
+    /// ("[Season 3] Ep. 235") and Naver ("3부 235화"), so a number is only
+    /// comparable to another number from the same season.
+    var latestSeason: Int? { episodes.compactMap(\.season).max() }
 
     /// When the most recent episode actually landed.
     var lastEpisodeAt: Date? { episodes.map(\.published).max() }
@@ -46,7 +80,14 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
         else { return nil }
         return finale.season
     }
+}
 
+/// Everything specific to reading a Webtoons series feed: turning a stored
+/// series link into its RSS URL, and parsing the RSS document itself. Kept
+/// apart from the generic `ReleaseFeed` shape above so Naver and GigaViewer
+/// do not inherit URL rules and an XML parser that are only ever true of
+/// Webtoons.
+enum WebtoonsFeedParser {
     /// The feed URL for a series link, or nil when one cannot be built.
     ///
     /// Derived from the link MangaBaka already stores rather than assembled
@@ -98,7 +139,7 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
     /// The feed URL for a page the redirect landed on.
     static func feedURL(fromResolved resolved: URL) -> URL? { feedURL(for: resolved) }
 
-    private static func isWebtoons(_ url: URL) -> Bool {
+    static func isWebtoons(_ url: URL) -> Bool {
         guard let host = url.host()?.lowercased() else { return false }
         return host == "webtoons.com" || host.hasSuffix(".webtoons.com")
     }
@@ -113,12 +154,12 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
     /// `XMLParser` from Foundation rather than an HTML parsing dependency —
     /// this is well-formed XML from a feed, not a page being scraped, so there
     /// is nothing to be lenient about and no library to add.
-    static func parse(_ data: Data) -> WebtoonsFeed? {
+    static func parse(_ data: Data) -> ReleaseFeed? {
         let delegate = FeedDelegate()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         guard parser.parse(), !delegate.channelTitle.isEmpty else { return nil }
-        return WebtoonsFeed(title: delegate.channelTitle, entries: delegate.entries)
+        return ReleaseFeed(title: delegate.channelTitle, entries: delegate.entries, source: .webtoons)
     }
 }
 
@@ -128,7 +169,7 @@ struct WebtoonsFeed: Equatable, Sendable, Codable {
 /// state lives here rather than in the struct above.
 private final class FeedDelegate: NSObject, XMLParserDelegate {
     var channelTitle = ""
-    var entries: [WebtoonsEntry] = []
+    var entries: [ReleaseEntry] = []
 
     private var element = ""
     private var text = ""
@@ -192,7 +233,7 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     private func append() {
         guard !itemTitle.isEmpty, let date = Self.rfc822.date(from: itemDate) else { return }
         let read = WebtoonsTitle.read(itemTitle)
-        entries.append(WebtoonsEntry(
+        entries.append(ReleaseEntry(
             title: itemTitle, published: date, number: read?.number, season: read?.season
         ))
     }

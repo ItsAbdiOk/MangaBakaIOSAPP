@@ -25,6 +25,12 @@ struct AppServices {
     /// nil whenever the shared anonymous quota is spent — Apple Books above is
     /// the source the page actually depends on.
     let googleBooks = GoogleBooksClient()
+    /// Reads whichever publisher's own release feed a series carries a link
+    /// to. Webtoons and GigaViewer before Naver: Naver is the Korean original
+    /// and never becomes the reader's own edition — see `ReleaseFeedService`.
+    let releaseFeeds = ReleaseFeedService(
+        providers: [WebtoonsFeedClient(), GigaViewerFeedClient(), NaverFeedClient()]
+    )
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore

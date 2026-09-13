@@ -1,13 +1,13 @@
 import Foundation
 
-/// One entry in a Webtoons series feed.
+/// One entry in a release feed — Webtoons, Naver, or a GigaViewer magazine RSS.
 ///
 /// Entries are not all episodes. "The Knight Only Lives Today" ends its first
 /// season with three `Afterword 1/2/3` items sitting above `Episode 112
 /// (Season 1 Finale)`, all published the same Friday (checked live,
 /// 2026-09-12). They are real entries with real dates, and they are not
 /// chapters — so `number` is nil for them and `isEpisode` is false.
-struct WebtoonsEntry: Equatable, Sendable, Codable {
+struct ReleaseEntry: Equatable, Sendable, Codable {
     /// The title exactly as the feed gave it, e.g. "[Season 3] Ep. 235".
     let title: String
     let published: Date
@@ -19,7 +19,8 @@ struct WebtoonsEntry: Equatable, Sendable, Codable {
     var isEpisode: Bool { number != nil }
 }
 
-/// Reads a Webtoons entry title.
+/// Reads an episode title — Webtoons' English forms, Naver's Korean ones, and
+/// a Japanese publisher's `第N話` forms off a GigaViewer magazine RSS.
 ///
 /// **An allowlist of the episode word, not a test for a number.** The obvious
 /// rule — "trust any title with a number in it" — reads `Afterword 3` as
@@ -42,6 +43,13 @@ enum WebtoonsTitle {
     static func read(_ title: String) -> (number: Int, season: Int?)? {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let season = readSeason(trimmed)
+
+        // Japanese magazine RSS titles put the episode marker inside its own
+        // brackets — "[第33話] カテナチオ" — rather than as a prefix ahead of a
+        // separate episode word, so this is checked on the untouched title
+        // before the bracket-stripping below would remove it.
+        if let number = readJapanese(trimmed) { return (number, season) }
+
         // Anything bracketed is a prefix like "[Season 3]", never the episode
         // itself; dropping it leaves the part that has to match a word below.
         let body = trimmed.replacingOccurrences(
@@ -64,6 +72,16 @@ enum WebtoonsTitle {
     private static func readKorean(_ body: String) -> Int? {
         guard let range = body.range(of: "[0-9]+화", options: .regularExpression) else { return nil }
         return Int(body[range].dropLast())
+    }
+
+    /// "第33話" → 33, "第12-1話" → 12 (the leading number, a sub-episode
+    /// dropped rather than guessed at), "第77話①" → 77 (the circled digit is
+    /// not part of the pattern and is simply left after the match).
+    private static func readJapanese(_ title: String) -> Int? {
+        guard let range = title.range(of: "第[0-9]+(-[0-9]+)?話", options: .regularExpression),
+              let numberRange = title[range].range(of: "[0-9]+", options: .regularExpression)
+        else { return nil }
+        return Int(title[range][numberRange])
     }
 
     /// "[Season 3] …" and Naver's "3부 …" both name a season.

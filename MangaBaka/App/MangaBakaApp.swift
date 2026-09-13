@@ -31,6 +31,7 @@ struct MangaBakaApp: App {
                 characters: services.characters,
                 appleBooks: services.appleBooks,
                 googleBooks: services.googleBooks,
+                releaseFeeds: services.releaseFeeds,
                 taste: services.taste,
                 catalogue: services.catalogue,
                 blockedTags: services.blockedTags,

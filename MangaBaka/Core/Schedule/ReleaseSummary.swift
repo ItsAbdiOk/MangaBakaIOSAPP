@@ -17,13 +17,13 @@ enum ReleaseSummary: Equatable, Sendable {
     case lastSeen(latest: Date, number: Int?)
     /// Two or more episodes, but fewer than `Cadence.estimate` needs to speak —
     /// listable, with no schedule attached.
-    case recent([WebtoonsEntry])
+    case recent([ReleaseEntry])
     /// Enough history for `Cadence` to state a schedule.
-    case rhythm(Cadence, latest: WebtoonsEntry?)
+    case rhythm(Cadence, latest: ReleaseEntry?)
     /// A season finished. Distinct from `rhythm` on purpose: "Season 1 ended on
     /// 28 August" and "overdue since August" are opposite claims, and a
     /// gap-based estimate cannot tell a finished run from a stalled one — only
-    /// the finale marker can. See `WebtoonsFeed.endedSeason`.
+    /// the finale marker can. See `ReleaseFeed.endedSeason`.
     case seasonEnded(season: Int?, on: Date)
 
     /// True only for `.none`, so a view can write `if !summary.isEmpty`.
@@ -46,7 +46,7 @@ enum ReleaseSummary: Equatable, Sendable {
     ///   whether that is enough for a schedule. When it says no, that is
     ///   `.recent`, not `.none` — the episodes themselves are still real and
     ///   worth listing.
-    static func summarise(_ feed: WebtoonsFeed?) -> ReleaseSummary {
+    static func summarise(_ feed: ReleaseFeed?) -> ReleaseSummary {
         guard let feed else { return .none }
         let episodes = feed.episodes
         guard !episodes.isEmpty else { return .none }
@@ -63,7 +63,7 @@ enum ReleaseSummary: Equatable, Sendable {
         }
 
         if let cadence = Cadence.estimate(from: feed.releaseDates) {
-            // `max(by:)` rather than `episodes.first`: nothing in `WebtoonsFeed`
+            // `max(by:)` rather than `episodes.first`: nothing in `ReleaseFeed`
             // guarantees feed order survived parsing newest-first, and the
             // published date is the one fact this type can trust directly.
             let latest = episodes.max { $0.published < $1.published }

@@ -15,15 +15,20 @@ import Foundation
 enum ReleaseSource: String, Equatable, Sendable, Codable, CaseIterable {
     case webtoons
     case naverWebtoon
-    case youngJump
+    /// GigaViewer, the Hatena-built engine behind seven Japanese publisher
+    /// sites. There is no per-series feed — see `GigaViewerFeedClient` — so
+    /// this source is attributed by whichever host's magazine RSS answered,
+    /// via `displayName(forHost:)` rather than one fixed name.
+    case gigaViewer
 
     /// What the reader sees. The platform's own English name where it has one
     /// — a reader who follows the link lands on a page calling itself this.
+    /// `.gigaViewer` has no single name — see `displayName(forHost:)`.
     var displayName: String {
         switch self {
         case .webtoons: "Webtoons"
         case .naverWebtoon: "Naver Webtoon"
-        case .youngJump: "Tonari no Young Jump"
+        case .gigaViewer: "Shonen Jump+"
         }
     }
 
@@ -34,23 +39,38 @@ enum ReleaseSource: String, Equatable, Sendable, Codable, CaseIterable {
     /// same way.
     var attribution: String { "Releases · \(displayName)" }
 
+    /// The seven GigaViewer hosts confirmed to answer a magazine-wide RSS feed
+    /// at `<host>/rss` (measured 2026-09-13). Each publisher's own name for
+    /// itself, since "GigaViewer" is the engine, not a brand a reader knows.
+    ///
+    /// "Magazine Pocket" for shonenmagazine.com is **a guess** — the site's own
+    /// branding was not confirmed as thoroughly as the other six.
+    static let gigaViewerHostNames: [String: String] = [
+        "tonarinoyj.jp": "Tonari no Young Jump",
+        "shonenjumpplus.com": "Shonen Jump+",
+        "comic-days.com": "Comic Days",
+        "magcomi.com": "MAGCOMI",
+        "shonenmagazine.com": "Magazine Pocket",
+        "comic-gardo.com": "Comic Gardo",
+        "comic-earthstar.com": "Comic Earth Star"
+    ]
+
     /// Registrable domains this source serves, matched on a label boundary the
     /// way `ReadingPlatforms` does — one entry covers every subdomain.
     ///
-    /// Measured 2026-09-12 against the live sites:
+    /// Measured 2026-09-12/13 against the live sites:
     /// - `webtoons.com` answers an RSS feed per series (20 entries, exact
     ///   timestamps).
     /// - `comic.naver.com` answers JSON at `/api/article/list?titleId=`, and
     ///   carries `totalCount` and `finished` that the English side does not.
-    /// - `tonarinoyj.jp` answers GigaViewer JSON at `<episode url>.json`.
-    ///   Its siblings on the same engine — shonenjumpplus.com, comic-days.com —
-    ///   return `{"error":{"message":"wrong feature"}}`, so the endpoint is
-    ///   enabled per publisher and they are deliberately absent here.
+    /// - The seven GigaViewer hosts each answer a magazine-wide RSS at
+    ///   `/rss` — see `GigaViewerFeedClient`. Per-episode JSON was tried and
+    ///   rejected: see docs/release-sources-2026-09-12.md, 2026-09-13 section.
     private var hosts: [String] {
         switch self {
         case .webtoons: ["webtoons.com"]
         case .naverWebtoon: ["comic.naver.com"]
-        case .youngJump: ["tonarinoyj.jp"]
+        case .gigaViewer: Array(Self.gigaViewerHostNames.keys)
         }
     }
 

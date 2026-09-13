@@ -12,12 +12,12 @@ struct ReleaseSummaryTests {
         Calendar.current.date(byAdding: .day, value: offset, to: now) ?? now
     }
 
-    private func episode(_ number: Int, daysAgo: Int, season: Int? = nil) -> WebtoonsEntry {
-        WebtoonsEntry(title: "Episode \(number)", published: day(-daysAgo), number: number, season: season)
+    private func episode(_ number: Int, daysAgo: Int, season: Int? = nil) -> ReleaseEntry {
+        ReleaseEntry(title: "Episode \(number)", published: day(-daysAgo), number: number, season: season)
     }
 
-    private func afterword(_ index: Int, daysAgo: Int) -> WebtoonsEntry {
-        WebtoonsEntry(title: "Afterword \(index)", published: day(-daysAgo), number: nil, season: nil)
+    private func afterword(_ index: Int, daysAgo: Int) -> ReleaseEntry {
+        ReleaseEntry(title: "Afterword \(index)", published: day(-daysAgo), number: nil, season: nil)
     }
 
     // MARK: - Control
@@ -42,17 +42,17 @@ struct ReleaseSummaryTests {
 
     @Test("A feed with zero entries summarises to none")
     func zeroEntriesIsNone() {
-        let feed = WebtoonsFeed(title: "Empty", entries: [])
+        let feed = ReleaseFeed(title: "Empty", entries: [], source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .none)
     }
 
     @Test("A feed whose entries are all afterwords, zero episodes, summarises to none")
     func allAfterwordsIsNone() {
-        let feed = WebtoonsFeed(title: "Finished", entries: [
+        let feed = ReleaseFeed(title: "Finished", entries: [
             afterword(1, daysAgo: 0),
             afterword(2, daysAgo: 0),
             afterword(3, daysAgo: 0)
-        ])
+        ], source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .none)
     }
 
@@ -61,7 +61,7 @@ struct ReleaseSummaryTests {
     @Test("Exactly one episode summarises to lastSeen with its date and number")
     func oneEpisodeIsLastSeen() {
         let episode = episode(5, daysAgo: 3)
-        let feed = WebtoonsFeed(title: "Naver Paywalled", entries: [episode])
+        let feed = ReleaseFeed(title: "Naver Paywalled", entries: [episode], source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .lastSeen(latest: episode.published, number: 5))
     }
 
@@ -79,7 +79,7 @@ struct ReleaseSummaryTests {
             episode(1, daysAgo: 14)
         ]
         #expect(episodes.count < Cadence.minimumDates)
-        let feed = WebtoonsFeed(title: "Naver Paywalled", entries: episodes)
+        let feed = ReleaseFeed(title: "Naver Paywalled", entries: episodes, source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .recent(episodes))
     }
 
@@ -88,7 +88,7 @@ struct ReleaseSummaryTests {
         // Two dates are below Cadence.minimumDates (4) no matter how the single
         // gap looks, so this must land on .recent rather than .rhythm.
         let episodes = [episode(2, daysAgo: 1), episode(1, daysAgo: 40)]
-        let feed = WebtoonsFeed(title: "Sparse", entries: episodes)
+        let feed = ReleaseFeed(title: "Sparse", entries: episodes, source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .recent(episodes))
     }
 
@@ -97,7 +97,7 @@ struct ReleaseSummaryTests {
     @Test("A full twenty-episode weekly feed summarises to rhythm with the latest episode")
     func twentyWeeklyEpisodesIsRhythm() throws {
         let episodes = (1...20).map { episode($0, daysAgo: (20 - $0) * 7) }
-        let feed = WebtoonsFeed(title: "Tower of God", entries: episodes)
+        let feed = ReleaseFeed(title: "Tower of God", entries: episodes, source: .webtoons)
         let summary = ReleaseSummary.summarise(feed)
         guard case let .rhythm(cadence, latest) = summary else {
             Issue.record("expected .rhythm, got \(summary)")
@@ -117,7 +117,7 @@ struct ReleaseSummaryTests {
             episode(2, daysAgo: 14),
             episode(1, daysAgo: 21)
         ]
-        let feed = WebtoonsFeed(title: "Weekly", entries: episodes)
+        let feed = ReleaseFeed(title: "Weekly", entries: episodes, source: .webtoons)
         let summary = ReleaseSummary.summarise(feed)
         guard case let .rhythm(cadence, latest) = summary else {
             Issue.record("expected .rhythm, got \(summary)")
@@ -131,7 +131,7 @@ struct ReleaseSummaryTests {
 
     @Test("A finale entry that is also the latest episode summarises to seasonEnded")
     func finaleEntrySummarisesToSeasonEnded() {
-        let finale = WebtoonsEntry(
+        let finale = ReleaseEntry(
             title: "Episode 112 (Season 1 Finale)", published: day(0), number: 112, season: 1
         )
         let episodes = [
@@ -143,7 +143,7 @@ struct ReleaseSummaryTests {
         // Afterwords sit above the finale in the real feed and share its date;
         // they must not stop endedSeason from firing.
         let entries = [afterword(1, daysAgo: 0), afterword(2, daysAgo: 0)] + episodes
-        let feed = WebtoonsFeed(title: "The Knight Only Lives Today", entries: entries)
+        let feed = ReleaseFeed(title: "The Knight Only Lives Today", entries: entries, source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .seasonEnded(season: 1, on: finale.published))
     }
 
@@ -153,7 +153,7 @@ struct ReleaseSummaryTests {
         // proves goes to .rhythm. Adding only the finale marker on the newest one
         // must flip the result to .seasonEnded, showing the check order in
         // `summarise` actually matters rather than happening to agree.
-        let finale = WebtoonsEntry(
+        let finale = ReleaseEntry(
             title: "Episode 4 (Season 1 Finale)", published: day(0), number: 4, season: 1
         )
         let episodes = [
@@ -162,7 +162,7 @@ struct ReleaseSummaryTests {
             episode(2, daysAgo: 14, season: 1),
             episode(1, daysAgo: 21, season: 1)
         ]
-        let feed = WebtoonsFeed(title: "Weekly, Finished", entries: episodes)
+        let feed = ReleaseFeed(title: "Weekly, Finished", entries: episodes, source: .webtoons)
         #expect(ReleaseSummary.summarise(feed) == .seasonEnded(season: 1, on: finale.published))
     }
 
