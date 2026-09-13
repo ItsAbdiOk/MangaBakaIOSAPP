@@ -16,18 +16,22 @@ extension SeriesDetailView {
         if shelf.isEmpty {
             VolumesSection(
                 volumes: extras.volumes,
+                seriesCover: shown.cover,
                 note: appleUnreachable ? "Apple Books couldn't be reached" : nil,
                 // gap 22: while the store is still being asked, the section
                 // shows a skeleton instead of MangaBaka's own shelf — showing
                 // that first and swapping it for the store's the moment it
                 // answers reads as content changing under the reader.
-                isCheckingStore: isLoadingVolumes
+                isCheckingStore: isLoadingVolumes,
+                openLibraryCovers: openLibraryCovers
             )
         } else {
             AppleVolumesRow(
                 volumes: shelf,
                 expected: shown.finalVolume.map { Int(wholeOrClamped: $0) },
-                edition: appleEdition
+                edition: appleEdition,
+                seriesCover: shown.cover,
+                openLibraryCovers: openLibraryCovers
             )
         }
     }
@@ -35,9 +39,13 @@ extension SeriesDetailView {
     /// One request, cached a week, after the page is readable: the shelf is
     /// below the fold and the store is a third party with its own limit.
     func loadAppleVolumes() async {
-        guard let appleBooks else { return }
+        guard let appleBooks else {
+            // No Apple client at all still leaves MangaBaka's own volumes on
+            // screen (`VolumesSection`) worth filling gaps in.
+            await loadOpenLibraryCovers()
+            return
+        }
         isLoadingVolumes = true
-        defer { isLoadingVolumes = false }
         let country = Locale.current.region?.identifier ?? "us"
         let language = Locale.current.language.languageCode?.identifier
         var answer = await appleBooks.volumes(for: shown, country: country, language: language)
@@ -56,12 +64,60 @@ extension SeriesDetailView {
         // a series Apple carries end to end costs no Google request at all.
         // The Japanese shelf is left alone: it is one store's single edition,
         // and splicing a second store's covers into it would misrepresent it.
-        guard appleEdition == nil,
-              VolumeShelf.needsGoogle(
-                apple: appleVolumes, expected: shown.finalVolume.map { Int(wholeOrClamped: $0) }
-              )
-        else { return }
-        googleVolumes = await googleBooks?.volumes(for: shown, language: language) ?? []
+        if appleEdition == nil,
+           VolumeShelf.needsGoogle(
+             apple: appleVolumes, expected: shown.finalVolume.map { Int(wholeOrClamped: $0) }
+           ) {
+            googleVolumes = await googleBooks?.volumes(for: shown, language: language) ?? []
+        }
+        // The shelf itself is decided the moment Apple and Google have both
+        // answered — `isLoadingVolumes` ends here, not after Open Library,
+        // so the skeleton never sits through a third, spaced-out pass the
+        // shelf's own shape does not depend on.
+        isLoadingVolumes = false
+        // Open Library, last, and not awaited by anything the shelf itself
+        // needs: `appleEdition == nil` is checked again inside — the
+        // Japanese shelf is skipped there too.
+        await loadOpenLibraryCovers()
+    }
+
+    /// A follow-up pass, run after Apple and Google have both had their
+    /// turn, that asks `OpenLibraryCovers` for whatever is still missing
+    /// artwork — MangaBaka's own volumes with none, and shelf spines the
+    /// stores sent no art for. Deliberately its own call, not folded into
+    /// `loadAppleVolumes`: this must never be what a reader on the fast path
+    /// (Apple carries the whole series) waits on.
+    ///
+    /// The Japanese-edition shelf is skipped: it is Apple's single foreign
+    /// storefront, not matched against MangaBaka's own ISBNs, and asking for
+    /// covers on someone else's numbering scheme is a coincidence away from
+    /// showing the wrong volume's art.
+    func loadOpenLibraryCovers() async {
+        guard let openLibrary, appleEdition == nil else { return }
+
+        var isbnsByNumber = VolumesSection.isbnsNeedingCovers(extras.volumes)
+        let shelfGaps = VolumeShelf.numbersNeedingCovers(shelf)
+        for number in shelfGaps where isbnsByNumber[number] == nil {
+            // Apple and Google carry no ISBN of their own (S1) — the only
+            // way to ask Open Library about a shelf gap is to borrow the
+            // ISBN MangaBaka's own volume of the same number carries.
+            guard let isbn = extras.volumes
+                .first(where: { $0.number.flatMap(Int.init) == number })?
+                .editions.compactMap(\.isbn).first
+            else { continue }
+            isbnsByNumber[number] = isbn
+        }
+        guard !isbnsByNumber.isEmpty else { return }
+
+        var found: [Int: URL] = [:]
+        for (number, isbn) in isbnsByNumber {
+            guard !Task.isCancelled else { return }
+            if let url = await openLibrary.coverURL(isbn: isbn) {
+                found[number] = url
+            }
+        }
+        guard !Task.isCancelled else { return }
+        openLibraryCovers = found
     }
 
     /// "Similar by description": ids ranked by `EmbeddingIndex`, resolved to

@@ -64,6 +64,7 @@ enum APIError: Error, Equatable {
         case shikimori
         case appleBooks
         case googleBooks
+        case openLibrary
         case webtoons
         case naver
         case gigaViewer
@@ -76,6 +77,7 @@ enum APIError: Error, Equatable {
             case .shikimori: "Shikimori"
             case .appleBooks: "Apple Books"
             case .googleBooks: "Google Books"
+            case .openLibrary: "Open Library"
             case .webtoons: "Webtoons"
             case .naver: "Naver"
             case .gigaViewer: "GigaViewer"

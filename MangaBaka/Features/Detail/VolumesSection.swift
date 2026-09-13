@@ -14,6 +14,9 @@ import SwiftUI
 /// two editions become visible, which is where the difference matters.
 struct VolumesSection: View {
     let volumes: [SeriesWork.Volume]
+    /// The series' own cover, dimmed in as a stand-in for a volume with no
+    /// artwork of its own — see `MissingVolumeCover`.
+    var seriesCover: Cover = .empty
     /// Why this is MangaBaka's shelf rather than the store's, when there is
     /// a reason worth saying: "Apple Books couldn't be reached". A failure
     /// shown as silence looks like the feature does not exist — gap 21: with
@@ -25,6 +28,11 @@ struct VolumesSection: View {
     /// letting MangaBaka's own shelf flash on screen and then be replaced —
     /// gap 22, "shelf swaps content under the reader".
     var isCheckingStore: Bool = false
+    /// Covers `OpenLibraryCovers` found for a volume with none of its own,
+    /// keyed by volume number — see `isbnsNeedingCovers` and
+    /// `SeriesDetailView+Store.loadOpenLibraryCovers`. Empty for a page that
+    /// has not run that pass yet, or found nothing.
+    var openLibraryCovers: [Int: URL] = [:]
 
     @State private var opened: SeriesWork.Volume?
 
@@ -91,12 +99,7 @@ struct VolumesSection: View {
 
     private func spine(_ volume: SeriesWork.Volume) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            CoverImage(
-                cover: volume.cover ?? Cover.empty,
-                width: Metrics.coverSeedWidth,
-                radius: Metrics.radiusSeed,
-                accessibilityText: volume.label
-            )
+            volumeCover(volume)
             Text(volume.label)
                 .typeCardTitle()
                 .foregroundStyle(Palette.textPrimary)
@@ -110,6 +113,49 @@ struct VolumesSection: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(volume))
         .accessibilityAddTraits(.isButton)
+    }
+
+    /// The volume's own artwork, or an Open Library fill for it, when there
+    /// is one — but never a fill for a volume that already has art.
+    private func resolvedCover(_ volume: SeriesWork.Volume) -> Cover? {
+        if let own = volume.cover { return own }
+        guard let number = volume.number.flatMap(Int.init), let url = openLibraryCovers[number] else {
+            return nil
+        }
+        return Cover(raw: url, x150: nil, x250: nil, x350: nil, blurhash: nil, width: nil, height: nil)
+    }
+
+    @ViewBuilder
+    private func volumeCover(_ volume: SeriesWork.Volume) -> some View {
+        switch MissingVolumeCover.choice(for: resolvedCover(volume)) {
+        case let .artwork(cover):
+            CoverImage(
+                cover: cover, width: Metrics.coverSeedWidth, radius: Metrics.radiusSeed,
+                accessibilityText: volume.label
+            )
+        case .seriesCover:
+            MissingVolumeCover(
+                seriesCover: seriesCover, width: Metrics.coverSeedWidth, numberLabel: volume.number ?? ""
+            )
+        }
+    }
+
+    /// The ISBN of every volume in `volumes` that has no cover of its own —
+    /// the set worth asking `OpenLibraryCovers` about. A volume without an
+    /// ISBN (no edition carries one) is simply left out: there is nothing to
+    /// ask Open Library for.
+    ///
+    /// Numberless volumes ("Other editions") are excluded too — there is no
+    /// single volume number to key a found cover back to on the shelf.
+    nonisolated static func isbnsNeedingCovers(_ volumes: [SeriesWork.Volume]) -> [Int: String] {
+        var isbnsByNumber: [Int: String] = [:]
+        for volume in volumes where volume.cover == nil {
+            guard let number = volume.number.flatMap(Int.init),
+                  let isbn = volume.editions.compactMap(\.isbn).first
+            else { continue }
+            isbnsByNumber[number] = isbn
+        }
+        return isbnsByNumber
     }
 
     /// The volume's release year, read in UTC.
@@ -137,6 +183,13 @@ struct VolumesSection: View {
 
     private func accessibilityLabel(_ volume: SeriesWork.Volume) -> String {
         var parts = [volume.label]
+        if case .seriesCover = MissingVolumeCover.choice(for: resolvedCover(volume)) {
+            // The spine's own `.accessibilityElement(children: .ignore)`
+            // means `MissingVolumeCover`'s label is never read — this is the
+            // one place a VoiceOver user is told the box is a stand-in
+            // rather than the volume's own art.
+            parts.append("cover not available")
+        }
         if let date = volume.date {
             parts.append(date.formatted(Self.utcMonthYear))
         }
@@ -145,6 +198,55 @@ struct VolumesSection: View {
         }
         return parts.joined(separator: ", ")
     }
+}
+
+/// A volume's cover, or a stand-in when nothing — not Apple, not Google, not
+/// MangaBaka's own images, not Open Library — has one.
+///
+/// The series' own cover, dimmed, with the volume number over it, in place
+/// of a blank grey box. A grey box reads as broken; a dimmed familiar cover
+/// reads as "this one just doesn't have its own picture yet". Shared between
+/// `VolumesSection` (MangaBaka's own volumes) and `AppleVolumesRow` (the
+/// store shelf) so the two never drift into two different "missing" looks.
+struct MissingVolumeCover: View {
+    let seriesCover: Cover
+    var width: CGFloat = Metrics.coverSeedWidth
+    var radius: CGFloat = Metrics.radiusSeed
+
+    /// What to draw for a volume's artwork slot: its own cover, when it has
+    /// one, or the series' cover as a stand-in.
+    enum Choice: Equatable {
+        case artwork(Cover)
+        case seriesCover
+    }
+
+    /// `nonisolated static` so `VolumesSectionTests`/`AppleVolumesRowTests`-
+    /// style suites can call it directly, off the main actor, the way
+    /// `VolumesSection.shows` already is.
+    nonisolated static func choice(for artwork: Cover?) -> Choice {
+        artwork.map(Choice.artwork) ?? .seriesCover
+    }
+
+    var body: some View {
+        CoverImage(cover: seriesCover, width: width, radius: radius, accessibilityText: "Cover not available")
+            // A GUESS: dim enough to read as a stand-in rather than the
+            // volume's actual art, not so dim the series is unrecognisable.
+            .opacity(0.35)
+            .overlay(alignment: .bottomLeading) {
+                Text(numberLabel)
+                    .typeCardTitle()
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(6)
+                    // The caller's own accessibility element (both call
+                    // sites wrap the whole spine in one) already speaks
+                    // "cover not available" — this would only repeat it.
+                    .accessibilityHidden(true)
+            }
+    }
+
+    /// Set by the caller so this view stays store-agnostic — `VolumesSection`
+    /// has "Vol. 2"-style labels, `AppleVolumesRow` bare numbers.
+    var numberLabel: String = ""
 }
 
 /// One volume, and the editions of it.

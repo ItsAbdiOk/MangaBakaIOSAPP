@@ -36,6 +36,9 @@ struct SeriesDetailView: View {
     var releaseFeeds: ReleaseFeedService?
     /// MangaUpdates' vote-weighted categories; nil skips the section.
     var mangaUpdatesCategories: MangaUpdatesClient?
+    /// Cover gap-filler by ISBN, asked only for volumes no store has art for.
+    var openLibrary: OpenLibraryCovers?
+    @State var openLibraryCovers: [Int: URL] = [:]
     @State var categories: [MangaUpdatesCategories.Category] = []
     @State var isCategoriesLoading = false
     @State var categoriesFailure: APIError?

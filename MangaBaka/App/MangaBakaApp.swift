@@ -36,6 +36,7 @@ struct MangaBakaApp: App {
                 offlineCatalogue: services.offlineCatalogue,
                 mangaUpdatesCategories: services.mangaUpdatesCategories,
                 publisherFollows: services.publisherFollows,
+                openLibraryCovers: services.openLibraryCovers,
                 taste: services.taste,
                 catalogue: services.catalogue,
                 blockedTags: services.blockedTags,

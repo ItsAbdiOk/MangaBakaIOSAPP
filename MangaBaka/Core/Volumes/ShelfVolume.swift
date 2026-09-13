@@ -66,14 +66,30 @@ enum VolumeShelf {
     /// Naming Google is not a courtesy: their branding terms require their
     /// content to be attributed wherever it is shown. Naming Apple alone
     /// while showing two of Google's covers would be the non-compliant case.
-    static func attribution(for volumes: [ShelfVolume]) -> String? {
+    ///
+    /// - Parameter openLibraryUsed: whether any spine on this shelf is
+    ///   showing a cover `OpenLibraryCovers` supplied rather than the
+    ///   store's own — see `SeriesDetailView+Store.loadOpenLibraryCovers`.
+    ///   Open Library is a cover source, not a data source the way Apple and
+    ///   Google are, so it is appended to whichever store name already
+    ///   applies rather than getting a case of its own in the switch above.
+    static func attribution(for volumes: [ShelfVolume], openLibraryUsed: Bool = false) -> String? {
         let sources = Set(volumes.map(\.source))
-        return switch (sources.contains(.appleBooks), sources.contains(.googleBooks)) {
+        let base: String? = switch (sources.contains(.appleBooks), sources.contains(.googleBooks)) {
         case (true, true): "Apple & Google Books"
         case (true, false): "Apple Books"
         case (false, true): "Google Books"
         case (false, false): nil
         }
+        guard let base else { return nil }
+        return openLibraryUsed ? "\(base) & Open Library" : base
+    }
+
+    /// The volume numbers on this shelf with no artwork of their own — Apple
+    /// and Google both leave `cover.raw` nil when they sent none — and so
+    /// the only ones worth asking `OpenLibraryCovers` about at all.
+    static func numbersNeedingCovers(_ volumes: [ShelfVolume]) -> Set<Int> {
+        Set(volumes.filter { $0.cover.raw == nil }.map(\.number))
     }
 
     /// Whether Google's volumes need fetching at all.

@@ -29,7 +29,9 @@ struct AttributionSection: View {
                 Kitsu, MangaUpdates, MyAnimeList and Anime-Planet. The offline \
                 catalogue and "Similar by description" are built from a nightly \
                 snapshot of the same MangaBaka data (CC BY-NC-SA 4.0), bundled so \
-                they work without a connection.
+                they work without a connection. Volume covers come from Apple \
+                Books and Google Books, and, when neither has one, from the \
+                Internet Archive's Open Library.
                 """)
                 .typeSubtitle()
                 .foregroundStyle(Palette.textSecondary)

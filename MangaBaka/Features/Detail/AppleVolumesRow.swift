@@ -19,6 +19,13 @@ struct AppleVolumesRow: View {
     let expected: Int?
     /// Set when the shelf is another store's edition; nil for the reader's own.
     var edition: Edition?
+    /// The series' own cover, for `MissingVolumeCover` — a spine whose store
+    /// sent no artwork at all.
+    var seriesCover: Cover = .empty
+    /// Covers `OpenLibraryCovers` found for a shelf number with none of its
+    /// own, keyed by volume number — see
+    /// `SeriesDetailView+Store.loadOpenLibraryCovers`.
+    var openLibraryCovers: [Int: URL] = [:]
 
     enum Edition {
         /// From the Japanese store, because the reader's has nothing. Covers
@@ -100,21 +107,50 @@ struct AppleVolumesRow: View {
         return (1...expected).allSatisfy(have.contains)
     }
 
-    /// "Apple & Google Books" when both put a volume on the shelf. The
-    /// Japanese note keeps its own wording, since that shelf is Apple's alone.
+    /// "Apple & Google Books" when both put a volume on the shelf, with
+    /// "& Open Library" appended when a spine on it is showing a cover that
+    /// store never sent — naming Open Library is not a courtesy any more
+    /// than naming Google is; both ask for it. The Japanese note keeps its
+    /// own wording, since that shelf is Apple's alone.
     private var sourceLabel: String {
         if edition == .japanese { return "Japanese edition · Apple Books" }
-        return VolumeShelf.attribution(for: volumes) ?? "Apple Books"
+        return VolumeShelf.attribution(for: volumes, openLibraryUsed: usesOpenLibraryCover)
+            ?? "Apple Books"
+    }
+
+    /// Whether any spine on this shelf is drawing an Open Library cover
+    /// rather than the store's own — see `resolvedCover`.
+    private var usesOpenLibraryCover: Bool {
+        volumes.contains { $0.cover.raw == nil && openLibraryCovers[$0.number] != nil }
+    }
+
+    /// The spine's artwork: the store's own, or an Open Library fill for it
+    /// when the store sent none — never a fill for a spine that already has
+    /// art of its own.
+    private func resolvedCover(_ volume: ShelfVolume) -> Cover? {
+        if volume.cover.raw != nil { return volume.cover }
+        guard let url = openLibraryCovers[volume.number] else { return nil }
+        return Cover(raw: url, x150: nil, x250: nil, x350: nil, blurhash: nil, width: nil, height: nil)
+    }
+
+    @ViewBuilder
+    private func volumeCover(_ volume: ShelfVolume) -> some View {
+        switch MissingVolumeCover.choice(for: resolvedCover(volume)) {
+        case let .artwork(cover):
+            CoverImage(
+                cover: cover, width: Metrics.coverSeedWidth, radius: Metrics.radiusSeed,
+                accessibilityText: "Volume \(volume.number)"
+            )
+        case .seriesCover:
+            MissingVolumeCover(
+                seriesCover: seriesCover, width: Metrics.coverSeedWidth, numberLabel: "\(volume.number)"
+            )
+        }
     }
 
     private func spine(_ volume: ShelfVolume) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            CoverImage(
-                cover: volume.cover,
-                width: Metrics.coverSeedWidth,
-                radius: Metrics.radiusSeed,
-                accessibilityText: "Volume \(volume.number)"
-            )
+            volumeCover(volume)
             // Gap 65: with no link at all, this button did nothing on tap and
             // looked exactly like every spine that opens the store — the
             // `PressStyle` `.press` gives every button the same highlight
@@ -137,8 +173,15 @@ struct AppleVolumesRow: View {
         .opacity(volume.link == nil ? 0.6 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            ["Volume \(volume.number)", edition == nil ? volume.formattedPrice : nil]
-                .compactMap { $0 }.joined(separator: ", ")
+            [
+                "Volume \(volume.number)",
+                // The spine's own accessibility element (`children: .ignore`
+                // above) means `MissingVolumeCover`'s label is never read —
+                // this is the one place VoiceOver is told the box is a
+                // stand-in, not the store's own art.
+                resolvedCover(volume) == nil ? "cover not available" : nil,
+                edition == nil ? volume.formattedPrice : nil
+            ].compactMap { $0 }.joined(separator: ", ")
         )
         .accessibilityHint(
             volume.link == nil ? ""

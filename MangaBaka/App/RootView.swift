@@ -26,6 +26,7 @@ struct RootView: View {
     let offlineCatalogue: OfflineCatalogue
     let mangaUpdatesCategories: MangaUpdatesClient
     let publisherFollows: PublisherFollows
+    let openLibraryCovers: OpenLibraryCovers
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
