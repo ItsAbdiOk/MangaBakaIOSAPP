@@ -228,15 +228,25 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
 - **Apple Books: Square Enix numbering** — `df43edc`. The Apothecary Diaries
   showed six light novels instead of sixteen manga volumes.
 
+- **Failure audit, all 123 gaps fixed** — `docs/reviews/FAILURES-SUMMARY.md`,
+  commits `9143277`, `67916a9`, `d4cd541`. Every request, decode, third party
+  and trap now has a loading state, an honest failure (who failed, for how
+  long, Retry), and an empty state only when the source answered. Shared kit:
+  `APIError.party`, `.cancelled`, 20 s timeout (guess), pre-emptive 30/min
+  search window, live countdown, `Fetched<T>`, `InlineFailure`,
+  `ConfirmDestructive`, `Int(wholeOrClamped:)`. Characters are now AniList ∪
+  Shikimori with a rough fuzzy match (Abdi's ask). 1,368 tests. **Not verified
+  on a device**: onboarding push ordering; the corrupt-database reset toast.
+- **Decisions taken as recommended** (flip if wrong): inline "Couldn't load ·
+  Retry" per section; partial library renders with a bar; "Remove token" and
+  "Deal another now" confirm; countdown auto-retries on Search only; library
+  writes patch locally with a "Saved" toast.
+
 ## Next, in the order I would do it
 
-1. **Every point of failure has a screen.** Abdi, 2026-09-13: audit each place a
-   request, decode, third party, or trap can fail, and make sure the reader sees
-   a loading state and an honest explanation rather than a blank or a crash.
-   Read-only sweep per screen group first, then one fix batch with tests.
-2. **18+ age rating in App Store Connect**, and confirm which tier applies now
+1. **18+ age rating in App Store Connect**, and confirm which tier applies now
    that Apple has moved to 13+/16+/18+.
-3. **App Store screenshots without real manga covers.** Nothing exists yet, so
+2. **App Store screenshots without real manga covers.** Nothing exists yet, so
    nothing is wrong yet; the constraint applies to the icon and promo text too.
 
 ## Explicitly not doing
