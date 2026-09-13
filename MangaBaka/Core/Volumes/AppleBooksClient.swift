@@ -41,7 +41,7 @@ actor AppleBooksClient {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         // Versioned: a match rule that tightens must not be outlived by a
         // week of cached answers made under the looser one.
-        let key = "v3-\(series.id)-\(country.lowercased())-\(language ?? "any")"
+        let key = "v4-\(series.id)-\(country.lowercased())-\(language ?? "any")"
         if let cached = readCache(key) { return cached }
 
         guard let results = await search(query, country: country) else { return nil }
@@ -62,7 +62,7 @@ actor AppleBooksClient {
     /// must be the title with a bare number, the way that store writes it.
     func japaneseVolumes(for series: Series) async -> [AppleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
-        let key = "v3-\(series.id)-jp-ja-bare"
+        let key = "v4-\(series.id)-jp-ja-bare"
         if let cached = readCache(key) { return cached }
 
         guard let results = await search(query, country: "jp") else { return nil }

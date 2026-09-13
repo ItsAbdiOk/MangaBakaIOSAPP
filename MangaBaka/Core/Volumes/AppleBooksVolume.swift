@@ -105,11 +105,20 @@ enum AppleBooksMatch {
         let surnames = creators.compactMap { $0.split(separator: " ").last.map { normalise(String($0)) } }
             .filter { $0.count >= 3 }
         var byNumber: [Int: AppleBooksVolume] = [:]
-        for result in results {
+        // Two passes, tagged editions first. Store relevance order put "The
+        // Apothecary Diaries: Volume 1" (the light novel, untagged) ahead of
+        // "The Apothecary Diaries 01 (Manga)", so first-seen-wins showed the
+        // novel's cover on the comic's shelf (Abdi's phone, 2026-09-13). An
+        // edition that says what it is outranks one that does not.
+        let ranked = results.enumerated().sorted { lhs, rhs in
+            let (lhsTagged, rhsTagged) = (isTagged(lhs.element), isTagged(rhs.element))
+            return lhsTagged != rhsTagged ? lhsTagged : lhs.offset < rhs.offset
+        }.map(\.element)
+        for result in ranked {
             guard let parts = split(result.trackName, numbering: numbering),
                   wanted.contains(normalise(parts.title))
             else { continue }
-            if let tag = parts.tag, tag.contains("novel") != isNovel { continue }
+            if let tag = parts.tag, isNovelTag(tag) != isNovel { continue }
             if !surnames.isEmpty {
                 let credit = normalise(result.artistName ?? "")
                 guard surnames.contains(where: { credit.contains($0) }) else { continue }
@@ -130,6 +139,13 @@ enum AppleBooksMatch {
         return byNumber.values.sorted { $0.number < $1.number }
     }
 
+    private static func isTagged(_ result: AppleBooksResult) -> Bool {
+        split(result.trackName)?.tag != nil
+    }
+
+    /// "(novel)", "(Light Novel)" → a novel; "(comic)", "(Manga)" → not.
+    private static func isNovelTag(_ tag: String) -> Bool { tag.contains("novel") }
+
     struct Parts: Equatable {
         let title: String
         let number: Int
@@ -149,13 +165,17 @@ enum AppleBooksMatch {
     }
 
     /// "Solo Leveling, Vol. 8 (comic)" → ("Solo Leveling", 8, "comic").
-    /// The marker may be "Vol.", "Vol", "Volume" or "#".
+    /// The marker may be "Vol.", "Vol", "Volume" or "#" — or absent when a
+    /// bracketed kind follows the number: Square Enix's "The Apothecary
+    /// Diaries 01 (Manga)" (GB store, 2026-09-13). The bracket is what
+    /// makes a bare number safe to read as a volume; "Kingdom 2" alone
+    /// could be a sequel's title.
     static func split(_ name: String, numbering: Numbering = .marker) -> Parts? {
         switch numbering {
         case .marker:
             guard let match = name.wholeMatch(of: pattern) else { return nil }
-            guard let number = Int(match.output.2) else { return nil }
-            let tag = match.output.3.map { $0.lowercased() }
+            guard let digits = match.output.2 ?? match.output.3, let number = Int(digits) else { return nil }
+            let tag = match.output.4.map { $0.lowercased() }
             return Parts(title: String(match.output.1), number: number, tag: tag)
         case .bare:
             guard let match = name.wholeMatch(of: barePattern) else { return nil }
@@ -174,8 +194,8 @@ enum AppleBooksMatch {
     // Built per call: a Regex is not Sendable, so it cannot be a static
     // constant. Cheap enough — the store answers at most 200 names.
     // swiftlint:disable:next large_tuple
-    private static var pattern: Regex<(Substring, Substring, Substring, Substring?)> {
-        /^(.+?)[,:]?\s+(?:vol\.?|volume|#)\s*(\d+)\s*(?:\(([^)]+)\))?\s*$/.ignoresCase()
+    private static var pattern: Regex<(Substring, Substring, Substring?, Substring?, Substring?)> {
+        /^(.+?)[,:]?\s+(?:(?:vol\.?|volume|#)\s*(\d+)|(\d+)(?=\s*\())\s*(?:\(([^)]+)\))?\s*$/.ignoresCase()
     }
 
     /// The language a blurb is written in, as a primary subtag ("fr"), or

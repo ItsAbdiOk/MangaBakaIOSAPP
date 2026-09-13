@@ -37,6 +37,32 @@ struct AppleBooksMatchTests {
         #expect(volumes[0].artworkURL?.absoluteString.hasSuffix("600x600bb.jpg") == true)
     }
 
+    /// The live GB answer for "The Apothecary Diaries", 2026-09-13, reduced.
+    /// Square Enix titles the comic "The Apothecary Diaries 01 (Manga)" —
+    /// a bare number, then the kind in brackets — while J-Novel Club's light
+    /// novels are "The Apothecary Diaries: Volume 1" up to 6 and only add
+    /// "(Light Novel)" from 7. Abdi's phone showed six volumes: the six
+    /// untagged novels, because the comic's numbering had no "Vol." to match.
+    @Test("A bare number with a bracketed kind is a volume, and the tagged kind beats an untagged one")
+    func bareNumberWithKind() {
+        let results = [
+            result(1, "The Apothecary Diaries: Volume 1"),
+            result(2, "The Apothecary Diaries 01 (Manga)"),
+            result(3, "The Apothecary Diaries 02 (Manga)"),
+            result(4, "The Apothecary Diaries: Volume 7 (Light Novel)"),
+            result(5, "The Apothecary Diaries 16 (Manga)", price: nil),
+            result(6, "The Apothecary Diaries: Maomao’s Notes on the Inner Palace, Vol. 1"),
+            result(7, "The Apothecary Diaries Art Book")
+        ]
+        let comic = AppleBooksMatch.volumes(in: results, titles: ["The Apothecary Diaries"], isNovel: false)
+        #expect(comic.map(\.number) == [1, 2, 16])
+        #expect(comic.map(\.id) == [2, 3, 5], "The edition tagged (Manga) wins over the untagged novel")
+
+        let novel = AppleBooksMatch.volumes(in: results, titles: ["The Apothecary Diaries"], isNovel: true)
+        #expect(novel.map(\.number) == [1, 7])
+        #expect(novel.map(\.id) == [1, 4])
+    }
+
     /// The GB store's answer for HUNTER×HUNTER is the French edition,
     /// "Hunter ✖ Hunter - Volume 1" credited to its translator; the results
     /// carry no language, so the credit is the tell (Abdi's phone,
