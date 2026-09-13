@@ -10,6 +10,14 @@ import SwiftUI
 /// inside the hero it stopped at the safe area and left a black band above,
 /// which made the page read as two screens stacked.
 struct DetailBackdrop: View {
+    /// The mockup's numbers, named so a test can hold them rather than grep
+    /// for literals in this file. Measured against the design board, not
+    /// derived; changing one changes the page's whole tone.
+    nonisolated static let scale: CGFloat = 1.6
+    nonisolated static let blurRadius: CGFloat = 72
+    nonisolated static let saturation: Double = 1.7
+    nonisolated static let opacity: Double = 0.34
+
     let cover: Cover
     /// How tall the wash is. Beyond the hero it is solid ground anyway, and
     /// blurring a full-page image costs more the taller it is.
@@ -33,10 +41,10 @@ struct DetailBackdrop: View {
                 Color.clear
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-            .scaleEffect(1.6)
-            .blur(radius: 72, opaque: false)
-            .saturation(1.7)
-            .opacity(0.34)
+            .scaleEffect(Self.scale)
+            .blur(radius: Self.blurRadius, opaque: false)
+            .saturation(Self.saturation)
+            .opacity(Self.opacity)
             .overlay {
                 LinearGradient(
                     stops: [

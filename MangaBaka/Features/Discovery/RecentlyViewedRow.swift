@@ -12,10 +12,22 @@ final class RecentlyViewedModel {
 
     private let history: HistoryStore
     private let allowedRatings: () -> [String]
+    /// Same closure shape as ratings, for the same reason: read at load time,
+    /// so a format or blocked tag toggled in Settings takes effect on the
+    /// next load rather than the next launch.
+    private let allowedFormats: () -> [String]
+    private let blockedTags: () -> [Int]
 
-    init(history: HistoryStore, allowedRatings: @escaping () -> [String]) {
+    init(
+        history: HistoryStore,
+        allowedRatings: @escaping () -> [String],
+        allowedFormats: @escaping () -> [String] = { [] },
+        blockedTags: @escaping () -> [Int] = { [] }
+    ) {
         self.history = history
         self.allowedRatings = allowedRatings
+        self.allowedFormats = allowedFormats
+        self.blockedTags = blockedTags
     }
 
     /// Below two entries there is nothing to come back to.
@@ -27,7 +39,9 @@ final class RecentlyViewedModel {
 
     func load() async {
         let ratings = allowedRatings()
-        series = (try? await history.entries(allowedRatings: ratings)) ?? []
+        series = (try? await history.entries(
+            allowedRatings: ratings, allowedFormats: allowedFormats(), blockedTags: blockedTags()
+        )) ?? []
     }
 
     func record(_ opened: Series) async {

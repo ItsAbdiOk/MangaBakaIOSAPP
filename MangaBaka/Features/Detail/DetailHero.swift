@@ -275,9 +275,25 @@ struct DetailHero: View {
 
     /// "Manhwa · Completed". Either half alone is still worth showing.
     private var kicker: String? {
-        let parts = [series.type?.capitalized, SeriesStatus.label(for: series.status)]
+        let parts = [Self.typeLabel(series.type), SeriesStatus.label(for: series.status)]
             .compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "Manhwa", "OEL" — `series.type` verbatim-capitalized read "Oel" for
+    /// original-English series, an initialism `.capitalized` cannot know
+    /// about. `FormatPreferences.Format.oel.title` is the app's own answer
+    /// for it (used on the format-preferences screen); everything else stays
+    /// on `.capitalized`, since `Format.novel.title` is "Novels" — right for
+    /// a settings toggle, wrong for a single series' inline type ("Novel",
+    /// not "Novels · 8.6"). Shared with `DiscoverView.meta(for:)`, which had
+    /// the same OEL defect.
+    nonisolated static func typeLabel(_ type: String?) -> String? {
+        guard let type, !type.isEmpty else { return nil }
+        if type.lowercased() == FormatPreferences.Format.oel.rawValue {
+            return FormatPreferences.Format.oel.title
+        }
+        return type.capitalized
     }
 
     /// The mockup writes "native title · author". A series with no native title

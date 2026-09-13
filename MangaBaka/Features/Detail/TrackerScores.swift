@@ -40,8 +40,13 @@ struct TrackerScores: View {
             }
         guard scored.count >= minSourcesForAgreement else { return nil }
 
-        guard let highest = scored.max(by: { $0.score < $1.score }),
-              let lowest = scored.min(by: { $0.score < $1.score }) else { return nil }
+        // Sorted by name first, so a tie for highest or lowest is broken the
+        // same way every launch rather than by `Dictionary`'s hash order —
+        // otherwise the named tracker in "Readers disagree" could change
+        // between launches with no change in the scores themselves.
+        let ordered = scored.sorted { $0.name < $1.name }
+        guard let highest = ordered.max(by: { $0.score < $1.score }),
+              let lowest = ordered.min(by: { $0.score < $1.score }) else { return nil }
         let spread = highest.score - lowest.score
 
         if spread >= divisiveSpread {
@@ -99,7 +104,7 @@ struct TrackerScores: View {
                 }
                 .scrollIndicators(.hidden)
 
-                if let line = verdictText(agreement) {
+                if let line = Self.verdictText(agreement) {
                     Text(line)
                         .typeSmallMeta()
                         .foregroundStyle(Palette.textMuted)
@@ -110,12 +115,16 @@ struct TrackerScores: View {
         }
     }
 
-    private func verdictText(_ agreement: Agreement?) -> String? {
+    /// A pure function of the verdict, not the instance, so a test can pin
+    /// the sentence without building a view. "within 5 points" used to be a
+    /// separate literal from `agreedSpread`; this reads the constant instead
+    /// of restating it.
+    nonisolated static func verdictText(_ agreement: Agreement?) -> String? {
         switch agreement {
         case let .divisive(high, low):
             "Readers disagree: \(high.name) \(high.score), \(low.name) \(low.score)"
         case .agreed:
-            "Every tracker agrees, within 5 points"
+            "Every tracker agrees, within \(Int(Self.agreedSpread)) points"
         case nil:
             nil
         }

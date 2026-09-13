@@ -31,6 +31,44 @@ struct ReadingPlatformsTests {
         #expect(ReadingPlatforms.allows(URL(string: "https://manta.net/en/series/x")))
     }
 
+    /// 3397's only Japanese reading link — `webplatform | ja | piccoma.com` —
+    /// measured against `/v1/series/3397/full`, 2026-09-13. Kakao's licensed
+    /// Japanese platform, hidden outright before this.
+    @Test("Piccoma is a licensed platform")
+    func piccomaAllowed() {
+        #expect(ReadingPlatforms.allows(URL(string: "https://piccoma.com/web/product/123")))
+    }
+
+    /// The decision: a bare host root is the platform's front door, not an
+    /// offer to read a specific series.
+    @Test("A bare host root is not somewhere to read")
+    func bareRootRejected() {
+        #expect(!ReadingPlatforms.allows(URL(string: "https://webtoons.com/")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://webtoons.com")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://webtoons.com/en")))
+    }
+
+    /// `naver.com`, `daum.net`, `kakao.com`, `pixiv.net`, `nicovideo.jp` and
+    /// `bilibili.com` are portal roots: a suffix match on the bare domain
+    /// would also admit a contributor's own blog, cafe, gallery or profile
+    /// page under the licensed host's name. Only the specific reader
+    /// subdomain is allowed.
+    @Test("A portal root's aggregator subdomains are not allowed, only the reader")
+    func portalRootsRestrictedToTheReader() {
+        #expect(ReadingPlatforms.allows(URL(string: "https://comic.naver.com/webtoon/list?titleId=1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://blog.naver.com/someone/1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://cafe.daum.net/someclub/1")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://webtoon.daum.net/webtoon/view/1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://kakao.com/x")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://page.kakao.com/content/1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://someone.pixiv.net/artworks/1")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://comic.pixiv.net/works/1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://www.nicovideo.jp/user/12345")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://seiga.nicovideo.jp/watch/mg1")))
+        #expect(!ReadingPlatforms.allows(URL(string: "https://space.bilibili.com/12345")))
+        #expect(ReadingPlatforms.allows(URL(string: "https://manga.bilibili.com/detail/mc1")))
+    }
+
     /// One entry per publisher, not per magazine: Shueisha alone appeared in
     /// the sample as mangaplus, mangamillion, zebrack-comic and cocohana.
     @Test("A subdomain of an allowed host is allowed, and so is a www. prefix")

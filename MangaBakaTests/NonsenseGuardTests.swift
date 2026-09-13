@@ -44,6 +44,22 @@ struct NonsenseGuardTests {
         #expect(!DetailCredits(series: series).rows.contains { $0.id == "Anime adaptation" })
     }
 
+    /// The v1 shape, verbatim from `/v1/series/3397/full` (Solo Leveling),
+    /// measured live 2026-09-13: `anime` has no `exists` key at all — only
+    /// `start`/`end` — and the fact is a sibling field, `has_anime`. Checking
+    /// `exists == true` alone decodes nil and prints "None listed" for a
+    /// series with two anime seasons. Expected to fail with `row?.value ==
+    /// "None listed"` before routing through `series.hasAnimeAdaptation`.
+    @Test("The v1 anime shape (has_anime, no exists) still says yes")
+    func animeV1ShapeWithHasAnime() throws {
+        let series = try Fixture.decoder().decode(Series.self, from: Data("""
+        {"id": 3397, "state": "active", "cover": {}, "has_anime": true,
+         "anime": {"start": "Chap 0 (S1) / Chap 46 (S2)", "end": "..."}}
+        """.utf8))
+        let row = DetailCredits(series: series).rows.first { $0.id == "Anime adaptation" }
+        #expect(row?.value == "Yes")
+    }
+
     // MARK: Ratings
 
     /// Every other stat in the strip guards `> 0`; rating alone did not, and

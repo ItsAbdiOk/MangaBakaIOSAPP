@@ -130,7 +130,14 @@ struct DetailStatsStrip: View {
             return String(format: "%.1fm", Double(count) / 1_000_000)
         }
         if count >= 1_000 {
-            return String(format: "%.1fk", Double(count) / 1_000)
+            // Rounded before the suffix is chosen, or 999,950...999,999
+            // formats to one decimal as "1000.0k" instead of crossing into
+            // "m" — the boundary a straight division-then-format misses.
+            let thousands = (Double(count) / 1_000 * 10).rounded() / 10
+            if thousands >= 1_000 {
+                return String(format: "%.1fm", Double(count) / 1_000_000)
+            }
+            return String(format: "%.1fk", thousands)
         }
         return String(count)
     }

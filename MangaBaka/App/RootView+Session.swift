@@ -122,7 +122,7 @@ extension RootView {
         // Pending notifications name series from the previous account's
         // library. Without this, "<title> has finished" arrives on the lock
         // screen for an account the reader has signed out of.
-        await reminders.cancelAll()
+        await reminders.forget()
         await schedule.cancelBuild()
         // Same reason as the reminders: the index names the previous
         // account's library.

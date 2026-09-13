@@ -52,10 +52,21 @@ struct DetailCredits: View {
     var rows: [Row] {
         var out: [Row] = []
         if let authors = series.authors, !authors.isEmpty {
-            out.append(Row(id: "Story & art", value: authors.joined(separator: ", ")))
+            let artists = series.artists ?? []
+            // Set compare, not array compare: the same two names in a
+            // different order ("Story & art" credited the author with work
+            // an entirely different person drew, on 3397 (Chu-Gong, story
+            // only) — verified against `/v1/series/3397/full`, 2026-09-13 —
+            // are still the same one person, and `["A","B"] != ["B","A"]`
+            // used to print a duplicate "Art" row for them.
+            let isSoloCreator = artists.isEmpty || Set(artists) == Set(authors)
+            out.append(Row(
+                id: isSoloCreator ? "Story & art" : "Story",
+                value: authors.joined(separator: ", ")
+            ))
         }
         if let artists = series.artists, !artists.isEmpty,
-           artists != series.authors {
+           Set(artists) != Set(series.authors ?? []) {
             out.append(Row(id: "Art", value: artists.joined(separator: ", ")))
         }
         if let publishers = series.publishers, !publishers.isEmpty {
@@ -68,14 +79,22 @@ struct DetailCredits: View {
         if let contentRating = series.contentRating {
             out.append(Row(id: "Content rating", value: contentRating.capitalized))
         }
-        // `exists` is the answer; the object being present is not. Checking
-        // only for nil printed "Yes" for The Greatest Estate Developer, whose
-        // API row is {"exists": false} — verified against the live endpoint on
-        // 2026-09-10. The row is omitted when the field is absent altogether,
-        // because a series fetched through a shape that does not carry it has
-        // told us nothing, and "None listed" is a claim.
-        if let anime = series.anime {
-            out.append(Row(id: "Anime adaptation", value: anime.exists == true ? "Yes" : "None listed"))
+        // `exists` is the answer; the object being present is not — but v1's
+        // `/series/{id}/full` does not send `exists` at all. Solo Leveling
+        // (3397) arrives as `anime: {start: "...", end: "..."}` with no
+        // `exists` key and a sibling `has_anime: true` — measured against the
+        // live endpoint, 2026-09-13 — so checking `exists` alone printed
+        // "None listed" for a series with two anime seasons.
+        // `hasAnimeAdaptation` reads every shape the API has actually sent:
+        // v2's `exists`, v1's `has_anime`, and v1's bare `start`. The row is
+        // still omitted when none of those fired and there is no explicit
+        // "false" either, because a series fetched through a shape that
+        // carries none of these fields has told us nothing, and "None
+        // listed" is a claim.
+        if series.hasAnimeAdaptation {
+            out.append(Row(id: "Anime adaptation", value: "Yes"))
+        } else if series.anime != nil || series.hasAnime != nil {
+            out.append(Row(id: "Anime adaptation", value: "None listed"))
         }
         return out
     }
@@ -120,7 +139,7 @@ struct DetailCredits: View {
                 .padding(.horizontal, 14)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if row.id == "Story & art" || row.id == "Art", let onOpenAuthor {
+                    if row.id == "Story & art" || row.id == "Story" || row.id == "Art", let onOpenAuthor {
                         let names = creators(for: row)
                         if names.count == 1 { onOpenAuthor(names[0]) } else if !names.isEmpty {
                             isChoosingAuthor = true
@@ -131,7 +150,11 @@ struct DetailCredits: View {
                        let publishers = series.publishers, !publishers.isEmpty {
                         // One name opens straight away; several ask which.
                         if publishers.count == 1 {
-                            onOpenPublisher(publishers[0].name)
+                            // 3397 credits "Panini Manga México " with a
+                            // trailing space; untrimmed it went out as a
+                            // literal `publisher=` query value and titled the
+                            // page with the space still in it.
+                            onOpenPublisher(publishers[0].name.trimmingCharacters(in: .whitespaces))
                         } else {
                             isChoosingPublisher = true
                         }
@@ -165,8 +188,13 @@ struct DetailCredits: View {
         .confirmationDialog(
             "Which publisher?", isPresented: $isChoosingPublisher, titleVisibility: .visible
         ) {
-            ForEach(series.publishers ?? [], id: \.name) { publisher in
-                Button(Self.choiceLabel(publisher)) { onOpenPublisher?(publisher.name) }
+            // Indexed, not `id: \.name`: a publisher listed twice under one
+            // name with a different `type` (an Original and an English
+            // entry) is a duplicate id keyed by name.
+            ForEach(Array((series.publishers ?? []).enumerated()), id: \.offset) { _, publisher in
+                Button(Self.choiceLabel(publisher)) {
+                    onOpenPublisher?(publisher.name.trimmingCharacters(in: .whitespaces))
+                }
             }
         }
     }
@@ -176,7 +204,8 @@ struct DetailCredits: View {
     }
 
     private func opensAuthor(_ row: Row) -> Bool {
-        (row.id == "Story & art" || row.id == "Art") && onOpenAuthor != nil && !creators(for: row).isEmpty
+        (row.id == "Story & art" || row.id == "Story" || row.id == "Art")
+            && onOpenAuthor != nil && !creators(for: row).isEmpty
     }
 
     /// The names behind a credits row: authors for "Story & art", artists

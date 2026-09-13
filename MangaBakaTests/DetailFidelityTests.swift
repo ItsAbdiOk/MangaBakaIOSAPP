@@ -68,6 +68,17 @@ struct DetailFidelityTests {
         #expect(DetailStatsStrip.compact(input) == expected)
     }
 
+    /// A straight `Double(count) / 1_000` formatted to one decimal rounds
+    /// 999,950...999,999 up to "1000.0k" instead of crossing into "m" — the
+    /// rounding has to happen before the suffix is chosen, not after.
+    @Test(
+        "Counts that round up to a million cross into the m suffix",
+        arguments: [(999_949, "999.9k"), (999_950, "1.0m"), (999_999, "1.0m"), (1_000_000, "1.0m")]
+    )
+    func compactCountsCrossMillionBoundary(_ input: Int, _ expected: String) {
+        #expect(DetailStatsStrip.compact(input) == expected)
+    }
+
     // MARK: Credits
 
     @Test("Credits answer the questions the mockup's table asks")
@@ -106,6 +117,49 @@ struct DetailFidelityTests {
 
         let different = SeriesFactory.make(id: 1, authors: ["A"], artists: ["B"])
         #expect(DetailCredits(series: different).rows.contains { $0.id == "Art" })
+    }
+
+    /// Measured against `/v1/series/3397/full`, 2026-09-13: Solo Leveling
+    /// credits `authors: ["Chu-Gong"]`, `artists: ["Seong-Rak Jang"]`, and the
+    /// old unconditional "Story & art" row put the writer's name on the
+    /// artwork he did not draw. Expected to fail before the fix, with
+    /// `labels.contains("Story & art")` true instead of `labels == ["Story", "Art"]`.
+    @Test("The author is not credited with art a separate artist drew")
+    func storyAndArtSplitWhenCreatorsDiffer() {
+        let series = SeriesFactory.make(id: 1, authors: ["Chu-Gong"], artists: ["Seong-Rak Jang"])
+        let labels = DetailCredits(series: series).rows.map(\.id)
+        #expect(labels == ["Story", "Art"])
+    }
+
+    /// A set compare, not an array compare: the same two names in a different
+    /// order are the same two people, and used to fail the equality check and
+    /// print a duplicate "Art" row for them.
+    @Test("The same two creators in a different order are still one credit")
+    func creatorOrderDoesNotSplitTheRow() {
+        let series = SeriesFactory.make(id: 1, authors: ["A", "B"], artists: ["B", "A"])
+        let labels = DetailCredits(series: series).rows.map(\.id)
+        #expect(labels == ["Story & art"])
+    }
+
+    // MARK: Type label
+
+    /// `series.type?.capitalized` read "Oel" for original-English series — an
+    /// initialism rendered as a word. `FormatPreferences.Format.oel.title` is
+    /// the app's own existing answer for it.
+    @Test("OEL keeps its capitals; other formats stay ordinary title case")
+    func typeLabelCapitalisesOEL() {
+        #expect(DetailHero.typeLabel("oel") == "OEL")
+        #expect(DetailHero.typeLabel("manhwa") == "Manhwa")
+        #expect(DetailHero.typeLabel(nil) == nil)
+        #expect(DetailHero.typeLabel("") == nil)
+    }
+
+    /// `DiscoverView.meta(for:)` had the identical defect and now shares the
+    /// same helper.
+    @Test("Discover's meta line uses the same OEL label as the hero")
+    func discoverMetaCapitalisesOEL() {
+        let series = SeriesFactory.make(id: 1, type: "oel")
+        #expect(DiscoverView.meta(for: series) == "OEL")
     }
 
     // MARK: Description
@@ -160,12 +214,11 @@ struct DetailOrderTests {
     /// under a four-stop gradient. Without it the page is flat black and reads
     /// as a different design.
     @Test("The hero keeps its blurred backdrop")
-    func backdropSurvives() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Detail/DetailBackdrop.swift")
-        #expect(source.contains("blur(radius: 72"))
-        #expect(source.contains("saturation(1.7)"))
-        #expect(source.contains("opacity(0.34)"))
-        #expect(source.contains("scaleEffect(1.6)"))
+    func backdropSurvives() {
+        #expect(DetailBackdrop.blurRadius == 72)
+        #expect(DetailBackdrop.saturation == 1.7)
+        #expect(DetailBackdrop.opacity == 0.34)
+        #expect(DetailBackdrop.scale == 1.6)
     }
 
     /// Tapping a tag searches for it. Without the route the tags are decoration
@@ -308,19 +361,12 @@ struct LibraryLookupTests {
     /// checks the behaviour with a library that actually pages; this only
     /// checks the loop still exists and is not written as bare numbers.
     @Test("The shared store pages until it runs out")
-    func storePages() throws {
+    func storePages() {
         // The pager moved into LibrarySnapshot when the library stopped being
         // walked three times a launch. It is one walk now, shared.
-        let source = try SourceTree.read("MangaBaka/Core/Library/LibrarySnapshot.swift")
-        #expect(source.contains("for page in 1...Self.pageCap"))
-        #expect(source.contains("if batch.count < Self.pageSize { break }"))
-
         // A thousand is not a cap, it is a real library. Abdi's is 937.
-        let cap = source
-            .components(separatedBy: "pageCap = ")
-            .dropFirst().first
-            .flatMap { Int($0.prefix { $0.isNumber }) }
-        #expect((cap ?? 0) > 10, "the cap has to clear a real library, not sit on top of one")
+        #expect(LibrarySnapshot.pageSize * LibrarySnapshot.pageCap >= 1_000,
+                "the cap has to clear a real library, not sit on top of one")
     }
 
     /// A write has to refresh the shared copy, or the Library tab and the

@@ -31,9 +31,14 @@ final class SessionModels {
         libraryService: any LibraryProviding,
         snapshot: LibrarySnapshot,
         client: APIClient,
-        allowedRatings: @escaping () -> [String]
+        allowedRatings: @escaping () -> [String],
+        allowedFormats: @escaping () -> [String] = { [] },
+        blockedTags: @escaping () -> [Int] = { [] }
     ) {
-        recentlyViewed = RecentlyViewedModel(history: history, allowedRatings: allowedRatings)
+        recentlyViewed = RecentlyViewedModel(
+            history: history, allowedRatings: allowedRatings,
+            allowedFormats: allowedFormats, blockedTags: blockedTags
+        )
         counts = LensCounts(repository: repository)
         library = LibraryModel(library: libraryService, snapshot: snapshot)
         pulse = CommunityPulseService(client: client)

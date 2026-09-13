@@ -259,7 +259,7 @@ struct DiscoverView: View {
     /// "Manhwa · 8.6". Each half only when the API supplied it.
     static func meta(for series: Series) -> String? {
         var parts: [String] = []
-        if let type = series.type, !type.isEmpty { parts.append(type.capitalized) }
+        if let label = DetailHero.typeLabel(series.type) { parts.append(label) }
         if let rating = series.rating { parts.append(String(format: "%.1f", rating / 10)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

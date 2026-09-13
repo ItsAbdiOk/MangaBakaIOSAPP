@@ -125,7 +125,9 @@ struct AppServices {
             libraryService: libraryService,
             snapshot: sharedLibrary,
             client: client,
-            allowedRatings: { store.preferences.allowed.map(\.rawValue) }
+            allowedRatings: { store.preferences.allowed.map(\.rawValue) },
+            allowedFormats: { formatStore.preferences.queryValues },
+            blockedTags: { blocked.blocked.ids }
         )
     }
 
