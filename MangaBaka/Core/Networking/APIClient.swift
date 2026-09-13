@@ -393,7 +393,11 @@ actor APIClient {
         "blend_user_id"
     ]
 
-    private func makeRequest(path: String, query: [URLQueryItem]) throws(APIError) -> URLRequest {
+    private func makeRequest(
+        path: String,
+        query: [URLQueryItem],
+        ifModifiedSince: String? = nil
+    ) throws(APIError) -> URLRequest {
         guard var components = URLComponents(
             url: baseURL.appendingPathComponent(path),
             resolvingAgainstBaseURL: false
@@ -427,7 +431,100 @@ actor APIClient {
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        // Sent verbatim — the server's own `Last-Modified` string, never
+        // reformatted. A re-formatted date can miss the byte-for-byte match
+        // the server is comparing against and never answer 304 at all.
+        if let ifModifiedSince, !ifModifiedSince.isEmpty {
+            request.setValue(ifModifiedSince, forHTTPHeaderField: "If-Modified-Since")
+        }
         return request
+    }
+}
+
+/// The conditional-GET half of the client, split from the actor body itself
+/// so the primary type stays under `type_body_length` — same reason the
+/// decoding/date-parsing extension below exists. `private` members
+/// (`perform`, `decoder`, `limiter`, `makeRequest`) stay reachable: Swift's
+/// `private` is scoped to the enclosing declaration and its extensions *in
+/// the same file*, and this is that file.
+extension APIClient {
+    /// What a conditional `get` produced.
+    enum Conditional<Payload: Sendable>: Sendable {
+        /// HTTP 304: the server confirms the cached copy is still current.
+        /// MEASURED 2026-09-13 against api.mangabaka.org: the body is
+        /// zero bytes, so there is nothing here to decode.
+        case notModified
+        /// HTTP 2xx: a payload, and the response's own `Last-Modified` value
+        /// — kept as the server sent it, byte for byte, so the next request's
+        /// `If-Modified-Since` is an exact echo rather than a reformatting
+        /// that could miss the match.
+        case fresh(Payload, lastModified: String?)
+    }
+
+    /// The same fetch as `get`, but conditional on `ifModifiedSince`, and
+    /// answering whether anything actually changed rather than always paying
+    /// for the full body.
+    ///
+    /// MEASURED 2026-09-13 against api.mangabaka.org: responses carry no
+    /// `ETag` at all — only `Last-Modified` (e.g.
+    /// "Sun, 13 Sep 2026 13:56:53 GMT") and `cache-control: public,
+    /// max-age=60`. Repeating that exact value back as `If-Modified-Since`
+    /// gets a 304 with a zero-byte body; `/v1/series/{id}` carries
+    /// `Last-Modified` too. So this is Last-Modified/If-Modified-Since, not
+    /// the ETag scheme `get` has no need of.
+    ///
+    /// A separate method rather than widening `get`: every existing caller
+    /// wants a payload or nothing, and changing what `get` returns for a 304
+    /// would force all of them to switch over a case they never asked for.
+    ///
+    /// A 304 is a success path, never an `APIError` — it goes through
+    /// `perform`, so it still counts against the rate-limit gate's own
+    /// per-IP/per-window counters exactly like any other request (it *was* a
+    /// real request against the limit), but it must never trip the 429
+    /// backoff, and it clears any backoff already standing exactly like any
+    /// other 2xx would.
+    ///
+    /// - Parameter ifModifiedSince: the value to send verbatim, or `nil` to
+    ///   send no conditional header at all — which makes this behave exactly
+    ///   like an ordinary `get` (always 200, decoded and returned as
+    ///   `.fresh`). Used for the "no cached copy yet" case, so a caller does
+    ///   not need two code paths.
+    func get<Payload: Decodable & Sendable>(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        ifModifiedSince: String?,
+        as _: Payload.Type = Payload.self
+    ) async throws(APIError) -> Conditional<Payload> {
+        let request = try makeRequest(path: path, query: query, ifModifiedSince: ifModifiedSince)
+        let (data, http) = try await perform(request, path: path)
+
+        if http.statusCode == 304 {
+            // A success, not a failure: a run of "nothing changed" answers
+            // must not be mistaken for a run of failures and trip the 429
+            // backoff logic that lives only in `perform`'s 429 branch.
+            await limiter.recordSuccess()
+            return .notModified
+        }
+
+        guard (200...299).contains(http.statusCode) else {
+            let message = (try? decoder.decode(APIErrorEnvelope.self, from: data))?.message
+            throw APIError.server(
+                status: http.statusCode,
+                message: message ?? "MangaBaka returned an unexpected response."
+            )
+        }
+        await limiter.recordSuccess()
+
+        let envelope: APIEnvelope<Payload>
+        do {
+            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+        guard let payload = envelope.data else {
+            throw APIError.decoding(underlying: "Successful response carried no `data`.")
+        }
+        return .fresh(payload, lastModified: http.value(forHTTPHeaderField: "Last-Modified"))
     }
 }
 

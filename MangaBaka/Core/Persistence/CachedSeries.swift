@@ -105,4 +105,10 @@ struct FeedMetadata: Codable, FetchableRecord, PersistableRecord, Sendable {
 
     var feedKey: String
     var cachedAt: Date
+    /// The feed's own `Last-Modified` response header, kept verbatim so the
+    /// next fetch can send it back as `If-Modified-Since` — see
+    /// `AppDatabase`'s `v10_feedLastModified` migration for the measurement.
+    /// Nil for a feed cached before that migration, or one this build has
+    /// never fetched; either way the next request is simply unconditional.
+    var lastModified: String?
 }

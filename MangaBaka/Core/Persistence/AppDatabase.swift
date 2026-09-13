@@ -306,6 +306,20 @@ struct AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v10_feedLastModified") { db in
+            // The feed's own `Last-Modified` header value, kept verbatim so
+            // the next fetch can send it back as `If-Modified-Since`.
+            // MEASURED 2026-09-13 against api.mangabaka.org: feed responses
+            // carry no `ETag`, only `Last-Modified` (e.g. "Sun, 13 Sep 2026
+            // 13:56:53 GMT") — repeating it gets a 304 with a zero-byte body.
+            // Nullable: every row already on disk predates this column, and
+            // a feed with no recorded value simply fetches unconditionally,
+            // exactly as it always has.
+            try db.alter(table: "feedMetadata") { table in
+                table.add(column: "lastModified", .text)
+            }
+        }
+
         return migrator
     }
 }

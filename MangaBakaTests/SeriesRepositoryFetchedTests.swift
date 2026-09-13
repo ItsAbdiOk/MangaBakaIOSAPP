@@ -187,4 +187,39 @@ struct SeriesRepositoryFetchedTests {
         let repository = try makeRepository(clock: TestClock())
         #expect(await repository.discardCachedFeeds() == true)
     }
+
+    /// This suite is about telling "asked and it failed" from "asked and
+    /// there was nothing wrong" — and a 304 revalidation (see
+    /// `FeedRevalidationTests` for the full behaviour, and the measurement it
+    /// rests on) is exactly the case in between: the network answered, and
+    /// the answer is "you already have the current copy". That must read as
+    /// current (`.cache`), never as `.staleAfter` — the family reserved for
+    /// when the network genuinely could not be reached.
+    @Test("A 304 revalidation is current, not a stale fallback")
+    func notModifiedIsNotTreatedAsAFailure() async throws {
+        let feedBody = Data(#"""
+        {"status":200,"data":[{"id":1,"state":"active","merged_with":null,
+         "titles":[{"language":"en","traits":["official"],"title":"S1","is_primary":true}],
+         "cover":{"raw":null,"x150":null,"x250":null,"x350":null,"blurhash":null,
+                  "width":null,"height":null},
+         "description":null,"authors":null,"artists":null,"status":null,
+         "rating":null,"type":null,"content_rating":null}]}
+        """#.utf8)
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: feedBody, headers: ["Last-Modified": "Sun, 13 Sep 2026 13:56:53 GMT"]))
+        }
+        let clock = TestClock()
+        let repository = try makeRepository(clock: clock)
+        _ = await repository.feed(.rising, forceRefresh: false)
+        URLProtocolStub.reset()
+
+        clock.advance(by: FeedKind.rising.freshness + 1)
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 304, body: Data())) }
+        defer { URLProtocolStub.reset() }
+        let result = await repository.feed(.rising, forceRefresh: false)
+
+        #expect(result.origin == .cache, "A confirmed-current answer is not a network failure")
+        #expect(result.blockingError == nil)
+        #expect(result.series.map(\.id) == [1])
+    }
 }

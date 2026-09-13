@@ -47,6 +47,17 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// it rather than assuming an empty section means there was nothing to
     /// show (gap 9, FAILURES-SUMMARY.md).
     func extras(for seriesId: Int) async -> SeriesExtras
+    /// The series-page extras already sitting in the six-hour detail cache,
+    /// with no network call and no six-leg `extras(for:)` fetch — only what a
+    /// previous visit to the page already paid for and cached.
+    ///
+    /// `DueThisWeekIntent` (Siri) uses this to find a library series' release
+    /// links: firing `extras(for:)`'s six concurrent legs per series from a
+    /// background intent would turn "what's due this week" into dozens of
+    /// requests for a screen the reader never opened. Nil when nothing is
+    /// cached — the caller simply has no links to check for that series,
+    /// the same as if it had none.
+    func cachedExtras(for seriesId: Int) async -> SeriesExtras?
     /// One series by id, for a deep link, Siri or Spotlight — a single read,
     /// not the six `extras` legs. Nil when it cannot be fetched.
     func series(id: Int) async -> Series?
@@ -419,6 +430,19 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             return FeedResult(series: fresh, origin: .cache)
         }
 
+        // Whatever is already on disk for this feed, stale or not — read once
+        // up front so a 304 can serve it and a genuine failure can fall back
+        // to it, without a second database round trip for either.
+        //
+        // `lastModified` is what makes the request below conditional.
+        // MEASURED 2026-09-13 against api.mangabaka.org: feed responses carry
+        // no `ETag`, only `Last-Modified` (e.g. "Sun, 13 Sep 2026 13:56:53
+        // GMT") and `cache-control: public, max-age=60`; sending that value
+        // back as `If-Modified-Since` gets a 304 with a zero-byte body. Nil
+        // here — no prior cache, or one written before this shipped — makes
+        // the request below unconditional, i.e. today's behaviour exactly.
+        let existing = (try? readCacheWithDate(feed, requireFresh: false)) ?? CachedFeed()
+
         do {
             var query = [URLQueryItem(name: "limit", value: String(feed.limit))]
             query.append(contentsOf: feed.extraQuery)
@@ -427,25 +451,40 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // never cached, and never briefly visible while a client-side
             // filter catches up.
             query.append(contentsOf: filterQuery())
-            let series: [Series]
-            if feed.isRecommendationShaped {
-                let wrapped: [Recommendation] = try await client.get(feed.path, query: query)
-                series = wrapped.map(\.series)
-            } else {
-                series = try await client.get(feed.path, query: query)
+
+            // Split into SeriesRepository+Cache.swift only for the lint's
+            // line-count ceiling on this type — collapses the two response
+            // shapes (recommendation-wrapped or bare) into one
+            // `Conditional<[Series]>`.
+            let conditional = try await fetchConditionalFeed(
+                feed, query: query, ifModifiedSince: existing.lastModified
+            )
+
+            switch conditional {
+            case .notModified:
+                // The server just confirmed the rows on disk are still
+                // exactly right. Nothing to rewrite — only the freshness
+                // clock needed resetting, so the next visit inside the TTL
+                // reads as a plain cache hit again instead of revalidating a
+                // second time. `.cache`, not `.network`: what is returned did
+                // not come off the wire, it is the same rows that were
+                // already here, merely confirmed current — and no other
+                // `.cache` result in this repository carries a `cachedAt`
+                // either.
+                try? touchFeedMetadata(feed)
+                return FeedResult(series: existing.series, origin: .cache)
+            case let .fresh(series, lastModified):
+                let discoverable = series.filter { $0.isDiscoverable && allowsFormat($0) }
+                try? write(discoverable, for: feed, lastModified: lastModified)
+                return FeedResult(series: discoverable, origin: .network)
             }
-            let discoverable = series.filter { $0.isDiscoverable && allowsFormat($0) }
-            try? write(discoverable, for: feed)
-            return FeedResult(series: discoverable, origin: .network)
         } catch {
             // Falling back to stale cache is the whole point of the cache on a
             // train. An empty result here is handled by `blockingError`.
-            let stale: (series: [Series], cachedAt: Date?) =
-                (try? readCacheWithDate(feed, requireFresh: false)) ?? (series: [], cachedAt: nil)
             return FeedResult(
-                series: stale.series,
+                series: existing.series,
                 origin: .staleAfter(error),
-                cachedAt: stale.cachedAt
+                cachedAt: existing.cachedAt
             )
         }
     }
@@ -701,6 +740,12 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         return try? await client.get("/v1/series/\(id)")
     }
 
+    /// See the protocol doc: whatever `readDetailCache` already holds, never
+    /// a fetch.
+    func cachedExtras(for seriesId: Int) async -> SeriesExtras? {
+        try? readDetailCache(seriesId)
+    }
+
     func extras(for seriesId: Int) async -> SeriesExtras {
         if let cached = try? readDetailCache(seriesId) { return cached }
         let fresh = await fetchExtras(for: seriesId)
@@ -825,4 +870,9 @@ extension SeriesRepositoryProtocol {
     /// Stubs and any repository without a cheaper path fall back to the
     /// full record `extras` fetches.
     func series(id: Int) async -> Series? { await extras(for: id).full }
+
+    /// Nil by default: a stub has nothing cached, and a repository with no
+    /// cheaper path than `extras(for:)` should not be made to pay for a
+    /// network fetch just to answer "is anything cached".
+    func cachedExtras(for seriesId: Int) async -> SeriesExtras? { nil }
 }

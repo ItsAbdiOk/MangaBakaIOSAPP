@@ -142,35 +142,45 @@ extension SeriesRepository {
         try readCacheWithDate(feed, requireFresh: requireFresh).series
     }
 
-    /// The cached feed and when it was written.
+    /// What is on disk for one feed: its rows, when they were written, and
+    /// the `Last-Modified` they were written under.
     ///
-    /// The date is what lets a stale screen say "last updated 19 hours ago"
-    /// rather than the bare fact that a refresh failed. An age a reader can
-    /// judge is the difference between "this is yesterday's, fine" and "this
-    /// might be a week old, and I should worry".
+    /// A struct rather than a 3-member tuple (the lint's own cap) — `cachedAt`
+    /// is what lets a stale screen say "last updated 19 hours ago" rather
+    /// than the bare fact that a refresh failed; `lastModified` is what lets
+    /// a stale-but-present cache be revalidated with a conditional request
+    /// instead of a full re-download — see `SeriesRepository.feed`.
+    struct CachedFeed {
+        var series: [Series] = []
+        var cachedAt: Date?
+        var lastModified: String?
+    }
+
     func readCacheWithDate(
         _ feed: FeedKind,
         requireFresh: Bool
-    ) throws -> (series: [Series], cachedAt: Date?) {
+    ) throws -> CachedFeed {
         try database.writer.read { db in
             let metadata = try FeedMetadata
                 .filter(Column("feedKey") == feed.cacheKey)
                 .fetchOne(db)
 
             if requireFresh {
-                guard let metadata else { return ([], nil) }
+                guard let metadata else { return CachedFeed() }
 
                 let age = clock.now.timeIntervalSince(metadata.cachedAt)
                 // A negative age means the device clock moved backwards; treat
                 // that as stale rather than trusting it.
-                guard age >= 0, age < feed.freshness else { return ([], nil) }
+                guard age >= 0, age < feed.freshness else { return CachedFeed() }
             }
 
             let entries = try FeedEntry
                 .filter(Column("feedKey") == feed.cacheKey)
                 .order(Column("position"))
                 .fetchAll(db)
-            guard !entries.isEmpty else { return ([], metadata?.cachedAt) }
+            guard !entries.isEmpty else {
+                return CachedFeed(cachedAt: metadata?.cachedAt, lastModified: metadata?.lastModified)
+            }
 
             let rows = try CachedSeries
                 .filter(entries.map(\.seriesId).contains(Column("id")))
@@ -194,11 +204,13 @@ extension SeriesRepository {
                     return try decoder.decode(Series.self, from: row.payload)
                 }
                 .filter(allowsFormat)
-            return (series, metadata?.cachedAt)
+            return CachedFeed(
+                series: series, cachedAt: metadata?.cachedAt, lastModified: metadata?.lastModified
+            )
         }
     }
 
-    func write(_ series: [Series], for feed: FeedKind) throws {
+    func write(_ series: [Series], for feed: FeedKind, lastModified: String? = nil) throws {
         let now = clock.now
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -219,8 +231,58 @@ extension SeriesRepository {
                 try FeedEntry(feedKey: feed.cacheKey, position: index, seriesId: item.id)
                     .insert(db)
             }
-            try FeedMetadata(feedKey: feed.cacheKey, cachedAt: now).save(db)
+            try FeedMetadata(feedKey: feed.cacheKey, cachedAt: now, lastModified: lastModified).save(db)
             try Self.trimOrphans(db)
+        }
+    }
+
+    /// Fetches a feed conditionally and collapses its two response shapes
+    /// into one `Conditional<[Series]>`: `isRecommendationShaped` endpoints
+    /// wrap each series in a recommendation envelope, the rest return series
+    /// directly.
+    ///
+    /// Split out of `SeriesRepository.feed` only for the lint's line-count
+    /// ceiling on that type's body — this is still feed-fetching, not
+    /// cache-reading, but every other seam in this actor was already claimed
+    /// by a more specific split (`+Paging`, `+Count`).
+    func fetchConditionalFeed(
+        _ feed: FeedKind,
+        query: [URLQueryItem],
+        ifModifiedSince: String?
+    ) async throws(APIError) -> APIClient.Conditional<[Series]> {
+        guard feed.isRecommendationShaped else {
+            return try await client.get(feed.path, query: query, ifModifiedSince: ifModifiedSince)
+        }
+        let wrapped: APIClient.Conditional<[Recommendation]> = try await client.get(
+            feed.path, query: query, ifModifiedSince: ifModifiedSince
+        )
+        switch wrapped {
+        case .notModified:
+            return .notModified
+        case let .fresh(recommendations, lastModified):
+            return .fresh(recommendations.map(\.series), lastModified: lastModified)
+        }
+    }
+
+    /// Resets a feed's freshness clock without touching a single row.
+    ///
+    /// The whole point of a 304: the server has just confirmed the rows on
+    /// disk are still exactly right, so there is nothing to re-encode or
+    /// reorder — only `cachedAt` needed moving forward so the next visit
+    /// reads as fresh again instead of immediately trying to revalidate a
+    /// second time.
+    func touchFeedMetadata(_ feed: FeedKind) throws {
+        let now = clock.now
+        try database.writer.write { db in
+            guard let existing = try FeedMetadata
+                .filter(Column("feedKey") == feed.cacheKey)
+                .fetchOne(db)
+            else { return }
+            try FeedMetadata(
+                feedKey: feed.cacheKey,
+                cachedAt: now,
+                lastModified: existing.lastModified
+            ).save(db)
         }
     }
 
