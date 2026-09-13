@@ -215,11 +215,28 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
   fonts and 44 fixed heights outside the detail page, listed by the agent, not
   fixed. **Not verified on a device at AX sizes.**
 
+- **Deep review, data-shape focus, all 77 findings fixed** — `docs/reviews/SUMMARY.md`,
+  commits `cfe6cb8`…`b55b222`. Seven Sonnet fixers by file ownership, one compile.
+  Headline causes: matchers fitted to one publisher (12 sites), Codable fields typed
+  without a captured payload (publisher `founded` was `Int?`, wire sends a date; the
+  anime row read a v2-only key), UTC dates read locally, empty answers cached as
+  long as good ones. 120 new tests, fixtures now real captures (French Webtoons
+  feed, 72-item GigaViewer magazine, Kodansha/Seven Seas/VIZ titles). Honest gaps:
+  the repository-filter drift test is a lock, not a proof (no live drift found);
+  nested same-tag BBCode spoilers still split early; Google Books still mostly
+  answers nothing (quota).
+- **Apple Books: Square Enix numbering** — `df43edc`. The Apothecary Diaries
+  showed six light novels instead of sixteen manga volumes.
+
 ## Next, in the order I would do it
 
-1. **18+ age rating in App Store Connect**, and confirm which tier applies now
+1. **Every point of failure has a screen.** Abdi, 2026-09-13: audit each place a
+   request, decode, third party, or trap can fail, and make sure the reader sees
+   a loading state and an honest explanation rather than a blank or a crash.
+   Read-only sweep per screen group first, then one fix batch with tests.
+2. **18+ age rating in App Store Connect**, and confirm which tier applies now
    that Apple has moved to 13+/16+/18+.
-2. **App Store screenshots without real manga covers.** Nothing exists yet, so
+3. **App Store screenshots without real manga covers.** Nothing exists yet, so
    nothing is wrong yet; the constraint applies to the icon and promo text too.
 
 ## Explicitly not doing
