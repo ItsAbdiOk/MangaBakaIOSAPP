@@ -384,6 +384,96 @@ struct WebtoonsFeedClientTests {
     }
 }
 
+/// `cachedFeed`, the read-only counterpart `ReleaseFeedService.cachedFeeds`
+/// calls from `RootView+Session.refreshReminders` — no request, no sleep, and
+/// (unlike `feed(for:links:)`) no freshness gate: a stale season-ended fact is
+/// still true.
+@Suite("Webtoons cachedFeed", .serialized)
+struct WebtoonsCachedFeedTests {
+    private func makeClient(clock: TestClock, cacheDirectory: URL) -> WebtoonsFeedClient {
+        WebtoonsFeedClient(
+            session: URLProtocolStub.makeSession(), clock: clock, cacheDirectory: cacheDirectory
+        )
+    }
+
+    private let link = SeriesLink(
+        id: "1", url: URL(string: "https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95"),
+        name: "webtoons", nameDisplay: nil, type: "webplatform", language: "en"
+    )
+
+    private let rss = Data(#"""
+    <?xml version="1.0"?>
+    <rss version="2.0"><channel><title>Tower of God</title>
+    <item><title>Episode 235</title><pubDate>Thu, 11 Sep 2026 15:00:00 GMT</pubDate></item>
+    </channel></rss>
+    """#.utf8)
+
+    /// Expected failure before `cachedFeed` existed: this would not compile —
+    /// `ReleaseFeedProvider` had no such method, only `feed(for:links:)`,
+    /// which costs a network call `refreshReminders` cannot afford to make
+    /// once per library series.
+    @Test("The same v4- key feed(for:) writes is read back, with no request")
+    func readsWhatFeedWrote() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 95, title: "Tower of God")
+
+        _ = await client.feed(for: series, links: [link])
+        #expect(URLProtocolStub.requests.count == 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.episodes.map(\.number) == [235])
+        #expect(URLProtocolStub.requests.count == 1, "cachedFeed must not make a request")
+    }
+
+    @Test("Nothing cached yet answers nil")
+    func nilWithNothingCached() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 95, title: "Tower of God")
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached == nil)
+    }
+
+    @Test("A series with no Webtoons-shaped link answers nil, not a lookup")
+    func nilForUnservedLinks() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 95, title: "Tower of God")
+
+        let cached = await client.cachedFeed(for: series, links: [])
+        #expect(cached == nil)
+    }
+
+    /// The one place `cachedFeed` deliberately differs from `feed(for:links:)`:
+    /// a stale cache still answers, per Abdi's brief — "a stale season-ended is
+    /// still season-ended". `feed(for:links:)`'s own cache read would have
+    /// treated this file as expired and gone to the network.
+    @Test("A cache older than cacheLife still answers — age is ignored")
+    func staleCacheStillAnswers() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 95, title: "Tower of God")
+
+        _ = await client.feed(for: series, links: [link])
+        clock.advance(by: WebtoonsFeedClient.cacheLife + 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.episodes.map(\.number) == [235])
+    }
+}
+
 /// Rewriting a landed feed URL's language to English. See
 /// `WebtoonsFeedParser.englishVariant` and finding 2 in
 /// `docs/reviews/reader.md`, 2026-09-13.

@@ -74,7 +74,8 @@ private enum ContactedHosts {
         "shonenmagazine.com",
         "comic-gardo.com",
         "comic-earthstar.com",
-        "api.mangaupdates.com"
+        "api.mangaupdates.com",
+        "covers.openlibrary.org"
     ]
 }
 

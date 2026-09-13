@@ -200,3 +200,86 @@ struct NaverFeedClientTests {
         #expect(URLProtocolStub.requests.count == 2)
     }
 }
+
+/// `cachedFeed`: the read-only path `ReleaseFeedService.cachedFeeds` uses so
+/// `RootView+Session.refreshReminders` can test the Naver-finished condition
+/// without a request per library series.
+@Suite("Naver cachedFeed", .serialized)
+struct NaverCachedFeedTests {
+    private func makeClient(clock: TestClock, cacheDirectory: URL) -> NaverFeedClient {
+        NaverFeedClient(session: URLProtocolStub.makeSession(), clock: clock, cacheDirectory: cacheDirectory)
+    }
+
+    private let link = SeriesLink(
+        id: "1", url: URL(string: "https://comic.naver.com/webtoon/list?titleId=183559"),
+        name: "naver", nameDisplay: nil, type: "webplatform", language: "ko"
+    )
+
+    private let answer = Data(#"""
+    {"totalCount": 653, "finished": true, "articleList": [
+      {"no": 653, "subtitle": "3부 235화", "serviceDateDescription": "25.02.02", "volumeNo": 3}
+    ]}
+    """#.utf8)
+
+    /// Expected failure before `cachedFeed` existed: does not compile —
+    /// `NaverFeedClient` had no such method.
+    @Test("The same v2-naver- key feed(for:) writes is read back, with no request")
+    func readsWhatFeedWrote() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("naver-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+        _ = await client.feed(for: series, links: [link])
+        #expect(URLProtocolStub.requests.count == 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.finished == true)
+        #expect(URLProtocolStub.requests.count == 1, "cachedFeed must not make a request")
+    }
+
+    @Test("Nothing cached yet answers nil")
+    func nilWithNothingCached() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("naver-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached == nil)
+    }
+
+    @Test("A series with no Naver link answers nil")
+    func nilForUnservedLinks() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("naver-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+        let cached = await client.cachedFeed(for: series, links: [])
+        #expect(cached == nil)
+    }
+
+    /// "A stale season-ended is still season-ended" — Abdi's brief. A finished
+    /// original a week past `cacheLife` must still read as finished, unlike
+    /// `feed(for:links:)`'s own read, which would treat the file as expired.
+    @Test("A cache older than cacheLife still answers — age is ignored")
+    func staleCacheStillAnswers() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("naver-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+        _ = await client.feed(for: series, links: [link])
+        clock.advance(by: NaverFeedClient.cacheLife + 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.finished == true)
+    }
+}

@@ -227,6 +227,17 @@ From the 2026-09-11 deep review (`docs/reviews/SUMMARY.md` has the ids).
   answers nothing (quota).
 - **Apple Books: Square Enix numbering** — `df43edc`. The Apothecary Diaries
   showed six light novels instead of sixteen manga volumes.
+- **Notifications cut to two conditions** — `NotificationPolicy` (new). Per
+  Abdi: only a confirmed release out now, or a reading/paused series
+  completing or ending a season. Cadence predictions, the monthly backlog
+  nudge, the "back to it" nudge, and the publisher-follow notification are
+  deleted, not gated off. `ReleaseReminders.reschedule` no longer rebuilds a
+  calendar (`predicted`/`lastOpened`/`readingHour` are gone from its
+  signature); it notifies once per event through the existing `notify()` path,
+  capped at 3/day (a guess) with a 24h same-series cooldown. Feed-confirmed
+  episodes, season-ended and Naver-finished are wired in `NotificationPolicy`
+  but currently never fire in the app: `RootView+Session.refreshReminders`
+  has no `[Int: ReleaseFeed]` cache to pass without adding a network call.
 
 - **Failure audit, all 123 gaps fixed** — `docs/reviews/FAILURES-SUMMARY.md`,
   commits `9143277`, `67916a9`, `d4cd541`. Every request, decode, third party

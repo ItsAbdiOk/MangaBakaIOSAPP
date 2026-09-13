@@ -491,6 +491,40 @@ struct AppleVolumesRowTests {
     }
 }
 
+/// Which shelf spines are worth asking `OpenLibraryCovers` about at all —
+/// the ones neither Apple nor Google sent artwork for.
+@Suite("Open Library gap detection on the shelf")
+struct VolumeShelfOpenLibraryTests {
+    private func volume(
+        _ number: Int, artwork: URL?, source: ShelfVolume.Source = .appleBooks
+    ) -> ShelfVolume {
+        let cover = Cover(
+            raw: artwork, x150: nil, x250: nil, x350: nil, blurhash: nil, width: nil, height: nil
+        )
+        return ShelfVolume(number: number, cover: cover, link: nil, formattedPrice: nil, source: source)
+    }
+
+    @Test("Only the numbers with no artwork of their own are flagged")
+    func onlyBareNumbersFlagged() {
+        let art = URL(string: "https://example.com/1.jpg")
+        let volumes = [volume(1, artwork: art), volume(2, artwork: nil)]
+        #expect(VolumeShelf.numbersNeedingCovers(volumes) == [2])
+    }
+
+    @Test("Attribution names Open Library only when it was actually used")
+    func attributionNamesOpenLibraryOnlyWhenUsed() {
+        let volumes = [volume(1, artwork: nil)]
+        #expect(VolumeShelf.attribution(for: volumes) == "Apple Books")
+        #expect(
+            VolumeShelf.attribution(for: volumes, openLibraryUsed: true) == "Apple Books & Open Library"
+        )
+        let both = volumes + [volume(2, artwork: nil, source: .googleBooks)]
+        #expect(
+            VolumeShelf.attribution(for: both, openLibraryUsed: true) == "Apple & Google Books & Open Library"
+        )
+    }
+}
+
 /// S2: `SeriesWork.date` parses a release date as UTC midnight on purpose —
 /// reading it back through the device's own calendar rolls a 1 January
 /// release onto 31 December of the previous year for every reader west of

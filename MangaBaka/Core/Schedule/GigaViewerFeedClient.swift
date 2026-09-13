@@ -51,11 +51,27 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
             return .failed(failure ?? fallback)
         }
 
-        let titles = Self.candidateTitles(for: series)
-        let matched = items.filter { item in titles.contains(Self.normalise(item.seriesTitle)) }
+        return .answered(Self.answer(matching: series, in: items, host: host))
+    }
+
+    /// See `ReleaseFeedProvider.cachedFeed`: the same per-host magazine cache
+    /// `feed(for:links:)` reads, filtered the same way — no request for the
+    /// magazine feed, and no spacing claim.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
+        guard let host = Self.matchingHost(in: links.compactMap(\.safeURL)) else { return nil }
+        guard let items = readCacheIgnoringAge("v1-giga-\(host)")?.items else { return nil }
+        return Self.answer(matching: series, in: items, host: host)
+    }
+
+    /// Filters a magazine's items down to one series' feed. Shared by
+    /// `feed(for:links:)` and `cachedFeed(for:links:)` so a network answer and
+    /// a cached one are turned into a `ReleaseFeed` by exactly the same rule.
+    private static func answer(matching series: Series, in items: [Item], host: String) -> ReleaseFeed? {
+        let titles = candidateTitles(for: series)
+        let matched = items.filter { item in titles.contains(normalise(item.seriesTitle)) }
         // The magazine answered; this series just is not in this issue. A
         // real answer with nothing usable, not a failure.
-        guard !matched.isEmpty else { return .answered(nil) }
+        guard !matched.isEmpty else { return nil }
 
         let entries = matched.map { item in
             let read = WebtoonsTitle.read(item.episodeTitle)
@@ -64,14 +80,12 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
                 number: read?.number, season: read?.season
             )
         }
-        // `matchingHost` above only ever returns a key of this same
-        // dictionary, so the fallback is unreachable — kept pointing at
+        // `matchingHost` only ever returns a key of this same dictionary, so
+        // the fallback is unreachable — kept pointing at
         // `ReleaseSource.gigaViewer.displayName` rather than its own copy of
         // the string, so there is one name to update, not two.
         let hostName = ReleaseSource.gigaViewerHostNames[host] ?? ReleaseSource.gigaViewer.displayName
-        return .answered(ReleaseFeed(
-            title: hostName, entries: entries, source: .gigaViewer, sourceName: hostName
-        ))
+        return ReleaseFeed(title: hostName, entries: entries, source: .gigaViewer, sourceName: hostName)
     }
 
     /// The host from a series' links that is one of the seven confirmed
@@ -165,11 +179,17 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
     }
 
     private func readCache(_ key: String) -> [Item]? {
-        guard let file = file(key), let data = try? Data(contentsOf: file),
-              let cached = try? JSONDecoder().decode(Cached.self, from: data),
+        guard let cached = readCacheIgnoringAge(key),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
         return cached.items
+    }
+
+    /// `readCache` without the freshness gate — see the `WebtoonsFeedClient`
+    /// sibling of the same name for why `cachedFeed` needs this.
+    private func readCacheIgnoringAge(_ key: String) -> Cached? {
+        guard let file = file(key), let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(Cached.self, from: data)
     }
 
     private func writeCache(_ key: String, _ items: [Item]) {

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import MangaBaka
 
@@ -7,18 +8,26 @@ import Testing
 private struct StubProvider: ReleaseFeedProvider {
     let source: ReleaseSource
     let answer: FeedAnswer
+    /// What `cachedFeed(for:links:)` answers — `answer.feed` by default, so a
+    /// stub built only for `report(for:)` tests still behaves sensibly if
+    /// `cachedFeeds` is ever run against it, but overridable for a
+    /// `cachedFeeds` test that wants cache and live-fetch answers to differ.
+    let cached: ReleaseFeed?
 
-    init(source: ReleaseSource, answer: ReleaseFeed?) {
+    init(source: ReleaseSource, answer: ReleaseFeed?, cached: ReleaseFeed? = nil) {
         self.source = source
         self.answer = .answered(answer)
+        self.cached = cached ?? answer
     }
 
-    init(source: ReleaseSource, answer: FeedAnswer) {
+    init(source: ReleaseSource, answer: FeedAnswer, cached: ReleaseFeed? = nil) {
         self.source = source
         self.answer = answer
+        self.cached = cached ?? answer.feed
     }
 
     func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer { answer }
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? { cached }
 }
 
 /// `ReleaseFeedService` is a pure function over its providers' answers, so
@@ -289,5 +298,95 @@ struct ReleaseFeedServiceTests {
         ])
         let report = await service.report(for: series, links: [], now: now)
         #expect(report.failedSources.isEmpty)
+    }
+}
+
+/// `cachedFeeds(for:links:)`: the read-only counterpart to `report(for:)` that
+/// `RootView+Session.refreshReminders` calls, over a batch of library entries
+/// rather than one series, and with no network call of its own — split out of
+/// `ReleaseFeedServiceTests` for the `type_body_length` lint cap, not because
+/// the two are testing different things.
+@Suite("Release feed service — cachedFeeds")
+struct ReleaseFeedServiceCachedFeedsTests {
+    private let series = SeriesFactory.make(id: 1, title: "Tower of God")
+
+    private func entry(id: Int, series: Series?) -> LibraryEntry {
+        LibraryEntry(
+            id: id, seriesId: id, state: .reading, progressChapter: nil, progressVolume: nil,
+            rating: nil, note: nil, startDate: nil, finishDate: nil, numberOfRereads: nil,
+            priority: nil, isPrivate: nil, readLink: nil, series: series
+        )
+    }
+
+    /// Expected failure before `cachedFeeds` existed: does not compile —
+    /// `ReleaseFeedService` had no such method, only `report(for:)`, which
+    /// costs a network request per provider and is exactly what
+    /// `RootView+Session.refreshReminders` cannot pay for every launch.
+    @Test("Webtoons is preferred over GigaViewer over Naver, same as report(for:)")
+    func prefersWebtoonsOverGigaViewerOverNaver() async {
+        let webtoonsFeed = ReleaseFeed(title: "Webtoons", entries: [], source: .webtoons)
+        let gigaFeed = ReleaseFeed(title: "Giga", entries: [], source: .gigaViewer)
+        let naverFeed = ReleaseFeed(title: "Naver", entries: [], source: .naverWebtoon)
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: nil, cached: webtoonsFeed),
+            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed),
+            StubProvider(source: .naverWebtoon, answer: nil, cached: naverFeed)
+        ])
+        let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
+        #expect(feeds[1]?.source == .webtoons)
+    }
+
+    @Test("GigaViewer is used when Webtoons has nothing cached")
+    func fallsBackToGigaViewer() async {
+        let gigaFeed = ReleaseFeed(title: "Giga", entries: [], source: .gigaViewer)
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: nil, cached: nil),
+            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed),
+            StubProvider(source: .naverWebtoon, answer: nil, cached: nil)
+        ])
+        let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
+        #expect(feeds[1]?.source == .gigaViewer)
+    }
+
+    @Test("A series no provider has cached anything for is simply absent")
+    func absentWhenNothingCached() async {
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: nil, cached: nil),
+            StubProvider(source: .naverWebtoon, answer: nil, cached: nil)
+        ])
+        let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
+        #expect(feeds[1] == nil)
+        #expect(feeds.isEmpty)
+    }
+
+    @Test("An entry with no series (state 'considering') is skipped, not crashed on")
+    func skipsEntriesWithNoSeries() async {
+        let webtoonsFeed = ReleaseFeed(title: "Webtoons", entries: [], source: .webtoons)
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: nil, cached: webtoonsFeed)
+        ])
+        let feeds = await service.cachedFeeds(for: [entry(id: 1, series: nil)]) { _ in [] }
+        #expect(feeds.isEmpty)
+    }
+
+    @Test("Each entry's own links are passed to the providers, by series id")
+    func linksArePerEntry() async {
+        let webtoonsFeed = ReleaseFeed(title: "Webtoons", entries: [], source: .webtoons)
+        let service = ReleaseFeedService(providers: [
+            StubProvider(source: .webtoons, answer: nil, cached: webtoonsFeed)
+        ])
+        let entries = [entry(id: 1, series: series), entry(id: 2, series: series)]
+        // The closure is @Sendable now, so the record goes through a lock
+        // rather than a captured var.
+        let seen = OSAllocatedUnfairLock(initialState: Set<Int>())
+        _ = await service.cachedFeeds(for: entries) { seriesId in
+            let link = SeriesLink(
+                id: "\(seriesId)", url: nil, name: "webtoons", nameDisplay: nil,
+                type: "webplatform", language: "en"
+            )
+            _ = seen.withLock { $0.insert(seriesId) }
+            return [link]
+        }
+        #expect(seen.withLock { $0.sorted() } == [1, 2])
     }
 }

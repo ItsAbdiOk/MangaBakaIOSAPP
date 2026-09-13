@@ -36,6 +36,14 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
         await feed(for: links, seriesID: series.id)
     }
 
+    /// See `ReleaseFeedProvider.cachedFeed`: the same `v4-<seriesID>` key
+    /// `feed(for:seriesID:)` reads, and nothing else — no candidate URL is
+    /// even resolved, since resolving one is itself a request.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
+        guard links.contains(where: { $0.safeURL != nil }) else { return nil }
+        return readCacheIgnoringAge("v4-\(series.id)")?.feed
+    }
+
     /// The feed for whichever of a series' links Webtoons will answer for.
     /// See `FeedAnswer` for what each case means; `.failed` is ordinary here
     /// and must stay silent by the time it reaches the series page — the
@@ -190,11 +198,18 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     }
 
     private func readCache(_ key: String) -> ReleaseFeed? {
-        guard let file = file(key), let data = try? Data(contentsOf: file),
-              let cached = try? JSONDecoder().decode(Cached.self, from: data),
+        guard let cached = readCacheIgnoringAge(key),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
         return cached.feed
+    }
+
+    /// `readCache` without the freshness gate — for `cachedFeed`, where a
+    /// season-ended or otherwise-settled fact a week stale is still true, and
+    /// this is read with no request behind it to refresh a miss anyway.
+    private func readCacheIgnoringAge(_ key: String) -> Cached? {
+        guard let file = file(key), let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(Cached.self, from: data)
     }
 
     private func writeCache(_ key: String, _ feed: ReleaseFeed) {

@@ -239,42 +239,43 @@ extension RootView {
         shelfPath = [series]
     }
 
-    /// Rebuilds every pending reminder from the current schedule.
-    ///
-    /// Called when the switch moves and when the app comes back to the
-    /// foreground. Not on a timer: iOS holds the pending list itself, so there
-    /// is nothing to keep alive between launches — only something to correct
-    /// when the underlying dates have moved.
+    /// Notifies about whatever is newly true: a confirmed release, or a
+    /// series the reader is reading or paused on finishing or ending a
+    /// season. Called when the switch moves and when the app comes back to
+    /// the foreground — see `NotificationPolicy` for the two conditions and
+    /// `ReleaseReminders` for why nothing here rebuilds a calendar anymore.
     func refreshReminders() async {
         guard reminders.isEnabled else {
-            await reminders.reschedule(announced: [], predicted: [])
+            await reminders.reschedule(announced: [])
             return
         }
 
-        let scheduled = await schedule.snapshot()
         let announced = await calendar.mine(seriesIDs: await librarySnapshot.seriesIDs())
-
-        // A series with an announced date is not also guessed about, for the
-        // same reason the Schedule screen drops it: two notices about the same
-        // series, one a fact and one an estimate, leave the reader deciding
-        // which to believe.
-        let announcedIDs = Set(announced.compactMap(\.seriesId))
-        let predicted = scheduled.dated.filter { !announcedIDs.contains($0.series.id) }
-
         let walk = await librarySnapshot.load()
-        // Followed publishers: once a day per follow, one search each.
-        await publisherFollows.check(using: repository) { follow, title in
-            await reminders.notify(id: "follow-\(follow.id)", title: "New from \(follow.name)", body: title)
+        // Followed publishers: once a day per follow, one search each. No
+        // `notify` closure — Abdi's rule (2026-09-13) is two conditions only,
+        // and a publisher follow is neither; the check still runs so
+        // `lastSeenSeriesID` stays current for whenever this list does notify.
+        await publisherFollows.check(using: repository)
+        // Whatever a prior series-page visit already cached — never a fetch:
+        // `cachedExtras` reads the six-hour detail cache and nothing else, so
+        // this call site still costs zero requests. A series with nothing
+        // cached (never opened this run) simply supplies no links, and
+        // `cachedFeeds` reports nothing for it, the same as before this batch.
+        // Read one entry at a time, ahead of `cachedFeeds`, because that
+        // method's own `links` closure is synchronous — it is a pure
+        // lookup over providers' caches, not a place to await anything.
+        var cachedLinks: [Int: [SeriesLink]] = [:]
+        for entry in walk.entries {
+            cachedLinks[entry.seriesId] = await repository.cachedExtras(for: entry.seriesId)?.links ?? []
         }
-        let lastOpened = (try? await history.lastOpenedDates()) ?? [:]
-        let readingHour = try? await history.usualReadingHour()
+        let linksByID = cachedLinks
+        let feeds = await releaseFeeds.cachedFeeds(for: walk.entries) { linksByID[$0] ?? [] }
         await reminders.reschedule(
             announced: announced,
-            predicted: predicted,
             library: walk.entries,
-            libraryFailure: scheduled.libraryFailure ?? walk.failure,
-            lastOpened: { lastOpened[$0] },
-            readingHour: readingHour
+            feeds: feeds,
+            libraryFailure: walk.failure
         )
     }
 
@@ -339,6 +340,7 @@ extension RootView {
             googleBooks: googleBooks,
             releaseFeeds: releaseFeeds,
             mangaUpdatesCategories: mangaUpdatesCategories,
+            openLibrary: openLibraryCovers,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),

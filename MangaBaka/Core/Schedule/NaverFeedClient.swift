@@ -80,6 +80,13 @@ actor NaverFeedClient: ReleaseFeedProvider {
         return .answered(feed)
     }
 
+    /// See `ReleaseFeedProvider.cachedFeed`: the same `v2-naver-<titleID>`
+    /// key `feed(for:links:)` reads, and nothing else.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
+        guard let titleID = Self.titleID(in: links.compactMap(\.safeURL)) else { return nil }
+        return readCacheIgnoringAge("v2-naver-\(titleID)")?.feed
+    }
+
     /// The `titleId` query item off a stored `comic.naver.com/webtoon/list`
     /// link, e.g. `.../webtoon/list?titleId=183559`.
     static func titleID(in candidates: [URL]) -> String? {
@@ -173,11 +180,17 @@ actor NaverFeedClient: ReleaseFeedProvider {
     }
 
     private func readCache(_ key: String) -> ReleaseFeed? {
-        guard let file = file(key), let data = try? Data(contentsOf: file),
-              let cached = try? JSONDecoder().decode(Cached.self, from: data),
+        guard let cached = readCacheIgnoringAge(key),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
         return cached.feed
+    }
+
+    /// `readCache` without the freshness gate — see the `WebtoonsFeedClient`
+    /// sibling of the same name for why `cachedFeed` needs this.
+    private func readCacheIgnoringAge(_ key: String) -> Cached? {
+        guard let file = file(key), let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(Cached.self, from: data)
     }
 
     private func writeCache(_ key: String, _ feed: ReleaseFeed) {

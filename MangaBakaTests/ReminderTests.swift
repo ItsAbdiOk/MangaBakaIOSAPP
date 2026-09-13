@@ -3,8 +3,14 @@ import Foundation
 import UserNotifications
 @testable import MangaBaka
 
-/// Release reminders: local only, asked for rather than assumed, and honest
-/// about which half of what they say is a guess.
+/// Release reminders: local only, asked for rather than assumed, and limited
+/// to the two conditions Abdi asked for (2026-09-13) — "release notifications
+/// for something that has just come out, confirmed" and "a series they're
+/// reading or have paused has either completed or finished the end of a
+/// season." What counts as either condition is `NotificationPolicyTests`;
+/// this suite covers permission handling and the pacing/dedup this type adds
+/// on top: the daily cap, the same-series cooldown, and the persisted ledger
+/// that survives a relaunch.
 @Suite("Release reminders")
 @MainActor
 struct ReminderTests {
@@ -12,8 +18,16 @@ struct ReminderTests {
         try #require(UserDefaults(suiteName: "reminders.tests.\(UUID().uuidString)"))
     }
 
-    private func work(_ id: String, series: Int, daysFromNow: Int) throws -> UpcomingWork {
-        let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: Date()) ?? Date()
+    /// - Parameter from: the reference "now" the date is relative to. Real
+    ///   `Date()` for tests with no injected clock; a `TestClock`'s `now` for
+    ///   tests that also move time deliberately — otherwise a work "dated
+    ///   today" against the real calendar could sit years away from a fixed
+    ///   `TestClock`'s epoch, and every date-gated assertion would fail for
+    ///   the wrong reason.
+    private func work(
+        _ id: String, series: Int, daysFromNow: Int, from now: Date = Date()
+    ) throws -> UpcomingWork {
+        let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
         let iso = DateFormatter()
         iso.locale = Locale(identifier: "en_US_POSIX")
         iso.timeZone = TimeZone(secondsFromGMT: 0)
@@ -24,13 +38,25 @@ struct ReminderTests {
         """.utf8))
     }
 
+    private func entry(
+        id: Int, state: LibraryEntry.State = .reading, status: String? = "completed"
+    ) -> LibraryEntry {
+        LibraryEntry(
+            id: id, seriesId: id, state: state, progressChapter: 10,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(id: id, title: "S\(id)", status: status)
+        )
+    }
+
     @Test("Nothing is scheduled until the reader asks")
     func offByDefault() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         #expect(!reminders.isEnabled)
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
         #expect(centre.added.isEmpty, "a notification nobody asked for is the worst kind")
     }
 
@@ -45,196 +71,15 @@ struct ReminderTests {
         #expect(!reminders.isEnabled)
     }
 
-    @Test("Rescheduling replaces rather than accumulates")
-    func replacesPending() async throws {
-        // A date moves, a series leaves the library, a reader changes their
-        // mind. Adding to what is there leaves notifications for things that
-        // are no longer true, and no way to tell which is which.
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
-        await reminders.reschedule(announced: [try work("b", series: 2, daysFromNow: 4)], predicted: [])
-
-        #expect(centre.removeAllCount == 2, "once per reschedule")
-        #expect(
-            centre.added.map(\.id) == ["announced-b"],
-            "the first batch is gone, not sitting behind the second"
-        )
-    }
-
-    /// The release date is parsed as midnight UTC. Compared against now, a
-    /// release dated today was already "past" for every reader once UTC
-    /// midnight had gone — the "out today" reminder was dropped on the only
-    /// day it could fire.
-    @Test("A release dated today is scheduled, whatever the hour")
-    func todayIsNotPast() async throws {
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-
-        await reminders.reschedule(announced: [try work("today", series: 1, daysFromNow: 0)], predicted: [])
-        #expect(centre.added.map(\.id) == ["announced-today"])
-    }
-
-    @Test("A date already past is not scheduled")
-    func skipsThePast() async throws {
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-
-        await reminders.reschedule(
-            announced: [try work("old", series: 1, daysFromNow: -2)],
-            predicted: []
-        )
-        #expect(centre.added.isEmpty)
-    }
-
-    @Test("Only the soonest fit, because iOS drops the rest silently")
-    func capsAtTheSystemLimit() async throws {
-        // iOS keeps 64 pending local notifications per app and discards the
-        // rest without saying so, which would make the far end of the list
-        // quietly stop working.
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-
-        let many = try (1...60).map { try work("w\($0)", series: $0, daysFromNow: $0) }
-        await reminders.reschedule(announced: many, predicted: [])
-
-        #expect(centre.added.count == ReleaseReminders.limit)
-        #expect(centre.added.first?.id == "announced-w1", "soonest first")
-    }
-
-    /// Coming back to the app offline used to wipe every pending reminder: the
-    /// library read as empty, so there was "nothing" to remind about. A
-    /// reminder set from a library that was there yesterday is still right.
-    @Test("An unreadable library leaves the pending reminders alone")
-    func unreadableLibraryKeepsPending() async throws {
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
-        #expect(centre.added.map(\.id) == ["announced-a"])
-
-        await reminders.reschedule(announced: [], predicted: [], libraryFailure: .offline)
-
-        #expect(centre.removeAllCount == 1, "Nothing may be removed on the strength of a failed read")
-        #expect(centre.added.map(\.id) == ["announced-a"])
-    }
-
-    private func nearlyFinished(_ id: Int) -> LibraryEntry {
-        LibraryEntry(
-            id: id, seriesId: id, state: .reading, progressChapter: 196,
-            progressVolume: nil, rating: nil, note: nil, startDate: nil,
-            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
-            readLink: nil,
-            series: SeriesFactory.make(id: id, title: "S\(id)", status: "completed", totalChapters: 200)
-        )
-    }
-
-    /// The two library nudges were re-added at now+24h and now+30d on every
-    /// foreground. Open the app daily and neither ever fired: the date was
-    /// always tomorrow.
-    @Test("A nudge keeps its date across foregrounds, and then fires once")
-    func nudgeKeepsItsDate() async throws {
-        let clock = TestClock()
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
-        await reminders.enable()
-        let library = [nearlyFinished(7)]
-
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        let first = try #require(centre.added.first { $0.id == "finished-7" }?.date)
-
-        clock.advance(by: 6 * 3_600)
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        let second = try #require(centre.added.first { $0.id == "finished-7" }?.date)
-        #expect(second == first, "Six hours later the nudge is still set for the same moment")
-
-        // Past its date it has fired. A series can only end once.
-        clock.advance(by: 30 * 3_600)
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        #expect(!centre.added.contains { $0.id == "finished-7" })
-    }
-
-    @Test("The backlog nudge comes round again a month after it fired")
-    func backlogNudgeIsMonthly() async throws {
-        let clock = TestClock()
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
-        await reminders.enable()
-        var behind = nearlyFinished(3)
-        behind = LibraryEntry(
-            id: 3, seriesId: 3, state: .reading, progressChapter: 10,
-            progressVolume: nil, rating: nil, note: nil, startDate: nil,
-            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
-            readLink: nil,
-            series: SeriesFactory.make(id: 3, title: "S3", status: "releasing", totalChapters: 60)
-        )
-
-        await reminders.reschedule(announced: [], predicted: [], library: [behind])
-        let first = try #require(centre.added.first { $0.id == "catch-up" }?.date)
-
-        clock.advance(by: 31 * 86_400)
-        await reminders.reschedule(announced: [], predicted: [], library: [behind])
-        let next = try #require(centre.added.first { $0.id == "catch-up" }?.date)
-        #expect(next > first)
-        #expect(next.timeIntervalSince(clock.now) > 29 * 86_400, "Roughly a month from now, not from then")
-    }
-
-    /// `cancelAll()` — what an account change used to call — clears the
-    /// pending requests but leaves `nudgeDates` on disk, keyed only by series
-    /// id. A `finished-<seriesId>` the previous account was already nudged
-    /// about then reads as already-fired for the next account too, and it
-    /// never fires for them. `forget()` has to clear that memory as well.
-    @Test("An account change forgets a nudge it already sent, not just the pending copy")
-    func accountChangeForgetsNudgeMemory() async throws {
-        let clock = TestClock()
-        let centre = FakeCentre()
-        let store = try defaults()
-        let reminders = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
-        await reminders.enable()
-        let library = [nearlyFinished(7)]
-
-        // Account A sees the nudge, and it fires: past its one-off date.
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        clock.advance(by: 30 * 3_600)
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        #expect(!centre.added.contains { $0.id == "finished-7" }, "control: it has already fired once")
-
-        // The app forgets account A. The same `ReleaseReminders` instance and
-        // the same on-disk `nudgeDates` are what account B's session reuses.
-        await reminders.forget()
-
-        // Account B has its own series 7 nearly finished — an unrelated
-        // series that only happens to share the id. It has never been told.
-        await reminders.reschedule(announced: [], predicted: [], library: library)
-        #expect(
-            centre.added.contains { $0.id == "finished-7" },
-            "forgetting the previous account must clear its nudge memory too"
-        )
-    }
-
-    /// Gap 102: `isEnabled` alone said nothing about whether iOS would
-    /// actually deliver anything — a reader who denied the system prompt (or
-    /// revoked it later in Settings) still saw the in-app switch reading On.
-    /// Expected to fail before the fix with: no `effectiveEnabled` property
-    /// existed on `ReleaseReminders` at all.
     @Test("A denied system permission overrides an enabled switch")
     func deniedSystemPermissionOverridesTheSwitch() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
 
-        // The reader turned it on while the app still had permission.
         _ = await reminders.enable()
         #expect(reminders.isEnabled)
         #expect(reminders.effectiveEnabled)
 
-        // iOS takes the permission away behind the app's back — Settings, not
-        // this app. `isEnabled` (the reader's own ask) does not move on its
-        // own; only a fresh `refreshStatus()` learns of it.
         centre.grants = false
         await reminders.refreshStatus()
 
@@ -242,82 +87,137 @@ struct ReminderTests {
         #expect(!reminders.effectiveEnabled, "but iOS will not deliver anything")
     }
 
-    /// Gap 103: a walk that stopped at the page cap is not `libraryFailure` —
-    /// nothing failed, as far as this call knows — but it is still a partial
-    /// answer, and re-deriving reminders from it used to drop every series
-    /// past wherever the walk stopped, silently, the next time this ran.
-    /// Expected to fail before the fix with: `centre.removeAllCount == 2` and
-    /// the announced-b reminder replacing announced-a, because nothing told
-    /// `reschedule` the second library was incomplete.
-    @Test("An incomplete walk is treated like a failure for removals, not a real answer")
-    func incompleteWalkKeepsPendingReminders() async throws {
+    @Test("A confirmed release notifies once; asking again does not repeat it")
+    func confirmedReleaseNotifiesOnce() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         await reminders.enable()
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
-        #expect(centre.added.map(\.id) == ["announced-a"])
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        #expect(centre.added.map(\.id) == ["release-work-a"])
 
-        await reminders.reschedule(
-            announced: [try work("b", series: 2, daysFromNow: 4)], predicted: [], isComplete: false
-        )
-
-        #expect(centre.removeAllCount == 1, "an incomplete walk must not touch what is pending")
-        #expect(centre.added.map(\.id) == ["announced-a"])
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        #expect(centre.added.map(\.id) == ["release-work-a"], "the same confirmed release is not repeated")
     }
 
-    @Test("Turning it off clears what was pending")
+    @Test("An unreadable or incomplete library read schedules nothing this pass")
+    func failedOrIncompleteReadSchedulesNothing() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], libraryFailure: .offline
+        )
+        #expect(centre.added.isEmpty)
+
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)], isComplete: false)
+        #expect(centre.added.isEmpty)
+    }
+
+    @Test("A completed series is told once, and not told again next time")
+    func completedSeriesNotifiedOnce() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+        let library = [entry(id: 7, status: "releasing")]
+
+        // First sighting: only a baseline is recorded, per `NotificationPolicy`.
+        await reminders.reschedule(announced: [], library: library)
+        #expect(centre.added.isEmpty)
+
+        // The status flips to completed.
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "completed")])
+        #expect(centre.added.map(\.id) == ["finished-7"])
+
+        // Asked again with the same completed status: not repeated.
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "completed")])
+        #expect(centre.added.map(\.id) == ["finished-7"], "told once, not on every subsequent check")
+    }
+
+    @Test("At most three notifications a day; the fourth waits for tomorrow morning")
+    func dailyCapDefersTheFourth() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
+        await reminders.enable()
+
+        let works = try (1...4).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
+        await reminders.reschedule(announced: works)
+
+        #expect(centre.added.count == 4, "all four are scheduled, just not all for today")
+        let today = centre.added.filter { $0.date <= clock.now }
+        let deferred = centre.added.filter { $0.date > clock.now }
+        #expect(today.count == ReleaseReminders.dailyLimit)
+        #expect(deferred.count == 1)
+        let calendar = Calendar.current
+        #expect(calendar.component(.hour, from: try #require(deferred.first?.date)) == 9)
+        #expect(!calendar.isDate(try #require(deferred.first?.date), inSameDayAs: clock.now))
+    }
+
+    @Test("Two events for the same series within 24 hours: only the first is sent")
+    func sameSeriesCooldownHolds() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
+        await reminders.enable()
+
+        // Series 1 gets a confirmed release today, and — on the same pass —
+        // its status also flips to completed. Both are true at once, but
+        // Abdi's fatigue guard allows only one notification per series a day.
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0, from: clock.now)],
+            library: [entry(id: 1, status: "releasing")]
+        )
+        #expect(centre.added.map(\.id) == ["release-work-a"])
+
+        clock.advance(by: 60 * 60) // one hour later, same day
+        await reminders.reschedule(
+            announced: [],
+            library: [entry(id: 1, status: "completed")]
+        )
+        #expect(centre.added.map(\.id) == ["release-work-a"], "series 1 already had its notification today")
+
+        clock.advance(by: 25 * 60 * 60) // now past the 24h cooldown
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "completed")])
+        #expect(centre.added.map(\.id) == ["release-work-a", "finished-1"])
+    }
+
+    @Test("forget() clears the ledger, so a new account's own flip can still notify")
+    func forgetClearsTheLedger() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+
+        // Account A: series 7 flips to completed and is told once.
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "releasing")])
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "completed")])
+        #expect(centre.added.map(\.id) == ["finished-7"], "control: it has already fired once")
+
+        await reminders.forget()
+        #expect(centre.added.isEmpty, "forget() cancels what was pending too")
+
+        // Account B has an unrelated series 7 that only shares the id. If
+        // `forget()` left account A's "completed" baseline in place, account
+        // B's own releasing → completed flip below would read as "no change"
+        // and never notify — the bug this test is for.
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "releasing")])
+        #expect(centre.added.isEmpty, "first sighting after forget only baselines")
+
+        await reminders.reschedule(announced: [], library: [entry(id: 7, status: "completed")])
+        #expect(centre.added.map(\.id) == ["finished-7"], "account B's own flip notifies independently")
+    }
+
+    @Test("Turning it off cancels what was pending")
     func disableClears() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         await reminders.enable()
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 3)], predicted: [])
+        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
 
         await reminders.disable()
         #expect(!reminders.isEnabled)
-        #expect(centre.removeAllCount >= 2)
-    }
-
-    private func stale(_ id: Int, chapters: Double) -> LibraryEntry {
-        LibraryEntry(
-            id: id, seriesId: id, state: .reading, progressChapter: 10,
-            progressVolume: nil, rating: nil, note: nil, startDate: nil,
-            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
-            readLink: nil,
-            series: SeriesFactory.make(id: id, title: "S\(id)", totalChapters: chapters)
-        )
-    }
-
-    @Test("Back-to-it nudges: off by default, nothing is scheduled")
-    func backToItOffByDefault() async throws {
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        await reminders.enable()
-        let veryStale = Date.distantPast
-
-        await reminders.reschedule(
-            announced: [], predicted: [], library: [stale(1, chapters: 30)],
-            lastOpened: { _ in veryStale }
-        )
-        #expect(!centre.added.contains { $0.id == "backtoit-1" }, "the switch was never turned on")
-    }
-
-    @Test("Back-to-it nudges work independently of the calendar toggle")
-    func backToItIndependentOfMainToggle() async throws {
-        let centre = FakeCentre()
-        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
-        // The calendar toggle is left off; only "back to it" is turned on.
-        await reminders.setBackToIt(true)
-        #expect(!reminders.isEnabled)
-
-        await reminders.reschedule(
-            announced: [try work("a", series: 9, daysFromNow: 1)], predicted: [],
-            library: [stale(1, chapters: 30)],
-            lastOpened: { _ in Date.distantPast }
-        )
-
-        #expect(centre.added.contains { $0.id == "backtoit-1" })
-        #expect(!centre.added.contains { $0.id == "announced-a" }, "the calendar half is still off")
+        #expect(centre.removeAllCount >= 1)
     }
 
     private final class FakeCentre: NotificationScheduling, @unchecked Sendable {

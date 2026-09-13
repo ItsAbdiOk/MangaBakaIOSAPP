@@ -184,6 +184,116 @@ struct GigaViewerFeedClientTests {
     }
 }
 
+/// `cachedFeed`: the read-only path `ReleaseFeedService.cachedFeeds` uses.
+/// Unlike Webtoons/Naver, the cache here holds the whole magazine's raw
+/// items, keyed by host — `cachedFeed` must filter to the series itself the
+/// same way `feed(for:links:)` does, without a request for the magazine feed.
+@Suite("GigaViewer cachedFeed", .serialized)
+struct GigaViewerCachedFeedTests {
+    private func makeClient(clock: TestClock, cacheDirectory: URL) -> GigaViewerFeedClient {
+        GigaViewerFeedClient(
+            session: URLProtocolStub.makeSession(), clock: clock, cacheDirectory: cacheDirectory
+        )
+    }
+
+    private let rss = Data(#"""
+    <?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><title>Tonari no Young Jump</title>
+    <item>
+      <title>[第33話] カテナチオ</title>
+      <pubDate>Thu, 11 Sep 2026 15:00:00 GMT</pubDate>
+      <link>https://tonarinoyj.jp/episode/1</link>
+    </item>
+    </channel></rss>
+    """#.utf8)
+
+    private let link = SeriesLink(
+        id: "1", url: URL(string: "https://tonarinoyj.jp/series/1"),
+        name: "tonarinoyj", nameDisplay: nil, type: "webplatform", language: "ja"
+    )
+
+    /// Expected failure before `cachedFeed` existed: does not compile —
+    /// `GigaViewerFeedClient` had no such method.
+    @Test("The same v1-giga- key feed(for:) writes is read back, filtered, with no request")
+    func readsWhatFeedWrote() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("giga-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "カテナチオ")
+
+        _ = await client.feed(for: series, links: [link])
+        #expect(URLProtocolStub.requests.count == 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.sourceName == "Tonari no Young Jump")
+        #expect(cached?.episodes.map(\.number) == [33])
+        #expect(URLProtocolStub.requests.count == 1, "cachedFeed must not make a request")
+    }
+
+    @Test("Nothing cached yet answers nil")
+    func nilWithNothingCached() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("giga-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "カテナチオ")
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached == nil)
+    }
+
+    @Test("A series with no matching GigaViewer host answers nil")
+    func nilForUnservedLinks() async {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("giga-tests-\(UUID().uuidString)", isDirectory: true)
+        let client = makeClient(clock: TestClock(), cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "カテナチオ")
+
+        let cached = await client.cachedFeed(for: series, links: [])
+        #expect(cached == nil)
+    }
+
+    /// The magazine feed is cached, but this series is not in it —
+    /// `answered(nil)` for `feed(for:links:)`, and nil here for the same reason.
+    @Test("A cached magazine that does not carry this series answers nil")
+    func nilWhenNotInCachedMagazine() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("giga-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let catenaccio = SeriesFactory.make(id: 1, title: "カテナチオ")
+        let other = SeriesFactory.make(id: 2, title: "Some Other Series")
+
+        _ = await client.feed(for: catenaccio, links: [link])
+        let cached = await client.cachedFeed(for: other, links: [link])
+        #expect(cached == nil)
+    }
+
+    /// "A stale season-ended is still season-ended" — the magazine cache here
+    /// is a day, not a week, but the rule is the same: `cachedFeed` must not
+    /// apply `feed(for:links:)`'s own freshness gate.
+    @Test("A cache older than cacheLife still answers — age is ignored")
+    func staleCacheStillAnswers() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: rss)) }
+        defer { URLProtocolStub.reset() }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("giga-tests-\(UUID().uuidString)", isDirectory: true)
+        let clock = TestClock()
+        let client = makeClient(clock: clock, cacheDirectory: directory)
+        let series = SeriesFactory.make(id: 1, title: "カテナチオ")
+
+        _ = await client.feed(for: series, links: [link])
+        clock.advance(by: GigaViewerFeedClient.cacheLife + 1)
+
+        let cached = await client.cachedFeed(for: series, links: [link])
+        #expect(cached?.episodes.map(\.number) == [33])
+    }
+}
+
 /// The real magazine feed, not a hand-shaped one. Captured 2026-09-13 from
 /// `tonarinoyj.jp/rss`: 72 items across many series, each with a thumbnail
 /// `<description>` and an `<enclosure>`. A fixture the parser was written

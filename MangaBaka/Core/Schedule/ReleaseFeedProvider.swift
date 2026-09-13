@@ -46,4 +46,24 @@ protocol ReleaseFeedProvider: Sendable {
     /// reason to block the page — only to tell `ReleaseSection` there is a
     /// reason this provider has nothing, instead of it looking unasked.
     func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer
+
+    /// Whatever this provider already has on disk for this series, with no
+    /// request and no spacing claim — the cache `feed(for:links:)` would have
+    /// read had it been called, and nothing more. Cache age is ignored: a
+    /// season-ended or Naver-finished feed a week stale is still season-ended
+    /// or finished, and `ReleaseReminders.reschedule` only needs to notice a
+    /// change since the last time it looked, not a fresh number.
+    ///
+    /// Built for `ReleaseFeedService.cachedFeeds(for:links:)`, which
+    /// `RootView+Session.refreshReminders` calls so the confirmed-episode,
+    /// season-ended and Naver-finished notification conditions can fire from
+    /// whatever a prior series-page visit already cached, without adding a
+    /// single network call of its own.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed?
+}
+
+extension ReleaseFeedProvider {
+    /// Default for anything that keeps no cache of its own (stubs in tests):
+    /// nothing to read, so nothing to answer.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? { nil }
 }

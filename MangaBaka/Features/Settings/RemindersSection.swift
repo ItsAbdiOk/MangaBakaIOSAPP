@@ -24,7 +24,7 @@ struct RemindersSection: View {
                         Task { await toggle() }
                     } label: {
                         SettingsRow(
-                            title: "Tell me when something is due",
+                            title: "Release notifications",
                             caption: "Nothing leaves this phone. iOS schedules these locally."
                         ) {
                             // Gap 102: this read `reminders.isEnabled` alone,
@@ -37,22 +37,8 @@ struct RemindersSection: View {
                         }
                     }
                     .buttonStyle(.press)
-                    .accessibilityLabel("Release reminders")
+                    .accessibilityLabel("Release notifications")
                     .accessibilityValue(reminders.effectiveEnabled ? "On" : "Off")
-                    SettingsDivider()
-                    Button {
-                        Task { await toggleBackToIt() }
-                    } label: {
-                        SettingsRow(
-                            title: "Back-to-it nudges",
-                            caption: "A nudge when you have not opened something you were reading."
-                        ) {
-                            SwitchIndicator(isOn: reminders.effectiveBackToItEnabled)
-                        }
-                    }
-                    .buttonStyle(.press)
-                    .accessibilityLabel("Back-to-it nudges")
-                    .accessibilityValue(reminders.effectiveBackToItEnabled ? "On" : "Off")
                 }
 
                 // Only shown once iOS has actually refused. Offering a trip to
@@ -75,6 +61,9 @@ struct RemindersSection: View {
 
                 if !publisherFollows.follows.isEmpty {
                     followsList
+                    Text("Follows don't notify yet.")
+                        .typeFootnote()
+                        .foregroundStyle(Palette.textSecondary)
                 }
             }
         }
@@ -112,13 +101,15 @@ struct RemindersSection: View {
         }
     }
 
-    /// Says what it will and will not tell you, because the honest answer is
-    /// "two different kinds of thing, and one of them is a guess".
+    /// States the two conditions exactly, and nothing else — Abdi's rule
+    /// (2026-09-13): "Limit notifications to: (1) release notifications for
+    /// something that has just come out, confirmed; (2) a series they're
+    /// reading or have paused has either completed or finished the end of a
+    /// season. Those are the only conditions." No prediction, no nudge.
     private var caption: String {
         """
-        A notice on the day a volume you follow is published, and a rougher one \
-        when a series you are reading is about due a chapter. The second is an \
-        estimate and says so.
+        A confirmed release the day it's out, and word when a series you're \
+        reading or have paused has completed or ended a season. Nothing else.
         """
     }
 
@@ -128,11 +119,6 @@ struct RemindersSection: View {
         } else {
             await reminders.enable()
         }
-        await onChange()
-    }
-
-    private func toggleBackToIt() async {
-        await reminders.setBackToIt(!reminders.backToItEnabled)
         await onChange()
     }
 }

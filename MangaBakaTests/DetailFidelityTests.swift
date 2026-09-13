@@ -486,6 +486,39 @@ struct TitleCopyTests {
 /// six fields the merge fills. This test is the thing that was missing:
 /// nothing asserted that the sections are wired to `shown` rather than that
 /// `shown` exists.
+/// Which of MangaBaka's own volumes are worth asking `OpenLibraryCovers`
+/// about, and the placeholder view's own artwork-vs-stand-in decision.
+@Suite("Open Library gap-filling on MangaBaka's own volumes")
+struct VolumesSectionOpenLibraryTests {
+    private func volume(number: String, isbn: String?, cover: Cover?) -> SeriesWork.Volume {
+        let edition = SeriesWork(
+            id: number, sequenceString: number, sequenceNumeric: Double(number), subTitle: nil,
+            releaseDate: nil, pages: nil, prices: nil,
+            identifiers: isbn.map { [SeriesWork.Identifier(id: $0, name: "isbn")] },
+            links: nil,
+            images: cover.map { [SeriesWork.Image(image: $0, type: nil)] }
+        )
+        return SeriesWork.Volume(number: number, editions: [edition])
+    }
+
+    @Test("A volume with an ISBN and no image is asked; one with an image is not")
+    func onlyImagelessVolumesAreAsked() {
+        let withISBNNoImage = volume(number: "2", isbn: "9781975345648", cover: nil)
+        let withImage = volume(number: "1", isbn: "9781975319434", cover: .sized)
+        let noISBN = volume(number: "3", isbn: nil, cover: nil)
+
+        let isbns = VolumesSection.isbnsNeedingCovers([withISBNNoImage, withImage, noISBN])
+
+        #expect(isbns == [2: "9781975345648"], "only the ISBN'd, imageless volume is worth asking about")
+    }
+
+    @Test("The placeholder view picks the series cover when there is no artwork")
+    func choosesSeriesCoverWhenArtworkIsNil() {
+        #expect(MissingVolumeCover.choice(for: nil) == .seriesCover)
+        #expect(MissingVolumeCover.choice(for: .sized) == .artwork(.sized))
+    }
+}
+
 @Suite("The detail page reads the merged series", .enabled(if: SourceTree.isAvailable))
 struct DetailMergedSeriesTests {
     /// Sections that read a field `filling(gapsFrom:)` can supply.

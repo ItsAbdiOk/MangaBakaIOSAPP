@@ -99,6 +99,41 @@ struct ReleaseFeedService: Sendable {
         )
     }
 
+    /// Whatever the providers already have cached for a batch of library
+    /// entries, with no network call — the counterpart to `report(for:)` for
+    /// `ReleaseReminders.reschedule`, which needs a `[Int: ReleaseFeed]` to
+    /// notice a confirmed episode, a season ending, or a Naver-finished
+    /// original, but must not turn a reminder refresh into one request per
+    /// series in the library.
+    ///
+    /// Same preference as `report(for:)`: providers are asked in `providers`
+    /// order and the first to have something cached wins — Webtoons before
+    /// GigaViewer before Naver in the production wiring. Unlike `report`,
+    /// there is no separate Naver-as-original slot: a reminder only needs one
+    /// feed per series to test the three conditions against, and Naver
+    /// answering when nothing else does is exactly the "Korean-only reader"
+    /// case `report` already treats as the edition.
+    ///
+    /// - Parameter links: a series id's stored links, e.g.
+    ///   `SeriesRepositoryProtocol.cachedExtras(for:)?.links` — never a
+    ///   fetch; a series with nothing cached simply supplies `[]`.
+    func cachedFeeds(
+        for entries: [LibraryEntry], links: @Sendable (Int) -> [SeriesLink]
+    ) async -> [Int: ReleaseFeed] {
+        var result: [Int: ReleaseFeed] = [:]
+        for entry in entries {
+            guard let series = entry.series else { continue }
+            let seriesLinks = links(entry.seriesId)
+            for provider in providers {
+                if let feed = await provider.cachedFeed(for: series, links: seriesLinks) {
+                    result[entry.seriesId] = feed
+                    break
+                }
+            }
+        }
+        return result
+    }
+
     /// Only computed when there is a translated edition distinct from the
     /// original to compare against — a Korean-only reader already sees the
     /// original as `summary` and has nothing to compare it to.
