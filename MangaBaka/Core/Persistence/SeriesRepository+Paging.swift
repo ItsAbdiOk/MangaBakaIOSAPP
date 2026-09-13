@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// The two uncached, paged reads: a later page of a feed, and a search.
 ///
@@ -12,6 +13,8 @@ import Foundation
 /// that was full on the wire can reach a caller short — which is exactly how
 /// a tag search got stuck at 30 results forever. See `FeedResult.hasMore`.
 extension SeriesRepository {
+    private static let pagingLogger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "paging")
+
     func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
         await feedPage(feed, page: page, priority: .userInitiated)
     }
@@ -57,10 +60,16 @@ extension SeriesRepository {
         // preference — see `filterQuery`'s doc comment for why.
         items.append(contentsOf: filterQuery(overridingTypes: query.types))
         do {
-            let (series, pagination): ([Series], Pagination?) =
+            // Lossy: one row the model cannot read costs that row, not the
+            // page — see `LossyArray`. The count is logged so a shape change
+            // upstream is visible somewhere rather than nowhere.
+            let (page, pagination): (LossyArray<Series>, Pagination?) =
                 try await client.getWithPagination("/v2/series/search", query: items, priority: priority)
+            if page.dropped > 0 {
+                Self.pagingLogger.error("search page dropped \(page.dropped, privacy: .public) rows")
+            }
             return FeedResult(
-                series: series.filter { $0.isDiscoverable && allowsFormat($0) },
+                series: page.elements.filter { $0.isDiscoverable && allowsFormat($0) },
                 origin: .network,
                 // The API's own signal, not the filtered count — see
                 // `FeedResult.hasMore`.

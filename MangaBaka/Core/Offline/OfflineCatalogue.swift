@@ -37,6 +37,12 @@ struct OfflineIndexEntry: Decodable, Sendable, Equatable {
 
 /// One offline search result: a `Series` built entirely from the bundled
 /// index, with no cover — that only exists once the API is reachable again.
+/// One page of offline hits and how many the whole query matched.
+struct OfflinePage: Sendable, Equatable {
+    let hits: [OfflineHit]
+    let total: Int
+}
+
 struct OfflineHit: Sendable, Equatable, Identifiable {
     let series: Series
     var id: Int { series.id }
@@ -172,12 +178,32 @@ actor OfflineCatalogue {
         limit: Int,
         offset: Int
     ) -> [OfflineHit] {
+        page(
+            query, allowedRatings: allowedRatings, allowedTypes: allowedTypes, blockedTags: blockedTags,
+            limit: limit, offset: offset
+        ).hits
+    }
+
+    /// `matches` plus the size of the whole filtered set, which the filter
+    /// pass already computed to slice a page from — so the heading's "N
+    /// results" and an exact "is there a next page" cost nothing extra
+    /// offline. Before this the model inferred the end from a short page
+    /// and left the total unknown, to avoid a second 19,300-row filter that
+    /// `count` would have spent (search review E F13, #52/#53).
+    func page(
+        _ query: SearchQuery,
+        allowedRatings: [String],
+        allowedTypes: [String],
+        blockedTags: [Int],
+        limit: Int,
+        offset: Int
+    ) -> OfflinePage {
         let filtered = filteredAndSorted(
             query, allowedRatings: allowedRatings, allowedTypes: allowedTypes, blockedTags: blockedTags
         )
-        guard offset < filtered.count, limit > 0 else { return [] }
+        guard offset < filtered.count, limit > 0 else { return OfflinePage(hits: [], total: filtered.count) }
         let end = min(offset + limit, filtered.count)
-        return filtered[offset..<end].map(OfflineHit.init)
+        return OfflinePage(hits: filtered[offset..<end].map(OfflineHit.init), total: filtered.count)
     }
     // swiftlint:enable function_parameter_count
 

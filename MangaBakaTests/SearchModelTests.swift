@@ -528,6 +528,33 @@ struct SearchOfflineFallbackTests {
         #expect(model.results.count > firstPageCount)
     }
 
+    /// Offline paging used to infer the end from a short page and leave the
+    /// heading at "N shown". `OfflineCatalogue.page` hands back the size of
+    /// the filtered set, so both are exact. Fails before the fix with
+    /// `model.total == nil`, and `hasMore` stays true on the last full page.
+    @Test("Offline results know their total and their exact last page")
+    func offlineTotalAndLastPage() async {
+        let repository = RecordingRepository()
+        let model = makeModel(repository: repository)
+        model.preferOffline = true
+        model.query.sort = "score_desc"
+
+        await model.search()
+        let total = model.total
+        #expect(total != nil, "Offline answers carry the filtered set's size")
+        #expect((total ?? 0) > model.results.count, "Sanity: more than one page")
+        #expect(model.hasMore)
+
+        // A page that ends exactly at the total has no next page.
+        let whole = makeModel(repository: repository)
+        whole.preferOffline = true
+        whole.query.sort = "score_desc"
+        whole.query.limit = total ?? 1
+        await whole.search()
+        #expect(whole.results.count == total)
+        #expect(!whole.hasMore, "A page that ends at the total has no next page")
+    }
+
     /// The control for the fallback tests below: a failure that is not
     /// `.offline` or `.rateLimited` says nothing about whether the network
     /// itself works, so it must read as the ordinary failure it is rather

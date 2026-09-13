@@ -119,6 +119,8 @@ actor CatalogueService {
     /// of series — found nothing at all and the screen simply emptied. Measured
     /// against the live API on 2026-09-10: `/v1/tags?limit=500` does not
     /// contain Romance, and `?q=romance` returns 35 tags including it.
+    /// Still true 2026-09-13: `?q=Isekai&limit=3` answers Isekai, Reverse
+    /// Isekai, BL Isekai — the schema lists no `q`, the server honours it.
     ///
     /// Returns nil, not an empty array, when the request fails: "no tags match"
     /// and "the network is down" must not look the same on screen.

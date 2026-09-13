@@ -369,7 +369,7 @@ final class SearchModel {
     /// against the API does.
     private func runOfflineSearch(mine: Int, page: Int, appending: Bool) async {
         let offset = (page - 1) * query.limit
-        let hits = await offline.matches(
+        let offlinePage = await offline.page(
             query,
             allowedRatings: allowedRatings(),
             allowedTypes: allowedFormats(),
@@ -377,6 +377,7 @@ final class SearchModel {
             limit: query.limit,
             offset: offset
         )
+        let hits = offlinePage.hits
         guard mine == generation else { return }
         let built = await offline.builtDate() ?? "unknown"
 
@@ -385,18 +386,17 @@ final class SearchModel {
             results.append(contentsOf: hits.map(\.series).filter { !known.contains($0.id) })
         } else {
             results = hits.map(\.series)
-            // The index carries no `pagination.count`; the heading falls
-            // back to "N shown". `offline.count` would give one at the
-            // price of re-filtering 19,300 rows a second time per search
-            // (E F13, unmeasured) — not spent until that cost is known.
-            total = nil
+            // The size of the filtered set, computed once by the page slice
+            // itself (`OfflineCatalogue.page`), so the heading reads "N
+            // results" offline too.
+            total = offlinePage.total
             answered = query.asAsked
         }
         query.page = page
-        // A short page means the index has nothing further to offer — there
-        // is no separate "next page exists" signal to read the way
-        // `FeedResult.hasMore` reads the API's `pagination.next`.
-        hasMore = hits.count == query.limit
+        // Exact, from the filtered set's size — the offline equivalent of
+        // reading the API's `pagination.next` rather than inferring the end
+        // from a short page (which a locally filtered page cannot support).
+        hasMore = offset + hits.count < offlinePage.total
         failure = nil
         pageFailure = nil
         stoppedEarly = false
