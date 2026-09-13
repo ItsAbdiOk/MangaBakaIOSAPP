@@ -151,4 +151,27 @@ extension View {
     func typeTabLabel() -> some View {
         scaledFont(size: 9.5, weight: .semibold, relativeTo: .subheadline)
     }
+    /// The second line of a compound control, under the figure it qualifies:
+    /// `ch 69` under `+1` on the library button.
+    func typeMicroLabel() -> some View {
+        scaledFont(size: 9, weight: .semibold, relativeTo: .subheadline)
+    }
+
+    // MARK: Glyphs set beside the ramp
+
+    /// An SF Symbol next to a line of the ramp: the chevron after "3 more tag
+    /// groups", the arrow on an external link, the plus on "Add tags". A
+    /// fixed-point glyph beside scaling text stays 10pt while its label
+    /// reaches 30, and reads as a stray mark rather than part of the label
+    /// (the 2026-09-13 sweep found 37 of them). Anchored like the ramp —
+    /// `.subheadline` under 14pt, for the stalls measured above — so glyph
+    /// and label grow in step; a larger glyph names the text style nearest
+    /// its size, the same way the ramp does.
+    func typeSymbol(
+        size: CGFloat,
+        weight: Font.Weight,
+        relativeTo textStyle: Font.TextStyle = .subheadline
+    ) -> some View {
+        scaledFont(size: size, weight: weight, relativeTo: textStyle)
+    }
 }

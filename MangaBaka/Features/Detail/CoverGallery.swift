@@ -271,7 +271,7 @@ private struct ZoomableCover: View {
                     .accessibilityIgnoresInvertColors()
             case .failure:
                 Image(systemName: "photo")
-                    .font(.system(size: 40))
+                    .typeSymbol(size: 40, weight: .regular, relativeTo: .largeTitle)
                     .foregroundStyle(Palette.textQuaternary)
             default:
                 ProgressView().tint(Palette.textQuaternary)

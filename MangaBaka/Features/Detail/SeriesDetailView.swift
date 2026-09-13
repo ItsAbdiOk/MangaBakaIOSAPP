@@ -39,6 +39,9 @@ struct SeriesDetailView: View {
     /// Cover gap-filler by ISBN, asked only for volumes no store has art for.
     var openLibrary: OpenLibraryCovers?
     @State var openLibraryCovers: [Int: URL] = [:]
+    /// Whether Open Library has been asked yet, so a missing cover can say
+    /// "no cover from the publisher" only once both sources have answered.
+    @State var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
     @State var categories: [MangaUpdatesCategories.Category] = []
     @State var isCategoriesLoading = false
     @State var categoriesFailure: APIError?

@@ -23,7 +23,8 @@ extension SeriesDetailView {
                 // that first and swapping it for the store's the moment it
                 // answers reads as content changing under the reader.
                 isCheckingStore: isLoadingVolumes,
-                openLibraryCovers: openLibraryCovers
+                openLibraryCovers: openLibraryCovers,
+                openLibraryStatus: openLibraryStatus
             )
         } else {
             AppleVolumesRow(
@@ -31,7 +32,8 @@ extension SeriesDetailView {
                 expected: shown.finalVolume.map { Int(wholeOrClamped: $0) },
                 edition: appleEdition,
                 seriesCover: shown.cover,
-                openLibraryCovers: openLibraryCovers
+                openLibraryCovers: openLibraryCovers,
+                openLibraryStatus: openLibraryStatus
             )
         }
     }
@@ -93,7 +95,7 @@ extension SeriesDetailView {
     /// covers on someone else's numbering scheme is a coincidence away from
     /// showing the wrong volume's art.
     func loadOpenLibraryCovers() async {
-        guard let openLibrary, appleEdition == nil else { return }
+        guard let openLibrary, appleEdition == nil else { openLibraryStatus = .answered; return }
 
         var isbnsByNumber = VolumesSection.isbnsNeedingCovers(extras.volumes)
         let shelfGaps = VolumeShelf.numbersNeedingCovers(shelf)
@@ -107,8 +109,10 @@ extension SeriesDetailView {
             else { continue }
             isbnsByNumber[number] = isbn
         }
-        guard !isbnsByNumber.isEmpty else { return }
+        // Nothing to ask about is an answer too: the placeholder may say so.
+        guard !isbnsByNumber.isEmpty else { openLibraryStatus = .answered; return }
 
+        openLibraryStatus = .loading
         var found: [Int: URL] = [:]
         for (number, isbn) in isbnsByNumber {
             guard !Task.isCancelled else { return }
@@ -118,6 +122,7 @@ extension SeriesDetailView {
         }
         guard !Task.isCancelled else { return }
         openLibraryCovers = found
+        openLibraryStatus = .answered
     }
 
     /// "Similar by description": ids ranked by `EmbeddingIndex`, resolved to

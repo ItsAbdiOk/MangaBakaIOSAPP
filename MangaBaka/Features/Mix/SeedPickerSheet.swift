@@ -80,7 +80,7 @@ struct SeedPickerSheet: View {
             SearchClearButton(text: queryText, onClear: { search.queryDidChange() })
         }
         .padding(.horizontal, 14)
-        .frame(height: Metrics.field)
+        .frame(minHeight: Metrics.field)
         .background(Palette.surfaceField, in: RoundedRectangle(
             cornerRadius: Metrics.radiusCard, style: .continuous
         ))
@@ -125,7 +125,7 @@ struct SeedPickerSheet: View {
                                     .typeChip()
                                     .lineLimit(1)
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .typeSymbol(size: 10, weight: .bold)
                             }
                             .foregroundStyle(Palette.textPrimary)
                             .padding(.horizontal, 12)
@@ -221,7 +221,7 @@ struct SeedPickerSheet: View {
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 Image(systemName: isSeed ? "checkmark.circle.fill" : "plus.circle")
-                    .font(.system(size: 20))
+                    .typeSymbol(size: 20, weight: .regular, relativeTo: .title3)
                     .foregroundStyle(isSeed ? Palette.accent : Palette.textTertiary)
             }
             .contentShape(Rectangle())

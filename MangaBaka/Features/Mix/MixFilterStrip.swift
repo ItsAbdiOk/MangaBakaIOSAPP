@@ -37,7 +37,7 @@ extension MixView {
 
             if lenses != nil {
                 HStack(spacing: 10) {
-                    SaveLensButton(isEnabled: !model.filters.isEmpty) {
+                    SaveLensButton(query: model.filters) {
                         isNamingLens = true
                     }
                     Text("Saves these filters as a lens, on Search.")
@@ -95,13 +95,13 @@ extension MixView {
                         Button { isPickingTags = true } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .typeSymbol(size: 10, weight: .bold)
                                     .foregroundStyle(Palette.accent)
                                 Text("Add tags").typeChip()
                             }
                             .foregroundStyle(Palette.textPrimary)
                             .padding(.horizontal, 12)
-                            .frame(height: Metrics.headerPill)
+                            .frame(minHeight: Metrics.headerPill)
                             .overlay(Capsule().strokeBorder(
                                 Palette.borderDashed,
                                 style: StrokeStyle(lineWidth: 0.5, dash: [3])
@@ -180,7 +180,7 @@ extension MixView {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 9)
-                .frame(height: Metrics.headerPill)
+                .frame(minHeight: Metrics.headerPill)
                 .background(
                     isSelected ? Palette.accent : Palette.surfaceChip,
                     in: Capsule()

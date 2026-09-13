@@ -39,7 +39,7 @@ struct TitleSection: View {
             SettingsRow(title: option.title, caption: option.caption) {
                 if preference == option {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
+                        .typeSymbol(size: 13, weight: .bold)
                         .foregroundStyle(Palette.accent)
                 }
             }

@@ -277,7 +277,7 @@ struct LibraryControl: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: Metrics.ctaPrimary)
+            .frame(minHeight: Metrics.ctaPrimary)
             .foregroundStyle(Palette.onAccent)
             .background(
                 Palette.accent,
@@ -317,7 +317,7 @@ struct LibraryControl: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: Metrics.ctaPrimary)
+                .frame(minHeight: Metrics.ctaPrimary)
                 .foregroundStyle(Palette.textPrimary)
                 .background(
                     Palette.surfaceChip,
@@ -344,9 +344,9 @@ struct LibraryControl: View {
                         } else {
                             VStack(spacing: -1) {
                                 Text("+1")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .typeCTA()
                                 Text(nextChapter(entry))
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .typeMicroLabel()
                                     .opacity(0.75)
                                     // The number this button will land on rolls
                                     // rather than cutting, same as every other
@@ -355,7 +355,7 @@ struct LibraryControl: View {
                             }
                         }
                     }
-                    .frame(width: Metrics.ctaPrimary, height: Metrics.ctaPrimary)
+                    .frame(minWidth: Metrics.ctaPrimary, minHeight: Metrics.ctaPrimary)
                     .foregroundStyle(Palette.onAccent)
                     .background(
                         Palette.accent,

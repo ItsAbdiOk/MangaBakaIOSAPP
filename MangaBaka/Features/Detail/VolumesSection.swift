@@ -33,6 +33,13 @@ struct VolumesSection: View {
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`. Empty for a page that
     /// has not run that pass yet, or found nothing.
     var openLibraryCovers: [Int: URL] = [:]
+    /// Whether the `OpenLibraryCovers` gap-fill pass has been asked at all
+    /// this page load, still out, or done — section-wide, not per volume,
+    /// because `loadOpenLibraryCovers` is one batched pass that finishes for
+    /// every ISBN it was given at once, never volume by volume. Drives
+    /// `MissingVolumeCover.caption` so "No cover from the publisher" is only
+    /// ever said once that pass has actually had its say.
+    var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
 
     @State private var opened: SeriesWork.Volume?
 
@@ -144,7 +151,12 @@ struct VolumesSection: View {
             )
         case .seriesCover:
             MissingVolumeCover(
-                seriesCover: seriesCover, width: Metrics.coverSeedWidth, numberLabel: volume.number ?? ""
+                seriesCover: seriesCover, width: Metrics.coverSeedWidth,
+                // `.answered`: this spine is only ever drawn once
+                // `isCheckingStore` has gone false, which only happens after
+                // Apple's own shelf has already come back (empty, or this
+                // screen would be showing `AppleVolumesRow` instead).
+                apple: .answered, openLibrary: openLibraryStatus, numberLabel: volume.number ?? ""
             )
         }
     }
@@ -196,8 +208,13 @@ struct VolumesSection: View {
             // The spine's own `.accessibilityElement(children: .ignore)`
             // means `MissingVolumeCover`'s label is never read — this is the
             // one place a VoiceOver user is told the box is a stand-in
-            // rather than the volume's own art.
-            parts.append("cover not available")
+            // rather than the volume's own art. Says the same thing the
+            // caption on screen does, so a sighted and a VoiceOver reader
+            // are told the identical story — "cover not available" alone
+            // when there's nothing more specific to say yet.
+            parts.append(
+                MissingVolumeCover.accessibilityText(apple: .answered, openLibrary: openLibraryStatus)
+            )
         }
         if let date = volume.date {
             parts.append(date.formatted(Self.utcMonthYear))
@@ -221,12 +238,37 @@ struct MissingVolumeCover: View {
     let seriesCover: Cover
     var width: CGFloat = Metrics.coverSeedWidth
     var radius: CGFloat = Metrics.radiusSeed
+    /// Where Apple's shelf stands for this volume. Both call sites only ever
+    /// reach `MissingVolumeCover` after Apple has already answered — a
+    /// `VolumesSection` spine because Apple's own shelf came back empty, an
+    /// `AppleVolumesRow` spine because Apple answered but sent no art for
+    /// this one number — so `.answered` is the only value either passes
+    /// today. Kept as a parameter, not hard-coded, so `caption(apple:
+    /// openLibrary:)` reads the same rule `AppleVolumesRow`'s own future
+    /// loading state (if it ever gets one) would need.
+    var apple: SourceState = .answered
+    /// Where the `OpenLibraryCovers` gap-fill pass stands for this volume —
+    /// see `SeriesDetailView+Store.loadOpenLibraryCovers`, which runs once
+    /// for every ISBN a screen still needs and only ever finishes as a whole
+    /// pass, not volume by volume.
+    var openLibrary: SourceState = .notAsked
 
     /// What to draw for a volume's artwork slot: its own cover, when it has
     /// one, or the series' cover as a stand-in.
     enum Choice: Equatable {
         case artwork(Cover)
         case seriesCover
+    }
+
+    /// One source's standing on a volume's cover. Reaching `MissingVolumeCover`
+    /// at all already means no cover was found — the only open question is
+    /// why: nobody has looked (`.notAsked`), someone is still looking
+    /// (`.loading`), or every source that could have one has already said no
+    /// (`.answered`).
+    enum SourceState: Equatable {
+        case notAsked
+        case loading
+        case answered
     }
 
     /// `nonisolated static` so `VolumesSectionTests`/`AppleVolumesRowTests`-
@@ -236,21 +278,77 @@ struct MissingVolumeCover: View {
         artwork.map(Choice.artwork) ?? .seriesCover
     }
 
+    /// The line under the dimmed placeholder, when there is one worth
+    /// saying. A blank box with no explanation reads as the app being
+    /// broken (the actual bug report: The Beginning After the End, Yen
+    /// Press — no Apple Books listing, no Open Library ISBN cover) — but
+    /// saying so before both sources have actually answered would be a
+    /// caption a moment later proves wrong, so a source still `.loading`
+    /// (or never asked at all) says nothing rather than guess.
+    nonisolated static func caption(apple: SourceState, openLibrary: SourceState) -> String? {
+        guard apple == .answered, openLibrary == .answered else { return nil }
+        return "No cover from the publisher"
+    }
+
+    /// What a VoiceOver reader is told in place of the on-screen caption —
+    /// the same words when there is a caption to say, and the older, more
+    /// general "cover not available" the rest of the time, so a reader who
+    /// cannot see the box is still told there is no cover at all even
+    /// before both sources have finished answering. Both call sites'
+    /// accessibility labels go through this one function so the spoken text
+    /// can never drift from `caption(apple:openLibrary:)`.
+    nonisolated static func accessibilityText(apple: SourceState, openLibrary: SourceState) -> String {
+        caption(apple: apple, openLibrary: openLibrary) ?? "cover not available"
+    }
+
+    private var isLoading: Bool { apple == .loading || openLibrary == .loading }
+
+    private var caption: String? { Self.caption(apple: apple, openLibrary: openLibrary) }
+
     var body: some View {
-        CoverImage(cover: seriesCover, width: width, radius: radius, accessibilityText: "Cover not available")
-            // A GUESS: dim enough to read as a stand-in rather than the
-            // volume's actual art, not so dim the series is unrecognisable.
-            .opacity(0.35)
-            .overlay(alignment: .bottomLeading) {
-                Text(numberLabel)
-                    .typeCardTitle()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(6)
-                    // The caller's own accessibility element (both call
-                    // sites wrap the whole spine in one) already speaks
-                    // "cover not available" — this would only repeat it.
-                    .accessibilityHidden(true)
-            }
+        if isLoading {
+            // A plain skeleton, not the dimmed series cover: showing the
+            // stand-in before a source has actually finished answering
+            // would flash "no cover" content that a moment later might be
+            // replaced by real art, the same swap `VolumesSection`'s own
+            // `isCheckingStore` skeleton exists to avoid at the row level.
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(Palette.imagePlaceholder)
+                .frame(width: width, height: width / Metrics.coverAspect)
+                .shimmering()
+                .accessibilityHidden(true)
+        } else {
+            CoverImage(
+                cover: seriesCover, width: width, radius: radius, accessibilityText: "Cover not available"
+            )
+                // A GUESS: dim enough to read as a stand-in rather than the
+                // volume's actual art, not so dim the series is unrecognisable.
+                .opacity(0.35)
+                .overlay(alignment: .bottomLeading) {
+                    Text(numberLabel)
+                        .typeCardTitle()
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(6)
+                        // The caller's own accessibility element (both call
+                        // sites wrap the whole spine in one) already speaks
+                        // "cover not available" — this would only repeat it.
+                        .accessibilityHidden(true)
+                }
+                .overlay(alignment: .bottom) {
+                    if let caption {
+                        Text(caption)
+                            .typeFootnote()
+                            .foregroundStyle(Palette.textMuted)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 4)
+                            // Same reasoning as the number label above: the
+                            // spine's own accessibility element speaks this
+                            // text already, via `caption(apple:openLibrary:)`.
+                            .accessibilityHidden(true)
+                    }
+                }
+        }
     }
 
     /// Set by the caller so this view stays store-agnostic — `VolumesSection`

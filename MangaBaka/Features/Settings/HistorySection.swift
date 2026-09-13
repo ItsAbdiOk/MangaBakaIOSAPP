@@ -28,7 +28,7 @@ struct HistorySection: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
+                        .typeSymbol(size: 13, weight: .semibold)
                     Text(label)
                         .typeCTA()
                 }

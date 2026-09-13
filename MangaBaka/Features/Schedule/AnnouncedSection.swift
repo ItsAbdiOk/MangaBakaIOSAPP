@@ -92,9 +92,9 @@ struct AnnouncedSection: View {
             if let link = work.publisherLink {
                 Link(destination: link) {
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .typeSymbol(size: 12, weight: .semibold)
                         .foregroundStyle(Palette.textTertiary)
-                        .frame(width: 32, height: 32)
+                        .frame(minWidth: 32, minHeight: 32)
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Open the publisher's page")

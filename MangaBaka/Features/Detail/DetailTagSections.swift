@@ -87,7 +87,7 @@ struct DetailTagSections: View {
                 Text(showsAllGroups ? "Fewer tags" : "\(remaining) more tag groups")
                     .typeChip()
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .typeSymbol(size: 10, weight: .semibold)
                     .rotationEffect(.degrees(showsAllGroups ? 180 : 0))
             }
             .foregroundStyle(Palette.accent)
@@ -143,7 +143,7 @@ struct DetailTagSections: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "eye.slash")
-                    .font(.system(size: 10, weight: .semibold))
+                    .typeSymbol(size: 10, weight: .semibold)
                 Text("\(count) spoiler\(count == 1 ? "" : "s")")
                     .typeChip()
             }
@@ -171,7 +171,7 @@ struct DetailTagSections: View {
                 // and "this one follows from that one".
                 if tag.isImplied {
                     Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .typeSymbol(size: 9, weight: .semibold)
                         .foregroundStyle(Palette.textQuaternary)
                 }
                 Text(tag.name)

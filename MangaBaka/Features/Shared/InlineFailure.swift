@@ -18,7 +18,7 @@ struct InlineFailure: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: error.symbolName)
-                .font(.system(size: 13, weight: .regular))
+                .typeSymbol(size: 13, weight: .regular)
                 .foregroundStyle(Palette.textMuted)
                 .padding(.top, 1)
                 .accessibilityHidden(true)

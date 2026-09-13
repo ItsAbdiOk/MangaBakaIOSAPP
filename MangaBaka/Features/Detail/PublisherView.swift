@@ -244,7 +244,7 @@ struct PublisherView: View {
                                     .typeChip()
                                     .lineLimit(1)
                                 Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .typeSymbol(size: 10, weight: .semibold)
                                     .foregroundStyle(Palette.textMuted)
                             }
                             .foregroundStyle(Palette.textPrimary)

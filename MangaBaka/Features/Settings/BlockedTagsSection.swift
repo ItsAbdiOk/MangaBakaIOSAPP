@@ -51,9 +51,9 @@ struct BlockedTagsSection: View {
             HStack(spacing: 7) {
                 Text(tag.name).typeChip()
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .typeSymbol(size: 8, weight: .bold)
                     .foregroundStyle(Palette.textSecondary)
-                    .frame(width: 16, height: 16)
+                    .frame(minWidth: 16, minHeight: 16)
                     .background(Palette.surfaceField, in: Circle())
             }
             .foregroundStyle(Palette.textPrimary)
@@ -75,7 +75,7 @@ struct BlockedTagsSection: View {
         Button { isPicking = true } label: {
             HStack(spacing: 5) {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .bold))
+                    .typeSymbol(size: 10, weight: .bold)
                     .foregroundStyle(Palette.accent)
                 Text("Block a tag").typeChip()
             }
@@ -245,7 +245,7 @@ struct BlockTagPicker: View {
                 Spacer(minLength: 8)
                 if isBlocked {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .typeSymbol(size: 12, weight: .bold)
                         .foregroundStyle(Palette.accent)
                 }
             }

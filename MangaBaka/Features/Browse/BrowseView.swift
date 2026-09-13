@@ -229,7 +229,7 @@ struct BrowseView: View {
                                     : Palette.textSecondary
                             )
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .typeSymbol(size: 12, weight: .semibold)
                             .foregroundStyle(Palette.textQuaternary)
                     }
                     .padding(.vertical, 13)

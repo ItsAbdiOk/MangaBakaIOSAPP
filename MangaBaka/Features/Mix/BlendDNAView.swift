@@ -141,7 +141,7 @@ struct BlendDNAView: View {
                                     .typeSmallMeta()
                                     .foregroundStyle(Palette.textMuted)
                                 Image(systemName: "arrow.right")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .typeSymbol(size: 9, weight: .semibold)
                                     .foregroundStyle(Palette.accent)
                                 Text(Self.percent(move.to))
                                     .typeSmallMeta()
@@ -159,7 +159,7 @@ struct BlendDNAView: View {
                             .typeRowTitle()
                             .foregroundStyle(Palette.textPrimary)
                             .frame(maxWidth: .infinity)
-                            .frame(height: Metrics.ctaSecondary)
+                            .frame(minHeight: Metrics.ctaSecondary)
                             .background(Palette.surface, in: RoundedRectangle(
                                 cornerRadius: 14, style: .continuous
                             ))

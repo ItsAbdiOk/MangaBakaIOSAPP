@@ -86,9 +86,9 @@ struct StateMark: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 21, weight: .regular))
+            .typeSymbol(size: 21, weight: .regular, relativeTo: .title2)
             .foregroundStyle(Palette.textSecondary)
-            .frame(width: 55, height: 55)
+            .frame(minWidth: 55, minHeight: 55)
             .background(
                 Palette.surface,
                 in: RoundedRectangle(cornerRadius: 15, style: .continuous)

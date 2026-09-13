@@ -224,7 +224,7 @@ struct AccountCard: View {
                     .foregroundStyle(Palette.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
-                    .frame(height: Metrics.field)
+                    .frame(minHeight: Metrics.field)
                     .background(Palette.surfaceField, in: RoundedRectangle(
                         cornerRadius: Metrics.radiusChip, style: .continuous
                     ))
@@ -257,7 +257,7 @@ struct AccountCard: View {
                     // 40pt was the mockup's field height and Apple's audit
                     // measured the text field inside it at 225x19. A field you
                     // have to aim at is a field people mistype into.
-                    .frame(height: max(Metrics.field, Metrics.tapTarget))
+                    .frame(minHeight: max(Metrics.field, Metrics.tapTarget))
                     .background(Palette.surfaceField, in: RoundedRectangle(
                         cornerRadius: Metrics.radiusChip, style: .continuous
                     ))
@@ -298,7 +298,7 @@ private struct TokenLink: View {
                     Text("Get a token")
                         .typeCTA()
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .typeSymbol(size: 11, weight: .semibold)
                 }
                 .foregroundStyle(Palette.textSecondary)
                 .padding(.horizontal, 16)

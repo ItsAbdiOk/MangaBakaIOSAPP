@@ -28,7 +28,7 @@ struct OnboardingCopyTests {
         // A full-width control, not grey text: refusing is a real choice, and a
         // choice styled as an afterthought reads as one the app would rather
         // you did not make.
-        #expect(source.contains("frame(height: Metrics.ctaSecondary)"))
+        #expect(source.contains("frame(minHeight: Metrics.ctaSecondary)"))
     }
 
     /// Every claim on those screens has to be something the app does.

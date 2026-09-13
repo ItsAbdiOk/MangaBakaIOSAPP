@@ -14,19 +14,22 @@ struct CatalogueTests {
         ))
     }
 
-    @Test("Genres decode from their label/value pairs")
-    func decodesGenres() async {
-        URLProtocolStub.setHandler { _ in
-            .respond(.init(body: Data("""
-            {"status":200,"data":[{"label":"Action","value":"action"},
-                                  {"label":"Slice of Life","value":"slice_of_life"}]}
-            """.utf8)))
-        }
+    /// Captured 2026-09-13 22:33 UTC: `GET https://api.mangabaka.org/v1/genres`
+    /// (`Fixtures/genres-2026-09-13.json`). Finding: the endpoint rejects any
+    /// query argument at all — `?limit=5` answers 400 "This endpoint do not
+    /// accept any query arguments, please remove them and try again" — so the
+    /// fixture is the live, unfiltered 46-row list, not a trimmed page. The
+    /// old hand-built payload only ever exercised 2 of those 46 rows.
+    @Test("Genres decode from their live label/value pairs")
+    func decodesGenres() async throws {
+        let body = try Fixture.data("genres-2026-09-13")
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
 
         let genres = await makeService().genres().value ?? []
-        #expect(genres.map(\.value) == ["action", "slice_of_life"])
-        #expect(genres.first?.label == "Action")
+        #expect(genres.count == 46)
+        #expect(genres.first == Genre(label: "Action", value: "action"))
+        #expect(genres.last == Genre(label: "Yuri", value: "yuri"))
     }
 
     /// Genres and tags change rarely and the tag list is large. Re-fetching
@@ -122,6 +125,25 @@ struct CatalogueTests {
         #expect(await service.children(of: 537).map(\.id) == [538])
     }
 
+    /// Finding: `searchTags` — the method the tag pickers actually call for
+    /// `?q=` — had never been decoded against a captured `/v1/tags?q=` page;
+    /// only the `?limit=` shape (`tagPayload` above) had a fixture. Captured
+    /// 2026-09-13 22:33 UTC: `GET https://api.mangabaka.org/v1/tags?q=isekai&limit=5`
+    /// (`Fixtures/tags-search-2026-09-13.json`). The five rows are already in
+    /// series-count order on the wire, so this also confirms the sort is a
+    /// no-op here rather than masking a bug the fixture happens not to show.
+    @Test("A tag search decodes the live q= shape, ordered by series count")
+    func searchTagsDecodesRealShape() async throws {
+        let body = try Fixture.data("tags-search-2026-09-13")
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
+        defer { URLProtocolStub.reset() }
+
+        let found = await makeService().searchTags("isekai", limit: 5)
+        #expect(found?.map(\.id) == [94, 2879, 3801, 5454, 5825])
+        #expect(found?.first?.namePath == "Settings > Fantasy > Isekai")
+        #expect(found?.first?.level == 3, "a wire root is level 1; Isekai sits three deep under it")
+    }
+
     /// `founded`/`closed` are `string|null, format: date` on the wire, not the
     /// `Int?`/`Bool?` this used to type them as — verified live 2026-09-13,
     /// `/v1/publishers/search?q=Kodansha` sends `"founded": "2008-07-01"` on
@@ -177,39 +199,31 @@ struct CatalogueTests {
     }
 
     /// `q=Kodansha` answers `["Kodansha USA","Kodansha Manga","Kodansha"]`
-    /// live (measured 2026-09-13) — the exact match is third, not first.
-    /// Fails without the fix: `?? hits.first` picks "Kodansha USA".
+    /// live — captured 2026-09-13 22:33 UTC:
+    /// `GET https://api.mangabaka.org/v1/publishers/search?q=Kodansha&limit=5`
+    /// (`Fixtures/publishers-search-2026-09-13.json`) — the exact match is
+    /// third, not first. Fails without the fix: `?? hits.first` picks
+    /// "Kodansha USA".
     @Test("An exact name match wins even when it is not the first result")
-    func exactMatchBeatsFirstResult() async {
-        URLProtocolStub.setHandler { _ in
-            .respond(.init(body: Data("""
-            {"status":200,"data":[
-              {"id":1,"name":"Kodansha USA"},
-              {"id":2,"name":"Kodansha Manga"},
-              {"id":3,"name":"Kodansha"}
-            ]}
-            """.utf8)))
-        }
+    func exactMatchBeatsFirstResult() async throws {
+        let body = try Fixture.data("publishers-search-2026-09-13")
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
 
         let found = await makeService().findPublisher(named: "Kodansha")
         #expect(found?.name == "Kodansha")
+        // The wire's exact-name row (id 32, JP) carries no founding date,
+        // unlike the US imprint the old hand-built payload never modelled.
+        #expect(found?.founded == nil)
     }
 
-    /// Same three results, a name none of them are. Fails without the fix:
-    /// `?? hits.first` decorates the page with "Kodansha USA", a different
-    /// publisher that merely starts the same way.
+    /// Same fixture, a name none of its three rows are. Fails without the
+    /// fix: `?? hits.first` decorates the page with "Kodansha USA", a
+    /// different publisher that merely starts the same way.
     @Test("A name matching nothing in the results is nil, not the first result")
-    func noMatchIsNilNotFirstResult() async {
-        URLProtocolStub.setHandler { _ in
-            .respond(.init(body: Data("""
-            {"status":200,"data":[
-              {"id":1,"name":"Kodansha USA"},
-              {"id":2,"name":"Kodansha Manga"},
-              {"id":3,"name":"Kodansha"}
-            ]}
-            """.utf8)))
-        }
+    func noMatchIsNilNotFirstResult() async throws {
+        let body = try Fixture.data("publishers-search-2026-09-13")
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
 
         let found = await makeService().findPublisher(named: "Kodansha Comics")

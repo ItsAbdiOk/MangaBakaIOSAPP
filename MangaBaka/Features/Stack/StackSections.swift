@@ -261,10 +261,10 @@ struct StackCircleAction: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 22, weight: .medium))
+                .typeSymbol(size: 22, weight: .medium, relativeTo: .title2)
                 .foregroundStyle(Palette.textSecondary)
                 .symbolEffect(.bounce, value: reduceMotion ? 0 : bounces)
-                .frame(width: size, height: size)
+                .frame(minWidth: size, minHeight: size)
                 .background { Glass.floating(Circle()) }
         }
         .buttonStyle(.press)

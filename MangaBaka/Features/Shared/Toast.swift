@@ -94,13 +94,32 @@ final class ToastCentre {
     }
 }
 
-private struct ToastOverlay: ViewModifier {
+/// Internal rather than private so `ToastTests` can reach the hit-testing
+/// rule below; nothing outside this file constructs it.
+struct ToastOverlay: ViewModifier {
     let centre: ToastCentre
     /// A swipe-down far enough to count as "dismiss this" rather than a
     /// stray drag. 40pt is a guess, generous enough that a reader aiming
     /// roughly downward at the capsule does not have to be precise.
     private static let dismissThreshold: CGFloat = 40
     @State private var dragOffset: CGFloat = 0
+
+    /// The only region of the screen a toast takes taps from: the capsule
+    /// itself. Seen on the simulator 2026-09-13: with a toast up, a reader
+    /// who had just saved one series could not tap the next until it faded.
+    /// The swipe gesture used to be attached *after* the 104pt bottom
+    /// padding and the 300pt max-width frame, so its hit region was whatever
+    /// SwiftUI decided that padded, framed subtree covered — over the tab bar
+    /// — rather than the card. Now the shape is stated, attached before the
+    /// padding, and this rule is what the test checks.
+    nonisolated static var interactionShape: Capsule { Capsule() }
+
+    /// Whether a tap at `point` lands on the card whose frame is `card`.
+    /// Everything outside — the padding under the capsule, the rest of the
+    /// overlay — passes through to the content beneath.
+    nonisolated static func capturesTap(at point: CGPoint, card: CGRect) -> Bool {
+        interactionShape.path(in: card).contains(point)
+    }
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
@@ -115,20 +134,13 @@ private struct ToastOverlay: ViewModifier {
                     .frame(maxWidth: 300)
                     .background { Glass.floating(Capsule()) }
                     .clipShape(Capsule())
-                    // Above the tab bar, not behind it. The mockup puts it at
-                    // 104px from the bottom, which is the bar plus its inset.
-                    .padding(.bottom, Metrics.scrollBottomInset)
-                    .offset(y: max(0, dragOffset))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    // Trades away the old "never intercepts a tap" —
-                    // `.allowsHitTesting(false)` — for the swipe-down this
-                    // batch adds: a gesture needs hit testing on. The toast
-                    // now sits over the tab bar for its 2-4s window rather
-                    // than passing taps through to it, which is a real
-                    // regression on whatever's directly underneath; flagged
-                    // for the main session to judge on a device against how
-                    // often a toast is actually up when a reader reaches for
-                    // the bar.
+                    // The swipe-down needs hit testing on (the old
+                    // `.allowsHitTesting(false)` went with it), so the hit
+                    // region is pinned to the capsule here — before the
+                    // bottom padding below, which would otherwise be part of
+                    // the gestured subtree and sit exactly over the tab bar.
+                    // See `interactionShape`.
+                    .contentShape(Self.interactionShape)
                     .gesture(
                         DragGesture()
                             .onChanged { value in
@@ -142,6 +154,11 @@ private struct ToastOverlay: ViewModifier {
                                 withAnimation(Motion.reduced(Motion.snappy)) { dragOffset = 0 }
                             }
                     )
+                    // Above the tab bar, not behind it. The mockup puts it at
+                    // 104px from the bottom, which is the bar plus its inset.
+                    .padding(.bottom, Metrics.scrollBottomInset)
+                    .offset(y: max(0, dragOffset))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                     .accessibilityAddTraits(.isStaticText)
             }
         }

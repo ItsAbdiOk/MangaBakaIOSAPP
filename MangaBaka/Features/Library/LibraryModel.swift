@@ -137,7 +137,7 @@ final class LibraryModel {
     private func refreshDerived() {
         shape = Self.shape(of: entries)
         allCount = entries.count { $0.state != .dropped }
-        subtitle = Self.subtitle(of: entries)
+        subtitle = Self.subtitle(of: entries, isComplete: isComplete)
         inProgress = Self.inProgress(in: entries)
         listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
         jumpTargets = Self.jumpTargets(in: listed)
@@ -230,10 +230,31 @@ final class LibraryModel {
     /// whether "Nothing here yet" belongs on screen.
     private(set) var subtitle = ""
 
-    private static func subtitle(of entries: [LibraryEntry]) -> String {
+    private static func subtitle(of entries: [LibraryEntry], isComplete: Bool) -> String {
         guard !entries.isEmpty else { return "Nothing here yet" }
-        let rated = entries.count { ($0.rating ?? 0) > 0 }
-        return "\(entries.count.formatted()) series · \(rated.formatted()) rated"
+        return subtitle(
+            count: entries.count,
+            dropped: entries.count { $0.state == .dropped },
+            rated: entries.count { ($0.rating ?? 0) > 0 },
+            isComplete: isComplete
+        )
+    }
+
+    /// The one rule for the two counts that sit a few points apart on the
+    /// screen: this line and the "All" pill (`allCount`, everything but
+    /// dropped). Seen on the simulator 2026-09-13: "942 series" over
+    /// "All 513", with nothing on screen saying the 429 between them were
+    /// the dropped shelf — two numbers for what read as one thing. The
+    /// series count stays the whole library, but the dropped count is said
+    /// beside it so the pill's number is derivable from this line
+    /// (`count - dropped == allCount`, which the test asserts), and while the
+    /// walk is still landing pages the count is labelled "so far", because
+    /// until then it is a floor (see `isComplete`), not the library.
+    nonisolated static func subtitle(count: Int, dropped: Int, rated: Int, isComplete: Bool) -> String {
+        var parts = ["\(count.formatted()) series\(isComplete ? "" : " so far")"]
+        if dropped > 0 { parts.append("\(dropped.formatted()) dropped") }
+        parts.append("\(rated.formatted()) rated")
+        return parts.joined(separator: " · ")
     }
 
     /// Mid-way through something, and still on it.

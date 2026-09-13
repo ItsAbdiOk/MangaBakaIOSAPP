@@ -67,7 +67,7 @@ struct LinksSection: View {
                             .foregroundStyle(Palette.accent)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 14)
-                            .frame(height: Metrics.ctaSecondary)
+                            .frame(minHeight: Metrics.ctaSecondary)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.press)
@@ -99,11 +99,11 @@ struct LinksSection: View {
                         .accessibilityHidden(true)
                 }
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .typeSymbol(size: 11, weight: .semibold)
                     .foregroundStyle(Palette.textMuted)
             }
             .padding(.horizontal, 14)
-            .frame(height: Metrics.ctaSecondary)
+            .frame(minHeight: Metrics.ctaSecondary)
         }
         .buttonStyle(.press)
         .accessibilityHint("Opens \(link.title) in the browser")

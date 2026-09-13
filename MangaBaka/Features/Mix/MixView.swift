@@ -217,7 +217,7 @@ struct MixView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: Metrics.ctaPrimary)
+            .frame(minHeight: Metrics.ctaPrimary)
             // A disabled control is a different control, not a faded live one.
             // `.opacity(0.4)` over the accent fill left accent-coloured text on
             // an accent-coloured ground, which Apple's audit reports as an

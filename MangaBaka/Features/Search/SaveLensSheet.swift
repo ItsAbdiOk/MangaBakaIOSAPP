@@ -123,12 +123,51 @@ struct SaveLensSheet: View {
 /// and in Mix without being designed twice. Saving from a results screen would
 /// need a second entry point, and two entry points for one action is how they
 /// drift apart.
+///
+/// Looks disabled with no filters set, but the tap still lands: it used to
+/// carry `.disabled(true)`, which SwiftUI also uses to drop the touch, so a
+/// reader who tapped an unfiltered lens button got nothing at all — no
+/// haptic, no explanation, indistinguishable from a missed tap
+/// (docs/reviews/search/STATUS.md #58). Now the visual stays muted but the
+/// tap always reaches `action` or an explanation.
 struct SaveLensButton: View {
-    let isEnabled: Bool
+    /// The query the button would save. Read directly, rather than a plain
+    /// `isEnabled: Bool` from the caller, so `tapOutcome` — and therefore
+    /// what the tap does — has one source of truth instead of the view
+    /// trusting a bool some other file promises stays in sync with it.
+    let query: SearchQuery
     let action: () -> Void
 
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
+
+    /// What a tap decides, kept as a pure function of the query so it is
+    /// testable without instantiating the view.
+    enum Outcome: Equatable {
+        /// Filters are set: run `action`.
+        case save
+        /// Nothing to save — the button explains instead.
+        case explain
+    }
+
+    nonisolated static func tapOutcome(query: SearchQuery) -> Outcome {
+        query.isEmpty ? .explain : .save
+    }
+
+    private var isEnabled: Bool { Self.tapOutcome(query: query) == .save }
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            switch Self.tapOutcome(query: query) {
+            case .save:
+                action()
+            case .explain:
+                // `.failure` for the kind, not because saving failed — it is
+                // the only kind that pairs with `Haptics.warning` in
+                // `ToastOverlay`, which is the feedback a silent-looking tap
+                // needs. See `ToastCentre.Kind`'s doc comment.
+                toasts?.show("Set a filter first to save a lens", kind: .failure)
+            }
+        } label: {
             Image(systemName: "bookmark")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(isEnabled ? Palette.accent : Palette.textQuaternary)
@@ -146,7 +185,8 @@ struct SaveLensButton: View {
                 )
         }
         .buttonStyle(.press)
-        .disabled(!isEnabled)
+        // Deliberately not `.disabled(!isEnabled)` — see the type's doc
+        // comment. The muted colours above already say "not ready".
         .accessibilityLabel("Save these filters as a lens")
         .accessibilityHint(isEnabled ? "" : "Set a filter first")
     }

@@ -229,7 +229,7 @@ extension FilterPanel {
         VStack(spacing: 10) {
             HStack(spacing: Metrics.gapChips) {
                 if let onSaveLens {
-                    SaveLensButton(isEnabled: !query.isEmpty) { onSaveLens() }
+                    SaveLensButton(query: query) { onSaveLens() }
                 }
 
                 // Reversible in place, rather than gone. See `FilterSheet`'s

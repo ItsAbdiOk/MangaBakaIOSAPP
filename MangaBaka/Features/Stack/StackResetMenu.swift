@@ -23,9 +23,9 @@ struct StackResetMenu: View {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
+                .typeSymbol(size: 16, weight: .semibold, relativeTo: .callout)
                 .foregroundStyle(Palette.textSecondary)
-                .frame(width: 44, height: 44)
+                .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget)
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Stack options")

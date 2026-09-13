@@ -281,7 +281,7 @@ private struct StackMechanicPage: View {
     private func direction(symbol: String, label: String, tint: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
+                .typeSymbol(size: 17, weight: .semibold, relativeTo: .body)
                 .foregroundStyle(tint)
             Text(label)
                 .typeSmallMeta()
@@ -356,7 +356,7 @@ private struct AccountPage: View {
                     .typeCTA()
                     .foregroundStyle(Palette.onAccent)
                     .frame(maxWidth: .infinity)
-                    .frame(height: Metrics.ctaPrimary)
+                    .frame(minHeight: Metrics.ctaPrimary)
                     .background(Palette.accent, in: RoundedRectangle(
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))
@@ -379,7 +379,7 @@ private struct AccountPage: View {
                     .typeCTA()
                     .foregroundStyle(Palette.textSecondary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: Metrics.ctaSecondary)
+                    .frame(minHeight: Metrics.ctaSecondary)
                     .overlay(
                         RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
                             .strokeBorder(Palette.borderPill, lineWidth: 0.5)
@@ -396,7 +396,7 @@ private struct AccountPage: View {
     private func row(_ benefit: Benefit) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: benefit.symbol)
-                .font(.system(size: 16, weight: .medium))
+                .typeSymbol(size: 16, weight: .medium, relativeTo: .callout)
                 .foregroundStyle(Palette.accent)
                 .frame(width: 24)
                 .accessibilityHidden(true)

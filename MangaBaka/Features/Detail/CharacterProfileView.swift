@@ -421,7 +421,7 @@ private struct CharacterProfileContent: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "eye.slash")
-                    .font(.system(size: 10, weight: .semibold))
+                    .typeSymbol(size: 10, weight: .semibold)
                 Text("Spoiler")
                     .typeChip()
             }
@@ -448,7 +448,7 @@ private struct CharacterProfileContent: View {
                 Text("View on \(name)")
                     .typeCTA()
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .typeSymbol(size: 11, weight: .semibold)
             }
             .foregroundStyle(Palette.accent)
         }

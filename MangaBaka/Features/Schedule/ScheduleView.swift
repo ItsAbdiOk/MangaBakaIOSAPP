@@ -148,7 +148,7 @@ struct ScheduleView: View {
                     // then, and a disabled button with no motion reads as
                     // broken rather than busy.
                     Image(systemName: "arrow.trianglehead.2.clockwise")
-                        .font(.system(size: 11, weight: .semibold))
+                        .typeSymbol(size: 11, weight: .semibold)
                         .symbolEffect(.rotate, isActive: model.isMeasuring && !reduceMotion)
                     Text(model.remeasureLabel)
                         .typeSmallMeta()
@@ -253,7 +253,7 @@ extension ScheduleView {
                     .typeCTA()
                     .foregroundStyle(Palette.onAccent)
                     .frame(maxWidth: .infinity)
-                    .frame(height: Metrics.ctaSecondary)
+                    .frame(minHeight: Metrics.ctaSecondary)
                     .background(Palette.accent, in: RoundedRectangle(
                         cornerRadius: Metrics.radiusCard, style: .continuous
                     ))

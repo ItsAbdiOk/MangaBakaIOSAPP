@@ -159,7 +159,7 @@ struct LockPill: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .typeSymbol(size: 10, weight: .semibold)
             Text("Always on")
                 .typeChip()
         }
@@ -185,7 +185,7 @@ struct RefetchCallout: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "arrow.trianglehead.2.clockwise")
-                .font(.system(size: 13, weight: .semibold))
+                .typeSymbol(size: 13, weight: .semibold)
                 .foregroundStyle(Palette.accent)
                 .padding(.top, 1)
                 .accessibilityHidden(true)

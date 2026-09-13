@@ -411,19 +411,19 @@ extension StackView {
                     .typeRowTitle()
                     .foregroundStyle(Palette.textPrimary)
                     .padding(.horizontal, 20)
-                    .frame(height: Metrics.actionDetails)
+                    .frame(minHeight: Metrics.actionDetails)
                     .background { Glass.floating(Capsule()) }
             }
             .buttonStyle(.press)
 
             Button { Task { await react(.saved) } } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .medium))
+                    .typeSymbol(size: 24, weight: .medium, relativeTo: .title2)
                     .foregroundStyle(Palette.onAccent)
                     // The glyph answers the commit it stands for, whichever
                     // way the card went.
                     .symbolEffect(.bounce, value: reduceMotion ? 0 : saves)
-                    .frame(width: Metrics.actionSave, height: Metrics.actionSave)
+                    .frame(minWidth: Metrics.actionSave, minHeight: Metrics.actionSave)
                     .background(Palette.accent, in: Circle())
                     .shadow(color: .black.opacity(0.5), radius: 13, y: 10)
             }

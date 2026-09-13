@@ -103,7 +103,10 @@ struct LibraryModelTests {
         ]))
         await model.load()
 
-        #expect(model.subtitle == "3 series · 2 rated")
+        // "1 dropped" is new (2026-09-13): the count of the whole library and
+        // the "All" pill's count differ by exactly the dropped shelf, and the
+        // line now says so — see `LibrarySubtitleTests`.
+        #expect(model.subtitle == "3 series · 1 dropped · 2 rated")
     }
 
     @Test("An empty library says so rather than counting to zero")

@@ -43,7 +43,7 @@ struct AttributionSection: View {
                             Text("mangabaka.org")
                                 .typeCTA()
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 11, weight: .semibold))
+                                .typeSymbol(size: 11, weight: .semibold)
                         }
                         .foregroundStyle(Palette.accent)
                     }

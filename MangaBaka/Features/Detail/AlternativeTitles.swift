@@ -40,7 +40,7 @@ struct AlternativeTitlesButton: View {
                         .padding(.vertical, 1)
                         .background(Palette.surfaceChip, in: Capsule())
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .typeSymbol(size: 9, weight: .semibold)
                 }
                 .foregroundStyle(Palette.textMuted)
                 .frame(minHeight: Metrics.tapTarget, alignment: .leading)

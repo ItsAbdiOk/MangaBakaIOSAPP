@@ -143,7 +143,7 @@ struct DetailScheduleBlock: View {
 
             if onOpen != nil {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .typeSymbol(size: 9, weight: .semibold)
                     .foregroundStyle(Palette.textMuted)
             }
             Spacer(minLength: 0)

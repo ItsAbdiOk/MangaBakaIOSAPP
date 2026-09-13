@@ -577,8 +577,10 @@ struct MixFilterTests {
     /// while it was true of Search alone.
     @Test("Mix has the same save control Search does")
     func mixCanSaveALens() throws {
-        #expect(try source().contains("SaveLensButton"))
-        #expect(try source().contains("model.filters.isEmpty"), "inert until something is set")
+        #expect(try source().contains("SaveLensButton(query: model.filters)"))
+        // "Inert until something is set" is `SaveLensButton.tapOutcome`'s
+        // rule now, tested as behaviour in `SaveLensButtonTapOutcomeTests`,
+        // not a disabled flag the strip had to keep in step.
     }
 
     // `tagsBeforeBlending` used to live here, asserting the absence of a
@@ -595,5 +597,23 @@ struct MixFilterTests {
     @Test("A picked tag survives a blend that does not mention it")
     func pickedTagsSurvive() throws {
         #expect(try source().contains("pickedBeyondDNA"))
+    }
+}
+
+/// A tap on the bookmark button with no filters set used to be `.disabled`,
+/// which SwiftUI also uses to swallow the touch — a reader got no haptic, no
+/// toast, nothing (docs/reviews/search/STATUS.md #58). The decision now lives
+/// in a pure function so it is checked here without a view, a `ToastCentre`,
+/// or the sheet the button opens.
+@Suite("Tapping the disabled save-lens button explains itself")
+struct SaveLensButtonTapOutcomeTests {
+    @Test("An empty query explains rather than saving")
+    func tapOutcomeExplainsWhenEmpty() {
+        #expect(SaveLensButton.tapOutcome(query: SearchQuery()) == .explain)
+    }
+
+    @Test("A query with a filter set saves")
+    func tapOutcomeSavesWhenFiltered() {
+        #expect(SaveLensButton.tapOutcome(query: SearchQuery(types: ["manga"])) == .save)
     }
 }

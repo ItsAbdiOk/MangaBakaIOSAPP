@@ -26,6 +26,11 @@ struct AppleVolumesRow: View {
     /// own, keyed by volume number — see
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`.
     var openLibraryCovers: [Int: URL] = [:]
+    /// Whether the `OpenLibraryCovers` gap-fill pass has been asked at all,
+    /// still out, or done for this shelf — see `VolumesSection`'s own
+    /// `openLibraryStatus` doc, which explains why this is one flag for the
+    /// whole row rather than per spine. Drives `MissingVolumeCover.caption`.
+    var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
 
     enum Edition {
         /// From the Japanese store, because the reader's has nothing. Covers
@@ -145,7 +150,11 @@ struct AppleVolumesRow: View {
             )
         case .seriesCover:
             MissingVolumeCover(
-                seriesCover: seriesCover, width: Metrics.coverSeedWidth, numberLabel: "\(volume.number)"
+                seriesCover: seriesCover, width: Metrics.coverSeedWidth,
+                // `.answered`: this row only ever renders once Apple has
+                // already answered with volumes — that's what makes `shelf`
+                // non-empty in the first place.
+                apple: .answered, openLibrary: openLibraryStatus, numberLabel: "\(volume.number)"
             )
         }
     }
@@ -180,8 +189,12 @@ struct AppleVolumesRow: View {
                 // The spine's own accessibility element (`children: .ignore`
                 // above) means `MissingVolumeCover`'s label is never read —
                 // this is the one place VoiceOver is told the box is a
-                // stand-in, not the store's own art.
-                resolvedCover(volume) == nil ? "cover not available" : nil,
+                // stand-in, not the store's own art. Says the same thing the
+                // on-screen caption does — see `VolumesSection`'s matching
+                // accessibility label.
+                resolvedCover(volume) == nil
+                    ? MissingVolumeCover.accessibilityText(apple: .answered, openLibrary: openLibraryStatus)
+                    : nil,
                 edition == nil ? volume.formattedPrice : nil
             ].compactMap { $0 }.joined(separator: ", ")
         )
