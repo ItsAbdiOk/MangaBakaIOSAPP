@@ -17,6 +17,11 @@ actor MangaUpdatesClient {
     private let session: URLSession
     private let clock: any Clock
     private var spacing = RequestSpacing(minimumInterval: MangaUpdatesClient.minimumInterval)
+    /// Where `series(number:)` answers are cached — see `readSeriesCache`.
+    /// Nil disables the cache rather than throwing, same as
+    /// `WebtoonsFeedClient`: a directory that cannot be created costs a
+    /// repeat request, not a crash.
+    private let cacheDirectory: URL?
 
     /// Identifies the app, as their terms require.
     static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
@@ -24,11 +29,14 @@ actor MangaUpdatesClient {
     init(
         baseURL: URL = URL(string: "https://api.mangaupdates.com/v1").unsafeScheduleFallback,
         session: URLSession = .shared,
-        clock: any Clock = SystemClock()
+        clock: any Clock = SystemClock(),
+        cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?.appendingPathComponent("mangaupdates", isDirectory: true)
     ) {
         self.baseURL = baseURL
         self.session = session
         self.clock = clock
+        self.cacheDirectory = cacheDirectory
     }
 
     /// One release row. Only the fields the estimate needs are modelled.
@@ -153,6 +161,88 @@ actor MangaUpdatesClient {
         } catch {
             throw APIError.decoding(underlying: String(describing: error), party: .mangaUpdates)
         }
+    }
+
+    /// One series record — categories, rating, and MangaUpdates' own
+    /// status/licensed/completed flags — since they all come off the same
+    /// `GET /v1/series/{number}` call.
+    ///
+    /// Cached on disk for a week, the same way `WebtoonsFeedClient` caches its
+    /// feed: "what it's actually like" does not change day to day, and
+    /// spending a request (and this client's 3 s spacing) on every series page
+    /// visit would make the section the slowest thing on the screen for no
+    /// reason.
+    ///
+    /// - Parameter number: the **decoded numeric** MangaUpdates id. Never the
+    ///   base-36 string — see `MangaUpdatesID`.
+    func series(number: Int) async throws(APIError) -> MangaUpdatesSeries {
+        let key = MangaUpdatesCategories.cacheKey(seriesNumber: number)
+        if let cached = readSeriesCache(key) { return cached }
+
+        try await waitForSlot()
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("series/\(number)"))
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
+            throw APIError.offline
+        } catch {
+            throw APIError.transport(underlying: String(describing: error), party: .mangaUpdates)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(underlying: "Not an HTTP response.", party: .mangaUpdates)
+        }
+        if http.statusCode == 429 {
+            let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
+            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            throw APIError.rateLimited(retryAfter: retryAfter, party: .mangaUpdates)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.server(
+                status: http.statusCode,
+                message: "MangaUpdates returned \(http.statusCode).",
+                party: .mangaUpdates
+            )
+        }
+
+        do {
+            let decoded = try JSONDecoder().decode(MangaUpdatesSeries.self, from: data)
+            writeSeriesCache(key, decoded)
+            return decoded
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error), party: .mangaUpdates)
+        }
+    }
+
+    // MARK: - Series cache
+
+    private struct CachedSeries: Codable {
+        let storedAt: Date
+        let series: MangaUpdatesSeries
+    }
+
+    private func seriesCacheFile(_ key: String) -> URL? {
+        cacheDirectory?.appendingPathComponent("\(key).json")
+    }
+
+    private func readSeriesCache(_ key: String) -> MangaUpdatesSeries? {
+        guard let file = seriesCacheFile(key), let data = try? Data(contentsOf: file),
+              let cached = try? JSONDecoder().decode(CachedSeries.self, from: data),
+              clock.now.timeIntervalSince(cached.storedAt) < MangaUpdatesCategories.cacheLife
+        else { return nil }
+        return cached.series
+    }
+
+    private func writeSeriesCache(_ key: String, _ series: MangaUpdatesSeries) {
+        guard let directory = cacheDirectory, let file = seriesCacheFile(key) else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let cached = CachedSeries(storedAt: clock.now, series: series)
+        try? JSONEncoder().encode(cached).write(to: file, options: .atomic)
     }
 
     /// Blocks until the spacing interval has elapsed since the last request.

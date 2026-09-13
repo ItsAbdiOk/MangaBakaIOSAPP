@@ -59,6 +59,84 @@ struct MangaUpdatesSpacingTests {
     }
 }
 
+/// `series(number:)` — the request itself, its spacing, and its errors.
+/// `.serialized` for the same reason as the suite above: it shares
+/// `URLProtocolStub`'s per-test state.
+@Suite("MangaUpdates series client", .serialized)
+struct MangaUpdatesSeriesClientTests {
+    private func tempCacheDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("mangaupdates-tests-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    private func client(clock: any Clock = TestClock()) -> MangaUpdatesClient {
+        MangaUpdatesClient(
+            baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
+            session: URLProtocolStub.makeSession(),
+            clock: clock,
+            cacheDirectory: tempCacheDirectory()
+        )
+    }
+
+    /// "7s905mh" (base 36) is 16_945_653_113 decoded — `MangaUpdatesID`'s own
+    /// example. This proves the client is called with the decoded number, not
+    /// the raw id: sending the raw string returns HTTP 200 with an unrelated
+    /// series (see `MangaUpdatesID`'s doc comment), a failure mode a stub
+    /// cannot reproduce, so this asserts on the URL the client actually built
+    /// instead.
+    @Test("The request path carries the decoded numeric id, not the base-36 string")
+    func requestsTheDecodedNumber() async throws {
+        let body = Data(#"{"series_id": 1, "categories": []}"#.utf8)
+        URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
+        defer { URLProtocolStub.reset() }
+
+        let number = try #require(MangaUpdatesID.number(from: "7s905mh"))
+        _ = try await client().series(number: number)
+
+        let request = try #require(URLProtocolStub.requests.first)
+        #expect(request.url?.path.hasSuffix("/series/\(number)") == true)
+        #expect(request.url?.path.contains("7s905mh") == false)
+    }
+
+    @Test("A 404 becomes .server(404, party: .mangaUpdates), not a MangaBaka error")
+    func notFoundCarriesTheParty() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 404)) }
+        defer { URLProtocolStub.reset() }
+
+        let expected = APIError.server(
+            status: 404, message: "MangaUpdates returned 404.", party: .mangaUpdates
+        )
+        await #expect(throws: expected) {
+            _ = try await client().series(number: 12_345)
+        }
+    }
+
+    /// Same bug class `MangaUpdatesSpacingTests.concurrentCallersAreSpaced`
+    /// proves for `releases(seriesNumber:)`: the slot must be claimed before
+    /// the wait, or two concurrent callers both read the same "next allowed"
+    /// slot and both fire together.
+    @Test("Two concurrent series() callers are spaced by the minimum interval")
+    func concurrentSeriesCallsAreSpaced() async throws {
+        let arrivals = ArrivalLog()
+        URLProtocolStub.setHandler { _ in
+            arrivals.record()
+            return .respond(.init(body: Data(#"{"series_id": 1, "categories": []}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let sharedClient = client()
+        // Warm-up so the slot is already taken, same reasoning as the
+        // sibling test: the first caller from cold never waits.
+        _ = try await sharedClient.series(number: 1)
+        async let first: MangaUpdatesSeries = sharedClient.series(number: 2)
+        async let second: MangaUpdatesSeries = sharedClient.series(number: 3)
+        _ = try await (first, second)
+
+        let gap = try #require(arrivals.lastGap)
+        #expect(gap >= .seconds(MangaUpdatesClient.minimumInterval - 0.5))
+    }
+}
+
 /// The rule itself, checked without sleeping: the claim happens at call time,
 /// so callers that arrive together get consecutive slots.
 @Suite("Request spacing slots")

@@ -141,3 +141,99 @@ struct MangaUpdatesDecodingTests {
         #expect(releases.map(\.chapter) == ["236", "235"])
     }
 }
+
+/// Decoding a real `GET /v1/series/{id}` answer, for "What it's actually
+/// like" — MangaUpdates' vote-weighted categories.
+///
+/// Fixture: `mangaupdates-berserk.json`, captured live 2026-09-13 from
+/// `GET /v1/series/51239621230` (description redacted). 263 categories is
+/// the real count on that answer, not a round number picked for the test.
+@Suite("MangaUpdates series decoding")
+struct MangaUpdatesSeriesDecodingTests {
+    @Test("A real series answer decodes all 263 categories")
+    func decodesAllCategories() throws {
+        let series = try JSONDecoder().decode(
+            MangaUpdatesSeries.self, from: Fixture.data("mangaupdates-berserk")
+        )
+        #expect(series.categories.count == 263)
+        #expect(series.seriesID == 51_239_621_230)
+        #expect(series.bayesianRating == 8.98)
+        #expect(series.ratingVotes == 3727)
+        #expect(series.latestChapter == 386)
+        #expect(series.licensed == true)
+        #expect(series.completed == false)
+    }
+
+    /// "Abuse of Power": 33 votes_plus, 1 votes_minus, on the fixture — this
+    /// pins the raw vote fields survive decoding untouched, ahead of
+    /// `MangaUpdatesCategories.ranked` doing anything with them.
+    @Test("Abuse of Power decodes with its real vote split, net 32")
+    func abuseOfPowerVotes() throws {
+        let series = try JSONDecoder().decode(
+            MangaUpdatesSeries.self, from: Fixture.data("mangaupdates-berserk")
+        )
+        let category = try #require(series.categories.first { $0.category == "Abuse of Power" })
+        #expect(category.votesPlus == 33)
+        #expect(category.votesMinus == 1)
+        #expect(category.votesPlus - category.votesMinus == 32)
+    }
+}
+
+/// `MangaUpdatesCategories.ranked` — pure, so exercised without any network
+/// stub.
+@Suite("MangaUpdates category ranking")
+struct MangaUpdatesCategoriesRankingTests {
+    private func series(_ votes: [MangaUpdatesSeries.CategoryVote]) -> MangaUpdatesSeries {
+        MangaUpdatesSeries(
+            seriesID: 1,
+            categories: votes,
+            bayesianRating: nil, ratingVotes: nil, latestChapter: nil, status: nil,
+            licensed: nil, completed: nil
+        )
+    }
+
+    private func vote(_ category: String, _ plus: Int, _ minus: Int) -> MangaUpdatesSeries.CategoryVote {
+        MangaUpdatesSeries.CategoryVote(category: category, votesPlus: plus, votesMinus: minus)
+    }
+
+    @Test("A category below the minimum vote count is dropped")
+    func dropsBelowMinimumVotes() {
+        // 2 total votes (1 + 1), below the default minimum of 3.
+        let ranked = MangaUpdatesCategories.ranked(series([vote("Rare Tag", 1, 0)]))
+        #expect(ranked.isEmpty)
+    }
+
+    @Test("A category with a net score of zero or below is dropped")
+    func dropsNonPositiveNetScore() {
+        // 10 total votes clears the minimum, but the split is even.
+        let ranked = MangaUpdatesCategories.ranked(series([vote("Split Opinion", 5, 5)]))
+        #expect(ranked.isEmpty)
+    }
+
+    @Test("Qualifying categories are sorted by net score, highest first")
+    func sortsByNetScore() {
+        let ranked = MangaUpdatesCategories.ranked(series([
+            vote("Low", 4, 1),
+            vote("High", 20, 0),
+            vote("Middle", 10, 2)
+        ]))
+        #expect(ranked.map(\.name) == ["High", "Middle", "Low"])
+        #expect(ranked.map(\.score) == [20, 8, 3])
+    }
+
+    @Test("The result is capped at the limit")
+    func capsAtLimit() {
+        let votes = (0..<30).map { vote("Tag \($0)", 10, 0) }
+        let ranked = MangaUpdatesCategories.ranked(series(votes), limit: 5)
+        #expect(ranked.count == 5)
+    }
+
+    @Test("A trailing /s is stripped and internal whitespace is collapsed")
+    func normalisesCategoryNames() {
+        let ranked = MangaUpdatesCategories.ranked(series([
+            vote("Abusive Family Member/s", 10, 0),
+            vote("Time  Skip", 10, 0)
+        ]))
+        #expect(ranked.map(\.name).sorted() == ["Abusive Family Member", "Time Skip"])
+    }
+}
