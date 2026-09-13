@@ -10,6 +10,13 @@ struct DetailOnwardRows: View {
     let relationships: [SeriesRelationship]
     let similar: [Series]
     let alsoLike: [Series]
+    /// Nearest neighbours over the bundled sentence embeddings — see
+    /// `EmbeddingIndex`. Never a `FeedResult`: this never asks a network
+    /// that can fail, so there is nothing here to retry. Empty means either
+    /// "this series has no vector in the file" or "asked and got nothing" —
+    /// both stay silent, the same as an onward row with no failure to show
+    /// (see `showsSimilarByDescription`).
+    var similarByDescription: [Series] = []
     let isLoading: Bool
     /// Set only when the corresponding feed asked and failed with nothing to
     /// fall back on (`FeedResult.blockingError`) — nil for "asked and got
@@ -50,6 +57,13 @@ struct DetailOnwardRows: View {
         return items.filter { seen.insert($0.id).inserted }
     }
 
+    /// Whether "Similar by description" belongs on the page at all. On-device
+    /// and never a network ask, so there is no loading or failed branch to
+    /// decide between — the row exists exactly when it has something to show.
+    nonisolated static func showsSimilarByDescription(_ items: [Series]) -> Bool {
+        !items.isEmpty
+    }
+
     var body: some View {
         relatedRow
         onwardRow(
@@ -58,6 +72,7 @@ struct DetailOnwardRows: View {
         onwardRow(
             "Readers also like", alsoLike, failure: alsoLikeFailure, retry: onRetryAlsoLike
         )
+        similarByDescriptionRow
     }
 
     /// Sequels, prequels, spin-offs and source novels. The strongest onward
@@ -140,6 +155,41 @@ struct DetailOnwardRows: View {
                             }
                             .buttonStyle(.press)
                             .zoomSource(title, item.id)
+                            .arrives()
+                        }
+                    }
+                    .padding(.horizontal, Metrics.gutter)
+                    .scrollTargetLayout()
+                }
+                .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.viewAligned)
+            }
+            .rowAmbient(items)
+        }
+    }
+
+    /// "Similar by description": nearest neighbours by embedding, after the
+    /// two feed-backed rows. Cards may carry only a title — resolved from
+    /// `OfflineCatalogue`, the same bundled 19k-title source the embedding
+    /// ids are drawn from, never a network fetch per id — in which case
+    /// `CoverCard` draws its existing placeholder in place of artwork.
+    @ViewBuilder
+    private var similarByDescriptionRow: some View {
+        let items = Self.deduplicated(similarByDescription)
+        if Self.showsSimilarByDescription(items) {
+            VStack(alignment: .leading, spacing: 11) {
+                header("Similar by description")
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                        ForEach(items) { item in
+                            Button {
+                                zoomRoute?.source = ZoomRoute.id("Similar by description", item.id)
+                                path.append(item)
+                            } label: {
+                                CoverCard(series: item, width: Metrics.coverDetailRowWidth)
+                            }
+                            .buttonStyle(.press)
+                            .zoomSource("Similar by description", item.id)
                             .arrives()
                         }
                     }
