@@ -3,49 +3,37 @@ import Foundation
 /// A saved search, shown on the search screen before anything is typed.
 ///
 /// The mockup calls these "lenses" and names them personally — "Seinen I never
-/// finished" — which implies the reader writes their own. These three are the
-/// mockup's, shipped as presets: a reader with no saved searches should still
-/// see the shape of the feature rather than an empty screen, and writing your
-/// own needs a design that does not exist yet.
+/// finished" — which implies the reader writes their own.
+///
+/// **Where the three presets went.** This type used to ship three hard-coded
+/// lenses — "Cosy fantasy, completed, 4+", "Seinen I never finished",
+/// "Regression, but funny" — the mockup's own sample lenses, kept so a reader
+/// with none of their own did not land on an empty screen. They were never
+/// derived from anything: not usage, not the catalogue, just the mockup's
+/// placeholder copy. Abdi asked (2026-09-13) to scrap them — laid out full
+/// width above the fold, they crowded the presets/genres/tags into one dense
+/// wall on the very screen meant to make searching feel simple. The idle
+/// screen now leads with recent searches and the filter panel instead; a
+/// reader who wants the shape of a saved search sees it the first time they
+/// save one of their own.
 struct SearchLens: Identifiable, Equatable, Sendable, Codable {
     let id: String
     let name: String
-    /// The filter in plain words, as the mockup writes it. Kept as text rather
-    /// than generated from the query, because "rating ≥ 8" reads better than
-    /// anything a formatter would produce from `minimumRating: 80`.
+    /// The filter in plain words. Kept as text rather than generated fresh
+    /// every render, because "rating ≥ 8" reads better than anything a
+    /// formatter would produce from `minimumRating: 80` on the fly — see
+    /// `describe(_:)`, which is what actually generates it at save time.
     let rule: String
     let query: SearchQuery
-    /// False for the three that ship with the app, which cannot be deleted.
-    var isOwn = false
-
-    static let presets: [SearchLens] = [
-        SearchLens(
-            id: "cosy-fantasy",
-            name: "Cosy fantasy, completed, 4+",
-            rule: "type: manhwa · status: completed · rating ≥ 8",
-            query: SearchQuery(
-                types: ["manhwa"],
-                statuses: ["completed"],
-                sort: "score_desc",
-                minimumRating: 80
-            )
-        ),
-        SearchLens(
-            id: "seinen-unfinished",
-            name: "Seinen I never finished",
-            rule: "tag: seinen · sort: popularity",
-            query: SearchQuery(sort: "popularity_asc", tags: ["Seinen"])
-        ),
-        SearchLens(
-            id: "regression-funny",
-            name: "Regression, but funny",
-            rule: "tags: regression AND comedy",
-            query: SearchQuery(tags: ["Regression", "Comedy"], tagMode: "and")
-        )
-    ]
+    /// Always true now that there are no presets left to be false for. Kept
+    /// rather than removed: `SaveLensSheet`/`SearchIdleView` read it to
+    /// decide whether a lens can be deleted, and a future re-introduction of
+    /// any non-deletable lens (a "starred" one, say) would want the flag
+    /// back rather than reinvented.
+    var isOwn = true
 }
 
-/// The reader's own saved searches, alongside the three the app ships with.
+/// The reader's own saved searches.
 ///
 /// The mockup names its lenses personally — "Seinen I never finished" — which
 /// implies the reader writes them. This is that: a lens is whatever filter is
@@ -57,10 +45,6 @@ final class SearchLensStore {
 
     private(set) var own: [SearchLens] = []
     private let defaults: UserDefaults
-
-    /// The presets first, then anything saved. Presets stay because a reader
-    /// with none of their own should still see the shape of the feature.
-    var all: [SearchLens] { SearchLens.presets + own }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -109,8 +93,8 @@ final class SearchLensStore {
 }
 
 extension SearchLens {
-    /// The filter in the same plain words the presets use, built from the query
-    /// rather than typed by hand.
+    /// The filter in plain words, built from the query rather than typed by
+    /// hand, so it cannot drift from what the lens actually stores.
     static func describe(_ query: SearchQuery) -> String {
         var parts: [String] = []
         if let text = query.text?.trimmingCharacters(in: .whitespaces), !text.isEmpty {

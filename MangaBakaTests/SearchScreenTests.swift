@@ -50,6 +50,30 @@ struct OfflineIndexDateLabelTests {
     }
 }
 
+/// Whether the idle screen's inline filter panel can be submitted at all —
+/// "Show results" must stay disabled until a filter would actually narrow
+/// anything, the same rule `FilterSheet`'s old "Clear all"/save-lens buttons
+/// already applied via `query.isEmpty`.
+@Suite("Filter panel enablement")
+struct FilterPanelCanShowTests {
+    @Test("An untouched query cannot be shown")
+    func emptyQueryDisabled() {
+        #expect(!FilterPanel.canShow(query: SearchQuery()))
+    }
+
+    @Test("Any one filter set is enough to enable it")
+    func oneFilterEnables() {
+        var query = SearchQuery()
+        query.types = ["manga"]
+        #expect(FilterPanel.canShow(query: query))
+    }
+
+    @Test("Free text alone also enables it")
+    func textAloneEnables() {
+        #expect(FilterPanel.canShow(query: SearchQuery(text: "solo")))
+    }
+}
+
 /// Whether the tag picker sheet is showing the live catalogue, a bundled
 /// fallback, or nothing — gap 41 (the fallback rendered with no label) and
 /// gap 42 (both sources failing left a blank sheet).

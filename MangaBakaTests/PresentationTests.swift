@@ -175,10 +175,12 @@ struct SortOrderTests {
     /// there.
     @Test("The sort list is defined once", .enabled(if: SourceTree.isAvailable))
     func definedOnce() throws {
-        // The filter sheet is the only place that renders the list; the search
-        // heading uses SortOrder.label. Neither may hold its own copy.
+        // The filter panel is the only place that renders the list (moved
+        // from `FilterSheet.swift` into `FilterPanel.swift` on 2026-09-13 so
+        // the same controls could sit inline on Search's idle screen); the
+        // search heading uses SortOrder.label. Neither may hold its own copy.
         for path in [
-            "MangaBaka/Features/Search/FilterSheet.swift",
+            "MangaBaka/Features/Search/FilterPanel.swift",
             "MangaBaka/Features/Search/SearchView.swift"
         ] {
             let source = try SourceTree.read(path)
@@ -187,7 +189,7 @@ struct SortOrderTests {
                 "\(path) carries its own copy of the sort list"
             )
         }
-        let sheet = try SourceTree.read("MangaBaka/Features/Search/FilterSheet.swift")
-        #expect(sheet.contains("SortOrder.all"))
+        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
+        #expect(panel.contains("SortOrder.all"))
     }
 }

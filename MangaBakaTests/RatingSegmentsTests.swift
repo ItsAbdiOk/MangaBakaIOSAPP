@@ -41,7 +41,10 @@ struct RatingSegmentsReachabilityTests {
     @Test("Search filters and Mix use the same control")
     func sharedControl() throws {
         for path in [
-            "MangaBaka/Features/Search/FilterSheet.swift",
+            // The controls themselves live in FilterPanel as of 2026-09-13
+            // (FilterSheet is now just the sheet's chrome around it, so it
+            // could also sit inline on Search's idle screen).
+            "MangaBaka/Features/Search/FilterPanel.swift",
             // The filter strip moved to its own file when Mix gained the
             // save-a-lens control and crossed the body-length ceiling.
             "MangaBaka/Features/Mix/MixFilterStrip.swift"
@@ -54,7 +57,7 @@ struct RatingSegmentsReachabilityTests {
     /// controls for the same value back in the app.
     @Test("No Stepper survives for rating")
     func noStepperLeft() throws {
-        let sheet = try SourceTree.read("MangaBaka/Features/Search/FilterSheet.swift")
-        #expect(!sheet.contains("Stepper("))
+        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
+        #expect(!panel.contains("Stepper("))
     }
 }

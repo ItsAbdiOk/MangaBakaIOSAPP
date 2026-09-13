@@ -96,6 +96,32 @@ struct SearchModelTests {
         #expect(repository.lastQuery?.text == "solo")
     }
 
+    /// The idle screen's inline `FilterPanel` binds straight to `model.query`
+    /// — chip taps mutate `query.types`/`.statuses`/etc directly, with no
+    /// `queryDidChange()` call attached to any of those bindings (only the
+    /// search field's `onChange` calls that). "Show results" is the one
+    /// thing wired to actually search: `cancelPendingDebounce()` then
+    /// `search()`, called once. This is the regression that would surface if
+    /// a future edit accidentally wired a chip's binding through
+    /// `queryDidChange()` too: filters would start firing their own debounced
+    /// searches, and "Show results" would double up with them.
+    @Test("Show results is one search, however many filters changed first")
+    func showResultsIsOneSearch() async {
+        let repository = RecordingRepository()
+        let model = SearchModel(repository: repository)
+
+        model.query.types = ["manga"]
+        model.query.statuses = ["completed"]
+        model.query.minimumRating = 80
+        #expect(repository.searchCount == 0, "Changing filters must not search on its own")
+
+        // What the panel's "Show results" button actually does.
+        model.cancelPendingDebounce()
+        await model.search()
+
+        #expect(repository.searchCount == 1, "Show results must fire exactly one request")
+    }
+
     @Test("Clearing the field drops results without calling the API")
     func clearingIsLocal() async {
         let repository = RecordingRepository()

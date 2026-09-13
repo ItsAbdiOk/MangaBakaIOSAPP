@@ -322,14 +322,6 @@ struct SearchLensTests {
         #expect(!names.contains("tag_mode"))
     }
 
-    /// A lens is only useful if it actually narrows anything; an empty query
-    /// would return before reaching the network and the screen would sit on its
-    /// idle state looking broken — which is exactly how "Surprise me" failed.
-    @Test("Every preset lens is a real query", arguments: SearchLens.presets)
-    func presetsAreNotEmpty(_ lens: SearchLens) {
-        #expect(!lens.query.isEmpty, "\(lens.name) would never reach the network")
-        #expect(!lens.rule.isEmpty)
-    }
 }
 
 /// A lens the reader writes themselves, which is what makes lenses theirs.
@@ -350,12 +342,12 @@ struct SavedLensTests {
         return query
     }
 
-    @Test("A saved lens joins the presets and survives a relaunch")
+    @Test("A saved lens survives a relaunch")
     func savesAndPersists() throws {
         let defaults = try #require(UserDefaults(suiteName: "lens.persist.\(UUID().uuidString)"))
         let store = SearchLensStore(defaults: defaults)
         #expect(store.save(name: "Cosy manhwa", query: narrowed))
-        #expect(store.all.count == SearchLens.presets.count + 1)
+        #expect(store.own.count == 1)
 
         let reloaded = SearchLensStore(defaults: defaults)
         #expect(reloaded.own.map(\.name) == ["Cosy manhwa"])
@@ -422,11 +414,16 @@ struct SavedLensTests {
         #expect(!rule.contains("score_desc"))
     }
 
-    @Test("Presets cannot be deleted")
-    func presetsSurviveDeletion() throws {
+    /// Deleting an id that was never saved is a no-op, not a crash — the same
+    /// guarantee `presetsSurviveDeletion` used to check against the three
+    /// hard-coded presets, which are gone (see `SearchLens`'s doc comment).
+    @Test("Deleting an unknown id changes nothing")
+    func deletingUnknownIdIsHarmless() throws {
         let store = try makeStore()
-        let preset = try #require(SearchLens.presets.first)
-        store.delete(id: preset.id)
-        #expect(store.all.contains { $0.id == preset.id })
+        store.save(name: "Mine", query: narrowed)
+
+        store.delete(id: "not-a-real-id")
+
+        #expect(store.own.count == 1)
     }
 }

@@ -2,36 +2,145 @@ import SwiftUI
 
 /// Search before anything is typed.
 ///
-/// Three sections, and the shapes are the argument: a **lens** is a full-width
-/// row with a live count, because it is a saved question that can be checked
-/// and can break. A **preset** or a **recent term** is a chip, because it is
-/// just a shortcut that fills the field. Rendering them alike would say they
-/// were the same kind of thing.
+/// Three sections, in this order: **Recent** searches, because the fastest
+/// way back to something is what you already typed; the **Filters** panel,
+/// inline rather than behind a tap, because "searching for a manga felt so
+/// odd" (Abdi, 2026-09-13) when the only way in was a text field with no
+/// visible way to narrow anything; and **Your lenses**, last and only when
+/// there are any, because a saved search is the one thing here worth a full
+/// row with a live count rather than a shortcut that just fills the field.
+///
+/// **What used to be here.** A presets section of three hard-coded lenses
+/// and the full tag row sat above this, laying out the whole vocabulary
+/// before the reader had typed a single letter — see `SearchLens`'s doc
+/// comment for where the presets came from and why they are gone.
 struct SearchIdleView: View {
     let lenses: SearchLensStore
     let counts: LensCounts
     let recents: RecentSearches
+    @Binding var query: SearchQuery
+    let catalogue: CatalogueService?
+    var preferOffline: Binding<Bool>?
     let onRun: (SearchLens) -> Void
     let onRunTerm: (String) -> Void
+    let onSaveLens: () -> Void
+    let onShowResults: () -> Void
+    var previewCount: ((SearchQuery) async -> Int?)?
 
-    @State private var isEditing = false
+    @State private var isEditingLenses = false
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     private var own: [SearchLens] { lenses.own }
+    private var visibleRecents: [String] { RecentSearches.visible(recents.terms) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
+            if !visibleRecents.isEmpty {
+                recentSearches
+                    .arrives(index: 0)
+            }
+
+            filters
+                .arrives(index: 1)
+
             if !own.isEmpty {
                 yourLenses
-            }
-            presets
-            if !recents.terms.isEmpty {
-                recentTerms
+                    .arrives(index: 2)
             }
         }
         .padding(.horizontal, Metrics.gutter)
         .task { counts.load(own) }
         .onDisappear { counts.cancel() }
+    }
+
+    // MARK: - Recent
+
+    private var recentSearches: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Recent")
+                    .typeSubsectionHeader()
+                    .foregroundStyle(Palette.textPrimary)
+                Spacer(minLength: 8)
+                // Muted, not accent. Accent on this screen means "a way
+                // onward"; throwing away your own search history is not one.
+                Button("Clear") {
+                    Motion.run(Motion.snappy) { recents.clear() }
+                    toasts?.show("Recent searches cleared")
+                }
+                .typeInstruction()
+                .foregroundStyle(Palette.textMuted)
+                .buttonStyle(.press)
+            }
+
+            VStack(spacing: 8) {
+                ForEach(visibleRecents, id: \.self) { term in
+                    recentRow(term)
+                }
+            }
+        }
+    }
+
+    /// A row, not a chip: recents used to be chips alongside the presets
+    /// they sat under, but a chip has no way to remove just one entry — only
+    /// "Clear" for all of them. A row earns its own "×" the same way a lens
+    /// row earns a delete control.
+    private func recentRow(_ term: String) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                onRunTerm(term)
+            } label: {
+                HStack(spacing: 11) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.textTertiary)
+                        .accessibilityHidden(true)
+                    Text(term)
+                        .typeRowTitle()
+                        .foregroundStyle(Palette.textPrimary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 15)
+                .padding(.vertical, 13)
+                .background(Palette.surface, in: RoundedRectangle(
+                    cornerRadius: 14, style: .continuous
+                ))
+                .hairlineBorder(Palette.hairline, radius: 14)
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.press)
+            .accessibilityLabel("Search \(term)")
+
+            Button {
+                Motion.run(Motion.snappy) { recents.remove(term) }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Palette.textQuaternary)
+            }
+            .buttonStyle(.press)
+            .accessibilityLabel("Remove \(term) from recent searches")
+        }
+        .transition(.blurReplace)
+    }
+
+    // MARK: - Filters
+
+    private var filters: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Filters")
+                .typeSubsectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+            FilterPanel(
+                query: $query,
+                onSaveLens: onSaveLens,
+                catalogue: catalogue,
+                preferOffline: preferOffline,
+                previewCount: previewCount ?? counts.count,
+                onShowResults: onShowResults
+            )
+        }
     }
 
     // MARK: - Yours
@@ -43,8 +152,8 @@ struct SearchIdleView: View {
                     .typeSubsectionHeader()
                     .foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
-                Button(isEditing ? "Done" : "Edit") {
-                    Motion.run(Motion.snappy) { isEditing.toggle() }
+                Button(isEditingLenses ? "Done" : "Edit") {
+                    Motion.run(Motion.snappy) { isEditingLenses.toggle() }
                 }
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
@@ -99,7 +208,7 @@ struct SearchIdleView: View {
             .buttonStyle(.press)
             .accessibilityLabel(accessibilityLabel(for: lens))
 
-            if isEditing {
+            if isEditingLenses {
                 Button {
                     counts.invalidate(lens.id)
                     let name = lens.name
@@ -137,68 +246,5 @@ struct SearchIdleView: View {
     private func accessibilityLabel(for lens: SearchLens) -> String {
         guard let count = counts.counts[lens.id] else { return "\(lens.name). \(lens.rule)" }
         return "\(lens.name). \(count.formatted()) results now."
-    }
-
-    // MARK: - Presets and recents
-
-    private var presets: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Presets")
-                .typeSubsectionHeader()
-                .foregroundStyle(Palette.textPrimary)
-
-            FlowLayout(spacing: 8) {
-                ForEach(SearchLens.presets) { lens in
-                    chip(lens.name) { onRun(lens) }
-                }
-            }
-        }
-    }
-
-    private var recentTerms: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Recent")
-                    .typeSubsectionHeader()
-                    .foregroundStyle(Palette.textPrimary)
-                Spacer(minLength: 8)
-                // Muted, not accent. Accent on this screen means "a way
-                // onward"; throwing away your own search history is not one,
-                // and three same-weight accent links told the reader nothing
-                // about which to reach for.
-                Button("Clear") {
-                    recents.clear()
-                    // Same gap as the lens delete above (gap 54) — low
-                    // stakes, no confirmation needed, but silence still read
-                    // as a missed tap.
-                    toasts?.show("Recent searches cleared")
-                }
-                .typeInstruction()
-                .foregroundStyle(Palette.textMuted)
-                .buttonStyle(.press)
-            }
-
-            FlowLayout(spacing: 8) {
-                ForEach(recents.terms, id: \.self) { term in
-                    chip(term) { onRunTerm(term) }
-                }
-            }
-        }
-    }
-
-    private func chip(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .typeChip()
-                .lineLimit(1)
-                .foregroundStyle(Palette.textSecondary)
-                .padding(.horizontal, 13)
-                .frame(minHeight: Metrics.headerPill)
-                .background(Palette.surfaceChip, in: Capsule())
-                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
-                .contentShape(Capsule())
-                .tapTarget()
-        }
-        .buttonStyle(.press)
     }
 }

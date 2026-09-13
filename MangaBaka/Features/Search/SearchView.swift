@@ -112,7 +112,8 @@ struct SearchView: View {
                 },
                 onSaveLens: { isNamingLens = true },
                 catalogue: catalogue,
-                preferOffline: $model.preferOffline
+                preferOffline: $model.preferOffline,
+                previewCount: counts.count
             )
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(Metrics.radiusSheet)
@@ -156,16 +157,21 @@ struct SearchView: View {
             .background(Palette.surfaceField)
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
 
-            Button {
-                showFilters = true
-            } label: {
-                Text("Filters")
-                    .typeCTA()
-                    .foregroundStyle(Palette.textPrimary)
-                    .padding(.horizontal, 16)
-                    .frame(height: Metrics.field)
-                    .background(Palette.surfaceChip)
-                    .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+            // Redundant while the idle page shows the same panel inline
+            // (Abdi, 2026-09-13); it returns once results are on screen.
+            if contentKind != .idle {
+                Button {
+                    showFilters = true
+                } label: {
+                    Text("Filters")
+                        .typeCTA()
+                        .foregroundStyle(Palette.textPrimary)
+                        .padding(.horizontal, 16)
+                        .frame(height: Metrics.field)
+                        .background(Palette.surfaceChip)
+                        .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+                }
+                .transition(.blurReplace)
             }
         }
     }
@@ -238,12 +244,21 @@ struct SearchView: View {
                 lenses: lenses,
                 counts: counts,
                 recents: recents,
+                query: $model.query,
+                catalogue: catalogue,
+                preferOffline: $model.preferOffline,
                 onRun: { lens in
                     Task { await model.apply(lens.query) }
                 },
                 onRunTerm: { term in
                     Task { await model.apply(SearchQuery(text: term)) }
-                }
+                },
+                onSaveLens: { isNamingLens = true },
+                onShowResults: {
+                    recents.record(model.query.text ?? "")
+                    Task { model.cancelPendingDebounce(); await model.search() }
+                },
+                previewCount: counts.count
             )
         case .skeleton:
             // The shape of the answer, not a spinner: the grid the results
