@@ -41,15 +41,25 @@ struct DetailBarTitle: ViewModifier {
 
     private var heroTitleIsHidden: Bool { crossfade >= 1 }
 
+    /// A named method rather than a closure body: Xcode Cloud's Swift 6.3.3
+    /// crashed in the SIL verifier ("OwnershipModelEliminator") on the
+    /// inline version of this under whole-module optimisation — build 69,
+    /// 2026-09-13 — while the local toolchain compiled it. Same behaviour.
+    private func updateCrossfade(travelled: CGFloat) {
+        let progress = Self.crossfadeProgress(travelled: travelled)
+        guard progress != crossfade else { return }
+        let animation = Motion.reduced(Motion.glide)
+        withAnimation(animation) {
+            crossfade = progress
+        }
+    }
+
     func body(content: Content) -> some View {
         content
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, travelled in
-                let progress = Self.crossfadeProgress(travelled: travelled)
-                if progress != crossfade {
-                    Motion.run(.glide) { crossfade = progress }
-                }
+                updateCrossfade(travelled: travelled)
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
