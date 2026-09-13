@@ -73,9 +73,10 @@ actor CatalogueService {
 
         let task = Task<Fetched<[Tag]>, Never> { [client] in
             do throws(APIError) {
-                let fetched: [Tag] = try await client.get(
+                let (fetched, pagination) = try await client.getWithPagination(
                     "/v1/tags",
-                    query: [URLQueryItem(name: "limit", value: String(limit))]
+                    query: [URLQueryItem(name: "limit", value: String(limit))],
+                    as: [Tag].self
                 )
                 // Merged tags point at a survivor and should never be shown
                 // or linked to. Ordered by how many series carry them,
@@ -84,7 +85,13 @@ actor CatalogueService {
                 let usable = fetched
                     .filter(\.isUsable)
                     .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
-                return .loaded(usable, fetchedAt: Date(), isPartial: false)
+                // `next` is nil only on the last page. This was stamped
+                // `isPartial: false` unconditionally while `?limit=500`
+                // answered 500 of 7,146 with `next` set (live 2026-09-13) —
+                // so the picker could not tell "the whole vocabulary" from
+                // "the first four roots of it" and replaced its bundled
+                // list with the latter. See `TagTaxonomy.merge`.
+                return .loaded(usable, fetchedAt: Date(), isPartial: pagination?.next != nil)
             } catch {
                 return .failed(error, stale: nil)
             }

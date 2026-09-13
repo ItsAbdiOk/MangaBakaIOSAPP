@@ -80,7 +80,11 @@ struct RateLimitGateTests {
     /// Expected to fail before the fix: the old `recordRateLimit(retryAfter:)`
     /// took no path and set one global `blockedUntil`, so a search refusal
     /// blocked `/v1/my/profile` too — this test's second assertion is exactly
-    /// the one the old behaviour violated.
+    /// the one the old behaviour violated. Until 2026-09-13 that "second
+    /// assertion" was a bare `try?`, which swallows the throw and asserts
+    /// nothing, so a regression to the global block would have passed
+    /// (search review, tests finding 3); it is now an `#expect(throws:
+    /// Never.self)`.
     @Test("A 429 on search blocks search only; a 429 on a general path blocks that only")
     func familyScopedBackoff() async {
         let (searchGate, _) = makeGate()
@@ -89,7 +93,9 @@ struct RateLimitGateTests {
             try await searchGate.reserveSlot(for: "/v2/series/search", priority: .userInitiated)
         }
         // The general family is untouched by a search-only refusal.
-        try? await searchGate.reserveSlot(for: "/v1/my/profile", priority: .userInitiated)
+        await #expect(throws: Never.self) {
+            try await searchGate.reserveSlot(for: "/v1/my/profile", priority: .userInitiated)
+        }
 
         let (generalGate, _) = makeGate()
         await generalGate.recordRateLimit(retryAfter: 60, path: "/v1/my/profile")
@@ -97,7 +103,9 @@ struct RateLimitGateTests {
             try await generalGate.reserveSlot(for: "/v1/my/profile", priority: .userInitiated)
         }
         // And a general-only refusal does not touch search.
-        try? await generalGate.reserveSlot(for: "/v2/series/search", priority: .userInitiated)
+        await #expect(throws: Never.self) {
+            try await generalGate.reserveSlot(for: "/v2/series/search", priority: .userInitiated)
+        }
     }
 
     /// A `.rateLimited` thrown for the search family carries `.mangaBakaSearch`
@@ -154,8 +162,12 @@ struct RateLimitGateTests {
         }
 
         // A different path is unaffected — the search window is scoped to
-        // paths containing `/series/search`.
-        try? await gate.reserveSlot(for: "/v1/discover/rising", priority: .userInitiated)
+        // paths containing `/series/search`. An assertion, not a `try?`: the
+        // discover feed being refused by search's window is exactly the
+        // regression this line is here to catch.
+        await #expect(throws: Never.self) {
+            try await gate.reserveSlot(for: "/v1/discover/rising", priority: .userInitiated)
+        }
 
         // Once the oldest of the thirty ages past the window, a slot reopens.
         clock.advance(RateLimitGate.searchWindow + 1)
@@ -330,6 +342,13 @@ struct RateLimitClientTests {
     /// The point of the gate: after a 429, the next call must not reach the
     /// network at all. Spending a request to be refused again helps nobody,
     /// least of all the strangers sharing the limit.
+    ///
+    /// The `Retry-After: 60` here is invented — the schema's `V1_Error_429`
+    /// (`docs/schemas/mangabaka_openapi.json`) is `{status, message}` and
+    /// promises no header, and nothing on record says MangaBaka sends one
+    /// (search review, tests finding 1). Kept as the "server names its own
+    /// window" case; `noHeaderStillCountsDown` below is the case the schema
+    /// actually describes.
     @Test("After a 429, the next request is refused locally without a network call")
     func refusesLocallyAfterRateLimit() async {
         URLProtocolStub.setHandler { _ in
@@ -354,6 +373,56 @@ struct RateLimitClientTests {
             URLProtocolStub.requests.count == afterFirst,
             "The second call must be refused locally, not sent"
         )
+    }
+
+    /// A 429 exactly as the schema describes it: `{"status":429,"message":
+    /// "Too Many Requests"}` (`V1_Error_429`'s default message) and **no**
+    /// `Retry-After`. Not a live capture — one is never earned on purpose —
+    /// so the body is the schema's own shape, dated 2026-09-13.
+    ///
+    /// The gate always computes a deadline for itself (`recordRateLimit`'s
+    /// exponential fallback when the header is nil), so the app *knows* when
+    /// it will try again. But on HEAD `APIClient` builds the thrown error
+    /// from the header alone (`APIClient.swift:207`, `displayed = retryAfter
+    /// .map …`), so the error carries `until: nil`, `APIError.countdown` is
+    /// nil, and `FailureState` mounts no `Countdown` and no auto-retry: a
+    /// reader who trips the shared per-IP limit sees "Search is paused" as
+    /// a static dead end — while every 429 test in this file, all carrying
+    /// the invented header, passes.
+    ///
+    /// Expected to fail on HEAD with: `until != nil` → actual `nil`. Passes
+    /// once Batch 2 Lane A lands the fallback to the gate's own deadline
+    /// (decision already taken: "a missing Retry-After falls back to the
+    /// RateLimitGate's own deadline").
+    @Test("A 429 with no Retry-After still carries a deadline the screen can count down")
+    func noHeaderStillCountsDown() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(
+                statusCode: 429,
+                body: Data(#"{"status":429,"message":"Too Many Requests"}"#.utf8)
+            ))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let client = makeClient()
+        do {
+            let _: [Int] = try await client.get("/v2/series/search")
+            Issue.record("A 429 must be thrown, not decoded")
+        } catch APIError.rateLimited(let until, let party) {
+            #expect(party == .mangaBakaSearch)
+            #expect(until != nil, "no header → the gate's own fallback deadline, never a static dead end")
+            if let until {
+                // The gate's first fallback is 2s (`min(pow(2, 1), 60)`);
+                // anything within the honoured cap is a deadline the screen
+                // can count down from. Bounds, not the exact value, so a
+                // retuned fallback does not break this.
+                let seconds = until.timeIntervalSinceNow
+                #expect(seconds > 0)
+                #expect(seconds <= RateLimitGate.maxHonouredRetryAfter)
+            }
+        } catch {
+            Issue.record("Expected .rateLimited, got \(error)")
+        }
     }
 
     @Test("A successful request clears the block")

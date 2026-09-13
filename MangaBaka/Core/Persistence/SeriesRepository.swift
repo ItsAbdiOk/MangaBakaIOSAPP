@@ -534,7 +534,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
 
     func mix(seeds: [Int], filters: SearchQuery, excludedTags: [Int] = []) async -> MixResult {
         guard !seeds.isEmpty else { return .empty }
-        var items = filters.queryItems.filter { $0.name != "q" && $0.name != "sort_by" }
+        // `random_seed` only means something beside `sort_by=random`, which is
+        // dropped here too; mix would otherwise receive a seed for nothing.
+        var items = filters.queryItems.filter { !["q", "sort_by", "random_seed"].contains($0.name) }
         // Repeated keys; the comma form is rejected with HTTP 400. See
         // FeedKind.extraQuery for the verification.
         items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })

@@ -14,24 +14,59 @@ struct SearchHeadingTests {
     /// claiming a number that has nothing to do with what is about to load.
     @Test("The heading is nil while a new search is in flight")
     func nilWhileSearching() {
-        #expect(SearchHeading.text(isEmpty: false, isSearching: true, count: 12, sortLabel: nil) == nil)
+        let heading = SearchHeading.text(
+            hasAsked: true, isSearching: true, shown: 12, total: 411, sortLabel: nil
+        )
+        #expect(heading == nil)
     }
 
-    @Test("The heading is nil before anything is typed")
+    /// Not `query.isEmpty`: a filter chosen on the idle panel is a query
+    /// with nothing asked yet, and a heading over the panel said "0 shown"
+    /// (UX#1, UX#13).
+    @Test("The heading is nil before anything is asked")
     func nilWhenIdle() {
-        #expect(SearchHeading.text(isEmpty: true, isSearching: false, count: 0, sortLabel: "Score") == nil)
+        let heading = SearchHeading.text(
+            hasAsked: false, isSearching: false, shown: 0, total: nil, sortLabel: "Score"
+        )
+        #expect(heading == nil)
     }
 
-    @Test("The heading names the count once a search has landed")
-    func showsCountOnceSettled() {
-        let heading = SearchHeading.text(isEmpty: false, isSearching: false, count: 12, sortLabel: nil)
+    /// UX#13: "0 shown" sat directly above "Nothing matched …", saying the
+    /// same thing twice.
+    @Test("The heading is nil over the empty state")
+    func nilWhenNothingShown() {
+        let heading = SearchHeading.text(
+            hasAsked: true, isSearching: false, shown: 0, total: 0, sortLabel: nil
+        )
+        #expect(heading == nil)
+    }
+
+    /// E F1 / R F13: the API's `pagination.count` is what a reader wants when
+    /// deciding whether to refine; "shown" was covering for it being thrown
+    /// away.
+    @Test("The heading names the total once a search has landed")
+    func showsTotalOnceSettled() {
+        let heading = SearchHeading.text(
+            hasAsked: true, isSearching: false, shown: 30, total: 4118, sortLabel: nil
+        )
+        #expect(heading == "4,118 results")
+    }
+
+    /// The offline index and a cached answer carry no total.
+    @Test("Without a total the heading falls back to the number shown")
+    func fallsBackToShown() {
+        let heading = SearchHeading.text(
+            hasAsked: true, isSearching: false, shown: 12, total: nil, sortLabel: nil
+        )
         #expect(heading == "12 shown")
     }
 
     @Test("A sort is appended after the count")
     func appendsSort() {
-        let heading = SearchHeading.text(isEmpty: false, isSearching: false, count: 3, sortLabel: "Score")
-        #expect(heading == "3 shown · Score")
+        let heading = SearchHeading.text(
+            hasAsked: true, isSearching: false, shown: 3, total: 3, sortLabel: "Score"
+        )
+        #expect(heading == "3 results · Score")
     }
 }
 
@@ -174,36 +209,85 @@ struct LensCountsQueueTests {
 /// skeleton, a blocking failure, the empty state and the grid — each
 /// `.blurReplace`d inside `Motion.settle` — has a test without rendering the
 /// view (this project has no ViewInspector).
+///
+/// The inputs are what was *asked* and whether an answer is *pending* —
+/// never `query.isEmpty`. Deriving the screen from the query (review
+/// 2026-09-13, cause A) is what made a chip tap on the idle panel read as a
+/// search with no results.
 @Suite("Search content state")
 struct SearchContentKindTests {
-    @Test("An empty query is always idle, even mid-search")
-    func emptyQueryIsIdle() {
+    /// UX#1, seen on screen in the 2026-09-13 walk: tap "Manga" on the idle
+    /// panel and the panel vanished under "Nothing matched these filters".
+    /// A filter chosen is not an ask; the panel stays until "Show results"
+    /// or a keystroke.
+    @Test("Nothing asked is idle, whatever the query holds")
+    func nothingAskedIsIdle() {
         let kind = SearchView.contentKind(
-            isQueryEmpty: true, isSearching: true, hasBlockingFailure: true, resultsEmpty: true
+            hasAsked: false, isPending: false, isSearching: false,
+            hasBlockingFailure: false, resultsEmpty: true
         )
         #expect(kind == .idle)
     }
 
-    @Test("A search in flight shows the skeleton, not the previous failure or results")
-    func searchingShowsSkeleton() {
+    /// E F4: the ≥300 ms debounce after the first keystroke used to render
+    /// as "Nothing matched 'n'" before a request had gone out.
+    @Test("A pending answer with nothing on screen is the skeleton, not the empty state")
+    func pendingWithNothingIsSkeleton() {
         let kind = SearchView.contentKind(
-            isQueryEmpty: false, isSearching: true, hasBlockingFailure: true, resultsEmpty: true
+            hasAsked: true, isPending: true, isSearching: false,
+            hasBlockingFailure: false, resultsEmpty: true
         )
         #expect(kind == .skeleton)
+    }
+
+    @Test("A search in flight with nothing on screen is the skeleton")
+    func searchingWithNothingIsSkeleton() {
+        let kind = SearchView.contentKind(
+            hasAsked: true, isPending: false, isSearching: true,
+            hasBlockingFailure: true, resultsEmpty: true
+        )
+        #expect(kind == .skeleton)
+    }
+
+    /// R F1: every debounced request replaced the grid the reader was
+    /// looking at with six shimmering placeholders, then blurred the results
+    /// back in with the stagger re-run from scratch — about a second of
+    /// motion per pause in "one piece", for results that were mostly the
+    /// same. The grid stays (dimmed by the view) while the next answer is
+    /// on its way.
+    @Test("A search in flight keeps the results already on screen")
+    func searchingKeepsResults() {
+        let kind = SearchView.contentKind(
+            hasAsked: true, isPending: false, isSearching: true,
+            hasBlockingFailure: false, resultsEmpty: false
+        )
+        #expect(kind == .results)
+    }
+
+    @Test("A pending answer keeps the results already on screen")
+    func pendingKeepsResults() {
+        let kind = SearchView.contentKind(
+            hasAsked: true, isPending: true, isSearching: false,
+            hasBlockingFailure: false, resultsEmpty: false
+        )
+        #expect(kind == .results)
     }
 
     @Test("A failure with nothing to show is a blocking failure")
     func failureWithNoResultsBlocks() {
         let kind = SearchView.contentKind(
-            isQueryEmpty: false, isSearching: false, hasBlockingFailure: true, resultsEmpty: true
+            hasAsked: true, isPending: false, isSearching: false,
+            hasBlockingFailure: true, resultsEmpty: true
         )
         #expect(kind == .failure)
     }
 
-    @Test("No results and no failure is the empty state")
+    /// Only after an answer: asked, nothing pending, nothing in flight.
+    @Test("No results and no failure after an answer is the empty state")
     func noResultsNoFailureIsEmpty() {
         let kind = SearchView.contentKind(
-            isQueryEmpty: false, isSearching: false, hasBlockingFailure: false, resultsEmpty: true
+            hasAsked: true, isPending: false, isSearching: false,
+            hasBlockingFailure: false, resultsEmpty: true
         )
         #expect(kind == .empty)
     }
@@ -211,7 +295,8 @@ struct SearchContentKindTests {
     @Test("Results present is the grid, even with a non-blocking failure alongside them")
     func resultsPresentIsGrid() {
         let kind = SearchView.contentKind(
-            isQueryEmpty: false, isSearching: false, hasBlockingFailure: false, resultsEmpty: false
+            hasAsked: true, isPending: false, isSearching: false,
+            hasBlockingFailure: false, resultsEmpty: false
         )
         #expect(kind == .results)
     }

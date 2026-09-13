@@ -33,6 +33,12 @@ struct FilterPanel: View {
     /// results". Absent disables the count preview but not the button itself
     /// — `canShow(query:)` alone gates whether it can be tapped.
     var previewCount: ((SearchQuery) async -> Int?)?
+    /// The same count answered from the bundled index, for when "Browse
+    /// offline" is on. Absent means no count at all in that mode — never a
+    /// fallback to `previewCount`, because the toggle's own copy promises
+    /// "no requests" and a preview nobody asked for was still one request
+    /// per settled chip (review 2026-09-13, UX#2). See `countSource(...)`.
+    var offlineCount: ((SearchQuery) async -> Int?)?
     /// Runs the one request "Show results" stands for. Never fired by a chip
     /// or a picker on its own — see `canShow(query:)`'s doc comment.
     let onShowResults: () -> Void
@@ -45,6 +51,20 @@ struct FilterPanel: View {
     @State private var countTask: Task<Void, Never>?
     /// The filters "Clear all" threw away, kept so they can be put back.
     @State private var cleared: SearchQuery?
+
+    /// How long the panel waits after the last filter change before asking
+    /// for a count. A guess: 350 ms arrived as a literal in 0e7d068
+    /// (2026-09-10) with no derivation, and sits 50 ms above `SearchModel`'s
+    /// typed debounce for no stated reason (review 2026-09-13, E F10/E
+    /// F12/T#8). Not changed here — a different guess is still a guess.
+    /// Named so a test can read it and so it is one number, not a literal.
+    /// A preview is not latency-sensitive; since the count now goes out at
+    /// `.background` (`LensCounts.count`) the value gates how often a
+    /// slot is *queued*, not whether a reader can still search.
+    nonisolated static let countDebounce = Duration.milliseconds(350)
+
+    /// See `countSource(query:preferOffline:hasNetworkCounter:hasOfflineCounter:)`.
+    enum CountSource: Equatable { case none, offline, network }
 
     private let types = ["manga", "novel", "manhwa", "manhua", "oel", "other"]
     private let statuses = ["releasing", "completed", "hiatus", "cancelled", "upcoming"]
@@ -118,6 +138,9 @@ struct FilterPanel: View {
             actions
         }
         .onChange(of: query) { _, new in scheduleCount(for: new) }
+        // Flipping "Browse offline" changes where the count comes from
+        // without changing the query, so it needs its own trigger.
+        .onChange(of: preferOffline?.wrappedValue) { _, _ in scheduleCount(for: query) }
         .task { scheduleCount(for: query) }
         .sheet(isPresented: $isPickingTags) {
             if let catalogue {
@@ -252,8 +275,8 @@ extension FilterPanel {
             }
             .disabled(!Self.canShow(query: query))
 
-            if onSaveLens != nil {
-                Text("The bookmark saves this as a lens. Greyed until a filter is set.")
+            if onSaveLens != nil, let footnote = Self.lensFootnote(for: query) {
+                Text(footnote)
                     .typeFootnote()
                     .foregroundStyle(Palette.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -274,23 +297,72 @@ extension FilterPanel {
         !query.isEmpty
     }
 
+    /// Where the "Show N results" number comes from for a given query and
+    /// offline setting. `nonisolated static` and pure so the rule is testable
+    /// without a live panel — the view's `scheduleCount` only acts on it.
+    ///
+    /// Offline wins outright and never falls through: with the toggle on and
+    /// no offline counter supplied, the answer is `.none`, not the network.
+    /// Before 2026-09-13 the panel read only `canShow` and `previewCount`,
+    /// so the toggle that promised "no requests" still sent one count per
+    /// settled filter change (review UX#2).
+    nonisolated static func countSource(
+        query: SearchQuery, preferOffline: Bool, hasNetworkCounter: Bool, hasOfflineCounter: Bool
+    ) -> CountSource {
+        guard canShow(query: query) else { return .none }
+        if preferOffline { return hasOfflineCounter ? .offline : .none }
+        return hasNetworkCounter ? .network : .none
+    }
+
     /// Debounced, so seven chip taps in a row ask the network once, not
     /// seven times — the same shared-rate-limit reasoning as
     /// `PublisherBrowser.schedule()`. This is a *preview* only: it never
     /// fires the actual search `onShowResults` does.
     private func scheduleCount(for query: SearchQuery) {
         countTask?.cancel()
-        guard Self.canShow(query: query), let previewCount else {
+        let source = Self.countSource(
+            query: query,
+            preferOffline: preferOffline?.wrappedValue ?? false,
+            hasNetworkCounter: previewCount != nil,
+            hasOfflineCounter: offlineCount != nil
+        )
+        let counter: ((SearchQuery) async -> Int?)? = switch source {
+        case .none: nil
+        case .offline: offlineCount
+        case .network: previewCount
+        }
+        guard let counter else {
             resultCount = nil
             return
         }
         countTask = Task {
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: Self.countDebounce)
             guard !Task.isCancelled else { return }
-            let total = await previewCount(query)
+            let total = await counter(query)
             guard !Task.isCancelled else { return }
             resultCount = total
         }
+    }
+
+    /// The line under the actions explaining the bookmark. Nil while no
+    /// filter is set: a first-time reader with nothing chosen used to meet
+    /// "saves this as a lens" before the screen had shown them a lens or a
+    /// filter (review 2026-09-13, UX#8). The greyed bookmark's own
+    /// accessibility hint ("Set a filter first") already covers that state.
+    nonisolated static func lensFootnote(for query: SearchQuery) -> String? {
+        guard !query.isEmpty else { return nil }
+        return "The bookmark saves these filters as a lens."
+    }
+
+    /// What the "Filters" button on the results screen should wear: the
+    /// number of filters narrowing the results besides the typed text, or
+    /// nil for none. Without it a Type chip that outlived a cleared query
+    /// filtered the grid with no visible cue (live walk 2026-09-13, `43` vs
+    /// `44-filters-check-manga-persist.png`). Text and sort are not filters
+    /// here — `activeFilterCount`'s own rule, reused rather than restated.
+    nonisolated static func filterBadge(for query: SearchQuery) -> String? {
+        let count = query.activeFilterCount
+        return count > 0 ? "\(count)" : nil
     }
 
     // MARK: - Shared controls
@@ -319,14 +391,6 @@ extension FilterPanel {
         }
         .buttonStyle(.press)
         .haptic(Haptics.selection, on: isOn)
-    }
-
-    private func toggle(_ collection: inout [String], _ value: String) {
-        if let index = collection.firstIndex(of: value) {
-            collection.remove(at: index)
-        } else {
-            collection.append(value)
-        }
     }
 
     /// The mockup names the current value beside the heading in the accent,
@@ -376,6 +440,28 @@ extension FilterPanel {
     }
 }
 
+/// The count capsule the "Filters" button wears while a filter is active —
+/// the same capsule the panel's Tags/Genres/Publishers buttons already use,
+/// so one filter reads the same way at both doors. Lives here, beside the
+/// rule that computes it (`FilterPanel.filterBadge(for:)`), rather than in
+/// `SearchView`, so the panel stays the one owner of what "a filter" is.
+struct FilterCountBadge: View {
+    let query: SearchQuery
+
+    var body: some View {
+        if let badge = FilterPanel.filterBadge(for: query) {
+            Text(badge)
+                .typeFootnote()
+                .foregroundStyle(Palette.onAccent)
+                .padding(.horizontal, 6)
+                .frame(minHeight: 18)
+                .background(Palette.accent, in: Capsule())
+                .countsNotCuts()
+                .accessibilityLabel("\(badge) active")
+        }
+    }
+}
+
 /// Picking a genre for the panel's "Genres" button — the same 46-item list
 /// `BrowseView`'s genre chips draw from, presented as a sheet rather than a
 /// whole screen since this is one filter among several being built, not a
@@ -393,7 +479,7 @@ private struct GenrePickerSheet: View {
                 FlowLayout(spacing: 8) {
                     ForEach(genres) { genre in
                         Button {
-                            toggle(genre.value)
+                            toggle(&selected, genre.value)
                         } label: {
                             Text(genre.label)
                                 .typeChip()
@@ -427,13 +513,15 @@ private struct GenrePickerSheet: View {
         .edgeSwipeToDismiss()
         .task { if genres.isEmpty { genres = await catalogue.genres().value ?? [] } }
     }
+}
 
-    private func toggle(_ value: String) {
-        if let index = selected.firstIndex(of: value) {
-            selected.remove(at: index)
-        } else {
-            selected.append(value)
-        }
+/// Add-or-remove for a chip's value; shared by the panel's chips and the
+/// genre sheet's, which used to carry a copy each.
+private func toggle(_ collection: inout [String], _ value: String) {
+    if let index = collection.firstIndex(of: value) {
+        collection.remove(at: index)
+    } else {
+        collection.append(value)
     }
 }
 

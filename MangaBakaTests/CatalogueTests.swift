@@ -49,17 +49,24 @@ struct CatalogueTests {
         #expect(second == first)
     }
 
+    /// Shaped on the live `/v1/tags?limit=500` page captured 2026-09-13
+    /// (`Fixtures/tags-page1.json`): a root is `level: 1`, not 0, and
+    /// `content_rating` is never null on the wire — the 500 live rows were
+    /// 496 `safe` and 4 `erotica`. The old hand-written rows said `level: 0`
+    /// and `content_rating: null` for a root, and no test had ever noticed
+    /// because nothing read `level`. `series_count` and the Boxing/Merged
+    /// rows are invented to keep the tree small; the shape is the wire's.
     private let tagPayload = Data("""
     {"status":200,"data":[
       {"id":537,"parent_id":null,"merged_with":null,"name":"Activities",
-       "name_path":"Activities","description":"Hobbies and pastimes.","level":0,
-       "series_count":9000,"is_genre":false,"is_spoiler":false,"content_rating":null},
+       "name_path":"Activities","description":"Hobbies and pastimes.","level":1,
+       "series_count":9000,"is_genre":false,"is_spoiler":false,"content_rating":"safe"},
       {"id":538,"parent_id":537,"merged_with":null,"name":"Boxing",
-       "name_path":"Activities > Sports > Boxing","description":null,"level":2,
-       "series_count":120,"is_genre":false,"is_spoiler":false,"content_rating":null},
+       "name_path":"Activities > Sports > Boxing","description":null,"level":3,
+       "series_count":120,"is_genre":false,"is_spoiler":false,"content_rating":"safe"},
       {"id":539,"parent_id":537,"merged_with":700,"name":"Merged Away",
-       "name_path":"Activities > Merged Away","description":null,"level":1,
-       "series_count":5,"is_genre":false,"is_spoiler":false,"content_rating":null}
+       "name_path":"Activities > Merged Away","description":null,"level":2,
+       "series_count":5,"is_genre":false,"is_spoiler":false,"content_rating":"safe"}
     ]}
     """.utf8)
 
@@ -72,7 +79,11 @@ struct CatalogueTests {
 
         let root = tags.first { $0.id == 537 }
         #expect(root?.isRoot == true)
-        #expect(root?.level == 0)
+        // The wire's root level is 1 (live 2026-09-13, all 4 roots on the
+        // first page; the bundled file's 17 roots agree). Fails on the old
+        // fixture, which said 0: expected to fail with `root?.level == 1`.
+        #expect(root?.level == 1)
+        #expect(root?.contentRating == "safe")
         let leaf = tags.first { $0.id == 538 }
         #expect(leaf?.parentId == 537)
         #expect(leaf?.namePath == "Activities > Sports > Boxing")
@@ -326,4 +337,239 @@ struct CatalogueTests {
             """#.utf8)))
         }
     }
+}
+
+/// Folding the live `/v1/tags` page into the bundled taxonomy.
+///
+/// The picker used to *replace* the bundled 2,686-row list with whatever the
+/// live fetch answered — and `?limit=500` is the first 500 rows in root
+/// alphabetical order, which is four of the seventeen roots (live
+/// 2026-09-13: Activities, Audience Demographics, Character Archetype,
+/// Character Traits). Online, the reader lost Themes, Settings, Relationship
+/// and the rest; offline they kept them.
+@Suite("Tag taxonomy merge")
+struct TagTaxonomyMergeTests {
+    private static func tag(
+        _ id: Int, _ name: String, path: String? = nil, parent: Int? = nil,
+        count: Int = 0, rating: String? = nil
+    ) -> MangaBaka.Tag {
+        MangaBaka.Tag(
+            id: id, name: name, namePath: path ?? name, parentId: parent, level: nil,
+            description: nil, seriesCount: count, isGenre: false, isSpoiler: false,
+            mergedWith: nil, contentRating: rating
+        )
+    }
+
+    /// Fails without the fix: `TagTaxonomy.merge` does not exist on HEAD, and
+    /// the picker's `tags = live` would leave one root, not two.
+    @Test("Bundled roots the live page did not cover survive the merge")
+    func keepsUncoveredBundledRoots() {
+        let bundled = [
+            Self.tag(537, "Activities", count: 0),
+            Self.tag(1, "Settings", count: 0),
+            Self.tag(94, "Isekai", path: "Settings > Fantasy > Isekai", parent: 2, count: 8_890)
+        ]
+        let live = [Self.tag(537, "Activities", count: 0, rating: "safe")]
+
+        let merged = TagTaxonomy.merge(bundled: bundled, live: live)
+
+        #expect(merged.filter(\.isRoot).map(\.name).sorted() == ["Activities", "Settings"])
+        #expect(merged.contains { $0.id == 94 })
+    }
+
+    /// The same idea at the real scale: the 24-row fixture slice over the
+    /// bundled file keeps all 17 roots. Skipped, not failed, when the test
+    /// host has no bundled taxonomy to read.
+    @Test("Seventeen bundled roots stay seventeen after a four-root live page")
+    func seventeenRootsAfterFourRootPage() throws {
+        let bundled = TagTaxonomy.bundled()
+        guard !bundled.isEmpty else { return }
+        let page = try Fixture.data("tags-page1")
+        let live = try Fixture.decoder().decode(APIEnvelope<[MangaBaka.Tag]>.self, from: page).data ?? []
+        #expect(live.filter(\.isRoot).count == 4, "the slice must reproduce the live page's four roots")
+
+        let merged = TagTaxonomy.merge(bundled: bundled, live: live)
+
+        #expect(merged.filter(\.isRoot).count == 17)
+        #expect(bundled.filter(\.isRoot).count == 17, "control: the bundled file itself has 17")
+    }
+
+    /// Where both have a row, the live one wins — it carries the rating and
+    /// today's count, which the bundled row lacks.
+    @Test("A live row replaces its bundled twin by id")
+    func liveRowWinsById() {
+        let bundled = [Self.tag(386, "Futanari", count: 100)]
+        let live = [Self.tag(386, "Futanari", count: 1_215, rating: "erotica")]
+
+        let merged = TagTaxonomy.merge(bundled: bundled, live: live)
+
+        #expect(merged.count == 1)
+        #expect(merged.first?.seriesCount == 1_215)
+        #expect(merged.first?.contentRating == "erotica")
+    }
+}
+
+/// What the picker withholds, and what it greys out.
+///
+/// Live 2026-09-13: `tag=Isekai&tag_not=94` answers 0 — picking a tag the
+/// reader blocked in Settings sends both and finds nothing, and the empty
+/// state then advises loosening a filter the reader cannot see.
+@Suite("Tag audience")
+struct TagAudienceTests {
+    private static func tag(
+        _ id: Int, _ name: String, path: String? = nil, rating: String? = nil, spoiler: Bool = false
+    ) -> MangaBaka.Tag {
+        MangaBaka.Tag(
+            id: id, name: name, namePath: path ?? name, parentId: nil, level: nil,
+            description: nil, seriesCount: 10, isGenre: false, isSpoiler: spoiler,
+            mergedWith: nil, contentRating: rating
+        )
+    }
+
+    /// Fails without the fix: `TagAudience` does not exist on HEAD; the
+    /// picker had no notion of a blocked tag at all.
+    @Test("A blocked id is marked blocked, and still shown so the reader sees why")
+    func blockedIdIsMarked() {
+        let audience = TagAudience(
+            allowedRatings: ["safe", "suggestive"], showsSpoilers: false, blockedIds: [94]
+        )
+        let isekai = Self.tag(94, "Isekai", rating: "safe")
+        let regression = Self.tag(1, "Regression", rating: "safe")
+
+        #expect(audience.isBlocked(isekai))
+        #expect(!audience.isBlocked(regression))
+        #expect(
+            audience.isShown(isekai),
+            "blocked is greyed, not hidden — hiding it would be the old silent zero"
+        )
+    }
+
+    @Test("A tag rated above the reader's setting is not offered")
+    func ratingAboveSettingIsHidden() {
+        let audience = TagAudience(
+            allowedRatings: ["safe", "suggestive"], showsSpoilers: false, blockedIds: []
+        )
+        #expect(!audience.isShown(Self.tag(386, "Futanari", rating: "erotica")))
+        #expect(audience.isShown(Self.tag(109, "Nudity", rating: "suggestive")))
+        let permissive = TagAudience(
+            allowedRatings: ["safe", "suggestive", "erotica"], showsSpoilers: false, blockedIds: []
+        )
+        #expect(permissive.isShown(Self.tag(386, "Futanari", rating: "erotica")))
+    }
+
+    /// Bundled rows carry no rating. Live 2026-09-13, `/v1/tags?q=Sexual
+    /// Content&limit=60`: of 60 rows under that root, 37 pornographic, 18
+    /// erotica, 2 suggestive, 3 safe — so an unrated row under it is treated
+    /// as erotica until the live row says otherwise.
+    @Test("An unrated row under Sexual Content is withheld unless erotica is allowed")
+    func unratedSexualContentIsWithheld() {
+        let audience = TagAudience(
+            allowedRatings: ["safe", "suggestive"], showsSpoilers: false, blockedIds: []
+        )
+        #expect(!audience.isShown(Self.tag(10, "Hentai", path: "Sexual Content > Intensity > Hentai")))
+        #expect(
+            audience.isShown(Self.tag(94, "Isekai", path: "Settings > Fantasy > Isekai")),
+            "control: the rest of the tree is shown unrated"
+        )
+        let permissive = TagAudience(
+            allowedRatings: ["safe", "suggestive", "erotica"], showsSpoilers: false, blockedIds: []
+        )
+        #expect(permissive.isShown(Self.tag(10, "Hentai", path: "Sexual Content > Intensity > Hentai")))
+    }
+
+    @Test("Spoiler tags are withheld by default, as Browse already does")
+    func spoilersHiddenByDefault() {
+        let audience = TagAudience(allowedRatings: ["safe"], showsSpoilers: false, blockedIds: [])
+        #expect(!audience.isShown(Self.tag(1, "Plot Twist", rating: "safe", spoiler: true)))
+        let showing = TagAudience(allowedRatings: ["safe"], showsSpoilers: true, blockedIds: [])
+        #expect(showing.isShown(Self.tag(1, "Plot Twist", rating: "safe", spoiler: true)))
+    }
+}
+
+/// C#1: the picker offered "Match all" / "Match any", and "any" set `mode`
+/// to nil — which the query never sends, and the API defaults to `and`.
+/// Measured 2026-09-13: `tag=Isekai&tag=Regression` answers 164 with
+/// `tag_mode=or`, with `tag_mode=and`, and with neither; `tag=isekai` alone
+/// is 7,116, so a working OR would be far above 164. The control is dead on
+/// both ends, so it is no longer presented.
+@Suite("Tag picker match mode", .enabled(if: SourceTree.isAvailable))
+struct TagPickerModeTests {
+    /// Fails without the fix — expected to fail with:
+    /// `!source.contains("Match any")`.
+    @Test("The picker no longer offers a Match any control")
+    func noMatchAnyControl() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Search/TagPickerSheet.swift")
+        #expect(!source.contains("\"Match any\""))
+        #expect(!source.contains("modeButton("))
+    }
+
+    /// Picking a tag settles the mode on the one value the API honours.
+    @Test("A pick always writes the and-mode value")
+    func pickWritesAnd() {
+        #expect(TagPickerSheet.pickedTagMode == "and")
+    }
+}
+
+/// Whether a tags page is the whole vocabulary or a slice of it.
+///
+/// Its own suite only because `CatalogueTests` sits at SwiftLint's
+/// `type_body_length` ceiling; same stub, same service.
+@Suite("Catalogue tag paging", .serialized)
+struct CatalogueTagPagingTests {
+    private func makeService() -> CatalogueService {
+        CatalogueService(client: APIClient(
+            baseURL: URL(string: "https://api.example.invalid").unsafeTestURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        ))
+    }
+
+    /// One root in the wire's shape (see `CatalogueTests.tagPayload`), and
+    /// no `pagination` block at all — as an unpaginated answer would be.
+    private static let lastPage = Data("""
+    {"status":200,"data":[
+      {"id":537,"parent_id":null,"merged_with":null,"name":"Activities",
+       "name_path":"Activities","description":null,"level":1,
+       "series_count":9000,"is_genre":false,"is_spoiler":false,"content_rating":"safe"}
+    ]}
+    """.utf8)
+
+    /// `/v1/tags?limit=500` answers 500 of 7,146 rows with `pagination.next`
+    /// set (live 2026-09-13, `Fixtures/tags-page1.json` is a 24-row slice of
+    /// that page with the pagination block kept verbatim). The service used
+    /// to stamp `isPartial: false` on it regardless. Fails without the fix —
+    /// expected to fail with: `isPartial == true`.
+    @Test("A paginated tags page is reported as partial")
+    func pagedTagsArePartial() async throws {
+        let page = try Fixture.data("tags-page1")
+        URLProtocolStub.setHandler { _ in .respond(.init(body: page)) }
+        defer { URLProtocolStub.reset() }
+
+        let fetched = await makeService().tags(limit: 500)
+        guard case let .loaded(tags, _, isPartial) = fetched else {
+            Issue.record("Expected .loaded, got \(fetched)")
+            return
+        }
+        #expect(isPartial == true)
+        // Control: the slice really is the live shape — four roots, all
+        // `level: 1`, and the erotica rows carry their rating through.
+        #expect(tags.filter(\.isRoot).count == 4)
+        #expect(tags.filter(\.isRoot).allSatisfy { $0.level == 1 })
+        #expect(tags.first { $0.id == 386 }?.contentRating == "erotica")
+    }
+
+    /// The same three-row payload with no `next` is the whole list.
+    @Test("A last tags page is not partial")
+    func lastTagsPageIsComplete() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(body: Self.lastPage)) }
+        defer { URLProtocolStub.reset() }
+
+        let fetched = await makeService().tags()
+        guard case let .loaded(_, _, isPartial) = fetched else {
+            Issue.record("Expected .loaded, got \(fetched)")
+            return
+        }
+        #expect(isPartial == false)
+    }
+
 }

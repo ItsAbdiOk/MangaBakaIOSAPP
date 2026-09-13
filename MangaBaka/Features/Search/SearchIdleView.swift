@@ -26,6 +26,8 @@ struct SearchIdleView: View {
     let onSaveLens: () -> Void
     let onShowResults: () -> Void
     var previewCount: ((SearchQuery) async -> Int?)?
+    /// The offline counter, handed straight through to `FilterPanel`.
+    var offlineCount: ((SearchQuery) async -> Int?)?
 
     @State private var isEditingLenses = false
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
@@ -138,6 +140,7 @@ struct SearchIdleView: View {
                 catalogue: catalogue,
                 preferOffline: preferOffline,
                 previewCount: previewCount ?? counts.count,
+                offlineCount: offlineCount,
                 onShowResults: onShowResults
             )
         }

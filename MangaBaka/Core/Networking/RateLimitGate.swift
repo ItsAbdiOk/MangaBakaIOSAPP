@@ -205,13 +205,23 @@ actor RateLimitGate {
     ///     lock itself out for minutes over a transient spike.
     ///   - path: which family earned this refusal. Only that family is
     ///     backed off — see the type's doc comment.
-    func recordRateLimit(retryAfter: TimeInterval?, path: String) {
+    /// - Returns: the deadline just recorded — the one date every screen
+    ///   should count down against. Returned rather than recomputed by the
+    ///   caller because `APIClient` used to build its own from the header
+    ///   alone, so a 429 with no `Retry-After` (the schema's `V1_Error_429`
+    ///   promises none) reached the reader as `until: nil` — a static
+    ///   "Search is paused" with no countdown and no automatic retry — while
+    ///   this gate had already worked out exactly when it would reopen.
+    @discardableResult
+    func recordRateLimit(retryAfter: TimeInterval?, path: String) -> Date {
         let family = Self.family(for: path)
         let count = (consecutiveRateLimits[family] ?? 0) + 1
         consecutiveRateLimits[family] = count
         let fallback = min(pow(2, Double(count)), 60)
         let wait = min(retryAfter ?? fallback, Self.maxHonouredRetryAfter)
-        blockedUntil[family] = clock.now.addingTimeInterval(wait)
+        let until = clock.now.addingTimeInterval(wait)
+        blockedUntil[family] = until
+        return until
     }
 
     /// A success clears only the family it succeeded in — a fine result from

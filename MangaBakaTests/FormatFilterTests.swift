@@ -49,6 +49,32 @@ struct FormatFilterTests {
         #expect(result.series.map(\.type) == ["manga"])
     }
 
+    /// The suite is named "holds everywhere" and until 2026-09-13 every test
+    /// in it loaded `.rising` — Search, the one endpoint that *does* honour
+    /// `type=`, was never exercised, so the local `allowsFormat` post-filter
+    /// on `SeriesRepository.search` was untested (search review, tests
+    /// finding 10). The stub plays a server that ignores the parameter, the
+    /// way discover does, so the assertion is on the local filter alone; a
+    /// second assertion pins that `type=manga` still goes out on the wire,
+    /// because for search the server-side half is the one that actually
+    /// saves the request budget.
+    @Test("Search drops what the format filter excludes, and still asks the server to")
+    func searchFiltersWhatTheServerReturns() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(statusCode: 200, body: self.page(["manga", "manhwa", "novel"])))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try repository()
+        await repository.updateFormats(["manga"])
+        let result = await repository.search(SearchQuery(text: "solo"))
+
+        #expect(result.series.map(\.type) == ["manga"])
+        let url = try #require(URLProtocolStub.requests.last?.url?.absoluteString)
+        #expect(url.contains("/v2/series/search"))
+        #expect(url.contains("type=manga"), "the standing format preference must reach the search request")
+    }
+
     @Test("No format chosen means every format is allowed")
     func emptyMeansEverything() async throws {
         URLProtocolStub.setHandler { _ in

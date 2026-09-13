@@ -100,9 +100,44 @@ struct PaginationTests {
 
         #expect(await model.results.count == 30)
         #expect(await model.results.map(\.id).count == Set(await model.results.map(\.id)).count)
-        // And it stops asking, rather than re-requesting the same page into a
-        // rate limit shared with everyone else on this IP.
+        // This is the *genuine end* control for `duplicatePagesStopAfterThree`
+        // below: with three pages the model asks for 2 and 3 (both repeats),
+        // and page 3 says there is no more — so `hasMore` is false because
+        // the API ended the list, not because the dedupe gave up. The old
+        // comment here claimed "it stops asking" while never checking what
+        // was asked (search review, tests finding 9).
+        #expect(repository.requestedPages == [1, 2, 3])
         #expect(await model.hasMore == false)
+        #expect(await model.stoppedEarly == false, "a real last page is not the model giving up")
+    }
+
+    /// The bound itself. A run of pages that add nothing — every row a
+    /// repeat, or every row filtered locally — while the API keeps saying
+    /// there is more must stop after `maxConsecutiveEmptyPages` (3) extra
+    /// requests, and say so through `stoppedEarly`, rather than spend the
+    /// shared 30/min search window on one scroll. Neither the bound nor the
+    /// flag appeared in any test before 2026-09-13.
+    @Test("Three empty pages in a row stop the scroll early and say so")
+    func duplicatePagesStopAfterThree() async {
+        // Ten pages on offer, every one a repeat of page 1.
+        let repository = PagingRepository(pageSize: 30, totalPages: 10)
+        repository.repeatsFirstPage = true
+        let model = await SearchModel(repository: repository)
+        await MainActor.run { model.query = SearchQuery(text: "solo") }
+
+        await model.search()
+        await model.loadMore()
+
+        // Pages 2, 3 and 4 were tried and added nothing; 5 through 10 were
+        // never asked for even though the stub would have said `hasMore`.
+        #expect(repository.requestedPages == [1, 2, 3, 4])
+        #expect(await model.results.count == 30)
+        #expect(await model.stoppedEarly, "the view needs to say 'stopped early', not 'that's all of them'")
+        #expect(await model.hasMore == false)
+
+        // And a further scroll does not resume the spend.
+        await model.loadMore()
+        #expect(repository.requestedPages == [1, 2, 3, 4])
     }
 
     @Test("A genuinely last page never triggers a second request")

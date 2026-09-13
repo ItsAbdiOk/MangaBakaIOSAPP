@@ -51,11 +51,6 @@ struct FailureState: View {
     /// itself renders as disabled so the reader can see why. See `RetryGate`.
     @State private var gate = RetryGate()
 
-    private var rateLimitDeadline: Date? {
-        guard case let .rateLimited(until, _) = error else { return nil }
-        return until
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             StateMark(symbol: error.symbolName)
@@ -78,8 +73,8 @@ struct FailureState: View {
             // rather than to the button, because it is a fact about the wait
             // and not a label for the tap. A real `TimelineView` now, not a
             // string frozen at the instant this rendered — see `Countdown`.
-            if let rateLimitDeadline {
-                Countdown(until: rateLimitDeadline, onReachZero: autoRetry ? { fireRetry() } : nil)
+            if let deadline = error.rateLimitDeadline {
+                Countdown(until: deadline, onReachZero: autoRetry ? { fireRetry() } : nil)
                     .typeSubtitle()
                     .fontWeight(.semibold)
                     .foregroundStyle(Palette.textPrimary)
@@ -137,7 +132,33 @@ struct FailureState: View {
 struct StaleBar: View {
     let headline: String
     let detail: String
+    /// When the stale reason is a rate limit, the moment it lifts. Mounts a
+    /// live `Countdown` under `detail` and fires `retry` the instant it
+    /// reaches zero — the same pair `FailureState` already had, which this
+    /// bar did not: over live results a 429 rendered `error.countdown`, a
+    /// string frozen at render, as plain text. The reader kept "Retrying in
+    /// 30 s" that never moved and never retried, while the model's own
+    /// comment promised auto-retry would fetch the answer (review R F9,
+    /// T#2, 2026-09-13). Nil for every other reason, and for a rate limit
+    /// nobody dated, in which case the bar is exactly what it was.
+    var deadline: Date?
+    /// The manual "Retry", and — with a `deadline` — what fires on its own
+    /// when the countdown ends. One closure for both because they are the
+    /// same act; a second tap or an automatic fire while one is in flight
+    /// is a no-op through `RetryGate`, as on `FailureState`.
     var retry: (() async -> Void)?
+
+    @State private var gate = RetryGate()
+
+    /// "Still showing 'one piece'": names whose results sit under the bar.
+    /// Without it the field could read "berserk" over a grid of "one piece"
+    /// with nothing saying which query the grid belonged to. A blank query
+    /// — a browse with no text — gets a neutral form rather than "''".
+    nonisolated static func stillShowing(_ query: String) -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Still showing the last results" }
+        return "Still showing '\(trimmed)'"
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -158,11 +179,18 @@ struct StaleBar: View {
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
+                if let deadline {
+                    Countdown(until: deadline, onReachZero: { fireRetry() })
+                        .typeSmallMeta()
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Palette.textPrimary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let retry {
-                StateAction(title: "Retry", weight: .aside) { Task { await retry() } }
+            if retry != nil {
+                StateAction(title: gate.isRetrying ? "Retrying…" : "Retry", weight: .aside, action: fireRetry)
+                    .disabled(gate.isRetrying)
                     .padding(.top, 2)
             }
         }
@@ -175,5 +203,10 @@ struct StaleBar: View {
         .padding(.horizontal, Metrics.gutter)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(headline). \(detail)")
+    }
+
+    private func fireRetry() {
+        guard let retry else { return }
+        Task { await gate.fire(retry) }
     }
 }

@@ -150,14 +150,17 @@ struct APIClientFailurePathTests {
         #expect((until?.timeIntervalSinceNow ?? 0) <= RateLimitGate.maxHonouredRetryAfter)
     }
 
-    @Test("429 without Retry-After still reports rateLimited")
+    /// Until 2026-09-13 this asserted `until: nil`, which is the bug: the
+    /// schema's `V1_Error_429` promises no `Retry-After`, and a nil deadline
+    /// meant no countdown and no auto-retry on the one limit readers actually
+    /// hit. The gate's own backoff is the deadline now.
+    @Test("429 without Retry-After still carries a deadline from the gate")
     func rateLimitedWithoutHeader() async {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
         defer { URLProtocolStub.reset() }
 
-        await #expect(throws: APIError.rateLimited(retryAfter: nil)) {
-            let _: [Int] = try await makeClient().get("/things")
-        }
+        let until = await expectRateLimitedDeadline()
+        #expect((until?.timeIntervalSinceNow ?? 0) > 0)
     }
 
     /// A rate limit is shared per IP, so it can be triggered by someone else on

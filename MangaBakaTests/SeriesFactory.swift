@@ -80,6 +80,14 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
         FeedResult(series: [], origin: .network)
     }
 
+    // The priority-taking pair is declared here, not left to the protocol
+    // extension's defaults: a witness is bound where the class conforms, so
+    // a subclass (`PriorityRecordingRepository`) can only see the priority a
+    // caller passed if the base has a method for it to override.
+    func search(_ query: SearchQuery, priority: RequestPriority) async -> FeedResult {
+        await search(query)
+    }
+
     func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
         FeedResult(series: [], origin: .network)
     }
@@ -106,4 +114,5 @@ class StubRepositoryBase: SeriesRepositoryProtocol, @unchecked Sendable {
     /// Nil rather than zero: a stub that answers "no results" would make every
     /// lens row claim its saved search now finds nothing.
     func count(_ query: SearchQuery) async -> Int? { nil }
+    func count(_ query: SearchQuery, priority: RequestPriority) async -> Int? { await count(query) }
 }

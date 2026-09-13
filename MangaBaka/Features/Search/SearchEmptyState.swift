@@ -18,22 +18,33 @@ extension SearchView {
         case idle, skeleton, failure, empty, results
     }
 
+    /// Decided from what was *asked* and whether an answer is *pending* —
+    /// never from `query.isEmpty`. Reading the query made a Type chip tapped
+    /// on the idle panel (a query with nothing asked) render as "Nothing
+    /// matched these filters" (UX#1, 2026-09-13 walk), and made the ≥300 ms
+    /// debounce after a first keystroke render the same way (E F4). And a
+    /// grid with content stays put while the next answer is on its way —
+    /// swapping it for the skeleton on every pause re-ran a second of blur
+    /// and stagger over results that were mostly the same (R F1); the view
+    /// dims it instead.
     nonisolated static func contentKind(
-        isQueryEmpty: Bool,
+        hasAsked: Bool,
+        isPending: Bool,
         isSearching: Bool,
         hasBlockingFailure: Bool,
         resultsEmpty: Bool
     ) -> ContentKind {
-        if isQueryEmpty { return .idle }
-        if isSearching { return .skeleton }
+        if !hasAsked { return .idle }
+        if !resultsEmpty { return .results }
+        if isPending || isSearching { return .skeleton }
         if hasBlockingFailure { return .failure }
-        if resultsEmpty { return .empty }
-        return .results
+        return .empty
     }
 
     var contentKind: ContentKind {
         Self.contentKind(
-            isQueryEmpty: model.query.isEmpty,
+            hasAsked: model.hasAsked,
+            isPending: model.isPending,
             isSearching: model.isSearching,
             hasBlockingFailure: model.failure != nil && model.results.isEmpty,
             resultsEmpty: model.results.isEmpty
@@ -45,6 +56,11 @@ extension SearchView {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(Array(model.results.enumerated()), id: \.element.id) { index, series in
                 Button {
+                    // Opening a result is how most searches end, and Recent
+                    // only heard about Return and "Show results" — "typed
+                    // berserk, tapped the cover" was never in the list
+                    // (UX#10, LW §2). `record` refuses blanks itself.
+                    recents.record(model.query.text ?? "")
                     zoomRoute?.source = ZoomRoute.id("search", series.id)
                     zoomRoute?.neighbours = model.results
                     path.append(series)
@@ -118,8 +134,7 @@ extension SearchView {
                 .padding(.top, 16)
             }
             Button {
-                model.query.sort = "random"
-                Task { model.cancelPendingDebounce(); await model.search() }
+                Task { await model.surpriseMe() }
             } label: {
                 Text("Random with these filters")
                     .typeRowTitle()

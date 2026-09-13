@@ -119,9 +119,16 @@ final class AccessibilityAuditTests: XCTestCase {
     }
 
     /// Every tab, audited where it opens.
+    ///
+    /// Search was missing from this list until 2026-09-13 (search review,
+    /// summary #14) — the one tab with a hand-rolled text field, 40pt
+    /// controls and a results grid nothing else audits. It renders as the
+    /// circle beside the capsule (`role: .search` in `RootView`), which is
+    /// still a tab-bar button as far as XCUI is concerned; if that stops
+    /// being true, the `XCTFail` below says so rather than skipping it.
     func testTabsPassTheAudit() throws {
         let app = launchedApp()
-        for tab in ["Discover", "Stack", "Mix", "Library"] {
+        for tab in ["Discover", "Stack", "Mix", "Library", "Search"] {
             let button = app.tabBars.buttons[tab]
             guard button.waitForExistence(timeout: 10) else {
                 XCTFail("no \(tab) tab to audit")

@@ -126,6 +126,62 @@ struct OfflineCatalogueTests {
         #expect(Set(hits.map(\.id)) == expected)
     }
 
+    // MARK: - Content rating
+
+    /// The offline index is the one path that shows results *without* the
+    /// server's `content_rating` filter, so this local one is all that
+    /// stands between a reader with explicit content off and the whole
+    /// export. Every other test here passes `allowedRatings: []`, which
+    /// `passesRating` reads as "allow everything" — deleting the filter
+    /// outright left this file green (search review, tests finding 4).
+    ///
+    /// Measured against the bundled export (built 2026-09-13): safe 12,268,
+    /// suggestive 2,784, erotica 2,717, pornographic 1,531, none missing —
+    /// so `SearchModel`'s default `["safe", "suggestive"]` must return
+    /// exactly 15,052, and the "missing rating passes" rule cannot be
+    /// exercised by this fixture at all (recorded, not tested).
+    @Test("The default content ratings keep 15,052 of the 19,300 and none of the rest")
+    func contentRatingFilterKeepsOnlyAllowed() async {
+        let allowed: Set<String> = ["safe", "suggestive"]
+        let expected = Set(
+            Self.rawEntries.filter { entry in
+                guard let rating = entry.contentRating, !rating.isEmpty else { return true }
+                return allowed.contains(rating.lowercased())
+            }.map(\.id)
+        )
+        #expect(expected.count == 15_052, "the export's own split; a drift here is a new export, not a bug")
+        #expect(expected.count < Self.rawEntries.count, "Sanity: the filter must actually remove something")
+
+        let catalogue = makeCatalogue()
+        let hits = await catalogue.matches(
+            query(), allowedRatings: Array(allowed), allowedTypes: [], blockedTags: [],
+            limit: Self.rawEntries.count, offset: 0
+        )
+        #expect(Set(hits.map(\.id)) == expected)
+        // The hit's `Series` carries the rating through (`OfflineCatalogue.swift:60`),
+        // so a nil here would be a hit built wrong, not an unrated row — the
+        // export has none.
+        #expect(
+            hits.allSatisfy { hit in hit.series.contentRating.map(allowed.contains) ?? false },
+            "no returned hit may carry a rating outside the allowed set"
+        )
+    }
+
+    /// Control for the test above: `count()` shares the filter with
+    /// `matches()`, and the comparison is case-insensitive on the wire value
+    /// — the export stores lowercase, the settings store whatever the picker
+    /// wrote.
+    @Test("count() applies the content-rating filter the same way matches() does")
+    func contentRatingCountAgreesWithMatches() async {
+        let catalogue = makeCatalogue()
+        let count = await catalogue.count(
+            query(), allowedRatings: ["Safe"], allowedTypes: [], blockedTags: []
+        )
+        let expected = Self.rawEntries.filter { $0.contentRating?.lowercased() == "safe" }.count
+        #expect(count == expected)
+        #expect(count == 12_268)
+    }
+
     // MARK: - Rating and type
 
     @Test("A rating floor keeps only series at or above it")

@@ -56,7 +56,7 @@ final class TagSearch {
 
         // Immediately, from what is already here. The remote answer replaces
         // this a moment later; it never replaces it with less.
-        results = loaded.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        results = Self.localMatches(in: loaded, for: trimmed)
         isSearching = true
 
         task = Task { [weak self] in
@@ -83,6 +83,32 @@ final class TagSearch {
     /// network, the other is about the tag.
     func emptyMessage(for query: String) -> String {
         didFail ? "Could not search tags just now." : "No tag matches \"\(query)\"."
+    }
+
+    /// The loaded tags whose name contains the query, names that *start*
+    /// with it first.
+    ///
+    /// Case- and diacritic-insensitive, matching the offline title index
+    /// (`OfflineCatalogue`, `.diacriticInsensitive`): this used
+    /// `localizedCaseInsensitiveContains`, which folds case but not accents,
+    /// so "cafe" found nothing locally for "Café" — the one accented bundled
+    /// name — until the API answered (C#8). Prefix hits lead because a reader
+    /// typing "rom" means Romance, and the loaded list is ordered by series
+    /// count, so "Workplace Romance" (broader) used to sit above it. Within
+    /// each band the load order — by count — is kept.
+    nonisolated static func localMatches(in loaded: [Tag], for query: String) -> [Tag] {
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        var prefixed: [Tag] = []
+        var contained: [Tag] = []
+        for tag in loaded {
+            guard let range = tag.name.range(of: query, options: options) else { continue }
+            if range.lowerBound == tag.name.startIndex {
+                prefixed.append(tag)
+            } else {
+                contained.append(tag)
+            }
+        }
+        return prefixed + contained
     }
 
     /// Local hits first — they are the popular tags, and the reader is most

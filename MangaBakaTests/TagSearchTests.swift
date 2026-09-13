@@ -36,6 +36,49 @@ struct TagSearchTests {
         let merged = TagSearch.merge(local: [], remote: [Self.tag(2, "Romance")])
         #expect(merged.map(\.name) == ["Romance"])
     }
+
+    // MARK: - Local matching
+
+    /// Control: case has never mattered locally (`localizedCaseInsensitiveContains`)
+    /// and, measured 2026-09-13, `tag=isekai` and `tag=Isekai` both answer
+    /// 7,116 on the API. Passes before and after the fix.
+    @Test("\"isekai\" matches \"Isekai\"")
+    func caseDoesNotMatter() {
+        let found = TagSearch.localMatches(in: [Self.tag(94, "Isekai")], for: "isekai")
+        #expect(found.map(\.id) == [94])
+    }
+
+    /// The one accented bundled name. The offline title index folds
+    /// diacritics (`OfflineCatalogue.swift`, `.diacriticInsensitive`); the
+    /// tag filter did not, so "cafe" found nothing until the API answered.
+    /// Fails without the fix — expected to fail with: `found.map(\.id) == [624]`
+    /// (`localizedCaseInsensitiveContains` answers `[]`).
+    @Test("\"cafe\" matches \"Café\"")
+    func diacriticsDoNotMatter() {
+        let found = TagSearch.localMatches(in: [Self.tag(624, "Café")], for: "cafe")
+        #expect(found.map(\.id) == [624])
+    }
+
+    /// A reader typing "rom" almost always means Romance, not Workplace
+    /// Romance. The old filter kept load order, which is by series count —
+    /// so a broad tag containing the word outranked the tag that *is* the
+    /// word. Fails without the fix — expected to fail with:
+    /// `found.map(\.id) == [2, 1, 3]` (load order gives `[1, 2, 3]`).
+    @Test("A name that starts with the query outranks one that merely contains it")
+    func prefixBeforeSubstring() {
+        let loaded = [
+            Self.tag(1, "Workplace Romance", count: 900),
+            Self.tag(2, "Romance", count: 800),
+            Self.tag(3, "Office Romance", count: 700)
+        ]
+        let found = TagSearch.localMatches(in: loaded, for: "rom")
+        #expect(found.map(\.id) == [2, 1, 3], "prefix hit first, then the substring hits in load order")
+    }
+
+    @Test("A name without the query is not a match")
+    func noMatchIsEmpty() {
+        #expect(TagSearch.localMatches(in: [Self.tag(1, "Cooking")], for: "rom").isEmpty)
+    }
 }
 
 /// The two halves of `TagSearch` a merge test cannot reach: waiting before it
@@ -77,6 +120,49 @@ struct TagSearchTimingTests {
         try await Task.sleep(for: TagSearch.debounce * 3)
 
         #expect(counter.queries == ["romance"], "seven keystrokes should cost one request")
+    }
+
+    /// T#7 (docs/reviews/search/tests.md): `debounceCollapsesTyping` fires
+    /// its keystrokes in a synchronous loop, so each `update` cancels the
+    /// last before anything runs — it proves cancel-on-change, and passes
+    /// with the sleep set to zero. A reader types with 80–150 ms between
+    /// keys (a guess from ordinary typing; not measured here), so the gaps
+    /// below are 100 ms: shorter than the 250 ms debounce, longer than a
+    /// synchronous loop. Fails with `debounce` under ~100 ms — expected to
+    /// fail with: `counter.queries == ["sol"]` (a 50 ms debounce records
+    /// `["s", "so", "sol"]`).
+    @Test("Keystrokes 100 ms apart are still one request")
+    func debounceOutlastsRealTyping() async throws {
+        let counter = Counter()
+        let search = TagSearch { query in
+            counter.record(query)
+            return []
+        }
+
+        for prefix in ["s", "so", "sol"] {
+            search.update(query: prefix)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        // Waits on TagSearch's own debounce timer, at 3x margin.
+        try await Task.sleep(for: TagSearch.debounce * 3)
+
+        #expect(counter.queries == ["sol"])
+    }
+
+    /// The lower bound the old tests never pinned: nothing goes out before
+    /// the debounce elapses.
+    @Test("No request goes out before the debounce elapses")
+    func nothingBeforeDebounce() async throws {
+        let counter = Counter()
+        let search = TagSearch { query in
+            counter.record(query)
+            return []
+        }
+
+        search.update(query: "s")
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(counter.queries.isEmpty, "100 ms is inside the 250 ms window")
     }
 
     @Test("Local matches appear before anything is asked of the API")

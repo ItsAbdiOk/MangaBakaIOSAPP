@@ -322,6 +322,45 @@ struct SearchLensTests {
         #expect(!names.contains("tag_mode"))
     }
 
+    /// The Genres door used to write into `tags`, so `genre=romance` reached
+    /// the wire as `tag=romance` and found 14% of the genre (measured
+    /// 2026-09-13: 14,065 vs 100,947). The field is its own; the pickers are
+    /// rewired to it in the next batch.
+    @Test("A genre reaches the search endpoint as genre=, beside any tags")
+    func genresReachTheWire() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        let repository = try makeRepository()
+        var query = SearchQuery()
+        query.genres = ["romance"]
+        query.tags = ["Regression"]
+        _ = await repository.search(query)
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        #expect(sent.filter { $0.name == "genre" }.compactMap(\.value) == ["romance"])
+        #expect(sent.filter { $0.name == "tag" }.compactMap(\.value) == ["Regression"])
+    }
+
+    /// Year is a real filter on both endpoints now (`/v1/series/mix` lists
+    /// the same `published_start_date_*` parameters), so a blend narrowed to
+    /// "from 2020" must not quietly blend every year.
+    @Test("A lens's year range survives into a blend")
+    func yearRangeReachesTheMix() async throws {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(body: Data(#"{"status":200,"data":[]}"#.utf8)))
+        }
+        defer { URLProtocolStub.reset() }
+
+        var filters = SearchQuery()
+        filters.yearFrom = 2020
+        _ = try await makeRepository().mix(seeds: [7], filters: filters, excludedTags: [])
+
+        let sent = try items(from: URLProtocolStub.requests.first)
+        #expect(sent.first { $0.name == "published_start_date_lower" }?.value == "2020")
+    }
 }
 
 /// A lens the reader writes themselves, which is what makes lenses theirs.

@@ -129,6 +129,14 @@ struct RootView: View {
             .sensoryFeedback(Haptics.selection, trigger: selection)
             .environment(\.zoomNamespace, coverTransition)
             .environment(\.zoomRoute, zoomRoute)
+            // What the tag picker may offer this reader: their rating
+            // ceiling and their blocked list, so a picked tag can never be
+            // one the search then refuses (`TagAudience`).
+            .environment(\.tagAudience, TagAudience(
+                allowedRatings: Set(content.preferences.queryValues),
+                showsSpoilers: false,
+                blockedIds: Set(blockedTags.blocked.ids)
+            ))
             .task { await startSession() }
             // Primes `characters`' outage memory before any series page asks
             // for a cast, so the first one opened does not pay AniList's own

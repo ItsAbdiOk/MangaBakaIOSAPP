@@ -139,8 +139,17 @@ final class LensCounts {
     /// dedup and cache entirely. This is one request for one query at a
     /// time, debounced by the caller (`FilterPanel`); nothing here needs to
     /// remember it happened.
+    ///
+    /// `.background`, like the lens walk above, and for the same reason: a
+    /// preview is not a search. At the default `.userInitiated` it drew on
+    /// the ten slots `RateLimitGate` reserves for the reader's own typed
+    /// query, so a reader who toggled thirty chips in a minute was refused
+    /// their next search by their own previews (review 2026-09-13, E F3 —
+    /// the mechanism is certain; the thirty-toggle pace is a plausible-use
+    /// claim, not a measurement). Background waits rather than fails, and
+    /// the caller already cancels a superseded count.
     func count(_ query: SearchQuery) async -> Int? {
-        await repository.count(query)
+        await repository.count(query, priority: .background)
     }
 }
 

@@ -17,9 +17,13 @@ import SwiftUI
 struct TagPickerSheet: View {
     let catalogue: CatalogueService
     @Binding var selected: [String]
+    /// Settled on `pickedTagMode` whenever a tag is picked. The binding
+    /// stays so the two callers' signatures do not change.
     @Binding var mode: String?
 
     @State private var query = ""
+    /// Every usable tag, bundled and live folded together — including rows
+    /// the reader's settings withhold. Filter through `visible`.
     @State private var tags: [Tag] = []
     /// Kept beside `tags` and set with it, see `TagBreadth.sortedCounts`.
     @State private var sortedCounts: [Int] = []
@@ -33,9 +37,22 @@ struct TagPickerSheet: View {
     /// gets a footnote instead, since there is something to show either way.
     @State private var liveFailure: APIError?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.tagAudience) private var audience
 
-    /// How many tags a group shows before asking.
+    /// How many tags a group shows before asking. A guess: eight rows is
+    /// about one screen under the field and the chosen chips on a 393pt
+    /// phone; nothing measured it.
     private static let perGroup = 8
+
+    /// The only value `tag_mode` can usefully take. The picker offered
+    /// a Match-any button as well, which set `mode` to nil — never sent — and the
+    /// API ignores `tag_mode` in any case: measured 2026-09-13,
+    /// `tag=Isekai&tag=Regression` answers 164 with `tag_mode=or`, with
+    /// `=and`, and with neither, while `tag=isekai` alone is 7,116. A control
+    /// whose two states produce the same request is not a control; it is
+    /// gone until the API honours it. Mix reads `"and"`/`"or"` and patched
+    /// nil back to `"and"` itself, so writing it here settles both callers.
+    nonisolated static let pickedTagMode = "and"
 
     var body: some View {
         NavigationStack {
@@ -63,7 +80,6 @@ struct TagPickerSheet: View {
                         field
                         if !selected.isEmpty {
                             chosen
-                            matchMode
                         }
                         if !isLoading, status == .bundledOnly {
                             bundledFootnote
@@ -155,8 +171,11 @@ struct TagPickerSheet: View {
     }
 
     private var placeholder: String {
-        isLoading ? "Search tags" : "Search \(tags.count.formatted()) tags"
+        isLoading ? "Search tags" : "Search \(visible.count.formatted()) tags"
     }
+
+    /// What this reader may be offered. See `TagAudience`.
+    private var visible: [Tag] { tags.filter(audience.isShown) }
 
     private var chosen: some View {
         FlowLayout(spacing: 8) {
@@ -180,36 +199,6 @@ struct TagPickerSheet: View {
         }
     }
 
-    /// Deliberately grey when selected, where a chosen tag is accent.
-    ///
-    /// The accent means "this is one of your filters". All-versus-any is not a
-    /// filter, it is how the filters combine — and colouring it the same would
-    /// make it look like a third tag.
-    private var matchMode: some View {
-        HStack(spacing: 8) {
-            modeButton("Match all", value: "and")
-            modeButton("Match any", value: nil)
-        }
-    }
-
-    private func modeButton(_ title: String, value: String?) -> some View {
-        let isOn = mode == value
-        return Button { mode = value } label: {
-            Text(title)
-                .typeChip()
-                .foregroundStyle(isOn ? Palette.textPrimary : Palette.textMuted)
-                .padding(.horizontal, 14)
-                .frame(minHeight: Metrics.headerPill)
-                .background(isOn ? Palette.surfaceField : .clear, in: Capsule())
-                .overlay(Capsule().strokeBorder(
-                    isOn ? .clear : Palette.borderPill, lineWidth: 0.5
-                ))
-                .tapTarget()
-        }
-        .buttonStyle(.press)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-    }
-
     /// Asked of the API, not filtered from the 500 loaded here — there are
     /// 7,127 tags and the popular list does not contain Romance. See `TagSearch`.
     @ViewBuilder
@@ -224,9 +213,10 @@ struct TagPickerSheet: View {
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(found.prefix(40))) { tag in
-                    TagPickerRow(tag: tag, breadth: breadth(tag), isOn: selected.contains(tag.name)) {
-                        toggle(tag.name)
-                    }
+                    // The whole path above the leaf: "Fantasy" the Settings
+                    // child and "Fantasy" the genre are otherwise the same
+                    // row (C#4).
+                    row(tag, subtitle: Self.parentPath(of: tag))
                 }
             }
         }
@@ -241,14 +231,41 @@ struct TagPickerSheet: View {
     }
 
     private var roots: [Tag] {
-        tags.filter(\.isRoot).sorted { $0.name < $1.name }
+        visible.filter(\.isRoot).sorted { $0.name < $1.name }
+    }
+
+    /// Everything beneath a root, not just its direct children.
+    ///
+    /// Only level-2 rows were listed (`parentId == root.id`), which is 807 of
+    /// the bundled 2,686: "Settings > Fantasy > Isekai" — 8,890 series, one
+    /// of the most-searched tags on the site — was not browsable at all, and
+    /// "25 more in search" under Settings counted siblings when the true
+    /// number beneath it is in the hundreds (C#4). By path rather than
+    /// walking `parentId`, since the bundled parent ids are derived from the
+    /// path anyway.
+    private func descendants(of root: Tag) -> [Tag] {
+        let prefix = root.name + " > "
+        return visible
+            .filter { $0.namePath?.hasPrefix(prefix) == true }
+            .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
+    }
+
+    /// The path between the group heading and the leaf — "Fantasy" for
+    /// "Settings > Fantasy > Isekai", nothing for a direct child.
+    private static func subtitle(for tag: Tag) -> String? {
+        let inner = tag.namePath?.components(separatedBy: " > ").dropFirst().dropLast() ?? []
+        return inner.isEmpty ? nil : inner.joined(separator: " > ")
+    }
+
+    /// The path minus the leaf, for a search hit shown out of its group.
+    private static func parentPath(of tag: Tag) -> String? {
+        let parents = tag.namePath?.components(separatedBy: " > ").dropLast() ?? []
+        return parents.isEmpty ? nil : parents.joined(separator: " > ")
     }
 
     @ViewBuilder
     private func group(_ root: Tag) -> some View {
-        let children = tags
-            .filter { $0.parentId == root.id }
-            .sorted { ($0.seriesCount ?? 0) > ($1.seriesCount ?? 0) }
+        let children = descendants(of: root)
         let isOpen = openGroup == root.id
         let chosenHere = children.filter { selected.contains($0.name) }.count
 
@@ -280,13 +297,7 @@ struct TagPickerSheet: View {
 
             if isOpen {
                 ForEach(Array(children.prefix(Self.perGroup))) { tag in
-                    TagPickerRow(
-                        tag: tag,
-                        breadth: breadth(tag),
-                        isOn: selected.contains(tag.name)
-                    ) {
-                        toggle(tag.name)
-                    }
+                    row(tag, subtitle: Self.subtitle(for: tag))
                 }
                 if children.count > Self.perGroup {
                     Text("\(children.count - Self.perGroup) more in search")
@@ -304,13 +315,37 @@ struct TagPickerSheet: View {
 
     private func breadth(_ tag: Tag) -> Int { TagBreadth.step(for: tag, amongSortedCounts: sortedCounts) }
 
+    private func row(_ tag: Tag, subtitle: String?) -> some View {
+        TagPickerRow(
+            tag: tag,
+            subtitle: subtitle,
+            breadth: breadth(tag),
+            isOn: selected.contains(tag.name),
+            isBlocked: audience.isBlocked(tag)
+        ) {
+            toggle(tag.name)
+        }
+    }
+
     private func toggle(_ name: String) {
         if let index = selected.firstIndex(of: name) {
             selected.remove(at: index)
         } else {
             selected.append(name)
         }
+        // Written on a pick, not on appear: the sheet's callers re-count
+        // results on every query change, and a mode flip with no tag behind
+        // it would spend a request from the 30/min search window for nothing.
+        mode = Self.pickedTagMode
     }
+}
+
+extension EnvironmentValues {
+    /// Set once where the stores live (`RootView`), rather than threaded
+    /// through `SearchView` → `FilterPanel` → here and again through
+    /// `MixView` — two sheet call sites that would otherwise each grow three
+    /// parameters. Until it is set, `TagAudience.default` applies.
+    @Entry var tagAudience: TagAudience = .default
 }
 
 /// Split out of the struct body to stay under the lint's `type_body_length`
@@ -328,9 +363,7 @@ extension TagPickerSheet {
 
         let bundled = TagTaxonomy.bundled().filter(\.isUsable)
         if !bundled.isEmpty {
-            tags = bundled
-            sortedCounts = TagBreadth.sortedCounts(of: tags)
-            searchState.loaded = tags
+            show(bundled, in: searchState)
             isLoading = false
             status = .bundledOnly
         }
@@ -339,12 +372,22 @@ extension TagPickerSheet {
         let live = (fetched.value ?? []).filter(\.isUsable)
         liveFailure = fetched.error
         if !live.isEmpty {
-            tags = live
-            sortedCounts = TagBreadth.sortedCounts(of: tags)
-            searchState.loaded = tags
+            // Folded into the bundled list, never swapped for it: the live
+            // page is four roots of seventeen (C#3). See `TagTaxonomy.merge`.
+            show(TagTaxonomy.merge(bundled: bundled, live: live), in: searchState)
         }
         status = TagPickerStatus.resolve(bundled: bundled, live: live)
         isLoading = false
+    }
+
+    /// One place that sets the three things that must move together.
+    private func show(_ list: [Tag], in searchState: TagSearch) {
+        tags = list
+        sortedCounts = TagBreadth.sortedCounts(of: list)
+        // The search filters what the reader may see, not the whole list —
+        // a withheld tag found by typing its name is the same leak as one
+        // found by browsing.
+        searchState.loaded = list.filter(audience.isShown)
     }
 
     /// Retried from `FailureState` when both sources came back with nothing
@@ -355,21 +398,35 @@ extension TagPickerSheet {
     }
 }
 
-/// One tag: its name, how broad it is, and whether it is chosen.
+/// One tag: its name, where it sits, how broad it is, and whether it is
+/// chosen — or blocked in Settings, in which case it cannot be.
 struct TagPickerRow: View {
     let tag: Tag
+    /// The path above the leaf, when the leaf alone is ambiguous.
+    var subtitle: String?
     /// 1 to 4. See `TagPickerSheet.breadth`.
     let breadth: Int
     let isOn: Bool
+    /// Greyed with the reason rather than hidden or pickable: picked, it
+    /// went to the wire as `tag=X&tag_not=<X>` and found nothing (C#5).
+    var isBlocked = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Text(tag.name)
-                    .typeBody()
-                    .foregroundStyle(Palette.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tag.name)
+                        .typeBody()
+                        .foregroundStyle(isBlocked ? Palette.textMuted : Palette.textPrimary)
+                        .lineLimit(1)
+                    if let caption {
+                        Text(caption)
+                            .typeFootnote()
+                            .foregroundStyle(Palette.textMuted)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 8)
                 bar
                 checkbox
@@ -378,9 +435,16 @@ struct TagPickerRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.press)
+        .disabled(isBlocked)
         .accessibilityLabel(tag.name)
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// The block outranks the path: a reader who cannot pick the row does
+    /// not need to know where it sits.
+    private var caption: String? {
+        isBlocked ? "Blocked in Settings" : subtitle
     }
 
     /// Four steps, drawn as one bar rather than four blocks — the board's own
@@ -424,8 +488,9 @@ struct TagPickerRow: View {
         case 2: "uncommon"
         default: "rare"
         }
-        guard let count = tag.seriesCount else { return isOn ? "Selected" : "Not selected" }
-        return "\(breadthWord), \(count.formatted()) series. \(isOn ? "Selected" : "Not selected")"
+        let state = isBlocked ? "Blocked in Settings" : (isOn ? "Selected" : "Not selected")
+        guard let count = tag.seriesCount else { return state }
+        return "\(breadthWord), \(count.formatted()) series. \(state)"
     }
 }
 

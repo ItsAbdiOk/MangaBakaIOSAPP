@@ -49,12 +49,12 @@ struct SearchView: View {
                 // there.
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        if !model.query.isEmpty { headingText }
+                        if model.hasAsked { headingText }
                         Spacer(minLength: 0)
                         headerActions
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        if !model.query.isEmpty { headingText }
+                        if model.hasAsked { headingText }
                         headerActions
                     }
                 }
@@ -73,10 +73,13 @@ struct SearchView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .scrollEdge()
-        // The end of the results, felt: "no more" is different from "still
-        // loading", and nothing on screen says which until now.
+        // The end of the results, felt — and, since R F10, also said, by the
+        // "That's all N" line under the grid. Not while a new search is
+        // resetting `hasMore` for its own first page, and not when the walk
+        // gave up early: that line says "more may exist", and a haptic
+        // saying "that's all" under it would lie.
         .sensoryFeedback(Haptics.settled, trigger: model.hasMore) { old, new in
-            old && !new && !model.results.isEmpty
+            old && !new && !model.results.isEmpty && !model.isSearching && !model.stoppedEarly
         }
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.query) { name in
@@ -113,7 +116,8 @@ struct SearchView: View {
                 onSaveLens: { isNamingLens = true },
                 catalogue: catalogue,
                 preferOffline: $model.preferOffline,
-                previewCount: counts.count
+                previewCount: previewCount,
+                offlineCount: model.offlineCount
             )
             .presentationDetents([.medium, .large])
             .presentationCornerRadius(Metrics.radiusSheet)
@@ -127,7 +131,7 @@ struct SearchView: View {
                     .foregroundStyle(Palette.textTertiary)
                     // Breathes while a request is out, so the field itself
                     // says "working" without a spinner beside it.
-                    .symbolEffect(.pulse, isActive: model.isSearching && !reduceMotion)
+                    .symbolEffect(.pulse, isActive: isWorking && !reduceMotion)
                 TextField("Title, author, or tag", text: Binding(
                     get: { model.query.text ?? "" },
                     set: { model.query.text = $0 }
@@ -163,13 +167,19 @@ struct SearchView: View {
                 Button {
                     showFilters = true
                 } label: {
-                    Text("Filters")
-                        .typeCTA()
-                        .foregroundStyle(Palette.textPrimary)
-                        .padding(.horizontal, 16)
-                        .frame(height: Metrics.field)
-                        .background(Palette.surfaceChip)
-                        .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+                    // The badge is the only sign, on this screen, that a
+                    // Type chip from the panel is still narrowing the grid
+                    // (LW §1: "Manga silently survives").
+                    HStack(spacing: 6) {
+                        Text("Filters")
+                            .typeCTA()
+                            .foregroundStyle(Palette.textPrimary)
+                        FilterCountBadge(query: model.query)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: Metrics.field)
+                    .background(Palette.surfaceChip)
+                    .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
                 }
                 .transition(.blurReplace)
             }
@@ -212,21 +222,21 @@ struct SearchView: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.press)
-            SurpriseMeButton(isSearching: model.isSearching) {
-                model.query.sort = "random"
-                Task { model.cancelPendingDebounce(); await model.search() }
+            SurpriseMeButton(isSearching: isWorking) {
+                Task { await model.surpriseMe() }
             }
         }
         .fixedSize()
     }
 
-    /// "12 shown · Score" once anything is asked for, nil before that and
+    /// "411 results · Score" once anything is asked for, nil before that and
     /// while a new search is in flight.
     private var heading: String? {
         SearchHeading.text(
-            isEmpty: model.query.isEmpty,
-            isSearching: model.isSearching,
-            count: model.results.count,
+            hasAsked: model.hasAsked,
+            isSearching: isWorking,
+            shown: model.results.count,
+            total: model.total,
             sortLabel: SortOrder.label(for: model.query.sort)
         )
     }
@@ -251,6 +261,9 @@ struct SearchView: View {
                     Task { await model.apply(lens.query) }
                 },
                 onRunTerm: { term in
+                    // Moves it to the front (UX#10): a recent tapped again
+                    // is the most recent search.
+                    recents.record(term)
                     Task { await model.apply(SearchQuery(text: term)) }
                 },
                 onSaveLens: { isNamingLens = true },
@@ -258,7 +271,8 @@ struct SearchView: View {
                     recents.record(model.query.text ?? "")
                     Task { model.cancelPendingDebounce(); await model.search() }
                 },
-                previewCount: counts.count
+                previewCount: previewCount,
+                offlineCount: model.offlineCount
             )
         case .skeleton:
             // The shape of the answer, not a spinner: the grid the results
@@ -284,11 +298,46 @@ struct SearchView: View {
                 .transition(.blurReplace)
         case .results:
             grid
+                .opacity(isWorking ? Self.dimmedWhileWorking : 1)
+                .animation(Motion.reduced(Motion.snappy), value: isWorking)
                 .transition(.blurReplace)
         }
     }
 
-    private var grid: some View {
+    // `resultsGrid`, `shouldPrefetch` and `prefetchDistance` moved to
+    // `SearchEmptyState.swift` for the lint's type-length ceiling.
+
+    // Internal, not private: the empty state lives in its own file for the
+    // lint's ceiling. See SearchEmptyState.swift.
+    var displayedQuery: String {
+        let text = (model.query.text ?? "").trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? "these filters" : "\u{201C}\(text)\u{201D}"
+    }
+}
+
+// The results grid and its helpers, in an extension of the same file for
+// the lint's type-length ceiling — `private` is file-scoped, so nothing
+// widens.
+private extension SearchView {
+    /// A request out, or a debounce about to send one.
+    var isWorking: Bool { model.isSearching || model.isPending }
+
+    /// The "Show N results" label's number. The model answers for the query
+    /// it just searched — the sheet opened over results used to spend a
+    /// `limit=1` request asking for a total the search response had
+    /// already carried (E F1). Anything else is one background-priority
+    /// count through `LensCounts`.
+    func previewCount(_ query: SearchQuery) async -> Int? {
+        if let known = model.knownTotal(for: query) { return known }
+        return await counts.count(query)
+    }
+
+    /// Kept on screen while the next answer is on its way, at this opacity
+    /// — a guess at "clearly busy, still readable"; the skeleton only ever
+    /// replaces an empty grid now (R F1).
+    static let dimmedWhileWorking = 0.55
+
+    var grid: some View {
         VStack(spacing: 0) {
             // A failure that still has content to show is not a blocking
             // failure — the last good results stay on screen, under a bar
@@ -296,9 +345,15 @@ struct SearchView: View {
             // out from under the reader on every throttled keystroke (gap 7).
             Group {
                 if let failure = model.failure {
+                    // With a deadline the bar counts down itself and names
+                    // the query the grid still shows, so it is never
+                    // anonymous under a 429 (R F9).
                     StaleBar(
                         headline: failure.headline,
-                        detail: failure.countdown ?? failure.userFacingMessage,
+                        detail: failure.rateLimitDeadline == nil
+                            ? failure.userFacingMessage
+                            : StaleBar.stillShowing(displayedQuery),
+                        deadline: failure.rateLimitDeadline,
                         retry: { await model.search() }
                     )
                     .padding(.bottom, 12)
@@ -338,18 +393,17 @@ struct SearchView: View {
                     .foregroundStyle(Palette.textMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
+            } else if !model.hasMore, !isWorking {
+                // The real end, said rather than only felt: the haptic above
+                // is nothing to a reader with haptics off or on VoiceOver,
+                // and "page 2 quietly never came" looked the same (R F10).
+                Text("That's all \(model.results.count)")
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
             }
         }
-    }
-
-    // `resultsGrid`, `shouldPrefetch` and `prefetchDistance` moved to
-    // `SearchEmptyState.swift` for the lint's type-length ceiling.
-
-    // Internal, not private: the empty state lives in its own file for the
-    // lint's ceiling. See SearchEmptyState.swift.
-    var displayedQuery: String {
-        let text = (model.query.text ?? "").trimmingCharacters(in: .whitespaces)
-        return text.isEmpty ? "these filters" : "\u{201C}\(text)\u{201D}"
     }
 }
 
@@ -357,17 +411,21 @@ struct SearchView: View {
 /// is testable without a live `SearchView` (this project has no
 /// ViewInspector) — gap 50.
 enum SearchHeading {
-    /// "shown", not "results": this is the number loaded so far, and a query
-    /// matching thousands read "24 results" and then "47 results" as the
-    /// reader scrolled — the same query reporting different totals. Nil while
-    /// `isSearching`: the count on screen at that instant still describes the
-    /// query the reader just left, not the one the skeleton beneath it is
-    /// about to answer — `SearchView.swift:194` used to hold the previous
-    /// query's count above the incoming skeleton with nothing telling them
-    /// apart.
-    static func text(isEmpty: Bool, isSearching: Bool, count: Int, sortLabel: String?) -> String? {
-        guard !isEmpty, !isSearching else { return nil }
-        let text = "\(count) shown"
+    /// "N results" from the API's own total; "N shown" only when the answer
+    /// carried none (the offline index). "shown" used to be the only form,
+    /// covering for the total being decoded and thrown away (E F1, R F13) —
+    /// "24 results" then "47 results" as the reader scrolled was the same
+    /// query reporting different totals, so the loaded count was never
+    /// called "results". Nil until something is asked (a filter chosen on
+    /// the idle panel is not an ask, and "0 shown" sat over it — UX#13),
+    /// nil over the empty state for the same reason, and nil while
+    /// `isSearching`: the count on screen at that instant still describes
+    /// the query the reader just left, not the one about to answer.
+    static func text(
+        hasAsked: Bool, isSearching: Bool, shown: Int, total: Int?, sortLabel: String?
+    ) -> String? {
+        guard hasAsked, !isSearching, shown > 0 else { return nil }
+        let text = total.map { "\($0.formatted()) results" } ?? "\(shown) shown"
         guard let sortLabel else { return text }
         return "\(text) · \(sortLabel)"
     }

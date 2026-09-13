@@ -23,6 +23,32 @@ final class SearchModel {
     var query = SearchQuery()
     private(set) var results: [Series] = []
     private(set) var isSearching = false
+    /// Whether the reader has asked for anything yet — a keystroke, "Show
+    /// results", a lens, "Surprise me". The screen's idle/answered split
+    /// reads this, never `query.isEmpty`: a Type chip tapped on the idle
+    /// panel is a query with filters and *nothing asked*, and deriving the
+    /// screen from the query made that first tap replace the panel with
+    /// "Nothing matched these filters" (review 2026-09-13, UX#1, seen on
+    /// screen). Cleared when the field empties — × is "start over".
+    private(set) var hasAsked = false
+    /// A debounced search is scheduled but has not gone out. `isSearching`
+    /// only turns on inside `search()`, so without this the ≥300 ms between
+    /// the first keystroke and the request read as "asked, answered,
+    /// nothing matched" (E F4) — the reader's first sight after one letter
+    /// was a failure sentence.
+    private(set) var isPending = false
+    /// The API's `pagination.count` for the current search, nil when it did
+    /// not carry one (the offline index, a failed page). Decoded into
+    /// `FeedResult.total` from the start and never read here, so the
+    /// heading said "30 shown" and the filter sheet spent a `limit=1`
+    /// request asking for a number this model had already been handed
+    /// (E F1, R F13).
+    private(set) var total: Int?
+    /// The page-one query the current `results` answer, text trimmed. Lets
+    /// `search()` skip a byte-identical re-ask — Return after the debounce
+    /// had already answered cost 2 of the shared 30/min for one answer
+    /// (E F2), and `"one "` after `"one"` cost another (E F8).
+    private var answered: SearchQuery?
     /// The most recent search's failure, when it had one — kept distinct from
     /// `results.isEmpty` on purpose (gap 7). A `nil` failure with empty
     /// results is a real answer: nothing matched. A failure with *non-empty*
@@ -64,7 +90,11 @@ final class SearchModel {
     /// answers from `OfflineCatalogue` and never calls the repository at all —
     /// "Zero requests in that mode" is the whole point of the toggle, not a
     /// side effect of the network happening to be down.
-    var preferOffline = false
+    var preferOffline = false {
+        // The same query answered from the other source is a different
+        // answer; forgetting the last one lets it be asked again.
+        didSet { answered = nil }
+    }
 
     /// Compatibility for a caller not yet reading `failure` directly —
     /// `SeedPickerSheet.swift` (owned by the Mix batch, gap 44) still reads
@@ -90,7 +120,11 @@ final class SearchModel {
     private let blockedTagIDs: @MainActor () -> [Int]
     private var debounceTask: Task<Void, Never>?
     /// The text `apply(_:)` just set, so the field's own change observer can
-    /// tell that edit from a keystroke. See `queryDidChange`.
+    /// tell that edit from a keystroke. See `queryDidChange`. Stored as ""
+    /// rather than nil for a text-less apply: a lens with no text applied
+    /// over "naruto" fires the observer for "naruto" → nil, and a nil
+    /// sentinel could not match it, so a second search was debounced and
+    /// the generation bump threw the first answer away (E F5).
     private var appliedText: String?
 
     init(
@@ -120,7 +154,7 @@ final class SearchModel {
         // strangers. Whether the observer runs before or after the explicit
         // search is SwiftUI's business and not something to bet on, so the
         // model remembers what it applied and this ignores that one edit.
-        if let appliedText, appliedText == query.text {
+        if let appliedText, appliedText == query.text ?? "" {
             self.appliedText = nil
             return
         }
@@ -129,24 +163,62 @@ final class SearchModel {
         // me" sets `sort = "random"` and nothing ever unset it, so every search
         // after one tap of it was randomised: `q=one piece&sort_by=random`
         // answers 32 series and ONE PIECE is not among them, while relevance
-        // answers 411 with it first. Measured on 2026-09-10.
-        if query.sort == "random", !(query.text ?? "").isEmpty {
+        // answers 411 with it first. Measured on 2026-09-10. An emptied field
+        // drops it too: the only way here with no text is the reader clearing
+        // the field, and × after "Surprise me" used to run *another* shuffle
+        // instead of going back to the idle panel (UX#5, 2026-09-13 walk).
+        if query.sort == "random" {
             query.sort = nil
+            query.randomSeed = nil
         }
-        guard !query.isEmpty else {
-            results = []
-            failure = nil
-            pageFailure = nil
-            stoppedEarly = false
-            isSearching = false
-            hasMore = false
+        // An empty field is idle, whatever filters are still set: they stay
+        // on the panel, visible and removable, rather than running as a
+        // filter-only search under an unlabelled grid (UX#5, LW §1).
+        guard query.asAsked.text != nil else {
+            resetToIdle()
             return
         }
+        hasAsked = true
+        isPending = true
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             await self?.search()
         }
+    }
+
+    /// Back to the idle panel: nothing asked, nothing shown, nothing owed.
+    private func resetToIdle() {
+        results = []
+        total = nil
+        answered = nil
+        failure = nil
+        pageFailure = nil
+        stoppedEarly = false
+        isSearching = false
+        isPending = false
+        hasAsked = false
+        hasMore = false
+    }
+
+    /// `total` when `query` is the search that produced it, else nil — so
+    /// the filter sheet opened over results can label "Show N results"
+    /// without a second request for a number already on screen (E F1).
+    func knownTotal(for query: SearchQuery) -> Int? {
+        query.asAsked == answered ? total : nil
+    }
+
+    /// How many rows the bundled index has for `query` under the reader's
+    /// current rating/format/blocked-tag preferences — the panel's count
+    /// while "Browse offline" is on, so the toggle's "zero requests" promise
+    /// holds for the preview too (UX#2).
+    func offlineCount(for query: SearchQuery) async -> Int? {
+        await offline.count(
+            query,
+            allowedRatings: allowedRatings(),
+            allowedTypes: allowedFormats(),
+            blockedTags: blockedTagIDs()
+        )
     }
 
     /// Runs the search immediately, bypassing debounce. Used for explicit
@@ -159,14 +231,26 @@ final class SearchModel {
     /// no results and no error. Cancelling the pending debounce is the caller's
     /// business, not this method's.
     func search() async {
+        isPending = false
         guard !query.isEmpty else {
-            results = []
-            failure = nil
-            pageFailure = nil
-            stoppedEarly = false
-            isSearching = false
-            hasMore = false
+            resetToIdle()
             return
+        }
+        hasAsked = true
+        // Already answered, and the answer is still good: Return after the
+        // debounce, or "one " after "one", sends nothing. A failure is asked
+        // again (that is what retry is), and random is a reshuffle every time.
+        if let answered, answered == query.asAsked, failure == nil, query.sort != "random" {
+            return
+        }
+        // Random pages against one seed, or page 2 is a fresh shuffle of
+        // mostly-seen rows (E F7). Minted here when the sort chip set random
+        // without one; `surpriseMe()` mints a new one per tap. Dropped the
+        // moment the sort is anything else, so a stale seed cannot pin it.
+        if query.sort == "random" {
+            if query.randomSeed == nil { query.randomSeed = SearchQuery.freshRandomSeed() }
+        } else {
+            query.randomSeed = nil
         }
         isSearching = true
         // A deferred reset, so no early return can strand the spinner again.
@@ -177,6 +261,13 @@ final class SearchModel {
         query.page = 1
         generation += 1
         let mine = generation
+        // No next page until this search's first one lands. Left over from
+        // the previous search, `hasMore` let the view ask for page 2 of a
+        // query that had not answered, and flipped true→false as a one-page
+        // answer landed — firing the "end of results" haptic for it (R F10).
+        hasMore = false
+        total = nil
+        answered = nil
 
         // The toggle wins outright: "Browse offline" means the reader does
         // not want a request going out at all, not "try the network first".
@@ -224,7 +315,12 @@ final class SearchModel {
             origin = .network
             return
         }
-        results = result.series
+        // Deduplicated like every later page: a repeated id within one page
+        // (possible under `sort_by=random`) gave `ForEach` two views with
+        // one identity (R F12).
+        results = Self.uniqued(result.series)
+        total = result.total
+        answered = query.asAsked
         // The API's own signal (`pagination.next`), not the filtered count:
         // `search` drops rows locally for `isDiscoverable`/format, so a page
         // that had 30 on the wire can arrive with fewer, and comparing that
@@ -237,21 +333,6 @@ final class SearchModel {
         // tell `EmptyState` from `FailureState` from the model alone.
         failure = nil
         origin = .network
-    }
-
-    nonisolated private static func isOffline(_ error: APIError) -> Bool {
-        if case .offline = error { return true }
-        return false
-    }
-
-    /// Whether a blocking failure should fall back to the offline index rather
-    /// than read as a dead end. Offline and rate-limited both mean the network
-    /// path is temporarily unusable, not that the ask itself was wrong.
-    private static func isOfflineEligible(_ error: APIError) -> Bool {
-        switch error {
-        case .offline, .rateLimited: true
-        case .server, .decoding, .transport, .cancelled: false
-        }
     }
 
     /// Answers `query` from `OfflineCatalogue` instead of the network. Shared
@@ -276,6 +357,12 @@ final class SearchModel {
             results.append(contentsOf: hits.map(\.series).filter { !known.contains($0.id) })
         } else {
             results = hits.map(\.series)
+            // The index carries no `pagination.count`; the heading falls
+            // back to "N shown". `offline.count` would give one at the
+            // price of re-filtering 19,300 rows a second time per search
+            // (E F13, unmeasured) — not spent until that cost is known.
+            total = nil
+            answered = query.asAsked
         }
         query.page = page
         // A short page means the index has nothing further to offer — there
@@ -286,6 +373,17 @@ final class SearchModel {
         pageFailure = nil
         stoppedEarly = false
         origin = .offlineIndex(builtDate: built)
+    }
+
+    /// "Surprise me": a random sort with a fresh seed, so this tap is a new
+    /// shuffle and its later pages are the same shuffle. Keeps whatever else
+    /// the query holds — the empty state's "Random with these filters" is
+    /// the same gesture.
+    func surpriseMe() async {
+        query.sort = "random"
+        query.randomSeed = SearchQuery.freshRandomSeed()
+        cancelPendingDebounce()
+        await search()
     }
 
     /// Drops every filter but the typed text, and searches again.
@@ -309,6 +407,12 @@ final class SearchModel {
     /// on one scroll. Three is arbitrary but small next to the 30/minute cap.
     private static let maxConsecutiveEmptyPages = 3
 
+    /// `/v2/series/search` accepts `page` up to 100 (`docs/schemas/
+    /// mangabaka_openapi.json`). What page 101 answers is not on record; the
+    /// walk used to ask for it and turn whatever came back into a retry
+    /// button that could never succeed (E F9).
+    private static let lastPage = 100
+
     /// Appends the next page. Driven by scroll position, not a button.
     func loadMore() async {
         guard hasMore, !isSearching, !isLoadingMore, !query.isEmpty else { return }
@@ -327,6 +431,10 @@ final class SearchModel {
 
         while true {
             next.page += 1
+            guard next.page <= Self.lastPage else {
+                hasMore = false
+                return
+            }
             let result = await repository.search(next)
             // The reader scrolled to the bottom of one search and typed
             // another before its page arrived: this page is for the old
@@ -350,6 +458,7 @@ final class SearchModel {
                 return
             }
             pageFailure = nil
+            if let count = result.total { total = count }
 
             // Deduplicate: the API repeats series across pages when the
             // underlying ordering shifts between requests, and a duplicate id
@@ -399,7 +508,7 @@ final class SearchModel {
         next.sort = "popularity_asc"
         // Assigned here, not in the task: a caller may read the query
         // straight back, and it should be the browse.
-        appliedText = next.text
+        appliedText = next.text ?? ""
         query = next
         cancelPendingDebounce()
         Task { await search() }
@@ -409,7 +518,7 @@ final class SearchModel {
     /// keystroke gets. For the explicit triggers: a saved lens, a recent term,
     /// a browse. See `queryDidChange` for why the text is remembered first.
     func apply(_ next: SearchQuery) async {
-        appliedText = next.text
+        appliedText = next.text ?? ""
         query = next
         cancelPendingDebounce()
         await search()
@@ -420,5 +529,42 @@ final class SearchModel {
     /// the reader has already submitted.
     func cancelPendingDebounce() {
         debounceTask?.cancel()
+        isPending = false
+    }
+}
+
+private extension SearchModel {
+    nonisolated static func uniqued(_ series: [Series]) -> [Series] {
+        var seen = Set<Int>()
+        return series.filter { seen.insert($0.id).inserted }
+    }
+
+    nonisolated static func isOffline(_ error: APIError) -> Bool {
+        if case .offline = error { return true }
+        return false
+    }
+
+    /// Whether a blocking failure should fall back to the offline index rather
+    /// than read as a dead end. Offline and rate-limited both mean the network
+    /// path is temporarily unusable, not that the ask itself was wrong.
+    nonisolated static func isOfflineEligible(_ error: APIError) -> Bool {
+        switch error {
+        case .offline, .rateLimited: true
+        case .server, .decoding, .transport, .cancelled: false
+        }
+    }
+}
+
+private extension SearchQuery {
+    /// This query as `SearchModel.answered` remembers it: page one, text
+    /// trimmed (`"one "` is the same question as `"one"`), empty text as
+    /// nil. The wire side trims too (`queryItems`); this is the comparison
+    /// side (E F8).
+    var asAsked: SearchQuery {
+        var probe = self
+        probe.page = 1
+        let text = (self.text ?? "").trimmingCharacters(in: .whitespaces)
+        probe.text = text.isEmpty ? nil : text
+        return probe
     }
 }

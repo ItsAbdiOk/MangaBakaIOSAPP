@@ -169,7 +169,7 @@ struct SearchModelTests {
             "The previous results must stay on screen through a rate limit, not be thrown away"
         )
         #expect(model.failure == .rateLimited(until: until))
-        #expect(model.failure?.countdown != nil, "Expected a live countdown, not a frozen sentence")
+        #expect(model.failure?.rateLimitDeadline != nil, "Expected a live deadline, not a frozen sentence")
     }
 
     /// The control for the test above: a genuinely empty answer (no error at
@@ -266,17 +266,55 @@ struct SearchFilterEscapeTests {
         model.cancelPendingDebounce()
     }
 
-    @Test("Browsing at random is left alone")
-    func randomBrowsingSurvives() {
-        // No text: "Surprise me" is the whole request, and clearing the sort
-        // here would turn the feature off.
-        let model = SearchModel(repository: StubRepositoryBase())
+    /// The field's × after "Surprise me" used to run *another* random search
+    /// ("30 shown · Random") instead of going back to Recent/Filters: the
+    /// text emptied but `sort == "random"` kept `query.isEmpty` false, so the
+    /// debounce fired again (UX#5, seen on screen in the 2026-09-13 walk).
+    /// The only way `queryDidChange` runs with no text is the reader
+    /// emptying the field, and × is "start over" — so a random sort goes
+    /// with the text, and the screen goes idle. Replaces the old
+    /// `randomBrowsingSurvives`, which pinned the bug.
+    @Test("Clearing the field after Surprise me drops the random sort and returns to idle")
+    func clearingAfterSurpriseReturnsToIdle() async {
+        let repository = RecordingRepository()
+        repository.result = FeedResult(series: [SeriesFactory.make(id: 1, title: "S1")], origin: .network)
+        let model = SearchModel(repository: repository)
         model.query.sort = "random"
+        await model.search()
+        #expect(model.hasAsked, "Sanity: Surprise me is a real ask")
 
+        // What the × does: empties the text, then `queryDidChange()`.
+        model.query.text = ""
         model.queryDidChange()
 
-        #expect(model.query.sort == "random")
+        #expect(model.query.sort == nil, "× is start over, not another shuffle")
+        #expect(!model.hasAsked, "The idle panel must come back")
+        #expect(model.results.isEmpty)
+        #expect(!model.isPending, "Nothing may be scheduled against an empty field")
         model.cancelPendingDebounce()
+    }
+
+    /// Filters set inline on the idle panel must not chase the reader: a
+    /// Type chip left over from a previous search survives × *in the panel*
+    /// (where it is visible and removable), not as a silent filter-only
+    /// search under an unlabelled grid (LW §1, "Manga silently survives").
+    @Test("Clearing the field with a filter still set returns to idle, filter kept")
+    func clearingWithFilterReturnsToIdle() async {
+        let repository = RecordingRepository()
+        let model = SearchModel(repository: repository)
+        model.query.text = "dragon"
+        model.query.types = ["manga"]
+        await model.search()
+        #expect(repository.searchCount == 1)
+
+        model.query.text = ""
+        model.queryDidChange()
+        // Long enough for the old filter-only debounce to have fired.
+        try? await Task.sleep(for: .milliseconds(600))
+
+        #expect(repository.searchCount == 1, "× must not spend a request on a filter-only search")
+        #expect(!model.hasAsked)
+        #expect(model.query.types == ["manga"], "The filter stays, visibly, on the panel")
     }
 
     @Test("Clearing filters keeps the words the reader typed")

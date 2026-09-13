@@ -125,9 +125,61 @@ struct LensTests {
         counts.load(lenses)
         await waitUntil { repository.calls == lenses.count }
         counts.load(lenses)
-        // Every lens is already asked, so this second load starts no task at
-        // all (see LensCounts.load's `pending` guard) — nothing to wait for.
+        // Every lens is already asked, so this second load should start no
+        // task at all (see LensCounts.load's `pending` guard). That is the
+        // claim under test, so the test has to give a task room to run
+        // before it looks: `load` counts inside a main-actor `Task {}`, and
+        // this test is main-actor too, so without a suspension here a
+        // regression that scheduled a duplicate walk would still read 2 —
+        // the duplicate could not have started yet (search review, tests
+        // finding 6). 600ms is more than twice the walk's own 250ms
+        // spacing, so a second walk would have counted at least one lens.
+        try? await Task.sleep(for: .milliseconds(600))
         #expect(repository.calls == 2, "the idle screen is returned to constantly")
+    }
+
+    /// 2026-09-13: the walk is the app's own idea, so it asks at
+    /// `.background` — capped below the full 30/min search window and made
+    /// to wait for room rather than compete with a typed search for it.
+    /// Every other stub in this file overrides the plain `count(_:)`, which
+    /// the protocol extension forwards to *without* the priority, so none
+    /// of them could see this regress to `.userInitiated` (the state that
+    /// put "Too many requests" on the series page — `RateLimitTests`'
+    /// `RequestPriorityBudgetTests` doc comment).
+    @Test("The idle-screen walk asks for every count at background priority")
+    func walkCountsAtBackgroundPriority() async throws {
+        let repository = PriorityRecordingRepository()
+        let counts = LensCounts(repository: repository)
+        let lenses = [lens("a"), lens("b")]
+
+        counts.load(lenses)
+        await waitUntil { repository.countPriorities.count == lenses.count }
+
+        #expect(
+            repository.countPriorities == [.background, .background],
+            "a nil here means the ask bypassed the priority-aware overload entirely"
+        )
+    }
+
+    /// The filter panel's live preview count goes through
+    /// `LensCounts.count(_:)`, not the walk — and on HEAD that one still
+    /// calls the priority-less `repository.count(query)`, which the real
+    /// repository sends at `.userInitiated`. A reader flicking through
+    /// rating segments therefore spends full-window search slots, and can
+    /// lock their own typed search out (search review, summary #4).
+    ///
+    /// Expected to fail on HEAD with: `countPriorities == [.background]`
+    /// → actual `[nil]`. Passes once Batch 1 Lane B lands
+    /// `repository.count(query, priority: .background)` in
+    /// `LensCounts.count(_:)` (`LensCounts.swift:143`).
+    @Test("The panel's preview count also asks at background priority")
+    func previewCountIsBackgroundPriority() async throws {
+        let repository = PriorityRecordingRepository()
+        let counts = LensCounts(repository: repository)
+
+        _ = await counts.count(SearchQuery(text: "murim"))
+
+        #expect(repository.countPriorities == [.background])
     }
 
     /// Leaving Search cancels the walk. The lenses it had not reached were
@@ -321,11 +373,11 @@ struct LensSaveEntryTests {
         #expect(panel.contains("SaveLensButton"))
     }
 
-    @Test("The save control is inert until something is filtered")
-    func inertUntilFiltered() throws {
-        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
-        #expect(panel.contains("SaveLensButton(isEnabled: !query.isEmpty)"))
-    }
+    // `inertUntilFiltered` used to live here, pinning the literal call
+    // `SaveLensButton(isEnabled: !query.isEmpty)`. Removed 2026-09-13: a
+    // whitespace change broke it and a renamed-but-equivalent call passed
+    // it. `FilterPanel.canShow(query:)` in `SearchScreenTests` is the
+    // behavioural version of the same rule.
 }
 
 /// The three preset lenses are gone — see `SearchLens`'s doc comment for
@@ -434,17 +486,14 @@ struct MixFilterTests {
         #expect(try source().contains("model.filters.isEmpty"), "inert until something is set")
     }
 
-    /// A reader who wants "these three, but it must have Regression" used to
-    /// have to blend once, discard the answer, and blend again.
-    @Test("Tags can be required before the first blend")
-    func tagsBeforeBlending() throws {
-        let source = try source()
-        #expect(
-            !source.contains("if !model.dna.isEmpty {\n            VStack"),
-            "the tag section must not be gated on a blend having already run"
-        )
-        #expect(source.contains("TagPickerSheet") || source.contains("isPickingTags"))
-    }
+    // `tagsBeforeBlending` used to live here, asserting the absence of a
+    // 40-character `if !model.dna.isEmpty {\n            VStack` snippet.
+    // Removed 2026-09-13: it pinned indentation, not behaviour — reformatting
+    // the strip broke it and moving the gate one line down passed it. The
+    // rule it guarded ("a reader who wants these three, but it must have
+    // Regression, must not have to blend once and discard the answer")
+    // needs a view-state test against `MixModel`, which this file does not
+    // have; recorded here so it is not re-proposed as a source grep.
 
     /// A tag picked before the first blend used to vanish the moment a blend
     /// returned a DNA that did not mention it — while still filtering results.

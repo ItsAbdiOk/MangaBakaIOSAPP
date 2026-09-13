@@ -199,14 +199,17 @@ actor APIClient {
         }
         if http.statusCode == 429 {
             let retryAfter = Self.parseRetryAfter(http.value(forHTTPHeaderField: "Retry-After"))
-            await limiter.recordRateLimit(retryAfter: retryAfter, path: path)
-            // Capped the same way the gate caps what it honours (see
-            // `RateLimitGate.maxHonouredRetryAfter`) — otherwise the gate
-            // could reopen in 15 minutes while the screen still read
-            // "Retrying in 3 hours," which is the app calling itself wrong.
-            let displayed = retryAfter.map { min($0, RateLimitGate.maxHonouredRetryAfter) }
+            // The gate's deadline is the one thrown, never a copy built here
+            // from the header: the gate already caps what it honours
+            // (`maxHonouredRetryAfter`), so the screen cannot read "Retrying
+            // in 3 hours" while the gate reopens in 15 minutes — and when
+            // the header is absent, which the API's schema allows, the gate's
+            // own backoff is still a real date rather than `nil`, so the
+            // reader gets a countdown and an automatic retry instead of a
+            // static "Search is paused" (review T#1, 2026-09-13).
+            let until = await limiter.recordRateLimit(retryAfter: retryAfter, path: path)
             let isSearch = RateLimitGate.family(for: path) == .search
-            throw APIError.rateLimited(retryAfter: displayed, party: isSearch ? .mangaBakaSearch : .mangaBaka)
+            throw APIError.rateLimited(until: until, party: isSearch ? .mangaBakaSearch : .mangaBaka)
         }
         return (data, http)
     }

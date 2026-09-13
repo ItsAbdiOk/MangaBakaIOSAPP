@@ -14,6 +14,16 @@ extension SeriesRepository {
     ///
     /// Nil on any failure. A lens whose count could not be fetched shows no
     /// count; it does not show zero.
+    ///
+    /// **This overload is foreground.** `.userInitiated` draws on the ten
+    /// slots `RateLimitGate.reserve` keeps for the reader's own search, so it
+    /// is right only for a count the reader is looking at right now
+    /// (`PublisherView`'s page total). A count the app asks for on its own —
+    /// a lens row, a filter-panel preview — must pass `.background` to the
+    /// overload below. `LensCounts.count(_:)` called this one until
+    /// 2026-09-13 and a reader's own previews could refuse their next typed
+    /// search (review E F3); the lens walk had been moved the same day, and
+    /// this call site was the one missed.
     func count(_ query: SearchQuery) async -> Int? {
         await count(query, priority: .userInitiated)
     }

@@ -130,6 +130,17 @@ enum APIError: Error, Equatable {
         .rateLimited(until: seconds.map { Date().addingTimeInterval($0) }, party: party)
     }
 
+    /// The deadline a countdown should tick against, or nil for anything
+    /// that is not a rate limit — or a rate limit nobody dated. A `Date`
+    /// rather than `countdown`'s string so `Countdown` can re-read it every
+    /// second; `FailureState` had this as a private copy and the stale bar
+    /// over live results could not reach it, which is why that bar showed
+    /// the string frozen at render instead (review R F9, 2026-09-13).
+    var rateLimitDeadline: Date? {
+        guard case let .rateLimited(until, _) = self else { return nil }
+        return until
+    }
+
     /// The seconds remaining, computed from `until` against the current time,
     /// for callers written against the old seconds-based payload. Recomputed
     /// on every access rather than cached, because "seconds remaining" is

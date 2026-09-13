@@ -24,6 +24,8 @@ struct FilterSheet: View {
     /// A live count for "Show results", when the caller can answer one. See
     /// `FilterPanel.previewCount`.
     var previewCount: ((SearchQuery) async -> Int?)?
+    /// The offline counter, handed straight through to `FilterPanel`.
+    var offlineCount: ((SearchQuery) async -> Int?)?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -40,6 +42,7 @@ struct FilterSheet: View {
                     catalogue: catalogue,
                     preferOffline: preferOffline,
                     previewCount: previewCount,
+                    offlineCount: offlineCount,
                     onShowResults: {
                         onApply()
                         dismiss()
