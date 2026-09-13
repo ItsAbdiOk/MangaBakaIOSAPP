@@ -1,0 +1,69 @@
+<!-- @dsCard group="Chrome" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/App/RootView.swift + App/AppTab.swift. RootView uses the
+     real system TabView/Tab(role: .search) — a floating glass capsule of four
+     items plus a detached search circle on iOS 26 — not a hand-drawn bar. This
+     is a lookalike of that system chrome, not the SwiftUI it's built from.
+     Symbols are SF Symbol names from AppTab.symbol; rendered here as simple
+     line glyphs since SF Symbols aren't available on the web. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .phone { position: relative; width: var(--reference-screen-width); max-width: 100%; height: 300px; background: var(--ground); overflow: hidden; border-radius: 20px; border: var(--hairline-width) solid var(--border); }
+  .content { position: absolute; inset: 0; padding: var(--scroll-top-inset) var(--gutter) 0; overflow: hidden; }
+  .row-line { height: 12px; border-radius: 4px; background: var(--surface); margin-bottom: 10px; }
+  .row-line.last { margin-bottom: var(--scroll-bottom-inset); background: var(--accent-tint); }
+
+  .chrome { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 0 var(--gutter); }
+  .capsule {
+    display: flex; align-items: center; gap: 2px;
+    background: var(--surface-field);
+    border: var(--hairline-width) solid var(--glass-edge);
+    border-radius: 999px;
+    padding: 6px 8px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 12px; border-radius: 999px; min-width: 44px; }
+  .tab.active { background: var(--surface-active); }
+  .glyph { width: 20px; height: 20px; border: 1.6px solid var(--text-secondary); border-radius: 50%; }
+  .tab.active .glyph { border-color: var(--accent); }
+  .tab-label { color: var(--text-secondary); }
+  .tab.active .tab-label { color: var(--text-primary); }
+  .search-circle {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--surface-field);
+    border: var(--hairline-width) solid var(--glass-edge);
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(20px);
+  }
+  .search-glyph { width: 14px; height: 14px; border: 1.6px solid var(--text-secondary); border-radius: 50%; position: relative; }
+  .search-glyph::after { content: ""; position: absolute; width: 6px; height: 1.6px; background: var(--text-secondary); bottom: -3px; right: -4px; transform: rotate(45deg); }
+</style>
+
+<p class="ds-label type-footnote">Floating tab bar — content scrolls under it; --scroll-bottom-inset (124px) clears the last row</p>
+<div class="ds-card">
+  <div class="phone">
+    <div class="content">
+      <div class="row-line" style="width:70%;"></div>
+      <div class="row-line" style="width:90%;"></div>
+      <div class="row-line" style="width:55%;"></div>
+      <div class="row-line" style="width:80%;"></div>
+      <div class="row-line" style="width:65%;"></div>
+      <div class="row-line last" style="width:75%;"></div>
+    </div>
+    <div class="chrome">
+      <div class="capsule">
+        <div class="tab active"><div class="glyph"></div><p class="type-tab-label tab-label">DISCOVER</p></div>
+        <div class="tab"><div class="glyph"></div><p class="type-tab-label tab-label">STACK</p></div>
+        <div class="tab"><div class="glyph"></div><p class="type-tab-label tab-label">MIX</p></div>
+        <div class="tab"><div class="glyph"></div><p class="type-tab-label tab-label">LIBRARY</p></div>
+      </div>
+      <div class="search-circle"><div class="search-glyph"></div></div>
+    </div>
+  </div>
+  <p class="type-footnote" style="color:var(--text-quaternary); margin-top:10px;">
+    Real bar: a system TabView with Tab(role: .search) detaching Search into its own circle —
+    that's what gives the fifth tab its own capsule rather than a fifth slot in the row.
+    Re-tapping the active tab pops its stack to root (RootView.tabSelection).
+  </p>
+</div>

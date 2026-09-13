@@ -1,0 +1,118 @@
+<!-- @dsCard group="Covers" -->
+<meta charset="utf-8">
+<!-- Mirrors CoverImage.swift (CoverImage, CoverFrame, CoverGloss, CoverCard)
+     and SearchEmptyState.swift's meta(for:) → "Manga · 2019 · Releasing".
+     Grid width: (393 - 2×18 gutter - 2×12 gap) / 3 = 111px (CoverGridLayout.resolve, 3 columns).
+     Row width: --cover-row-width (118px), fixed regardless of grid math. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .cover-card { display: flex; flex-direction: column; align-items: flex-start; }
+  .cover-frame {
+    position: relative;
+    aspect-ratio: var(--cover-aspect);
+    border-radius: var(--radius-cover-row);
+    overflow: hidden;
+    box-shadow: 0 8px 10px rgba(0, 0, 0, 0.5);
+    background: var(--image-placeholder);
+  }
+  .cover-frame.grid { border-radius: var(--radius-cover-grid); }
+  .cover-frame.row { width: var(--cover-row-width); }
+  .cover-frame.grid-size { width: 111px; } /* computed grid column width, see brief */
+
+  /* Stand-in for BlurHash: a soft blurred gradient in the placeholder tone,
+     never a real cover (licensing). */
+  .art {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(120% 90% at 20% 15%, #3a2a3a 0%, transparent 55%),
+      radial-gradient(100% 80% at 80% 85%, #1c2a3a 0%, transparent 60%),
+      var(--image-placeholder);
+    filter: blur(6px);
+    transform: scale(1.15); /* hide the blur's own edge */
+  }
+  .art.loaded { filter: none; transform: none; opacity: 0; animation: fade-in var(--motion-settle) forwards; }
+
+  /* CoverGloss: a diagonal fill fading before the middle, plus a strokeBorder
+     rim gradient — approximated here with a border-image-less double layer. */
+  .gloss { position: absolute; inset: 0; pointer-events: none; }
+  .gloss::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(135deg,
+      rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.10) 38%, rgba(255,255,255,0) 60%);
+  }
+  .gloss::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(to bottom,
+      rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.35) 12%, rgba(255,255,255,0.35) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+
+  @keyframes fade-in { to { opacity: 1; } }
+
+  .cover-title {
+    font: 600 12px/1.25 var(--font-stack); /* type-card-title */
+    color: var(--text-primary);
+    margin: 7px 0 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cover-meta {
+    font: 400 10.5px/1.3 var(--font-stack); /* type-grid-meta */
+    color: var(--text-muted);
+    margin: 2px 0 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Loading placeholder: skeleton bars in place of title/meta text. */
+  .bar { border-radius: 999px; background: var(--surface); height: 9px; margin-top: 8px; }
+  .bar.short { width: 45%; height: 8px; }
+</style>
+
+<p class="ds-label type-footnote">Grid card — 111px (computed: (393 − 2×18 − 2×12) / 3)</p>
+<div class="ds-card">
+  <div class="cover-card">
+    <div class="cover-frame grid grid-size">
+      <div class="art loaded"></div>
+      <div class="gloss"></div>
+    </div>
+    <p class="cover-title">Attack on Titan</p>
+    <p class="cover-meta">Manga · 2019 · Releasing</p>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">Row card — var(--cover-row-width), 118px</p>
+<div class="ds-card">
+  <div class="cover-card">
+    <div class="cover-frame row">
+      <div class="art loaded"></div>
+      <div class="gloss"></div>
+    </div>
+    <p class="cover-title">Attack on Titan</p>
+    <p class="cover-meta">Manga · 2019 · Releasing</p>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">Long title — clamps to 2 lines (titleLineLimit, non-accessibility size)</p>
+<div class="ds-card">
+  <div class="cover-card">
+    <div class="cover-frame grid grid-size">
+      <div class="art loaded"></div>
+      <div class="gloss"></div>
+    </div>
+    <p class="cover-title">The Dungeon of Black Company: Reborn as a Vending Machine</p>
+    <p class="cover-meta">Manga · 2016 · Ended</p>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">Loading — BlurHash stand-in (blurred gradient), no gloss until art arrives</p>
+<div class="ds-card">
+  <div class="cover-card">
+    <div class="cover-frame grid grid-size">
+      <div class="art"></div>
+    </div>
+    <div class="bar" style="width: 82%"></div>
+    <div class="bar short"></div>
+  </div>
+</div>

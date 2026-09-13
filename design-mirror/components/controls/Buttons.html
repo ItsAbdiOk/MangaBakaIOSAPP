@@ -1,0 +1,59 @@
+<!-- @dsCard group="Controls" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .btn-row { display: flex; flex-direction: column; gap: 14px; max-width: 340px; }
+  .btn { display: flex; align-items: center; justify-content: center; border: none;
+    font-family: var(--font-stack); border-radius: var(--radius-card); }
+  .btn-primary { height: var(--cta-primary); background: var(--accent); color: var(--on-accent); }
+  .btn-secondary { height: var(--cta-secondary); background: var(--surface-chip); color: var(--text-primary); }
+  .btn-disabled { height: var(--cta-primary); background: var(--surface-chip); color: var(--text-muted); }
+  /* Header pill: 30px fill (Metrics.headerPill) sitting inside a 44px hit
+     area (TapTarget.swift) — the pill never grows, the tappable box does. */
+  .tap-target { min-height: var(--tap-target); display: flex; align-items: center; justify-content: center; }
+  .header-pill { height: var(--header-pill); padding: 0 14px; border-radius: 999px;
+    background: var(--surface-chip); color: var(--text-secondary); display: flex; align-items: center; }
+  .state-action { height: var(--cta-secondary); padding: 0 20px; border-radius: 999px;
+    background: transparent; color: var(--text-secondary); border: var(--hairline-width) solid var(--border-pill); }
+</style>
+</head>
+<body>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Primary CTA — MixView.swift blendButton, FilterPanel "Show results"</p>
+  <div class="btn-row">
+    <button class="btn btn-primary type-cta">Blend</button>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Secondary CTA — FilterPanel.swift "Clear all" (surfaceChip fill, ctaSecondary height)</p>
+  <div class="btn-row">
+    <button class="btn btn-secondary type-cta">Clear all</button>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Disabled — MixView.swift blendButton comment: &quot;A disabled control is a different control, not a faded live one&quot; — chip fill + text-muted, never opacity(0.4) on the accent</p>
+  <div class="btn-row">
+    <button class="btn btn-disabled type-cta" disabled>Blend</button>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Header pill — 30px fill inside a 44px hit area (TapTarget.swift: "Apply OUTSIDE the background, so the fill stays the size it was drawn")</p>
+  <div class="tap-target">
+    <span class="header-pill type-chip">Tags</span>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">StateAction, weight .aside — DetailCategories.swift "Show all N" / StateAction.swift (outline only, no fix implied)</p>
+  <button class="state-action type-cta">Show all 24</button>
+</div>
+
+</body>
+</html>

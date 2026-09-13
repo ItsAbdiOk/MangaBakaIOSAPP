@@ -1,0 +1,75 @@
+<!-- @dsCard group="Foundations" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/DesignSystem/Metrics.swift. Bars/boxes are drawn to
+     scale (1px = 1pt) so relative sizes are honest; labels give the exact var. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .metric-row { display: flex; align-items: center; gap: 14px; padding: 7px 0; }
+  .bar { background: var(--surface-active); border-radius: 3px; height: 14px; }
+  .box { background: var(--surface-active); border: var(--hairline-width) solid var(--border); }
+  .label { font: 400 12px/1.3 var(--font-stack); color: var(--text-secondary); white-space: nowrap; }
+  .label b { color: var(--text-primary); font-weight: 600; }
+  h4.group { color: var(--text-muted); margin: 22px 0 10px; }
+  .radius-demo { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
+  .radius-box { width: 64px; background: var(--surface); border: var(--hairline-width) solid var(--border); display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px; }
+  .control-demo { display: flex; gap: 18px; align-items: flex-end; flex-wrap: wrap; }
+  .control-box { width: 90px; background: var(--surface-chip); border: var(--hairline-width) solid var(--border); border-radius: var(--radius-chip); display:flex; align-items:center; justify-content:center; }
+  .control-box p { font: 400 11px var(--font-stack); color: var(--text-secondary); margin: 0; }
+</style>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 4px;">Gutters &amp; rhythm</p>
+  <div class="metric-row"><div class="bar" style="width:18px;"></div><p class="label"><b>--gutter</b> 18px — screen gutter, everywhere except the stack and status row</p></div>
+  <div class="metric-row"><div class="bar" style="width:22px;"></div><p class="label"><b>--gutter-stack</b> 22px</p></div>
+  <div class="metric-row"><div class="bar" style="width:26px;"></div><p class="label"><b>--section-gap</b> 26px — between home sections</p></div>
+  <div class="metric-row"><div class="bar" style="width:28px;"></div><p class="label"><b>--detail-row-gap</b> 28px — between detail rows</p></div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 4px;">Gaps</p>
+  <div class="metric-row"><div class="bar" style="width:7px;"></div><p class="label"><b>--gap-chips</b> 7px</p></div>
+  <div class="metric-row"><div class="bar" style="width:10px;"></div><p class="label"><b>--gap-strip</b> 10px</p></div>
+  <div class="metric-row"><div class="bar" style="width:12px;"></div><p class="label"><b>--gap-covers</b> 12px — cover rows and grids</p></div>
+  <div class="metric-row"><div class="bar" style="width:16px;"></div><p class="label"><b>--gap-hero</b> 16px — hero cover to its text</p></div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Radii</p>
+  <div class="radius-demo">
+    <div class="radius-box" style="height:52px; border-radius:var(--radius-sheet);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">26</p></div>
+    <div class="radius-box" style="height:52px; border-radius:var(--radius-stack-card);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">20</p></div>
+    <div class="radius-box" style="height:44px; border-radius:var(--radius-card);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">16</p></div>
+    <div class="radius-box" style="height:40px; border-radius:var(--radius-stack-neighbour);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">14</p></div>
+    <div class="radius-box" style="height:38px; border-radius:var(--radius-cover-row);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">13</p></div>
+    <div class="radius-box" style="height:36px; border-radius:var(--radius-chip);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">12</p></div>
+    <div class="radius-box" style="height:34px; border-radius:var(--radius-seed);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">11</p></div>
+    <div class="radius-box" style="height:30px; border-radius:var(--radius-badge);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">10</p></div>
+    <div class="radius-box" style="height:28px; border-radius:var(--radius-thumb);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">10</p></div>
+    <div class="radius-box" style="height:26px; border-radius:var(--radius-saved-thumb);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">9</p></div>
+    <div class="radius-box" style="height:22px; border-radius:var(--shape-bar);"><p style="font:400 10px var(--font-stack); color:var(--text-tertiary);">7</p></div>
+  </div>
+  <p class="type-footnote" style="color:var(--text-quaternary); margin-top:10px;">Left to right: sheet, stack card, card, stack neighbour, cover-row, chip, seed, badge, thumb, saved-thumb, shape-bar.</p>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Control heights &amp; the tap-target floor</p>
+  <div class="control-demo">
+    <div class="control-box" style="height:var(--cta-primary);"><p>52 primary</p></div>
+    <div class="control-box" style="height:var(--cta-secondary);"><p>46 secondary</p></div>
+    <div class="control-box" style="height:var(--tap-target); border-color:var(--accent);"><p>44 tap floor</p></div>
+    <div class="control-box" style="height:var(--field);"><p>40 field</p></div>
+    <div class="control-box" style="height:var(--rating-segment);"><p>34 rating seg</p></div>
+    <div class="control-box" style="height:var(--header-pill);"><p>30 header pill</p></div>
+  </div>
+  <p class="type-footnote" style="color:var(--text-secondary); margin-top:10px;">
+    <b style="color:var(--accent);">--tap-target</b> (44px) is Apple's platform minimum, not a mockup number —
+    named separately from --header-pill (30px) so the two are never confused when one changes.
+  </p>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 10px;">Hairline</p>
+  <div style="width:220px; border-top:var(--hairline-width) solid var(--border); padding-top:10px;">
+    <p class="type-footnote" style="color:var(--text-secondary); margin:0;"><b style="color:var(--text-primary);">--hairline-width</b>: 0.5px, always — never 1px. The spec's own rule, easy to break by accident.</p>
+  </div>
+</div>

@@ -1,0 +1,74 @@
+<!-- @dsCard group="Feedback" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  /* Countdown.swift: TimelineView(.periodic(by: 1)) re-evaluates every
+     second against `until`, so this never freezes the way error.countdown
+     (a string read once) used to. JS here is the same idea: re-read the
+     deadline every tick, never store a frozen sentence. */
+  .fail-screen { display: flex; flex-direction: column; align-items: center; max-width: 280px;
+    margin: 0 auto; padding-top: 20px; text-align: center; }
+  .state-mark { min-width: 55px; min-height: 55px; border-radius: 15px; background: var(--surface);
+    display: flex; align-items: center; justify-content: center; font-size: 21px;
+    color: var(--text-secondary); margin-bottom: 20px; }
+  .fail-headline { color: var(--text-primary); }
+  .fail-message { color: var(--text-secondary); margin-top: 25px; }
+  .fail-countdown { color: var(--text-primary); font-weight: 600; margin-top: 6px; }
+
+  .stale-bar { display: flex; align-items: flex-start; gap: 10px; padding: 14px;
+    background: var(--surface); border: var(--hairline-width) solid var(--border);
+    border-radius: var(--radius-card); max-width: 355px; }
+  .stale-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stale); margin-top: 5px; flex: none; }
+  .stale-headline { color: var(--text-primary); }
+  .stale-detail { color: var(--text-muted); margin-top: 3px; }
+  .stale-countdown { color: var(--text-primary); font-weight: 600; margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<!-- In a FailureState: "Retrying in 38 s" / "Retrying in 2 min" / "Retrying now…" -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Countdown — inside a FailureState (Countdown.swift text(for:): "Retrying in N s" under 60s, "N min" over, "Retrying now…" at zero)</p>
+  <div class="fail-screen">
+    <div class="state-mark">&#8987;</div>
+    <p class="type-subsection-header fail-headline">Too many requests, briefly</p>
+    <p class="type-subtitle fail-message">MangaBaka is throttling this connection. The limit is shared by everyone on your network, so this may not be you at all.</p>
+    <p class="type-subtitle fail-countdown" id="cd-fail">Retrying in 12 s</p>
+  </div>
+</div>
+
+<!-- In a StaleBar: same live tick, smaller type, fires retry at zero (autoRetry). -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Countdown — inside a StaleBar (StaleBar.swift: fires retry itself on reaching zero, not just labels it)</p>
+  <div class="stale-bar">
+    <div class="stale-dot"></div>
+    <div>
+      <p class="type-row-title stale-headline">Still showing 'one piece'</p>
+      <p class="type-small-meta stale-detail">MangaBaka is throttling this connection.</p>
+      <p class="type-small-meta stale-countdown" id="cd-stale">Retrying in 8s.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Two clocks, two phrasings — matches the two call sites exactly:
+  // FailureState's Countdown ("Retrying in N s") vs StaleBar's own
+  // countdown string ("Retrying in Ns."), per Countdown.swift / APIError.countdown.
+  function tick(el, deadline, render) {
+    const remaining = Math.round((deadline - Date.now()) / 1000);
+    el.textContent = render(remaining);
+    if (remaining > 0) requestAnimationFrame(() => setTimeout(() => tick(el, deadline, render), 250));
+  }
+  const failDeadline = Date.now() + 12000;
+  const staleDeadline = Date.now() + 8000;
+  tick(document.getElementById('cd-fail'), failDeadline, r =>
+    r <= 0 ? 'Retrying now…' : r < 60 ? `Retrying in ${r} s` : `Retrying in ${Math.round(r / 60)} min`);
+  tick(document.getElementById('cd-stale'), staleDeadline, r =>
+    r <= 0 ? 'Retrying now…' : `Retrying in ${r}s.`);
+</script>
+
+</body>
+</html>

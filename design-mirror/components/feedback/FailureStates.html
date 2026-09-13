@@ -1,0 +1,125 @@
+<!-- @dsCard group="Feedback" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .fail-screen { display: flex; flex-direction: column; align-items: center; max-width: 280px;
+    margin: 0 auto; padding-top: 40px; text-align: center; }
+  .state-mark { min-width: 55px; min-height: 55px; border-radius: 15px; background: var(--surface);
+    display: flex; align-items: center; justify-content: center; font-size: 21px;
+    color: var(--text-secondary); margin-bottom: 20px; }
+  .fail-headline { color: var(--text-primary); }
+  .fail-message { color: var(--text-secondary); margin-top: 25px; }
+  .fail-countdown { color: var(--text-primary); font-weight: 600; margin-top: 6px; }
+  /* Weight rule from StateAction.swift: accent fill only when the tap fixes it. */
+  .action { height: var(--cta-secondary); padding: 0 20px; border-radius: 999px; border: none;
+    font-family: var(--font-stack); margin-top: 23px; }
+  .action-fixes { background: var(--accent); color: var(--on-accent); }
+  .action-wayout { background: var(--surface-chip); color: var(--text-primary); }
+  .action-wayout[disabled] { background: var(--surface-inset); color: var(--text-muted); }
+
+  .inline-fail { display: flex; align-items: flex-start; gap: 8px; padding: 0 var(--gutter); }
+  .inline-fail-icon { color: var(--text-muted); font-size: 13px; padding-top: 1px; }
+  .inline-fail-text { color: var(--text-muted); flex: 1; }
+  .action-aside { background: transparent; color: var(--text-secondary);
+    border: var(--hairline-width) solid var(--border-pill); height: var(--cta-secondary); padding: 0 20px;
+    border-radius: 999px; font-family: var(--font-stack); }
+
+  .stale-bar { display: flex; align-items: flex-start; gap: 10px; padding: 14px;
+    background: var(--surface); border: var(--hairline-width) solid var(--border);
+    border-radius: var(--radius-card); margin: 0 var(--gutter); max-width: 355px; }
+  .stale-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--stale); margin-top: 5px; flex: none; }
+  .stale-headline { color: var(--text-primary); }
+  .stale-detail { color: var(--text-muted); margin-top: 3px; }
+  .stale-countdown { color: var(--text-primary); font-weight: 600; margin-top: 3px; }
+  .stale-body { flex: 1; display: flex; flex-direction: column; }
+</style>
+</head>
+<body>
+
+<!-- FailureState.swift: offline. No Party, so no accent — retry doesn't fix being offline. -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">FailureState — offline (APIError.swift .offline: no fix exists, so "Try again" is .wayOut, not accent)</p>
+  <div class="fail-screen">
+    <div class="state-mark">&#128246;</div>
+    <p class="type-subsection-header fail-headline">You're offline</p>
+    <p class="type-subtitle fail-message">Showing what was downloaded. Nothing new can load until you're back.</p>
+    <button class="action action-wayout type-cta">Try again</button>
+  </div>
+</div>
+
+<!-- rate limit with live countdown + auto-retry copy from APIError.swift .rateLimited(_, .mangaBaka) -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">FailureState — rate limited, MangaBaka (never blames the reader: "this may not be you at all")</p>
+  <div class="fail-screen">
+    <div class="state-mark">&#8987;</div>
+    <p class="type-subsection-header fail-headline">Too many requests, briefly</p>
+    <p class="type-subtitle fail-message">MangaBaka is throttling this connection. The limit is shared by everyone on your network, so this may not be you at all.</p>
+    <p class="type-subtitle fail-countdown">Retrying in 38 s</p>
+    <button class="action action-wayout type-cta">Retry now</button>
+  </div>
+</div>
+
+<!-- needsAccount: the one case that earns the accent fill -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">FailureState — needs account, 401/403 on MangaBaka (only case with weight .fixes: Settings genuinely fixes it)</p>
+  <div class="fail-screen">
+    <div class="state-mark">&#128100;</div>
+    <p class="type-subsection-header fail-headline">This part needs an account</p>
+    <p class="type-subtitle fail-message">Your library, recommendations and schedule are tied to a MangaBaka token. Discovery, search and the stack keep working without one.</p>
+    <button class="action action-fixes type-cta">Open Settings</button>
+  </div>
+</div>
+
+<!-- retry in flight: RetryGate disables the button so a second tap is visibly a no-op -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">FailureState — retrying (RetryGate.swift: a second tap while one is in flight is a no-op, shown disabled)</p>
+  <div class="fail-screen">
+    <div class="state-mark">&#9888;</div>
+    <p class="type-subsection-header fail-headline">Something went wrong</p>
+    <p class="type-subtitle fail-message">The request didn't complete.</p>
+    <button class="action action-wayout type-cta" disabled>Retrying&hellip;</button>
+  </div>
+</div>
+
+<!-- InlineFailure.swift: one muted line under a section header, first sentence only -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">InlineFailure — a section that asked and failed (e.g. Similar, Cast rows). Only the first sentence of userFacingMessage.</p>
+  <div class="inline-fail">
+    <span class="inline-fail-icon">&#9888;</span>
+    <span class="type-small-meta inline-fail-text">The request didn't complete.</span>
+    <button class="action-aside type-cta">Retry</button>
+  </div>
+</div>
+
+<!-- StaleBar.swift: good content, failed refresh — amber dot only, ordinary card grey fill -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">StaleBar — plain stale (StaleBar.swift: amber means "a fact", not a warning wash — bar fill stays ordinary card grey)</p>
+  <div class="stale-bar">
+    <div class="stale-dot"></div>
+    <div class="stale-body">
+      <p class="type-row-title stale-headline">Couldn't refresh</p>
+      <p class="type-small-meta stale-detail">Showing what was downloaded.</p>
+    </div>
+    <button class="action-aside type-cta" style="height:auto;padding:8px 16px;">Retry</button>
+  </div>
+</div>
+
+<!-- StaleBar with rate-limit deadline + live countdown, per stillShowing() -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">StaleBar — rate limited, with Countdown (StaleBar.stillShowing(query): names which results sit under the bar)</p>
+  <div class="stale-bar">
+    <div class="stale-dot"></div>
+    <div class="stale-body">
+      <p class="type-row-title stale-headline">Still showing 'one piece'</p>
+      <p class="type-small-meta stale-detail">MangaBaka is throttling this connection.</p>
+      <p class="type-small-meta stale-countdown">Retrying in 38s.</p>
+    </div>
+    <button class="action-aside type-cta" style="height:auto;padding:8px 16px;">Retry</button>
+  </div>
+</div>
+
+</body>
+</html>

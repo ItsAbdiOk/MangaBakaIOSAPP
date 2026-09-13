@@ -1,0 +1,57 @@
+<!-- @dsCard group="Feedback" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  /* Toast.swift ToastOverlay: floats over content at scrollBottomInset (104px,
+     the tab bar plus its own inset), max-width 300, glass capsule. */
+  .stage { position: relative; height: 220px; background: var(--surface-inset);
+    border-radius: var(--radius-card); overflow: hidden; max-width: 355px; }
+  .stage-content { position: absolute; inset: 0; padding: 14px; color: var(--text-tertiary); }
+  .toast { position: absolute; left: 50%; bottom: var(--scroll-bottom-inset, 40px);
+    transform: translateX(-50%); max-width: 300px; padding: 11px 18px; border-radius: 999px;
+    background: var(--surface-field); border: var(--hairline-width) solid var(--glass-edge);
+    color: var(--text-primary); text-align: center; }
+  /* Demo stage is shorter than the real 104px inset would allow; clamp so the
+     capsule still reads inside this frame rather than illustrating the token. */
+  .stage .toast { bottom: 24px; }
+  .hit-note { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+    width: 300px; height: 40px; border: 1px dashed var(--border-dashed); border-radius: 999px;
+    pointer-events: none; }
+</style>
+</head>
+<body>
+
+<!-- ToastCentre.Kind.success — "Saved", from LibraryService writes -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Toast — success (ToastCentre.show: 2s default duration, Haptics.success)</p>
+  <div class="stage">
+    <div class="stage-content type-body">Content underneath keeps receiving taps.</div>
+    <div class="toast type-small-meta">Saved</div>
+  </div>
+</div>
+
+<!-- ToastCentre.Kind.failure — 4s, protects itself from a success arriving inside the window -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Toast — failure (ToastCentre.failureDuration: 4s, a .success cannot pre-empt it — "a save that quietly failed... looked like every other successful save")</p>
+  <div class="stage">
+    <div class="stage-content type-body">Content underneath keeps receiving taps.</div>
+    <div class="toast type-small-meta">The request didn't complete.</div>
+  </div>
+</div>
+
+<!-- The 2026-09-13 hit-shape fix: only the capsule captures taps/swipe, the
+     104pt padding under it does not, so it never blocks the tab bar. -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Toast — hit shape (Toast.swift, 2026-09-13 comment: contentShape pinned to the Capsule before the bottom padding is applied, so "a reader who had just saved one series could not tap the next" is fixed — only the dashed capsule below captures taps, not the padding around it)</p>
+  <div class="stage">
+    <div class="stage-content type-body">Everywhere outside the dashed capsule passes taps through to this content.</div>
+    <div class="hit-note"></div>
+    <div class="toast type-small-meta">Saved</div>
+  </div>
+</div>
+
+</body>
+</html>

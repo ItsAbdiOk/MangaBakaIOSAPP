@@ -1,0 +1,57 @@
+<!-- @dsCard group="Controls" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .flow { display: flex; flex-wrap: wrap; gap: var(--gap-chips); }
+  .chip { height: var(--header-pill); padding: 0 14px; border-radius: 999px;
+    display: flex; align-items: center; background: var(--surface-chip); color: var(--text-secondary); }
+  .chip.on { background: var(--accent); color: var(--on-accent); }
+  .rating-row { display: flex; gap: 6px; max-width: 340px; }
+  .rating-seg { flex: 1; min-height: var(--rating-segment); border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-chip); color: var(--text-secondary); }
+  .rating-seg.on { background: var(--accent); color: var(--on-accent); }
+  .badge { display: inline-flex; align-items: center; justify-content: center; min-height: 18px;
+    padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); }
+  .tag-chip { display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 999px;
+    background: var(--surface); color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Type/status/sort chips — FilterPanel.swift chip(_:isOn:): unselected surface-chip, selected accent fill, headerPill height</p>
+  <div class="flow">
+    <span class="chip type-chip">Manga</span>
+    <span class="chip on type-chip">Manhwa</span>
+    <span class="chip type-chip">Manhua</span>
+    <span class="chip on type-chip">Novel</span>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Rating segments — RatingSegments.swift: filled left-to-right up to the selection, not just the matched pip. Segments: Any / 6+ / 7+ / 8+ / 9+</p>
+  <div class="rating-row">
+    <span class="rating-seg on type-chip">Any</span>
+    <span class="rating-seg on type-chip">6+</span>
+    <span class="rating-seg on type-chip">7+</span>
+    <span class="rating-seg type-chip">8+</span>
+    <span class="rating-seg type-chip">9+</span>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Count badge — FilterCountBadge / FilterPanel.pickerButton: same capsule at both doors</p>
+  <span class="badge type-footnote">3</span>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Tag chip with score — DetailCategories.swift chipLabel(): "\(name) · \(score)", typeGridMeta, surface fill</p>
+  <span class="tag-chip type-grid-meta">Slow burn · 214</span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!-- @dsCard group="Controls" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .panel { max-width: 393px; display: flex; flex-direction: column; gap: 14px; }
+  .eyebrow { color: var(--text-tertiary); }
+  .flow { display: flex; flex-wrap: wrap; gap: var(--gap-chips); }
+  .chip { height: var(--header-pill); padding: 0 14px; border-radius: 999px;
+    display: flex; align-items: center; background: var(--surface-chip); color: var(--text-secondary); }
+  .chip.on { background: var(--accent); color: var(--on-accent); }
+  .rating-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .rating-row { display: flex; gap: 6px; }
+  .rating-seg { flex: 1; min-height: var(--rating-segment); border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface-chip); color: var(--text-secondary); }
+  .rating-seg.on { background: var(--accent); color: var(--on-accent); }
+  .year-row { display: flex; gap: var(--gap-chips); }
+  .year-field { flex: 1; height: var(--header-pill); border-radius: var(--radius-card);
+    background: var(--surface-chip); display: flex; align-items: center; padding: 0 14px;
+    color: var(--text-tertiary); }
+  .picker-row { display: flex; gap: var(--gap-chips); }
+  .picker-btn { flex: 1; min-height: var(--tap-target); border-radius: 999px;
+    background: var(--surface-chip); border: var(--hairline-width) solid var(--border);
+    display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-secondary); }
+  .badge { display: inline-flex; align-items: center; justify-content: center; min-height: 18px;
+    padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); }
+  .actions { display: flex; flex-direction: column; gap: 10px; }
+  .actions-row { display: flex; gap: var(--gap-chips); }
+  .btn-secondary { flex: 1; height: var(--cta-secondary); border-radius: var(--radius-card);
+    background: var(--surface-chip); color: var(--text-primary); display: flex; align-items: center; justify-content: center; }
+  .btn-show { height: var(--cta-secondary); border-radius: var(--radius-card);
+    background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+  .footnote { color: var(--text-muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Whole inline panel — FilterPanel.swift. Sections use Eyebrow (11px semibold, tracked, uppercase) not typeSubsectionHeader, per the 2026-09-13 review this file's own comment cites.</p>
+  <div class="panel">
+
+    <div>
+      <p class="eyebrow type-eyebrow" style="margin:0 0 11px">Type</p>
+      <div class="flow">
+        <span class="chip on type-chip">Manga</span>
+        <span class="chip type-chip">Novel</span>
+        <span class="chip type-chip">Manhwa</span>
+        <span class="chip type-chip">Manhua</span>
+        <span class="chip type-chip">OEL</span>
+        <span class="chip type-chip">Other</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="eyebrow type-eyebrow" style="margin:0 0 11px">Status</p>
+      <div class="flow">
+        <span class="chip on type-chip">Releasing</span>
+        <span class="chip type-chip">Completed</span>
+        <span class="chip type-chip">Hiatus</span>
+        <span class="chip type-chip">Cancelled</span>
+        <span class="chip type-chip">Upcoming</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="eyebrow type-eyebrow" style="margin:0 0 11px">Sort</p>
+      <div class="flow">
+        <span class="chip type-chip">Popularity</span>
+        <span class="chip on type-chip">Rating</span>
+        <span class="chip type-chip">Newest</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="rating-head" style="margin-bottom:11px">
+        <p class="eyebrow type-eyebrow" style="margin:0">Minimum rating</p>
+        <span class="type-chip" style="color:var(--accent)">7+</span>
+      </div>
+      <div class="rating-row">
+        <span class="rating-seg on type-chip">Any</span>
+        <span class="rating-seg on type-chip">6+</span>
+        <span class="rating-seg on type-chip">7+</span>
+        <span class="rating-seg type-chip">8+</span>
+        <span class="rating-seg type-chip">9+</span>
+      </div>
+    </div>
+
+    <div>
+      <p class="eyebrow type-eyebrow" style="margin:0 0 11px">Year</p>
+      <div class="year-row">
+        <span class="year-field type-chip">From</span>
+        <span class="year-field type-chip">To</span>
+      </div>
+    </div>
+
+    <div>
+      <!-- "Narrow by" — pickerRow's own Eyebrow, separate from the type_body
+           lint split but visually identical to the sections above. -->
+      <p class="eyebrow type-eyebrow" style="margin:0 0 10px">Narrow by</p>
+      <div class="picker-row">
+        <span class="picker-btn type-chip">Tags <span class="badge type-footnote">3</span></span>
+        <span class="picker-btn type-chip">Genres</span>
+        <span class="picker-btn type-chip">Publishers <span class="badge type-footnote">1</span></span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="actions-row">
+        <span class="btn-secondary type-cta">Clear all</span>
+      </div>
+      <span class="btn-show type-cta">Show 1,426 results</span>
+      <p class="footnote type-footnote" style="margin:0">The bookmark saves these filters as a lens.</p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

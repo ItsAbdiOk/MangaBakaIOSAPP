@@ -1,0 +1,75 @@
+<!-- @dsCard group="Covers" -->
+<meta charset="utf-8">
+<!-- Mirrors PickBackUp.swift: header row, horizontal cover strip at
+     --cover-saved-strip-width, progress bar (ProgressFootBar) clipped to the
+     cover's own corners, and the chapter label the app actually shows:
+     "ch 69", never a "of N" total (PickBackUp.chapterLabel). -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .section { background: var(--ground); width: var(--reference-screen-width); max-width: 100%; }
+  .header {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 0 var(--gutter) 11px;
+  }
+  .header h3 { font: 700 20px/1.2 var(--font-stack); letter-spacing: -0.5px; color: var(--text-primary); margin: 0; flex: 1; }
+  .header span { font: 400 11.5px/1.3 var(--font-stack); color: var(--text-muted); }
+
+  .strip { display: flex; gap: var(--gap-covers); padding: 2px var(--gutter); overflow-x: auto; }
+
+  .card { width: var(--cover-saved-strip-width); flex: none; display: flex; flex-direction: column; gap: 7px; }
+  .cover {
+    position: relative;
+    width: var(--cover-saved-strip-width);
+    aspect-ratio: var(--cover-aspect);
+    border-radius: var(--radius-cover-row);
+    overflow: hidden; /* clips the foot bar to the cover's own corners */
+    background:
+      radial-gradient(120% 90% at 20% 15%, #3a2a3a 0%, transparent 55%),
+      radial-gradient(100% 80% at 80% 85%, #1c2a3a 0%, transparent 60%),
+      var(--image-placeholder);
+    box-shadow: 0 8px 10px rgba(0, 0, 0, 0.5);
+  }
+  .foot-bar {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .foot-bar > i { display: block; height: 100%; background: var(--accent); }
+
+  .chapter { font: 400 11px/1.55 var(--font-stack); color: var(--text-muted); margin: 0; }
+</style>
+
+<p class="ds-label type-footnote">Pick back up — cover width var(--cover-saved-strip-width) (74px), foot bar clipped to cover radius</p>
+<div class="ds-card">
+  <div class="section">
+    <div class="header">
+      <h3>Pick back up</h3>
+      <span>3 in progress</span>
+    </div>
+    <div class="strip">
+      <div class="card">
+        <div class="cover"><div class="foot-bar"><i style="width: 49%"></i></div></div>
+        <p class="chapter">ch 69</p>
+      </div>
+      <div class="card">
+        <div class="cover"><div class="foot-bar"><i style="width: 12%"></i></div></div>
+        <p class="chapter">ch 4 of 32</p>
+      </div>
+      <div class="card">
+        <div class="cover"><div class="foot-bar"><i style="width: 100%"></i></div></div>
+        <p class="chapter">ch 140 of 140</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">No progress fraction — entry has no read chapter yet (PickBackUp.fraction returns nil)</p>
+<div class="ds-card">
+  <div class="section">
+    <div class="strip">
+      <div class="card">
+        <div class="cover"></div>
+        <p class="chapter">Not started</p>
+      </div>
+    </div>
+  </div>
+</div>

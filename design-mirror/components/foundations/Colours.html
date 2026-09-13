@@ -1,0 +1,109 @@
+<!-- @dsCard group="Foundations" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/DesignSystem/Palette.swift. Wording on each swatch is
+     taken from that file's own doc comments, not paraphrased. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--gap-covers); }
+  .swatch { display: flex; flex-direction: column; gap: 8px; }
+  .chip {
+    height: 52px;
+    border-radius: var(--radius-chip);
+    border: var(--hairline-width) solid var(--border);
+  }
+  /* Grounds sit on the page background itself, so give them a border to read at all. */
+  .chip.on-ground { border-color: var(--glass-edge); }
+  .var-name { font: 600 12.5px/1.2 var(--font-stack); color: var(--text-primary); }
+  .value { font: 400 11px/1.4 var(--font-stack); color: var(--text-tertiary); }
+  .note { font: 400 11px/1.55 var(--font-stack); color: var(--text-secondary); }
+  h3.group { color: var(--text-muted); }
+</style>
+
+<div class="ds-card">
+  <p class="type-eyebrow group" style="color:var(--text-muted); margin:0 0 12px;">Grounds</p>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="chip on-ground" style="background:var(--ground);"></div>
+      <p class="var-name">--ground · #08080B</p><p class="note">Every screen's background.</p></div>
+    <div class="swatch"><div class="chip on-ground" style="background:var(--image-placeholder);"></div>
+      <p class="var-name">--image-placeholder · #131318</p><p class="note">Cover and image placeholder, shown behind art while it loads.</p></div>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Surfaces — translucent white over the ground, never solid grey</p>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="chip" style="background:var(--surface-inset);"></div>
+      <p class="var-name">--surface-inset · white 3.5%</p><p class="note">Inset row inside an already-bordered card.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface);"></div>
+      <p class="var-name">--surface · white 4.5%</p><p class="note">Standard card fill.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-chip);"></div>
+      <p class="var-name">--surface-chip · white 6%</p><p class="note">Chip or secondary button, unselected.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-pill);"></div>
+      <p class="var-name">--surface-pill · white 7%</p><p class="note">A small pill.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-field);"></div>
+      <p class="var-name">--surface-field · white 9%</p><p class="note">Search field.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-active);"></div>
+      <p class="var-name">--surface-active · white 13%</p><p class="note">Active tab pill.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--surface-badge);"></div>
+      <p class="var-name">--surface-badge · rgba(10,10,12,.6)</p><p class="note">The dark badge sitting on a cover.</p></div>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Text — exactly these levels; anything between them is a mistake</p>
+  <div class="swatch-grid">
+    <div class="swatch"><p style="color:var(--text-emphasis); font:700 15px var(--font-stack); margin:0;">Aa Emphasis</p>
+      <p class="var-name">--text-emphasis · white 98%</p><p class="note">Detail hero title only.</p></div>
+    <div class="swatch"><p style="color:var(--text-primary); font:700 15px var(--font-stack); margin:0;">Aa Primary</p>
+      <p class="var-name">--text-primary · white 96%</p></div>
+    <div class="swatch"><p style="color:var(--text-body); font:400 15px var(--font-stack); margin:0;">Aa Body</p>
+      <p class="var-name">--text-body · #EBEBF5 75%</p></div>
+    <div class="swatch"><p style="color:var(--text-secondary); font:400 15px var(--font-stack); margin:0;">Aa Secondary</p>
+      <p class="var-name">--text-secondary · #EBEBF5 60%</p></div>
+    <div class="swatch"><p style="color:var(--text-muted); font:400 15px var(--font-stack); margin:0;">Aa Muted</p>
+      <p class="var-name">--text-muted · #EBEBF5 50%</p><p class="note">Meta lines and inactive tab labels.</p></div>
+    <div class="swatch"><p style="color:var(--text-tertiary); font:400 15px var(--font-stack); margin:0;">Aa Tertiary</p>
+      <p class="var-name">--text-tertiary · #EBEBF5 45%</p></div>
+    <div class="swatch"><p style="color:var(--text-quaternary); font:400 15px var(--font-stack); margin:0;">Aa Quaternary</p>
+      <p class="var-name">--text-quaternary · #EBEBF5 32%</p><p class="note">Provenance and attribution footnotes.</p></div>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Accent — the single amber means exactly one thing</p>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="chip" style="background:var(--accent);"></div>
+      <p class="var-name">--accent · #F87966</p><p class="note">oklch(0.72 0.16 30). "Tap me."</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--on-accent); border-color:var(--accent);"></div>
+      <p class="var-name">--on-accent · #180B06</p><p class="note">Text/icons on an accent fill. Never white — white on accent fails contrast.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--accent-tint);"></div>
+      <p class="var-name">--accent-tint · #160B09</p><p class="note">Tinted callout wash, e.g. a setting that discards content.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--accent-edge);"></div>
+      <p class="var-name">--accent-edge · #47231D</p><p class="note">Matching edge for the tint.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--positive);"></div>
+      <p class="var-name">--positive · #5BBE62</p><p class="note">Cached dot only.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--stale);"></div>
+      <p class="var-name">--stale · #EFA831</p><p class="note">The one amber in the app: what you are looking at is real but out of date. Not the accent — the accent means "tap me".</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--paused);"></div>
+      <p class="var-name">--paused · #E38D3D</p><p class="note">Library "paused" state — its own token, not stale reused, because the two mean unrelated things.</p></div>
+    <div class="swatch"><div class="chip" style="background:var(--switch-off);"></div>
+      <p class="var-name">--switch-off · #2C2C2E</p><p class="note">iOS's own off-track grey, so a drawn switch reads as a real one.</p></div>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="type-eyebrow" style="color:var(--text-muted); margin:0 0 12px;">Borders — always 0.5px</p>
+  <div class="swatch-grid">
+    <div class="swatch"><div class="chip" style="background:transparent; border-width:2px; border-color:var(--hairline);"></div>
+      <p class="var-name">--hairline · white 8%</p></div>
+    <div class="swatch"><div class="chip" style="background:transparent; border-width:2px; border-color:var(--border);"></div>
+      <p class="var-name">--border · white 10%</p></div>
+    <div class="swatch"><div class="chip" style="background:transparent; border-width:2px; border-color:var(--border-pill);"></div>
+      <p class="var-name">--border-pill · white 12%</p></div>
+    <div class="swatch"><div class="chip" style="background:transparent; border-width:2px; border-color:var(--glass-edge);"></div>
+      <p class="var-name">--glass-edge · white 13%</p></div>
+    <div class="swatch"><div class="chip" style="background:transparent; border-width:2px; border-style:dashed; border-color:var(--border-dashed);"></div>
+      <p class="var-name">--border-dashed · white 20%</p><p class="note">Empty/add affordances only.</p></div>
+  </div>
+  <p class="type-footnote" style="color:var(--text-quaternary); margin-top:14px;">All of the above render at var(--hairline-width) (0.5px) in real components; these swatches use 2px so the colour reads at swatch scale.</p>
+</div>

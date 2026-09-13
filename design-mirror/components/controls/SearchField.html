@@ -1,0 +1,60 @@
+<!-- @dsCard group="Controls" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  /* This is `.searchable()` — the platform draws it, so this is an
+     approximation of iOS 26's field, not a component the app authors. */
+  .field-wrap { max-width: 393px; }
+  .field { height: var(--field); border-radius: 999px; background: var(--surface-field);
+    display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .field .glass-icon { color: var(--text-tertiary); font-size: 14px; }
+  .field .placeholder { color: var(--text-tertiary); }
+  .field .token { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-pill);
+    border-radius: 999px; padding: 3px 8px 3px 10px; color: var(--text-primary); }
+  .field .token .x { color: var(--text-tertiary); font-size: 11px; }
+  .scope-bar { display: flex; gap: 18px; margin-top: 14px; padding-bottom: 8px;
+    border-bottom: var(--hairline-width) solid var(--hairline); }
+  .scope-bar span { color: var(--text-tertiary); padding-bottom: 8px; }
+  .scope-bar span.on { color: var(--accent); border-bottom: 2px solid var(--accent); margin-bottom: -9px; }
+</style>
+</head>
+<body>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">System search field — SearchField.swift: .searchable(prompt: "Title, author, or tag"). Platform-drawn; approximated here as iOS 26's capsule/glass field since SwiftUI does not expose its exact metrics as tokens.</p>
+  <div class="field-wrap">
+    <div class="field">
+      <span class="glass-icon">&#128269;</span>
+      <span class="placeholder type-body">Title, author, or tag</span>
+    </div>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Scope bar — SearchScope.allCases via .searchScopes(activation: .onSearchPresentation). "All" selected shown in accent per iOS convention; exact selected-scope treatment is system-drawn.</p>
+  <div class="scope-bar type-subtitle">
+    <span class="on">All</span>
+    <span>Manga</span>
+    <span>Manhwa</span>
+    <span>Manhua</span>
+    <span>Novel</span>
+    <span>OEL</span>
+  </div>
+</div>
+
+<div class="ds-card">
+  <p class="ds-label type-footnote">Field with a picked-tag token — SearchToken.swift: query.tags/genres/publisher rendered as .searchable tokens with the system's own removable-chip label(token.label)</p>
+  <div class="field-wrap">
+    <div class="field">
+      <span class="glass-icon">&#128269;</span>
+      <span class="token type-body">Slow burn <span class="x">&#10005;</span></span>
+      <span class="placeholder type-body">Title, author, or tag</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

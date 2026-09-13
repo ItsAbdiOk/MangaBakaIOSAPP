@@ -1,0 +1,72 @@
+<!-- @dsCard group="Covers" -->
+<meta charset="utf-8">
+<!-- Mirrors Skeleton.swift (Shimmer, CoverSkeletonGrid). Built on the same
+     columns/gutter/gap as CoverGrid.html on purpose — the comment on
+     CoverSkeletonGrid calls out a past bug where the skeleton used different
+     spacing (.adaptive(minimum:111), no gutter) and placeholders jumped
+     5–13pt when real results replaced them (R F12b). -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .screen { width: var(--reference-screen-width); max-width: 100%; background: var(--ground); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--gap-covers);
+    row-gap: 16px;
+    padding: 0 var(--gutter);
+  }
+  .cell { display: flex; flex-direction: column; }
+  .cover-block {
+    aspect-ratio: var(--cover-aspect);
+    border-radius: var(--radius-cover-grid);
+    background: var(--image-placeholder);
+  }
+  /* Two bars, unequal width — a column of identical bars reads as a
+     rendering artefact rather than text about to arrive (Skeleton.swift). */
+  .bar { border-radius: 999px; background: var(--surface); height: 9px; margin-top: 8px; }
+  .bar.a { width: 82%; }
+  .bar.b { width: 66%; }
+
+  /* Shimmer: one gradient pass every 1.6s, masked to each shape via the
+     background-clip trick so the gap between cards never lights up. */
+  .shimmer { position: relative; overflow: hidden; }
+  .shimmer::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+    transform: translateX(-100%);
+    animation: shimmer-pass 1.6s linear infinite;
+    mix-blend-mode: plus-lighter;
+  }
+  @keyframes shimmer-pass {
+    to { transform: translateX(100%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer::after { animation: none; content: none; }
+  }
+</style>
+
+<p class="ds-label type-footnote">Skeleton grid — same 3-column/gutter/gap-covers as CoverGrid, so nothing jumps on landing</p>
+<div class="ds-card">
+  <div class="screen">
+    <div class="grid">
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar a"></div></div>
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar b"></div></div>
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar a"></div></div>
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar b"></div></div>
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar a"></div></div>
+      <div class="cell shimmer"><div class="cover-block"></div><div class="bar b"></div></div>
+    </div>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">prefers-reduced-motion: reduce — identity, no shimmer (Shimmer.body)</p>
+<div class="ds-card">
+  <div class="screen" style="filter: grayscale(0)">
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr)">
+      <div class="cell"><div class="cover-block"></div><div class="bar a"></div></div>
+      <div class="cell"><div class="cover-block"></div><div class="bar b"></div></div>
+      <div class="cell"><div class="cover-block"></div><div class="bar a"></div></div>
+    </div>
+  </div>
+</div>

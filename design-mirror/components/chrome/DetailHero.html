@@ -1,0 +1,75 @@
+<!-- @dsCard group="Chrome" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/Features/Detail/DetailHero.swift (cover, kicker, title,
+     byline), DetailStatsStrip.swift (the divided stats card) and
+     LibraryControl.swift (the add button / saved state + "+1 ch" row). Cover
+     is CoverStack simplified to a front cover with one peeking neighbour. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .hero { display: flex; gap: var(--gap-hero); padding: 12px var(--gutter) var(--gutter); align-items: flex-start; }
+  .cover-stack { position: relative; width: var(--cover-detail-hero-width); aspect-ratio: var(--cover-aspect); flex-shrink: 0; }
+  .cover-stack .neighbour {
+    position: absolute; inset: 6px -6px -6px 6px; border-radius: var(--radius-stack-neighbour);
+    background: var(--image-placeholder); opacity: 0.5; transform: rotate(2deg);
+  }
+  .cover-stack .front {
+    position: absolute; inset: 0; border-radius: var(--radius-card); overflow: hidden;
+    background:
+      radial-gradient(120% 90% at 20% 15%, #3a2a3a 0%, transparent 55%),
+      radial-gradient(100% 80% at 80% 85%, #1c2a3a 0%, transparent 60%),
+      var(--image-placeholder);
+    box-shadow: 0 10px 16px rgba(0,0,0,0.5);
+  }
+  .kicker { color: var(--accent); margin: 0; }
+  .title { color: var(--text-emphasis); margin: 6px 0 0; }
+  .byline { color: var(--text-muted); margin: 7px 0 0; }
+  .alt-titles { color: var(--text-tertiary); margin: 8px 0 0; }
+
+  .stats { display: flex; background: var(--surface); border-radius: var(--radius-card); border: var(--hairline-width) solid var(--hairline); margin: 0 var(--gutter) var(--section-gap); }
+  .stat { flex: 1; text-align: center; padding: 12px 4px; position: relative; }
+  .stat + .stat::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: var(--hairline-width); background: var(--hairline); }
+  .stat .value { color: var(--text-emphasis); margin: 0; }
+  .stat .stat-label { color: var(--text-muted); margin: 3px 0 0; letter-spacing: 0.4px; }
+
+  .library-row { display: flex; gap: var(--gap-chips); padding: 0 var(--gutter); }
+  .add-btn { flex: 1; height: var(--cta-primary); border: none; border-radius: var(--radius-card); background: var(--accent); color: var(--on-accent); }
+  .saved-btn { flex: 1; height: var(--cta-primary); border: var(--hairline-width) solid var(--border); border-radius: var(--radius-card); background: var(--surface-chip); color: var(--text-primary); display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .plus-btn { width: var(--cta-primary); height: var(--cta-primary); border: none; border-radius: var(--radius-card); background: var(--accent); color: var(--on-accent); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: -1px; }
+  .plus-btn .micro { opacity: 0.75; }
+</style>
+
+<p class="ds-label type-footnote">Hero — kicker, title, native title · authors, stacked cover (CoverStack)</p>
+<div class="ds-card">
+  <div class="hero">
+    <div class="cover-stack"><div class="neighbour"></div><div class="front"></div></div>
+    <div>
+      <p class="type-eyebrow kicker">Manhwa · Ongoing</p>
+      <p class="type-detail-hero-title title">Solo Leveling</p>
+      <p class="type-small-meta byline">나 혼자만 레벨업 · Chugong</p>
+      <p class="type-footnote alt-titles">2 alternative titles ›</p>
+    </div>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">Stats strip — DetailStatsStrip, segments the API didn't answer are dropped, not shown empty</p>
+<div class="ds-card" style="padding-left:0; padding-right:0;">
+  <div class="stats">
+    <div class="stat"><p class="type-row-title value">8.9</p><p class="type-grid-meta stat-label">RATING</p></div>
+    <div class="stat"><p class="type-row-title value">64.2k</p><p class="type-grid-meta stat-label">RATINGS</p></div>
+    <div class="stat"><p class="type-row-title value">179</p><p class="type-grid-meta stat-label">CHAPTERS</p></div>
+    <div class="stat"><p class="type-row-title value">2018</p><p class="type-grid-meta stat-label">STARTED</p></div>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">Library state — not in library (LibraryControl.addButton)</p>
+<div class="ds-card">
+  <div class="library-row"><button class="add-btn type-cta">Add to library</button></div>
+</div>
+
+<p class="ds-label type-footnote">Library state — saved, tracking progress: state chip + "+1 ch NN" button (LibraryControl.saved)</p>
+<div class="ds-card">
+  <div class="library-row">
+    <button class="saved-btn"><span class="type-cta">Reading</span><span class="type-small-meta">· ch 87</span></button>
+    <button class="plus-btn"><span class="type-cta">+1</span><span class="type-micro-label micro">CH 88</span></button>
+  </div>
+</div>

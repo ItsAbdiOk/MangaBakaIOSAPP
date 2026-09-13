@@ -1,0 +1,49 @@
+<!-- @dsCard group="Foundations" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/DesignSystem/Typography.swift: one .type-* class per
+     modifier there. Sizes/weights/tracking are copied verbatim from styles.css,
+     which was itself copied from that file. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .row { display: flex; align-items: baseline; gap: 16px; padding: 10px 0; border-top: var(--hairline-width) solid var(--hairline); }
+  .row:first-child { border-top: none; }
+  .meta { flex: 0 0 260px; }
+  .modifier { font: 600 11.5px/1.4 var(--font-stack); color: var(--accent); }
+  .spec { font: 400 11px/1.4 var(--font-stack); color: var(--text-tertiary); margin-top: 2px; }
+  .sample { color: var(--text-primary); }
+</style>
+
+<div class="ds-card">
+  <p class="type-body" style="color:var(--text-secondary); margin:0;">
+    Every size below scales with the reader's text size (Dynamic Type) in the app —
+    @ScaledMetric grows each one, anchored to the nearest system text style, so the
+    ramp keeps its proportions instead of collapsing at the extremes. Here the sizes
+    are fixed: treat them as ratios to each other, not pixel law.
+  </p>
+</div>
+
+<div class="ds-card">
+  <div class="row"><div class="meta"><p class="modifier">.typeScreenTitle()</p><p class="spec">36 / 700 / -1.2 tracking</p></div><p class="type-screen-title sample">Discover new series</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeStackTitle()</p><p class="spec">28 / 700 / -0.9 tracking</p></div><p class="type-stack-title sample">Your stack</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeStatNumber()</p><p class="spec">22 / 700 / -0.5 tracking</p></div><p class="type-stat-number sample">128</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeDetailHeroTitle()</p><p class="spec">24 / 700 / -0.7 tracking</p></div><p class="type-detail-hero-title sample">Attack on Titan</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeSheetTitle()</p><p class="spec">22 / 700 / -0.6 tracking</p></div><p class="type-sheet-title sample">Add to library</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeSectionHeader()</p><p class="spec">20 / 700 / -0.5 tracking</p></div><p class="type-section-header sample">In progress</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeDetailSectionHeader()</p><p class="spec">18 / 700 / -0.4 tracking</p></div><p class="type-detail-section sample">Synopsis</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeStackCardTitle()</p><p class="spec">19 / 700 / -0.4 tracking</p></div><p class="type-stack-card-title sample">Chainsaw Man</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeSubsectionHeader()</p><p class="spec">15 / 600</p></div><p class="type-subsection-header sample">Related series</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeCTA()</p><p class="spec">15 / 700</p></div><p class="type-cta sample">Add to library</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeBody()</p><p class="spec">14 / 400 / 1.55 line</p></div><p class="type-body sample">A quiet town hides a much older secret than anyone realises.</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeRowTitle()</p><p class="spec">13.5 / 600</p></div><p class="type-row-title sample">Rating</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeSubtitle()</p><p class="spec">13 / 400 / 1.45 line</p></div><p class="type-subtitle sample">Manhwa · Ongoing</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeChip()</p><p class="spec">12.5 / 500</p></div><p class="type-chip sample">Isekai</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeInstruction()</p><p class="spec">12.5 / 400</p></div><p class="type-instruction sample">Swipe right to save, left to skip.</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeBadge()</p><p class="spec">12 / 700 / 1 tracking</p></div><p class="type-badge sample">SAVE</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeCardTitle()</p><p class="spec">12 / 600 / 1.25 line</p></div><p class="type-card-title sample">Attack on Titan</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeSmallMeta()</p><p class="spec">11.5 / 400</p></div><p class="type-small-meta sample">Hajime Isayama · 212 chapters</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeEyebrow()</p><p class="spec">11 / 600 / 0.7 tracking / upper</p></div><p class="type-eyebrow sample">Manhwa · Completed</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeFootnote()</p><p class="spec">11 / 400 / 1.55 line</p></div><p class="type-footnote sample">Grid card — 111px, computed</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeGridMeta()</p><p class="spec">10.5 / 400</p></div><p class="type-grid-meta sample">Manga · 2019 · Releasing</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeTabLabel()</p><p class="spec">9.5 / 600</p></div><p class="type-tab-label sample">DISCOVER</p></div>
+  <div class="row"><div class="meta"><p class="modifier">.typeMicroLabel()</p><p class="spec">9 / 600</p></div><p class="type-micro-label sample">CH 69</p></div>
+</div>

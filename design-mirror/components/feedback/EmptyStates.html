@@ -1,0 +1,85 @@
+<!-- @dsCard group="Feedback" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .empty { display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 34px 8px; max-width: 340px; margin: 0 auto; }
+  .empty-title { color: var(--text-primary); }
+  .empty-advice { color: var(--text-tertiary); margin-top: 8px; }
+  .empty-actions { display: flex; gap: 0; margin-top: 16px; }
+  .pill { height: auto; padding: 11px 18px; border-radius: 999px; border: none;
+    font-family: var(--font-stack); margin-top: 16px; }
+  .pill-neutral { background: var(--surface-chip); color: var(--text-primary); }
+  .pill-accent { background: var(--accent); color: var(--on-accent); }
+
+  .idle { display: flex; flex-direction: column; gap: 10px; max-width: 355px; }
+  .idle-header { color: var(--text-primary); }
+  .idle-panel { padding: 16px; background: var(--surface-inset); border: var(--hairline-width) solid var(--hairline);
+    border-radius: var(--radius-card); display: flex; flex-direction: column; gap: 10px; }
+  .idle-eyebrow { color: var(--text-tertiary); }
+  .idle-chip-row { display: flex; gap: var(--gap-chips); flex-wrap: wrap; }
+  .idle-chip { padding: 6px 12px; border-radius: var(--radius-chip); background: var(--surface-chip);
+    color: var(--text-secondary); }
+  .idle-chip.on { background: var(--accent-tint); color: var(--accent); border: var(--hairline-width) solid var(--accent-edge); }
+</style>
+</head>
+<body>
+
+<!-- SearchIdleView.swift: before anything is typed — Filters panel inline, no "Your lenses" on a first run -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Idle — first run (SearchIdleView.swift: "Your lenses" only renders when own.isEmpty is false; a first-time reader sees only Filters)</p>
+  <div class="idle">
+    <p class="type-section-header idle-header">Filters</p>
+    <div class="idle-panel">
+      <p class="type-eyebrow idle-eyebrow">Type</p>
+      <div class="idle-chip-row">
+        <span class="idle-chip on type-chip">Manga</span>
+        <span class="idle-chip type-chip">Manhwa</span>
+        <span class="idle-chip type-chip">Manhua</span>
+      </div>
+      <p class="type-eyebrow idle-eyebrow">Status</p>
+      <div class="idle-chip-row">
+        <span class="idle-chip type-chip">Releasing</span>
+        <span class="idle-chip type-chip">Completed</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SearchEmptyState (SearchView.emptyState): no filters active, plain advice line -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Empty — no filters (SearchView.swift emptyState: emptyAdvice falls back to "Try a looser filter, or let the API pick.")</p>
+  <div class="empty">
+    <p class="type-body empty-title">Nothing matched 'zzzzqqq'</p>
+    <p class="type-instruction empty-advice">Try a looser filter, or let the API pick.</p>
+    <button class="pill pill-accent type-row-title">Random with these filters</button>
+  </div>
+</div>
+
+<!-- one active filter: "One filter is still applied." + Clear filters, singular per emptyAdvice -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Empty — one filter still applied (SearchView.emptyAdvice: singular wording, "count == 1")</p>
+  <div class="empty">
+    <p class="type-body empty-title">Nothing matched 'zzzzqqq'</p>
+    <p class="type-instruction empty-advice">One filter is still applied.</p>
+    <button class="pill pill-neutral type-row-title">Clear filters</button>
+    <button class="pill pill-accent type-row-title">Random with these filters</button>
+  </div>
+</div>
+
+<!-- multiple filters: plural form -->
+<div class="ds-card">
+  <p class="ds-label type-footnote">Empty — multiple filters (SearchView.emptyAdvice: "\(count) filters are still applied.")</p>
+  <div class="empty">
+    <p class="type-body empty-title">Nothing matched 'zzzzqqq'</p>
+    <p class="type-instruction empty-advice">3 filters are still applied.</p>
+    <button class="pill pill-neutral type-row-title">Clear filters</button>
+    <button class="pill pill-accent type-row-title">Random with these filters</button>
+  </div>
+</div>
+
+</body>
+</html>

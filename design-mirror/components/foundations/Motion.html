@@ -1,0 +1,111 @@
+<!-- @dsCard group="Foundations" -->
+<meta charset="utf-8">
+<!-- Mirrors MangaBaka/DesignSystem/Motion.swift (the presets) and
+     MotionModifiers.swift (where each is worn). CSS springs are an
+     approximation of SwiftUI's response/damping springs, not identical
+     curves — see the per-preset note. Hover or click a demo to replay it. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .demo-row { display: flex; align-items: center; gap: 20px; }
+  .stage { width: 120px; height: 64px; display: flex; align-items: center; justify-content: center; }
+  .chip-demo {
+    width: 56px; height: 56px; border-radius: var(--radius-chip);
+    background: var(--surface-active); border: var(--hairline-width) solid var(--border-pill);
+  }
+  .meta { flex: 1; }
+  .name { font: 700 13px var(--font-stack); color: var(--text-primary); margin: 0; }
+  .use { font: 400 11.5px/1.5 var(--font-stack); color: var(--text-secondary); margin: 4px 0 0; }
+
+  /* snappy: quick, slightly underdamped tap/toggle response */
+  .snappy:hover .chip-demo { transform: scale(1.12); background: var(--accent); }
+  .chip-demo { transition: transform var(--motion-snappy), background var(--motion-snappy); }
+
+  /* settle: content arriving/sheets presenting — rise, unblur, fade */
+  .settle .chip-demo { opacity: 0.98; }
+  .settle:hover .chip-demo { animation: arrive var(--motion-settle) 1; }
+  @keyframes arrive {
+    from { opacity: 0; filter: blur(6px); transform: translateY(8px); }
+    to   { opacity: 1; filter: blur(0); transform: translateY(0); }
+  }
+
+  /* glide: scroll-linked, fully damped, never overshoots */
+  .glide:hover .chip-demo { transform: scale(1); opacity: 1; transition: transform var(--motion-glide), opacity var(--motion-glide); }
+  .glide .chip-demo { transform: scale(0.85); opacity: 0.6; }
+
+  /* stagger: a row arriving item by item, each delayed one more step */
+  .stagger-row { display: flex; gap: 8px; }
+  .stagger-item {
+    width: 30px; height: 30px; border-radius: var(--radius-badge);
+    background: var(--surface-active); border: var(--hairline-width) solid var(--border);
+    opacity: 0; transform: translateY(6px);
+  }
+  .stagger-group:hover .stagger-item { animation: arrive var(--motion-settle) forwards; }
+  .stagger-item:nth-child(1) { animation-delay: calc(var(--motion-stagger-step) * 0); }
+  .stagger-item:nth-child(2) { animation-delay: calc(var(--motion-stagger-step) * 1); }
+  .stagger-item:nth-child(3) { animation-delay: calc(var(--motion-stagger-step) * 2); }
+  .stagger-item:nth-child(4) { animation-delay: calc(var(--motion-stagger-step) * 3); }
+  .stagger-item:nth-child(5) { animation-delay: calc(var(--motion-stagger-step) * 4); }
+  .stagger-item:nth-child(6) { animation-delay: calc(var(--motion-stagger-step) * 5); }
+</style>
+
+<div class="ds-card">
+  <p class="type-body" style="color:var(--text-secondary); margin:0;">
+    Every one of these degrades to an instant state change under prefers-reduced-motion
+    (mirrored here too — try your OS setting). In the app this is Motion.isReduced,
+    read from UIAccessibility rather than the SwiftUI environment so models and
+    closures can honour it too.
+  </p>
+</div>
+
+<div class="ds-card snappy">
+  <p class="ds-label type-footnote">Hover the chip</p>
+  <div class="demo-row">
+    <div class="stage"><div class="chip-demo"></div></div>
+    <div class="meta">
+      <p class="name">snappy — 220ms, quick ease-out</p>
+      <p class="use">SwiftUI: response 0.28, damping 0.86 (slightly underdamped). Taps and toggles —
+        answers a finger rather than settling into place. Used by Eyebrow's counting label and LibraryControl's state swap.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ds-card settle">
+  <p class="ds-label type-footnote">Hover the chip</p>
+  <div class="demo-row">
+    <div class="stage"><div class="chip-demo"></div></div>
+    <div class="meta">
+      <p class="name">settle — 320ms, damped ease</p>
+      <p class="use">SwiftUI: response 0.45, damping 0.82. Content arriving, sheets presenting — a touch
+        slower than snappy so a whole surface doesn't feel jumpy. Backs ArrivesModifier (rise 8pt + unblur + fade)
+        and AppearsSoftlyModifier (image over its BlurHash).</p>
+    </div>
+  </div>
+</div>
+
+<div class="ds-card glide">
+  <p class="ds-label type-footnote">Hover the chip</p>
+  <div class="demo-row">
+    <div class="stage"><div class="chip-demo"></div></div>
+    <div class="meta">
+      <p class="name">glide — 420ms, fully damped</p>
+      <p class="use">SwiftUI: response 0.7, damping 1.0 (no overshoot). Scroll-linked motion — EnterScaleModifier's
+        card scale-up and ParallaxModifier's depth drift, so nothing bounces while a finger is still moving the content.</p>
+    </div>
+  </div>
+</div>
+
+<div class="ds-card stagger-group">
+  <p class="ds-label type-footnote">Hover the row</p>
+  <div class="demo-row">
+    <div class="stage"><div class="stagger-row">
+      <div class="stagger-item"></div><div class="stagger-item"></div><div class="stagger-item"></div>
+      <div class="stagger-item"></div><div class="stagger-item"></div><div class="stagger-item"></div>
+    </div></div>
+    <div class="meta">
+      <p class="name">stagger — 45ms/item, capped at 6</p>
+      <p class="use">Motion.stagger(index): each item's settle delayed by its place in the group, so a list
+        assembles rather than snapping in at once. Capped at 6 steps so a long list's last rows don't wait seconds.
+        Feeds ArrivesModifier(index:) via Motion.arrival(index:).</p>
+    </div>
+  </div>
+</div>

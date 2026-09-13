@@ -1,0 +1,78 @@
+<!-- @dsCard group="Covers" -->
+<meta charset="utf-8">
+<!-- Mirrors CoverGrid<Item,Cell> in CoverImage.swift + CoverGridLayout.resolve
+     (Metrics.swift): 3 columns normally, 2 at accessibility text sizes.
+     Card width computed from a 393pt reference screen minus the gutter,
+     divided across gap-covers: 3-col → 111px, 2-col → 172.5px. -->
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  .screen {
+    width: var(--reference-screen-width);
+    max-width: 100%;
+    background: var(--ground);
+  }
+  .grid {
+    display: grid;
+    gap: var(--gap-covers);
+    padding: 0 var(--gutter);
+    row-gap: 16px; /* CoverGrid's own rowSpacing default */
+  }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+  .cell { display: flex; flex-direction: column; }
+  .cover {
+    position: relative;
+    aspect-ratio: var(--cover-aspect);
+    border-radius: var(--radius-cover-grid);
+    background:
+      radial-gradient(120% 90% at 20% 15%, #3a2a3a 0%, transparent 55%),
+      radial-gradient(100% 80% at 80% 85%, #1c2a3a 0%, transparent 60%),
+      var(--image-placeholder);
+    box-shadow: 0 8px 10px rgba(0, 0, 0, 0.5);
+  }
+  .title {
+    font: 600 12px/1.25 var(--font-stack);
+    color: var(--text-primary);
+    margin: 7px 0 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .meta {
+    font: 400 10.5px/1.3 var(--font-stack);
+    color: var(--text-muted);
+    margin: 2px 0 0;
+  }
+</style>
+
+<p class="ds-label type-footnote">
+  3 columns (default) — card width (357 − 2×12) / 3 = 111px, from CoverGridLayout.resolve
+</p>
+<div class="ds-card">
+  <div class="screen">
+    <div class="grid cols-3">
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 1</p><p class="meta">Manga · 2019 · Releasing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 2</p><p class="meta">Manhwa · 2021 · Ongoing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 3</p><p class="meta">Manga · 2016 · Ended</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 4</p><p class="meta">Manhua · 2022 · Releasing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 5</p><p class="meta">Manga · 2011 · Ended</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 6</p><p class="meta">Manga · 2019 · Releasing</p></div>
+    </div>
+  </div>
+</div>
+
+<p class="ds-label type-footnote">
+  2 columns (accessibility text size) — card width (357 − 12) / 2 = 172.5px. Fewer columns
+  answers bigger text, not wider cards in the same columns (CoverCard.Sizing doc).
+</p>
+<div class="ds-card">
+  <div class="screen">
+    <div class="grid cols-2">
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 1</p><p class="meta">Manga · 2019 · Releasing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 2</p><p class="meta">Manhwa · 2021 · Ongoing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 3</p><p class="meta">Manga · 2016 · Ended</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 4</p><p class="meta">Manhua · 2022 · Releasing</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 5</p><p class="meta">Manga · 2011 · Ended</p></div>
+      <div class="cell"><div class="cover"></div><p class="title">Series Title 6</p><p class="meta">Manga · 2019 · Releasing</p></div>
+    </div>
+  </div>
+</div>
