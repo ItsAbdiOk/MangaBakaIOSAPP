@@ -18,6 +18,10 @@ struct Shimmer: ViewModifier {
         } else {
             content
                 .overlay {
+                    // Masked to the content's own shapes: painted over the
+                    // whole frame it lightened the gaps between placeholders
+                    // as well, and the row read as a lit square behind its
+                    // rounded boxes (Abdi's phone, 2026-09-13).
                     LinearGradient(
                         colors: [.clear, .white.opacity(0.10), .clear],
                         startPoint: .leading,
@@ -26,9 +30,9 @@ struct Shimmer: ViewModifier {
                     .scaleEffect(x: 1.6)
                     .offset(x: phase * 260)
                     .blendMode(.plusLighter)
+                    .mask { content }
                     .allowsHitTesting(false)
                 }
-                .clipped()
                 .onAppear {
                     Motion.run(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
                         phase = 1
