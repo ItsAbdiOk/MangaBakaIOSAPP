@@ -45,6 +45,7 @@ struct SettingsView: View {
                 RemindersSection(reminders: reminders, onChange: onRemindersChanged)
                 HistorySection(history: history)
                 DataUseSection(taste: taste)
+                TranslationSection()
                 AttributionSection()
             }
             .padding(.horizontal, Metrics.gutter)

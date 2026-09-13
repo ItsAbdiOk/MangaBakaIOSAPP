@@ -121,6 +121,13 @@ protocol DescriptionTranslating: Sendable {
 struct SystemDescriptionTranslator: DescriptionTranslating, @unchecked Sendable {
     let session: TranslationSession
 
+    /// Raises the system's language-pack download prompt when the pair is
+    /// `.supported` but not installed. Only ever called from Settings, a
+    /// plain screen — from inside a sheet this is the build 64 crash.
+    func prepare() async {
+        try? await session.prepareTranslation()
+    }
+
     /// One string at a time, deliberately, rather than
     /// `TranslationSession.translations(from:)`.
     ///

@@ -37,8 +37,11 @@ struct CharacterProfileView: View {
     /// Russian is the only source language this view ever asks the
     /// Translation framework about — Shikimori's site language, verified
     /// live on 2026-09-12 against every description fetched during this work.
-    private static let sourceLanguage = Locale.Language(languageCode: "ru")
-    private static let targetLanguage = Locale.Language(languageCode: "en")
+    /// Shared with `TranslationSection`, which offers the download this view
+    /// cannot, via `TranslationGate` so the two screens cannot drift onto
+    /// different language pairs.
+    private static let sourceLanguage = TranslationGate.sourceLanguage
+    private static let targetLanguage = TranslationGate.targetLanguage
     /// How long a translation is allowed to run before the profile is shown
     /// without its description. A guess: long enough for an already-installed
     /// language pack to translate a short paragraph, short enough that a

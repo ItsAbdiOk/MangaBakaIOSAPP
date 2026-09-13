@@ -25,6 +25,14 @@ import Translation
 /// terminated app. Offering the download from somewhere that is not inside a
 /// sheet is the proper fix and is not built yet.
 enum TranslationGate {
+    /// The one pair this app ever translates. Shared by `CharacterProfileView`
+    /// (which only translates when `.installed`) and `TranslationSection`
+    /// (which is where the download is offered instead) so the two screens
+    /// cannot drift onto different language pairs — see "expose it at its
+    /// source" in the project's engineering standards.
+    static let sourceLanguage = Locale.Language(languageCode: "ru")
+    static let targetLanguage = Locale.Language(languageCode: "en")
+
     /// Whether translation may proceed for a language-pair status.
     ///
     /// Written as a pure function over the status so it can be tested: the
