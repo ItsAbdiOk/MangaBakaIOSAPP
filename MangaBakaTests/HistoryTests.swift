@@ -130,6 +130,48 @@ struct HistoryTests {
         #expect(try await history.entries(blockedTags: [42]).map(\.id) == [1], "an unrelated block")
     }
 
+    @Test("Last-opened dates come back keyed by series id")
+    func lastOpenedDatesByID() async throws {
+        let (history, clock) = try store()
+        try await history.record(SeriesFactory.make(id: 1))
+        let firstOpen = clock.now
+        clock.advance(by: 3_600)
+        try await history.record(SeriesFactory.make(id: 2))
+
+        let dates = try await history.lastOpenedDates()
+        #expect(dates[1] == firstOpen)
+        #expect(dates[2] == clock.now)
+        #expect(dates[3] == nil, "never opened")
+    }
+
+    @Test("Too little history says nothing about a usual reading hour")
+    func usualReadingHourNeedsEnoughHistory() async throws {
+        let (history, _) = try store()
+        for id in 1...4 {
+            try await history.record(SeriesFactory.make(id: id))
+        }
+        #expect(try await history.usualReadingHour() == nil, "control: four entries is not enough yet")
+    }
+
+    @Test("The most common hour wins, not the average of all of them")
+    func usualReadingHourIsTheMode() async throws {
+        let clock = TestClock()
+        let history = HistoryStore(database: try AppDatabase.inMemory(), clock: clock)
+        let repeatedHour = Calendar.current.component(.hour, from: clock.now)
+
+        // Three entries at the same hour, one twelve hours away — a mean of
+        // just two distinct hours could land somewhere neither reader ever
+        // actually opened the app.
+        // Five entries clears the minimum the control above pins.
+        for id in 1...4 {
+            try await history.record(SeriesFactory.make(id: id))
+        }
+        clock.advance(by: 12 * 3_600)
+        try await history.record(SeriesFactory.make(id: 5))
+
+        #expect(try await history.usualReadingHour() == repeatedHour)
+    }
+
     @Test("Clearing empties the history and leaves the shelf alone")
     func clearingSparesTheShelf() async throws {
         let database = try AppDatabase.inMemory()

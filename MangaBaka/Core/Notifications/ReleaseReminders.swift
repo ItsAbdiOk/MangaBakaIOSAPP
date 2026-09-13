@@ -32,7 +32,18 @@ final class ReleaseReminders {
     /// switch and offering Open Settings) is `RemindersSection`, batch 6.
     var effectiveEnabled: Bool { isEnabled && systemStatus != .denied }
 
+    /// Whether the reader has separately asked for "back to it" nudges — off
+    /// by default. An unrequested notification is a surprise, and this one
+    /// is opinionated in a way an upcoming-release reminder is not: it is
+    /// telling the reader they have not opened something, which the main
+    /// switch's own reader might not want.
+    private(set) var backToItEnabled: Bool
+    /// Same reasoning as `effectiveEnabled`: what the reader asked for, only
+    /// once iOS is actually willing to deliver it.
+    var effectiveBackToItEnabled: Bool { backToItEnabled && systemStatus != .denied }
+
     private static let key = "reminders.enabled"
+    private static let backToItKey = "reminders.backToIt.enabled"
     /// iOS keeps at most 64 pending local notifications per app and silently
     /// drops the rest, so the cap is picked rather than discovered: the nearest
     /// forty leaves room and covers further ahead than anyone plans.
@@ -51,6 +62,7 @@ final class ReleaseReminders {
         self.centre = centre
         self.now = now
         isEnabled = defaults.bool(forKey: Self.key)
+        backToItEnabled = defaults.bool(forKey: Self.backToItKey)
     }
 
     func refreshStatus() async {
@@ -81,6 +93,43 @@ final class ReleaseReminders {
         await centre.removeAll()
     }
 
+    /// Turns "back to it" nudges on or off. Independent of `enable()`/
+    /// `isEnabled`: a reader can want the calendar reminders and not this,
+    /// or the reverse. Still needs the same system permission, so turning it
+    /// on for the first time asks for it exactly as `enable()` does.
+    @discardableResult
+    func setBackToIt(_ on: Bool) async -> Bool {
+        guard on else {
+            backToItEnabled = false
+            defaults.set(false, forKey: Self.backToItKey)
+            return true
+        }
+        let granted = await centre.requestAuthorization()
+        await refreshStatus()
+        guard granted else {
+            backToItEnabled = false
+            defaults.set(false, forKey: Self.backToItKey)
+            return false
+        }
+        backToItEnabled = true
+        defaults.set(true, forKey: Self.backToItKey)
+        return true
+    }
+
+    /// One local notification, outside the replace-everything set
+    /// `reschedule()` manages — a publisher follow's "new from X" fires the
+    /// moment it is noticed rather than waiting for the next calendar
+    /// rebuild, and must not be wiped by that rebuild's `removeAll()`.
+    ///
+    /// Gap, not fixed here: iOS's own 64-pending cap is shared with
+    /// `reschedule()`'s 40, and nothing orders the two paths against each
+    /// other — a reader who follows enough publishers and also has a full
+    /// calendar could start losing whichever arrived first.
+    func notify(id: String, title: String, body: String, at date: Date = Date()) async {
+        guard systemStatus != .denied else { return }
+        await centre.add(ReminderRequest(id: id, title: title, body: body, date: date))
+    }
+
     /// Drops every pending reminder without turning the feature off.
     ///
     /// For an account change. `disable()` is the reader saying they do not
@@ -105,6 +154,7 @@ final class ReleaseReminders {
     func forget() async {
         await centre.removeAll()
         defaults.removeObject(forKey: Self.nudgeKey)
+        defaults.removeObject(forKey: Self.backToItDatesKey)
     }
 
     /// Replaces every pending reminder with one per upcoming release.
@@ -128,51 +178,81 @@ final class ReleaseReminders {
     ///     next reschedule. Treated the same as a failure for this call: keep
     ///     yesterday's reminders rather than removing ones for series this
     ///     walk simply never got to.
+    ///   - lastOpened: for "back to it" nudges — when `HistoryStore` last saw
+    ///     the reader open a series, by id. Only consulted when
+    ///     `effectiveBackToItEnabled`; defaults to "never" for every id,
+    ///     which just means every candidate falls back to its own
+    ///     `startDate` (see `ReadingNudges.candidates`).
+    ///   - latestKnownChapter: for "back to it" nudges — the newest chapter a
+    ///     release feed already knows about for a series, ahead of what the
+    ///     library's own `totalChapters` says. Defaults to nil for every id,
+    ///     which falls back to `totalChapters` alone.
+    ///   - readingHour: the hour of day, local time, to fire a "back to it"
+    ///     nudge — the reader's own usual hour where `HistoryStore` can say,
+    ///     else 19:00 (a guess: an evening hour, when someone with a job or
+    ///     classes is plausibly free, chosen with no measurement behind it).
     func reschedule(
         announced: [UpcomingWork],
         predicted: [ScheduledWork],
         library: [LibraryEntry] = [],
         libraryFailure: APIError? = nil,
-        isComplete: Bool = true
+        isComplete: Bool = true,
+        lastOpened: (Int) -> Date? = { _ in nil },
+        latestKnownChapter: (Int) -> Double? = { _ in nil },
+        readingHour: Int? = nil
     ) async {
         guard libraryFailure == nil, isComplete else { return }
         await centre.removeAll()
-        guard effectiveEnabled else { return }
+        // Each half of what this schedules is opted into separately — a
+        // reader who wants the calendar but not "back to it" (or the
+        // reverse) must not have their one choice silently gate the other.
+        guard effectiveEnabled || effectiveBackToItEnabled else { return }
 
         var requests: [ReminderRequest] = []
-
         let now = now()
-        let today = Calendar.current.startOfDay(for: now)
-        for work in announced {
-            // The release day in the reader's calendar, and today counts:
-            // comparing the UTC instant against now dropped "out today" for
-            // anyone once UTC midnight had passed.
-            guard let date = work.localDay(), date >= today else { continue }
-            requests.append(ReminderRequest(
-                id: "announced-\(work.id)",
-                title: work.title ?? "A release you are waiting for",
-                // The date is a fact, so it is stated as one.
-                body: [work.volume, "out today"].compactMap { $0 }.joined(separator: " · "),
-                date: date
-            ))
+
+        if effectiveEnabled {
+            let today = Calendar.current.startOfDay(for: now)
+            for work in announced {
+                // The release day in the reader's calendar, and today counts:
+                // comparing the UTC instant against now dropped "out today" for
+                // anyone once UTC midnight had passed.
+                guard let date = work.localDay(), date >= today else { continue }
+                requests.append(ReminderRequest(
+                    id: "announced-\(work.id)",
+                    title: work.title ?? "A release you are waiting for",
+                    // The date is a fact, so it is stated as one.
+                    body: [work.volume, "out today"].compactMap { $0 }.joined(separator: " · "),
+                    date: date
+                ))
+            }
+
+            for work in predicted {
+                guard let cadence = work.cadence, cadence.due > now else { continue }
+                requests.append(ReminderRequest(
+                    id: "predicted-\(work.series.id)",
+                    title: work.series.displayTitle ?? "A series you are reading",
+                    // Worded as the estimate it is. A notification that states a
+                    // guess as a fact is worse than no notification: it is the app
+                    // being confidently wrong on the reader's lock screen.
+                    body: "A new chapter is roughly due, going by how often it updates.",
+                    date: cadence.due
+                ))
+            }
+
+            let nudges = Self.catchUp(in: library, now: now, previous: nudgeDates)
+            rememberNudges(nudges, now: now)
+            requests.append(contentsOf: nudges)
         }
 
-        for work in predicted {
-            guard let cadence = work.cadence, cadence.due > now else { continue }
-            requests.append(ReminderRequest(
-                id: "predicted-\(work.series.id)",
-                title: work.series.displayTitle ?? "A series you are reading",
-                // Worded as the estimate it is. A notification that states a
-                // guess as a fact is worse than no notification: it is the app
-                // being confidently wrong on the reader's lock screen.
-                body: "A new chapter is roughly due, going by how often it updates.",
-                date: cadence.due
-            ))
+        if effectiveBackToItEnabled {
+            let backToIt = Self.backToIt(
+                in: library, now: now, lastOpened: lastOpened, latestKnownChapter: latestKnownChapter,
+                previous: backToItDates, readingHour: readingHour ?? 19
+            )
+            rememberBackToIt(backToIt, now: now)
+            requests.append(contentsOf: backToIt)
         }
-
-        let nudges = Self.catchUp(in: library, now: now, previous: nudgeDates)
-        rememberNudges(nudges, now: now)
-        requests.append(contentsOf: nudges)
 
         let soonest = requests
             .sorted { $0.date < $1.date }
@@ -256,6 +336,79 @@ extension ReleaseReminders {
         }
 
         return requests
+    }
+
+    /// "Back to it": at most `ReadingNudges.maxPerWeek` a week, spaced one a
+    /// day, and never the same series again within `ReadingNudges.
+    /// repeatBlock` of when it last fired — the same persisted-date trick
+    /// `catchUp` uses for its own nudges, so a reader who opens the app daily
+    /// does not get a nudge that keeps getting pushed back and never fires.
+    ///
+    /// - Parameter previous: when each candidate's nudge was last scheduled
+    ///   to fire, by `"backtoit-<seriesID>"`. A candidate still waiting on a
+    ///   future date keeps that date rather than being reassigned a new one
+    ///   on every reschedule; a candidate whose date has passed is silent for
+    ///   `ReadingNudges.repeatBlock` from when it fired, then eligible again.
+    nonisolated static func backToIt(
+        in entries: [LibraryEntry],
+        now: Date,
+        lastOpened: (Int) -> Date?,
+        latestKnownChapter: (Int) -> Double? = { _ in nil },
+        previous: [String: Date] = [:],
+        readingHour: Int = 19,
+        calendar: Calendar = .current
+    ) -> [ReminderRequest] {
+        let candidates = ReadingNudges.candidates(
+            in: entries, now: now, lastOpened: lastOpened, latestKnownChapter: latestKnownChapter
+        )
+
+        var components = calendar.dateComponents([.year, .month, .day], from: now)
+        components.hour = readingHour
+        components.minute = 0
+        let todaySlot = calendar.date(from: components) ?? now
+        // The first day any fresh candidate can land on — today's slot if
+        // that has not passed yet, tomorrow's otherwise. Computed once, not
+        // per candidate: doing it per candidate let two different candidates
+        // both bump from an already-past "today" onto the same "tomorrow".
+        let tomorrowSlot = calendar.date(byAdding: .day, value: 1, to: todaySlot) ?? todaySlot
+        let anchor = todaySlot > now ? todaySlot : tomorrowSlot
+
+        var requests: [ReminderRequest] = []
+        var day = 0
+        for candidate in candidates {
+            guard requests.count < ReadingNudges.maxPerWeek else { break }
+            let id = "backtoit-\(candidate.seriesID)"
+
+            if let set = previous[id] {
+                if set > now {
+                    // Already scheduled and still ahead: kept, not
+                    // reassigned, or a reader who opens the app daily would
+                    // never see it move from "tomorrow".
+                    requests.append(
+                        ReminderRequest(id: id, title: candidate.title, body: candidate.line, date: set)
+                    )
+                    continue
+                }
+                guard now.timeIntervalSince(set) >= ReadingNudges.repeatBlock else { continue }
+            }
+
+            let date = calendar.date(byAdding: .day, value: day, to: anchor) ?? anchor
+            requests.append(ReminderRequest(id: id, title: candidate.title, body: candidate.line, date: date))
+            day += 1
+        }
+        return requests
+    }
+
+    private static let backToItDatesKey = "reminders.backToItDates"
+
+    private var backToItDates: [String: Date] {
+        (defaults.dictionary(forKey: Self.backToItDatesKey) as? [String: Date]) ?? [:]
+    }
+
+    private func rememberBackToIt(_ requests: [ReminderRequest], now: Date) {
+        var dates = backToItDates
+        for request in requests { dates[request.id] = request.date }
+        defaults.set(dates, forKey: Self.backToItDatesKey)
     }
 
     /// When a nudge fires: its existing date while that is still ahead; a

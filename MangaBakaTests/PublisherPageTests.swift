@@ -130,7 +130,7 @@ struct PublisherWiringTests {
         #expect(view.contains(".task(id: order) { await load() }"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
         #expect(credits.contains("onOpenPublisher(publishers[0].name.trimmingCharacters(in: .whitespaces))"))
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
         #expect(root.contains(".navigationDestination(item: $openPublisher)"))
     }
 }
@@ -165,6 +165,20 @@ struct PublisherScreenStateTests {
     @Test("Loading wins while nothing has landed yet")
     func loadingWins() {
         #expect(PublisherView.state(series: [], origin: .network, isLoading: true) == .loading)
+    }
+}
+
+@Suite("A publisher page can be followed", .enabled(if: SourceTree.isAvailable))
+struct PublisherFollowWiringTests {
+    /// A plain toggle, not `ConfirmDestructive`: unfollowing is reversible in
+    /// one tap either way, unlike the destructive actions that pattern gates.
+    @Test("The follow button toggles the right kind and never confirms an unfollow")
+    func wiring() throws {
+        let view = try SourceTree.read("MangaBaka/Features/Detail/PublisherView.swift")
+        #expect(view.contains("follows.isFollowing(name, kind: followKind)"))
+        #expect(view.contains("follows.follow(name, kind: followKind)"))
+        #expect(view.contains("follows.unfollow(name, kind: followKind)"))
+        #expect(!view.contains("ConfirmDestructive"))
     }
 }
 

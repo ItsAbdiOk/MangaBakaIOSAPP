@@ -28,6 +28,13 @@ struct PublisherView: View {
     let catalogue: CatalogueService
     let repository: any SeriesRepositoryProtocol
     @Binding var path: [Series]
+    /// Not injected from `AppServices` yet — this view builds its own
+    /// default so it keeps compiling either way, but a fresh instance per
+    /// appearance means the Follow button here and a follows list shown
+    /// anywhere else (`RemindersSection`) can disagree until the app is
+    /// relaunched. See this feature's report for the one shared instance it
+    /// should actually be wired to.
+    var follows: PublisherFollows = PublisherFollows()
 
     /// How the list is ordered. Popularity first: "what is this studio
     /// known for"; newest for "what are they doing now" (Abdi, 2026-09-11).
@@ -70,6 +77,7 @@ struct PublisherView: View {
     @State private var loadMoreFailure: APIError?
     @Environment(\.openURL) private var openURL
     @Environment(\.zoomRoute) private var zoomRoute
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: Metrics.gapCovers), count: 3
@@ -164,12 +172,50 @@ struct PublisherView: View {
         .sensoryFeedback(Haptics.selection, trigger: order)
     }
 
+    private var followKind: PublisherFollows.Kind {
+        kind == .publisher ? .publisher : .author
+    }
+
+    /// A plain toggle with a toast, no confirmation dialog: following is
+    /// reversible in one tap either way, and warning before an unfollow would
+    /// treat "stop hearing about REDICE STUDIO" like deleting something.
+    private var followButton: some View {
+        let following = follows.isFollowing(name, kind: followKind)
+        return Button {
+            if following {
+                follows.unfollow(name, kind: followKind)
+                toasts?.show("Unfollowed \(name)")
+            } else {
+                follows.follow(name, kind: followKind)
+                toasts?.show("Following \(name)")
+            }
+        } label: {
+            Text(following ? "Following" : "Follow")
+                .typeChip()
+                .foregroundStyle(following ? Palette.textPrimary : Palette.onAccent)
+                .padding(.horizontal, 14)
+                .frame(minHeight: Metrics.headerPill + 8)
+                .background(following ? Palette.surfaceChip : Palette.accent, in: Capsule())
+                .overlay(Capsule().strokeBorder(Palette.border, lineWidth: following ? 0.5 : 0))
+        }
+        .buttonStyle(.press)
+        .sensoryFeedback(Haptics.selection, trigger: following)
+        .accessibilityLabel(following ? "Following \(name)" : "Follow \(name)")
+        .accessibilityHint(
+            following ? "Double tap to unfollow" : "Double tap to be notified about new series"
+        )
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(name)
-                .typeDetailHeroTitle()
-                .foregroundStyle(Palette.textEmphasis)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(name)
+                    .typeDetailHeroTitle()
+                    .foregroundStyle(Palette.textEmphasis)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                followButton
+            }
             if let detail, !detail.summary.isEmpty {
                 Text(detail.summary)
                     .typeSmallMeta()

@@ -278,6 +278,48 @@ struct ReminderTests {
         #expect(centre.removeAllCount >= 2)
     }
 
+    private func stale(_ id: Int, chapters: Double) -> LibraryEntry {
+        LibraryEntry(
+            id: id, seriesId: id, state: .reading, progressChapter: 10,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(id: id, title: "S\(id)", totalChapters: chapters)
+        )
+    }
+
+    @Test("Back-to-it nudges: off by default, nothing is scheduled")
+    func backToItOffByDefault() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        await reminders.enable()
+        let veryStale = Date.distantPast
+
+        await reminders.reschedule(
+            announced: [], predicted: [], library: [stale(1, chapters: 30)],
+            lastOpened: { _ in veryStale }
+        )
+        #expect(!centre.added.contains { $0.id == "backtoit-1" }, "the switch was never turned on")
+    }
+
+    @Test("Back-to-it nudges work independently of the calendar toggle")
+    func backToItIndependentOfMainToggle() async throws {
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
+        // The calendar toggle is left off; only "back to it" is turned on.
+        await reminders.setBackToIt(true)
+        #expect(!reminders.isEnabled)
+
+        await reminders.reschedule(
+            announced: [try work("a", series: 9, daysFromNow: 1)], predicted: [],
+            library: [stale(1, chapters: 30)],
+            lastOpened: { _ in Date.distantPast }
+        )
+
+        #expect(centre.added.contains { $0.id == "backtoit-1" })
+        #expect(!centre.added.contains { $0.id == "announced-a" }, "the calendar half is still off")
+    }
+
     private final class FakeCentre: NotificationScheduling, @unchecked Sendable {
         var grants = true
         var added: [ReminderRequest] = []
