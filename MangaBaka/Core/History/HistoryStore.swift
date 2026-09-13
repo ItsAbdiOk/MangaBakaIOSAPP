@@ -57,12 +57,33 @@ actor HistoryStore {
 
     /// Most recent first, filtered by what the reader currently allows.
     ///
-    /// The filter is applied on read rather than on write on purpose. Someone
-    /// who turns Explicit off expects it gone from everywhere immediately,
-    /// including from a list of what they had already opened — the same mistake
-    /// that once left cached feeds showing exactly what a reader had just
-    /// excluded. Passing nil means no filter, for callers that have none.
-    func entries(allowedRatings: [String]? = nil) throws -> [Series] {
+    /// **Every row stays on disk regardless of the filter.** The filter is
+    /// applied here, on read, rather than on write or by deleting a row that
+    /// stops matching — a row that a narrower preference hid must come back
+    /// the moment the preference widens again, and a row that is gone from
+    /// SQLite cannot. Someone who turns Explicit off expects it gone from
+    /// everywhere immediately, including from a list of what they had already
+    /// opened — the same mistake that once left cached feeds showing exactly
+    /// what a reader had just excluded.
+    ///
+    /// All three of the standing preferences apply, matching what the row's
+    /// own doc comment already promised and what `SeriesRepository` applies to
+    /// everything else. A row with no rating, no type, or no tags at all is
+    /// never dropped for the field being missing — the API not saying what
+    /// something is is not a reason to hide it, the same rule
+    /// `SeriesRepository.allowsFormat` applies to a live feed.
+    ///
+    /// - Parameters:
+    ///   - allowedRatings: nil means no rating filter, for callers that have
+    ///     none.
+    ///   - allowedFormats: empty means every format is allowed — the same
+    ///     "empty is unfiltered" convention `SeriesRepository.formats` uses.
+    ///   - blockedTags: tag ids the reader never wants to see.
+    func entries(
+        allowedRatings: [String]? = nil,
+        allowedFormats: [String] = [],
+        blockedTags: [Int] = []
+    ) throws -> [Series] {
         let series = try database.writer.read { db in
             try ViewedEntry
                 // seriesId only breaks a tie between two identical timestamps,
@@ -71,10 +92,19 @@ actor HistoryStore {
                 .fetchAll(db)
                 .compactMap { try? decoder.decode(Series.self, from: $0.payload) }
         }
-        guard let allowedRatings else { return series }
         return series.filter { entry in
-            guard let rating = entry.contentRating else { return true }
-            return allowedRatings.contains(rating)
+            if let allowedRatings, let rating = entry.contentRating, !allowedRatings.contains(rating) {
+                return false
+            }
+            if !allowedFormats.isEmpty, let type = entry.type?.lowercased(), !type.isEmpty,
+               !allowedFormats.contains(type) {
+                return false
+            }
+            if !blockedTags.isEmpty {
+                let tagIds = Set(entry.richTags.map(\.id))
+                guard tagIds.isDisjoint(with: blockedTags) else { return false }
+            }
+            return true
         }
     }
 

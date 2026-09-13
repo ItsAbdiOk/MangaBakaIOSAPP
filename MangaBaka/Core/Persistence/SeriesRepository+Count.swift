@@ -22,15 +22,7 @@ extension SeriesRepository {
         narrowed.page = 1
 
         var items = narrowed.queryItems
-        items.append(contentsOf: (contentRatings ?? []).map {
-            URLQueryItem(name: "content_rating", value: $0)
-        })
-        if narrowed.types.isEmpty {
-            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
-        }
-        items.append(contentsOf: blockedTags.map {
-            URLQueryItem(name: "tag_not", value: String($0))
-        })
+        items.append(contentsOf: filterQuery(overridingTypes: narrowed.types))
         return try? await client.total("/v2/series/search", query: items)
     }
 }

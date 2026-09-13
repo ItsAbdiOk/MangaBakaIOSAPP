@@ -21,7 +21,7 @@ extension SeriesRepository {
             URLQueryItem(name: "page", value: String(page))
         ]
         query.append(contentsOf: feed.extraQuery)
-        query.append(contentsOf: filterQuery)
+        query.append(contentsOf: filterQuery())
         do {
             let (series, pagination): ([Series], Pagination?) =
                 try await client.getWithPagination(feed.path, query: query)
@@ -41,19 +41,9 @@ extension SeriesRepository {
 
     func search(_ query: SearchQuery) async -> FeedResult {
         var items = query.queryItems
-        items.append(contentsOf: (contentRatings ?? []).map {
-            URLQueryItem(name: "content_rating", value: $0)
-        })
         // An explicit choice in the filter sheet wins over the standing
-        // preference. Sending both would intersect them, so picking "novel" in
-        // the sheet while novels are switched off in Settings would silently
-        // return nothing at all rather than what was asked for.
-        if query.types.isEmpty {
-            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
-        }
-        items.append(contentsOf: blockedTags.map {
-            URLQueryItem(name: "tag_not", value: String($0))
-        })
+        // preference — see `filterQuery`'s doc comment for why.
+        items.append(contentsOf: filterQuery(overridingTypes: query.types))
         do {
             let (series, pagination): ([Series], Pagination?) =
                 try await client.getWithPagination("/v2/series/search", query: items)

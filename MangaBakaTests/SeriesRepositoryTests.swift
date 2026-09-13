@@ -279,6 +279,49 @@ struct SeriesRepositoryTests {
         #expect(cached.series.first?.cover.width == 200)
     }
 
+    /// The specific risk `SeriesRepository+Count.swift` names in its own doc
+    /// comment: "a count that ignored [the standing filters] would promise
+    /// results the same filters then hide". `search` and `count` used to
+    /// assemble `content_rating` + `type` + `tag_not` by hand, separately —
+    /// this pins them to the shared `filterQuery` producing the exact same
+    /// items for the exact same input, so an edit to one that forgets the
+    /// other is caught here instead of by a reader watching a saved lens
+    /// promise a number that the results then do not show.
+    @Test("Search and count apply the identical standing filters")
+    func searchAndCountAgreeOnFilters() async throws {
+        let repository = try makeRepository(clock: TestClock())
+        await repository.updateContentRatings(["safe", "suggestive"])
+        await repository.updateFormats(["manga"])
+        await repository.updateBlockedTags([5, 6])
+        let query = SearchQuery(text: "one")
+
+        URLProtocolStub.setHandler { [data = payload(ids: [])] _ in .respond(.init(body: data)) }
+        _ = await repository.search(query)
+        let searchItems = try standingFilterItems(from: URLProtocolStub.requests.last)
+        URLProtocolStub.reset()
+
+        let countBody = Data(#"{"status":200,"data":[],"pagination":{"count":0}}"#.utf8)
+        URLProtocolStub.setHandler { _ in .respond(.init(body: countBody)) }
+        defer { URLProtocolStub.reset() }
+        _ = await repository.count(query)
+        let countItems = try standingFilterItems(from: URLProtocolStub.requests.last)
+
+        #expect(!searchItems.isEmpty, "control: the standing filters must actually be sent")
+        #expect(searchItems == countItems)
+    }
+
+    /// Only the three standing filters, sorted so two requests with the same
+    /// intent compare equal regardless of the order each path happened to
+    /// append them in.
+    private func standingFilterItems(from request: URLRequest?) throws -> [String] {
+        let url = try #require(request?.url)
+        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        return items
+            .filter { ["content_rating", "type", "tag_not"].contains($0.name) }
+            .map { "\($0.name)=\($0.value ?? "")" }
+            .sorted()
+    }
+
     /// Merged and deleted series must not be cached into a discovery feed.
     @Test("Non-active series are filtered before caching")
     func filtersNonActive() async throws {

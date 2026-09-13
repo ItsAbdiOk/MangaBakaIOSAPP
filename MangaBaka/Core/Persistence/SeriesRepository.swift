@@ -402,7 +402,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // Filtering server-side means excluded covers are never downloaded,
             // never cached, and never briefly visible while a client-side
             // filter catches up.
-            query.append(contentsOf: filterQuery)
+            query.append(contentsOf: filterQuery())
             let series: [Series]
             if feed.isRecommendationShaped {
                 let wrapped: [Recommendation] = try await client.get(feed.path, query: query)
@@ -438,15 +438,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })
         items.append(URLQueryItem(name: "strict", value: "false"))
         items.append(contentsOf: blendExclusionQuery)
-        items.append(contentsOf: blockedTags.map {
-            URLQueryItem(name: "blocked_tag", value: String($0))
-        })
-        items.append(contentsOf: (contentRatings ?? []).map {
-            URLQueryItem(name: "content_rating", value: $0)
-        })
-        if filters.types.isEmpty {
-            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
-        }
+        // `blocked_tag`, not `tag_not` — see `filterQuery`'s doc comment.
+        items.append(contentsOf: filterQuery(overridingTypes: filters.types, blockedTagParam: "blocked_tag"))
         // Excluded strands. Proven live: excluding the top tag drops it out of
         // the DNA, promotes everything below it, and changes most of the
         // results — so the DNA doubles as feedback for the edit just made.
@@ -595,13 +588,45 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         return formats.contains(type)
     }
 
-    /// Internal rather than private so the paging half can reach it. See
-    /// SeriesRepository+Paging.swift — the split is the lint's doing, not a
-    /// widening of who is meant to touch this.
-    var filterQuery: [URLQueryItem] {
-        (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
-            + formats.map { URLQueryItem(name: "type", value: $0) }
-            + blockedTags.map { URLQueryItem(name: "tag_not", value: String($0)) }
+    /// The three standing filters — rating, format, blocked tags — built once
+    /// rather than by hand at every call site.
+    ///
+    /// **Built here because this used to be four separate copies**: this
+    /// function, `mix`, `search` and `count` each assembled the same three
+    /// query items on their own, and a fourth caller would have been a fifth
+    /// copy with a fifth chance to miss one — exactly the shape
+    /// `SeriesRepository+Cache.swift`'s `CacheScope` exists to avoid on the
+    /// invalidation side.
+    ///
+    /// Internal rather than private so the paging and count halves can reach
+    /// it. See SeriesRepository+Paging.swift and +Count.swift — the split is
+    /// the lint's doing, not a widening of who is meant to touch this.
+    ///
+    /// - Parameter overridingTypes: an explicit type list from the caller's
+    ///   own query — a format chosen in the filter sheet — wins over the
+    ///   standing `formats` preference. Sending both would intersect them, so
+    ///   picking "novel" in the sheet while novels are off in Settings would
+    ///   silently return nothing at all rather than what was asked for.
+    ///   Empty (the default, and always for a feed, which has no query of its
+    ///   own to override with) means "apply the standing preference".
+    /// - Parameter blockedTagParam: the query key blocked tags are sent
+    ///   under. Not one key everywhere: `blocked_tag` is the parameter meant
+    ///   for a standing block and is verified, live, to actually change a
+    ///   blend's results (`BlockedTags.swift`); `tag_not` is what search,
+    ///   discovery and count accept instead — `blocked_tag` is not in their
+    ///   spec at all. A caller that gets this wrong sends a filter the
+    ///   endpoint silently ignores, which is exactly the shotgun-surgery risk
+    ///   this function exists to close off.
+    func filterQuery(
+        overridingTypes: [String] = [],
+        blockedTagParam: String = "tag_not"
+    ) -> [URLQueryItem] {
+        var items = (contentRatings ?? []).map { URLQueryItem(name: "content_rating", value: $0) }
+        if overridingTypes.isEmpty {
+            items.append(contentsOf: formats.map { URLQueryItem(name: "type", value: $0) })
+        }
+        items.append(contentsOf: blockedTags.map { URLQueryItem(name: blockedTagParam, value: String($0)) })
+        return items
     }
 
     /// Split out because GRDB offers both a sync and an async `write`, and in

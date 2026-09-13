@@ -77,7 +77,8 @@ the things to do or say at submission:
   no in-app account deletion — 'Remove token' de-links the device."
 - **Hosts the app talks to**, for the reviewer if asked: api.mangabaka.org,
   api.mangaupdates.com, itunes.apple.com, graphql.anilist.co,
-  shikimori.one. Nothing identifying goes to any but MangaBaka.
+  shikimori.io (shikimori.one now redirects here, verified 2026-09-13).
+  Nothing identifying goes to any but MangaBaka.
 - Removed before submission: anything that read a platform's web page.
 
 ## From Abdi, in build order

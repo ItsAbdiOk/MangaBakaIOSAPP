@@ -79,8 +79,24 @@ final class ReleaseReminders {
     /// want reminders; this is the app saying the ones it has are about
     /// somebody else's library. Keeping `isEnabled` means the next refresh
     /// schedules the new account's releases rather than silently stopping.
+    ///
+    /// **Does not clear `nudgeDates`.** Those are keyed by series id, not by
+    /// account, so a `finished-<seriesId>` the previous account was already
+    /// nudged about is treated as already-fired for the next account too, and
+    /// the monthly catch-up nudge keeps ticking on the old account's clock.
+    /// Call `forget()` instead of this on an actual account change; this stays
+    /// for whatever else calls it expecting only the pending requests to go.
     func cancelAll() async {
         await centre.removeAll()
+    }
+
+    /// Everything this store remembers about who was signed in: pending
+    /// reminders and when each nudge last fired. `cancelAll()` alone leaves
+    /// `nudgeDates` behind — see its doc comment for what that breaks on an
+    /// account change.
+    func forget() async {
+        await centre.removeAll()
+        defaults.removeObject(forKey: Self.nudgeKey)
     }
 
     /// Replaces every pending reminder with one per upcoming release.
@@ -179,7 +195,11 @@ extension ReleaseReminders {
         for item in ReadingInsights.nearlyFinished(in: entries).prefix(3) {
             let id = "finished-\(item.entry.seriesId)"
             guard let date = nudgeDate(
-                id: id, now: now, previous: previous, after: 60 * 60 * 24, repeats: false
+                id: id, now: now, previous: previous,
+                // A guess: no measurement behind "a day", just long enough
+                // that this does not compete with whatever else notified the
+                // reader today.
+                after: 60 * 60 * 24, repeats: false
             ) else { continue }
             let title = item.series?.displayTitle ?? "A series you were reading"
             requests.append(ReminderRequest(
@@ -193,10 +213,16 @@ extension ReleaseReminders {
         }
 
         // The backlog, once a month, and only when it is worth saying.
+        //
+        // A guess: ten chapters felt like "worth mentioning" against nothing
+        // measured about how large a backlog has to be before it is a problem.
         let behind = ReadingInsights.waiting(in: entries, minimum: 10)
         if let biggest = behind.first,
            let date = nudgeDate(
-               id: "catch-up", now: now, previous: previous, after: 60 * 60 * 24 * 30, repeats: true
+               id: "catch-up", now: now, previous: previous,
+               // A guess: a month, so the nudge is not frequent enough to be
+               // the reminder that gets its notifications turned off.
+               after: 60 * 60 * 24 * 30, repeats: true
            ) {
             let title = biggest.series?.displayTitle ?? "something you were reading"
             let others = behind.count - 1

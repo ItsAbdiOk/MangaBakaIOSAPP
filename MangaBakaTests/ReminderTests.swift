@@ -184,6 +184,39 @@ struct ReminderTests {
         #expect(next.timeIntervalSince(clock.now) > 29 * 86_400, "Roughly a month from now, not from then")
     }
 
+    /// `cancelAll()` — what an account change used to call — clears the
+    /// pending requests but leaves `nudgeDates` on disk, keyed only by series
+    /// id. A `finished-<seriesId>` the previous account was already nudged
+    /// about then reads as already-fired for the next account too, and it
+    /// never fires for them. `forget()` has to clear that memory as well.
+    @Test("An account change forgets a nudge it already sent, not just the pending copy")
+    func accountChangeForgetsNudgeMemory() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let store = try defaults()
+        let reminders = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
+        await reminders.enable()
+        let library = [nearlyFinished(7)]
+
+        // Account A sees the nudge, and it fires: past its one-off date.
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        clock.advance(by: 30 * 3_600)
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        #expect(!centre.added.contains { $0.id == "finished-7" }, "control: it has already fired once")
+
+        // The app forgets account A. The same `ReleaseReminders` instance and
+        // the same on-disk `nudgeDates` are what account B's session reuses.
+        await reminders.forget()
+
+        // Account B has its own series 7 nearly finished — an unrelated
+        // series that only happens to share the id. It has never been told.
+        await reminders.reschedule(announced: [], predicted: [], library: library)
+        #expect(
+            centre.added.contains { $0.id == "finished-7" },
+            "forgetting the previous account must clear its nudge memory too"
+        )
+    }
+
     @Test("Turning it off clears what was pending")
     func disableClears() async throws {
         let centre = FakeCentre()

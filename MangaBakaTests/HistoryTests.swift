@@ -79,6 +79,57 @@ struct HistoryTests {
         #expect(try await history.entries(allowedRatings: ["safe"]).map(\.id) == [1])
     }
 
+    /// The whole point of filtering on read: nothing is deleted, so widening
+    /// the preference again must bring the row straight back.
+    @Test("A row hidden under a narrow rating reappears once the preference widens")
+    func widenedRatingBringsRowBack() async throws {
+        let (history, _) = try store()
+        try await history.record(SeriesFactory.make(id: 1, contentRating: "explicit"))
+
+        #expect(try await history.entries(allowedRatings: ["safe"]).isEmpty, "control: hidden under safe")
+        #expect(try await history.entries(allowedRatings: ["safe", "explicit"]).map(\.id) == [1])
+    }
+
+    /// `entries` promised to filter by "what the reader currently allows",
+    /// but only ever read `allowedRatings` — a reader who switched novels off
+    /// still saw the novel they opened yesterday in "Recently viewed".
+    @Test("Turning a format off removes it from history too, and widening brings it back")
+    func filtersByFormat() async throws {
+        let (history, clock) = try store()
+        try await history.record(SeriesFactory.make(id: 1, type: "manga"))
+        clock.advance(by: 60)
+        try await history.record(SeriesFactory.make(id: 2, type: "novel"))
+
+        #expect(try await history.entries(allowedFormats: ["manga"]).map(\.id) == [1])
+        #expect(
+            try await history.entries(allowedFormats: ["manga", "novel"]).map(\.id) == [2, 1],
+            "the hidden row is still on disk and comes back once the format is allowed again"
+        )
+    }
+
+    @Test("A series with no stated type is not filtered out by the format preference")
+    func keepsUntypedSeries() async throws {
+        let (history, _) = try store()
+        try await history.record(SeriesFactory.make(id: 1, type: nil))
+
+        #expect(try await history.entries(allowedFormats: ["manga"]).map(\.id) == [1])
+    }
+
+    /// The same standing preference `SeriesRepository` applies to a live feed.
+    @Test("A blocked tag hides a row too, and widening the block brings it back")
+    func filtersByBlockedTag() async throws {
+        let (history, _) = try store()
+        let spoiler = SeriesTag(
+            id: 99, name: "Major Character Death", namePath: nil, isGenre: false,
+            isSpoiler: true, isExplicit: nil, impliedByTagIds: nil,
+            contentRating: nil, weight: "core", seriesCount: nil
+        )
+        try await history.record(SeriesFactory.make(id: 1, tagsV2: [spoiler]))
+
+        #expect(try await history.entries(blockedTags: [99]).isEmpty, "the tag is blocked")
+        #expect(try await history.entries(blockedTags: [42]).map(\.id) == [1], "an unrelated block")
+    }
+
     @Test("Clearing empties the history and leaves the shelf alone")
     func clearingSparesTheShelf() async throws {
         let database = try AppDatabase.inMemory()
