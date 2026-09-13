@@ -29,6 +29,16 @@ enum Haptics {
     static let settled: SensoryFeedback = .impact(flexibility: .soft)
     static let committed: SensoryFeedback = .impact(weight: .medium)
     static let refreshed: SensoryFeedback = .impact(flexibility: .rigid)
+    /// A unit changed under the reader's finger — +1 chapter, a pip moving —
+    /// distinct from `.selection` (a pick) even though both are light: this
+    /// one repeats as a value climbs, `.selection` marks a single choice.
+    static let tick: SensoryFeedback = .increase
+    /// A reward: saved, completed. Pairs with `Motion.celebrate`.
+    static let success: SensoryFeedback = .success
+    /// Something the reader should notice went wrong without it being a
+    /// hard failure — the `.error` of the two write-outcome feedbacks is for
+    /// an actual failed write.
+    static let warning: SensoryFeedback = .warning
 }
 
 extension View {
@@ -37,5 +47,12 @@ extension View {
     /// keeps a counter and bumps it.
     func haptic(_ feedback: SensoryFeedback, onEach count: Int) -> some View {
         sensoryFeedback(feedback, trigger: count) { old, new in new > old }
+    }
+
+    /// Fires `feedback` on any change to `trigger`, not just an increase —
+    /// for triggers with no direction (a toggle, an enum case, a one-shot
+    /// counter bumped once per gesture in `PressStyle`).
+    func haptic(_ feedback: SensoryFeedback, on trigger: some Equatable) -> some View {
+        sensoryFeedback(feedback, trigger: trigger)
     }
 }

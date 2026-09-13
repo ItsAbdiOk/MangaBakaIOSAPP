@@ -20,7 +20,53 @@ import UIKit
 /// value is derived from.
 @MainActor
 enum Motion {
-    static var isReduced: Bool { UIAccessibility.isReduceMotionEnabled }
+    /// `nonisolated` so the new presets and pure helpers below (`stagger`,
+    /// `arrival`) can default to it without forcing themselves onto the main
+    /// actor: `UIAccessibility.isReduceMotionEnabled` is documented safe to
+    /// read from any thread, unlike most `UIAccessibility` state.
+    nonisolated static var isReduced: Bool {
+        // The compiler marks the UIKit flag main-actor; UIKit documents it
+        // as readable anywhere. `assumeIsolated` would trap off the main
+        // thread — and a Swift Testing test evaluating a default argument
+        // is exactly that — so hop only when not already there.
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+        }
+        return DispatchQueue.main.sync { UIAccessibility.isReduceMotionEnabled }
+    }
+
+    /// The four springs everything in this app animates with. Response and
+    /// damping are guesses tuned by feel, not measurement — see each preset.
+    ///
+    /// Taps and toggles: quick, slightly underdamped so it reads as answering
+    /// a finger rather than settling into place. A guess.
+    nonisolated static let snappy: Animation = .spring(response: 0.28, dampingFraction: 0.86)
+    /// Content arriving, sheets presenting: a touch slower and better damped
+    /// than `snappy` so a whole surface doesn't feel jumpy. A guess.
+    nonisolated static let settle: Animation = .spring(response: 0.45, dampingFraction: 0.82)
+    /// One-off rewards only — save, complete — never a loop and never a
+    /// second bounce. Underdamped on purpose so it reads as a reward, not a
+    /// UI transition. A guess.
+    nonisolated static let celebrate: Animation = .spring(response: 0.55, dampingFraction: 0.6)
+    /// Scroll-linked motion: fully damped so nothing overshoots while the
+    /// reader's finger is still moving the content. A guess.
+    nonisolated static let glide: Animation = .spring(response: 0.7, dampingFraction: 1.0)
+
+    /// How long into a list's arrival the item at `index` should wait before
+    /// animating in, so a list assembles rather than queues. Capped at
+    /// `cap` steps so a long list doesn't make its last rows wait seconds —
+    /// `cap` and `step` are both guesses. Negative indices (should not occur,
+    /// but nothing here should force-unwrap or crash on bad input) wait 0.
+    nonisolated static func stagger(_ index: Int, step: TimeInterval = 0.045, cap: Int = 6) -> TimeInterval {
+        TimeInterval(min(max(index, 0), cap)) * step
+    }
+
+    /// `settle`, delayed by this item's place in the stagger — or nil under
+    /// Reduce Motion, where nothing should wait to appear either.
+    nonisolated static func arrival(index: Int, isReduced: Bool = Motion.isReduced) -> Animation? {
+        guard !isReduced else { return nil }
+        return settle.delay(stagger(index))
+    }
 
     /// The animation, or none at all when the reader has asked for less.
     ///
@@ -30,7 +76,9 @@ enum Motion {
     /// - Parameter isReduced: defaulted to the system setting, and injectable
     ///   so the decision can be tested without a device whose accessibility
     ///   settings have been changed underneath it.
-    static func reduced(_ animation: Animation?, isReduced: Bool = Motion.isReduced) -> Animation? {
+    nonisolated static func reduced(
+        _ animation: Animation?, isReduced: Bool = Motion.isReduced
+    ) -> Animation? {
         isReduced ? nil : animation
     }
 
@@ -92,4 +140,13 @@ private struct ArrivalTransition: ViewModifier {
                 .opacity(1 - distance * 0.4)
         }
     }
+}
+
+extension Animation {
+    /// The presets by their short names, so a call site can write
+    /// `Motion.run(.settle)` the way it writes `.easeOut`.
+    static var snappy: Animation { Motion.snappy }
+    static var settle: Animation { Motion.settle }
+    static var celebrate: Animation { Motion.celebrate }
+    static var glide: Animation { Motion.glide }
 }

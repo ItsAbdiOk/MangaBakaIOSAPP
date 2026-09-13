@@ -13,6 +13,15 @@ import SwiftUI
 /// still an answer, not a movement.
 struct PressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Bumped on every press-down (not release) so `.haptic(_:onEach:)` — an
+    /// increase-only trigger — fires exactly once per press rather than once
+    /// per press *and* release.
+    @State private var pressTicks = 0
+    /// `Haptics.selection` on press-down, when set. Left nil for most
+    /// buttons — a tap is its own feedback, per `Haptics.swift` — this is
+    /// for the few whose press itself is the meaningful choice (a segmented
+    /// pick), not a step toward one a later `.success`/`.committed` will mark.
+    var haptic: SensoryFeedback?
     /// A disabled control is a different control, not a faded live one — the
     /// same rule `StateAction` already follows (see its doc comment: an
     /// `.opacity` fade dims foreground and background together and can leave
@@ -24,16 +33,26 @@ struct PressStyle: ButtonStyle {
     /// worked (gaps 52, 65).
     @Environment(\.isEnabled) private var isEnabled
 
+    init(haptic: SensoryFeedback? = nil) {
+        self.haptic = haptic
+    }
+
+    @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
         let isPressed = configuration.isPressed
-        configuration.label
+        let label = configuration.label
             .foregroundStyle(Self.foregroundColor(isEnabled: isEnabled))
             .scaleEffect(Self.scale(isEnabled: isEnabled, isPressed: isPressed, reduceMotion: reduceMotion))
             .opacity(Self.opacity(isEnabled: isEnabled, isPressed: isPressed, reduceMotion: reduceMotion))
-            .animation(
-                Motion.reduced(.spring(response: 0.36, dampingFraction: 0.78)),
-                value: configuration.isPressed
-            )
+            .animation(Motion.reduced(Motion.snappy), value: isPressed)
+            .onChange(of: isPressed) { _, pressed in
+                if pressed, isEnabled { pressTicks += 1 }
+            }
+        if let haptic {
+            label.haptic(haptic, onEach: pressTicks)
+        } else {
+            label
+        }
     }
 
     /// A disabled control is a different control, not a faded live one — see
@@ -68,4 +87,9 @@ struct PressStyle: ButtonStyle {
 extension ButtonStyle where Self == PressStyle {
     /// The app's default for anything the reader taps: cards, chips, rows.
     static var press: PressStyle { PressStyle() }
+
+    /// `.press`, plus `Haptics.selection` on press-down — for a control
+    /// whose press is itself the choice (a segmented pick), not a step
+    /// toward one a later write's own haptic will mark.
+    static func press(haptic: SensoryFeedback) -> PressStyle { PressStyle(haptic: haptic) }
 }

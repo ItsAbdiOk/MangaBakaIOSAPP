@@ -19,6 +19,9 @@ import SwiftUI
 final class ZoomRoute {
     /// The id of the cover last tapped, or nil for an ordinary push.
     var source: String?
+    /// The row the tapped cover sat in, so the series page can page sideways
+    /// to its neighbours. Empty for a push from anywhere that is not a row.
+    var neighbours: [Series] = []
 
     static func id(_ row: String, _ seriesId: Int) -> String { "\(row)#\(seriesId)" }
 }
