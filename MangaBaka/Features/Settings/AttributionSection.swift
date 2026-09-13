@@ -26,7 +26,10 @@ struct AttributionSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("""
                 Series data comes from MangaBaka, and through it from AniList, \
-                Kitsu, MangaUpdates, MyAnimeList and Anime-Planet.
+                Kitsu, MangaUpdates, MyAnimeList and Anime-Planet. The offline \
+                catalogue and "Similar by description" are built from a nightly \
+                snapshot of the same MangaBaka data (CC BY-NC-SA 4.0), bundled so \
+                they work without a connection.
                 """)
                 .typeSubtitle()
                 .foregroundStyle(Palette.textSecondary)

@@ -31,6 +31,12 @@ struct AppServices {
     let releaseFeeds = ReleaseFeedService(
         providers: [WebtoonsFeedClient(), GigaViewerFeedClient(), NaverFeedClient()]
     )
+    /// One instance each: both load a bundled file lazily (7.3 MB and
+    /// 1.4 MB gzipped) and would otherwise reload it per series page.
+    let embeddingIndex = EmbeddingIndex()
+    let offlineCatalogue = OfflineCatalogue()
+    let mangaUpdatesCategories = MangaUpdatesClient()
+    let publisherFollows = PublisherFollows()
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore

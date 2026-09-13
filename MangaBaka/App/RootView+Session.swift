@@ -84,6 +84,7 @@ extension RootView {
                                     catalogue: catalogue,
                                     focusAccount: wantsAccountFocus,
                                     reminders: reminders,
+                                    publisherFollows: publisherFollows,
                                     onRemindersChanged: { await refreshReminders() },
                                     history: history,
                                     taste: taste,
@@ -179,6 +180,10 @@ extension RootView {
         let walk = await librarySnapshot.load()
         guard walk.failure == nil else { return }
         await spotlight.reindex(walk.entries)
+        let lastOpened = (try? await history.lastOpenedDates()) ?? [:]
+        WidgetSnapshot.write(
+            pickBackUp: WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened)
+        )
     }
 
     /// Opens the series a Spotlight result named, from the library walk.
@@ -257,11 +262,19 @@ extension RootView {
         let predicted = scheduled.dated.filter { !announcedIDs.contains($0.series.id) }
 
         let walk = await librarySnapshot.load()
+        // Followed publishers: once a day per follow, one search each.
+        await publisherFollows.check(using: repository) { follow, title in
+            await reminders.notify(id: "follow-\(follow.id)", title: "New from \(follow.name)", body: title)
+        }
+        let lastOpened = (try? await history.lastOpenedDates()) ?? [:]
+        let readingHour = try? await history.usualReadingHour()
         await reminders.reschedule(
             announced: announced,
             predicted: predicted,
             library: walk.entries,
-            libraryFailure: scheduled.libraryFailure ?? walk.failure
+            libraryFailure: scheduled.libraryFailure ?? walk.failure,
+            lastOpened: { lastOpened[$0] },
+            readingHour: readingHour
         )
     }
 
@@ -292,5 +305,82 @@ extension RootView {
         toasts.show("Saved")
         openShelf = session.library.shelves.first { $0.state == openShelf?.state }
         return nil
+    }
+}
+
+extension RootView {
+    /// One place for the search model's construction: the offline catalogue
+    /// and the three preference closures it answers from when the network
+    /// cannot. Out of `RootView` itself, which sits at the body-length cap.
+    func makeSearchModel() -> SearchModel {
+        SearchModel(
+            repository: repository,
+            offline: offlineCatalogue,
+            allowedRatings: { content.preferences.queryValues },
+            allowedFormats: { formats.preferences.queryValues },
+            blockedTagIDs: { blockedTags.blocked.ids }
+        )
+    }
+}
+
+extension RootView {
+    func detail(_ series: Series, path: Binding<[Series]>) -> some View {
+        SeriesDetailView(
+            series: series,
+            repository: repository,
+            library: library,
+            libraryStore: session.library,
+            schedule: schedule,
+            characters: characters,
+            taste: taste,
+            embeddingIndex: embeddingIndex,
+            offlineCatalogue: offlineCatalogue,
+            appleBooks: appleBooks,
+            googleBooks: googleBooks,
+            releaseFeeds: releaseFeeds,
+            mangaUpdatesCategories: mangaUpdatesCategories,
+            onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
+            onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
+            contentRatings: content.preferences.allowed.map(\.rawValue),
+            path: path,
+            // Gap 77: see `useAsSeedTapped` in `RootView+Failures.swift`.
+            onUseAsSeed: useAsSeedTapped,
+            onOpenTag: { tag in
+                // `applyBrowse`, not a raw assignment plus `search()`. Tapping
+                // a tag is the same gesture as picking one on the browse
+                // screen, and that method is what it is for: it remembers the
+                // text it applied so the field's own change observer does not
+                // schedule a second, identical request 300ms later (two calls
+                // per tap against a 30 req/min budget shared with everyone on
+                // the same network — see `SearchModel.queryDidChange`), it
+                // cancels any keystroke debounce already pending, and it sets
+                // a stable sort. The sort matters beyond tidiness: without one
+                // the API is free to reorder between pages, and this app pages
+                // by asking for page 2 and dropping ids it has already seen.
+                searchModel?.applyBrowse(tag: tag)
+                selection = .search
+            },
+            onOpenSchedule: {
+                selection = .library
+                showsSchedule = true
+            }
+        )
+        // Opening the page is what counts as having viewed it. Recorded here
+        // rather than inside the detail view so every route into it — a feed,
+        // the stack, search, a related-series row — is remembered the same way.
+        .task { await session.recentlyViewed.record(series) }
+        // The publisher page, pushed on whichever stack this page is in. A
+        // series it lists pushes back onto the same path.
+        .navigationDestination(item: $openPublisher) { route in
+            PublisherView(
+                name: route.name, kind: route.kind, catalogue: catalogue,
+                repository: repository, path: path, follows: publisherFollows
+            )
+        }
+        // Grows out of the cover that was tapped. Every screen that pushes a
+        // series marks its covers with `.zoomSource`; a route that did not
+        // falls through to the ordinary push, which is what an unmatched id
+        // already does.
+        .navigationTransition(.zoom(sourceID: zoomRoute.source ?? "none", in: coverTransition))
     }
 }

@@ -22,6 +22,10 @@ struct RootView: View {
     let appleBooks: AppleBooksClient
     let googleBooks: GoogleBooksClient
     let releaseFeeds: ReleaseFeedService
+    let embeddingIndex: EmbeddingIndex
+    let offlineCatalogue: OfflineCatalogue
+    let mangaUpdatesCategories: MangaUpdatesClient
+    let publisherFollows: PublisherFollows
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -71,7 +75,7 @@ struct RootView: View {
     @State var openShelf: LibraryModel.Shelf?
     @State private var searchPath: [Series] = []
     @State private var mixPath: [Series] = []
-    @State private var searchModel: SearchModel?
+    @State var searchModel: SearchModel?
     @State private var browseModel: BrowseModel?
     @State private var showsBrowse = false
     /// Internal rather than private: `RootView+Failures.swift` reads this to
@@ -91,8 +95,8 @@ struct RootView: View {
     @State var stackModel: StackModel?
     /// The cover the detail page should grow out of, and the namespace the
     /// source and destination share. See `ZoomRoute`.
-    @State private var zoomRoute = ZoomRoute()
-    @Namespace private var coverTransition
+    @State var zoomRoute = ZoomRoute()
+    @Namespace var coverTransition
     /// Real covers behind the first onboarding screen. Empty until the rising
     /// feed answers, which is the case the screen is built to survive.
     @State var onboardingCovers: [Series] = []
@@ -144,6 +148,8 @@ struct RootView: View {
             // A mangabaka.org series link. Dormant until the site hosts the
             // association file; see SeriesWebLink.
             .onOpenURL { url in
+                // A mangabaka.org series link, or the widgets' own
+                // `mangabaka://series/<id>` — see SeriesWebLink.
                 guard let id = SeriesWebLink.seriesID(from: url) else { return }
                 Task { await openSeries(id: id) }
             }
@@ -238,7 +244,7 @@ struct RootView: View {
             ) {
                 NavigationStack(path: $searchPath) {
                     SearchView(
-                        model: searchModel ?? SearchModel(repository: repository),
+                        model: searchModel ?? makeSearchModel(),
                         path: $searchPath,
                         onBrowse: { showsBrowse = true },
                         lenses: lenses,
@@ -283,7 +289,7 @@ struct RootView: View {
         .task {
             // Created once and kept: rebuilding them per tab switch would drop
             // a half-typed query or an assembled set of mix seeds.
-            if searchModel == nil { searchModel = SearchModel(repository: repository) }
+            if searchModel == nil { searchModel = makeSearchModel() }
             if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
             if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
             if discoverModel == nil { discoverModel = DiscoverModel(repository: repository) }
@@ -316,63 +322,6 @@ struct RootView: View {
             searchPath.removeAll()
             showsBrowse = false
         }
-    }
-
-    func detail(_ series: Series, path: Binding<[Series]>) -> some View {
-        SeriesDetailView(
-            series: series,
-            repository: repository,
-            library: library,
-            libraryStore: session.library,
-            schedule: schedule,
-            characters: characters,
-            taste: taste,
-            appleBooks: appleBooks,
-            googleBooks: googleBooks,
-            releaseFeeds: releaseFeeds,
-            onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
-            onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
-            contentRatings: content.preferences.allowed.map(\.rawValue),
-            path: path,
-            // Gap 77: see `useAsSeedTapped` in `RootView+Failures.swift`.
-            onUseAsSeed: useAsSeedTapped,
-            onOpenTag: { tag in
-                // `applyBrowse`, not a raw assignment plus `search()`. Tapping
-                // a tag is the same gesture as picking one on the browse
-                // screen, and that method is what it is for: it remembers the
-                // text it applied so the field's own change observer does not
-                // schedule a second, identical request 300ms later (two calls
-                // per tap against a 30 req/min budget shared with everyone on
-                // the same network — see `SearchModel.queryDidChange`), it
-                // cancels any keystroke debounce already pending, and it sets
-                // a stable sort. The sort matters beyond tidiness: without one
-                // the API is free to reorder between pages, and this app pages
-                // by asking for page 2 and dropping ids it has already seen.
-                searchModel?.applyBrowse(tag: tag)
-                selection = .search
-            },
-            onOpenSchedule: {
-                selection = .library
-                showsSchedule = true
-            }
-        )
-        // Opening the page is what counts as having viewed it. Recorded here
-        // rather than inside the detail view so every route into it — a feed,
-        // the stack, search, a related-series row — is remembered the same way.
-        .task { await session.recentlyViewed.record(series) }
-        // The publisher page, pushed on whichever stack this page is in. A
-        // series it lists pushes back onto the same path.
-        .navigationDestination(item: $openPublisher) { route in
-            PublisherView(
-                name: route.name, kind: route.kind, catalogue: catalogue,
-                repository: repository, path: path
-            )
-        }
-        // Grows out of the cover that was tapped. Every screen that pushes a
-        // series marks its covers with `.zoomSource`; a route that did not
-        // falls through to the ordinary push, which is what an unmatched id
-        // already does.
-        .navigationTransition(.zoom(sourceID: zoomRoute.source ?? "none", in: coverTransition))
     }
 
     /// Confirms a token by asking MangaBaka who it belongs to. A name coming

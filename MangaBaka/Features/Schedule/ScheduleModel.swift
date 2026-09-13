@@ -354,6 +354,9 @@ final class ScheduleModel {
                 guard let self else { return }
                 if await !self.refreshProgress() {
                     self.pollTask = nil
+                    WidgetSnapshot.write(
+                        dueThisWeek: WidgetSnapshot.dueThisWeekItems(dated: self.snapshot.dated)
+                    )
                     return
                 }
                 try? await Task.sleep(for: .seconds(2))

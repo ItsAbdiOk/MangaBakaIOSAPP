@@ -225,7 +225,9 @@ struct DetailOrderTests {
     /// and the most obvious onward path on the page goes nowhere.
     @Test("Tags, seeds and the schedule all lead somewhere")
     func onwardRoutesWired() throws {
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        // `detail(_:path:)` lives in the +Session extension since RootView
+        // reached the body-length cap (2026-09-13).
+        let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
         #expect(root.contains("onOpenTag:"))
         #expect(root.contains("onUseAsSeed:"))
         #expect(root.contains("onOpenSchedule:"))

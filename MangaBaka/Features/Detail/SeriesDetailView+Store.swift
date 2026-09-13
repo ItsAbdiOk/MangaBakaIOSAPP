@@ -63,4 +63,54 @@ extension SeriesDetailView {
         else { return }
         googleVolumes = await googleBooks?.volumes(for: shown, language: language) ?? []
     }
+
+    /// "Similar by description": ids ranked by `EmbeddingIndex`, resolved to
+    /// enough of a `Series` for a cover card — a title, no more.
+    ///
+    /// Deliberately not `repository.series(id:)` per neighbour: that method
+    /// falls back to one GET per cache miss, and firing twelve of them for
+    /// one row is exactly what the brief for this row rules out.
+    /// `OfflineCatalogue.titles(for:)` answers from the same bundled 19k
+    /// title list the embedding ids are drawn from, so this never touches
+    /// the network — a card whose id has no title (should not happen, since
+    /// both files are exports of the same 19k series, but not proven here)
+    /// is simply dropped rather than shown with an empty label.
+    ///
+    /// **Requires `func titles(for ids: [Int]) -> [Int: String]` on
+    /// `OfflineCatalogue`** (`MangaBaka/Core/Offline/OfflineCatalogue.swift`)
+    /// — that actor landed this round with `matches(_:...)` and `count(_:...)`
+    /// (both `SearchQuery`-shaped) but no lookup by id; this needs a small
+    /// addition, e.g. `entries.filter { ids.contains($0.id) }` over its
+    /// private `entries`, mapped to `[$0.id: $0.t]`.
+    func loadSimilarByDescription() async {
+        guard let neighbours = await embeddingIndex.neighbours(of: series.id),
+              !neighbours.isEmpty
+        else {
+            similarByDescription = []
+            return
+        }
+        let titles = await offlineCatalogue.titles(for: neighbours.map(\.id))
+        similarByDescription = neighbours.compactMap { neighbour -> Series? in
+            guard let title = titles[neighbour.id] else { return nil }
+            return Series(
+                id: neighbour.id,
+                state: "active",
+                mergedWith: nil,
+                titles: [SeriesTitle(language: "en", traits: ["official"], title: title, isPrimary: true)],
+                cover: .empty,
+                description: nil,
+                authors: nil,
+                artists: nil,
+                status: nil,
+                rating: nil,
+                type: nil,
+                contentRating: nil,
+                totalChapters: nil,
+                finalVolume: nil,
+                publishers: nil,
+                anime: nil,
+                source: nil
+            )
+        }
+    }
 }

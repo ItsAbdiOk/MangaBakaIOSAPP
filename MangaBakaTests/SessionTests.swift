@@ -106,7 +106,7 @@ struct RootViewWiringTests {
         let body = String(source[function.lowerBound...])
         #expect(body.contains("guard let mixModel else {"))
         #expect(body.contains("kind: .failure"))
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
         #expect(root.contains("onUseAsSeed: useAsSeedTapped,"))
     }
 

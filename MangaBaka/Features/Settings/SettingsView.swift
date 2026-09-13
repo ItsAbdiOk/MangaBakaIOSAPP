@@ -48,6 +48,7 @@ struct SettingsView: View {
     let catalogue: CatalogueService
     var focusAccount = false
     let reminders: ReleaseReminders
+    var publisherFollows: PublisherFollows = PublisherFollows()
     let onRemindersChanged: () async -> Void
     let history: HistoryStore
     let taste: TasteProfile
@@ -80,6 +81,7 @@ struct SettingsView: View {
         catalogue: CatalogueService,
         focusAccount: Bool = false,
         reminders: ReleaseReminders,
+        publisherFollows: PublisherFollows = PublisherFollows(),
         onRemindersChanged: @escaping () async -> Void,
         history: HistoryStore,
         taste: TasteProfile,
@@ -95,6 +97,7 @@ struct SettingsView: View {
         self.catalogue = catalogue
         self.focusAccount = focusAccount
         self.reminders = reminders
+        self.publisherFollows = publisherFollows
         self.onRemindersChanged = onRemindersChanged
         self.history = history
         self.taste = taste
@@ -117,8 +120,11 @@ struct SettingsView: View {
                 FormatSection(formats: formats)
                 contentSection
                 BlockedTagsSection(blockedTags: blockedTags, catalogue: catalogue)
-                RemindersSection(reminders: reminders, onChange: onRemindersChanged)
+                RemindersSection(
+                    reminders: reminders, onChange: onRemindersChanged, publisherFollows: publisherFollows
+                )
                 HistorySection(history: history)
+                LibraryTransferSection()
                 DataUseSection(taste: taste)
                 TranslationSection()
                 AttributionSection()

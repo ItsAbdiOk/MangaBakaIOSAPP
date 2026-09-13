@@ -13,6 +13,17 @@ struct SeriesDetailView: View {
     let schedule: ReleaseScheduleService?
     let characters: CharacterService?
     let taste: TasteProfile?
+    /// Nearest-neighbour search over the bundled sentence embeddings, for
+    /// "Similar by description". Defaults to a fresh instance so this screen
+    /// works with zero injection; AppServices should hold one instance and
+    /// share it across every series page instead (wiring line in report) —
+    /// each `EmbeddingIndex()` here loads the same 7.3 MB file separately.
+    var embeddingIndex: EmbeddingIndex = EmbeddingIndex()
+    /// Resolves an embedding neighbour's id to a title — see
+    /// `loadSimilarByDescription()`. Owned by another agent this round
+    /// (`Core/Offline/OfflineCatalogue.swift`); same sharing note as
+    /// `embeddingIndex` above.
+    var offlineCatalogue: OfflineCatalogue = OfflineCatalogue()
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
@@ -23,6 +34,11 @@ struct SeriesDetailView: View {
     /// or Naver Webtoon for the Korean original. Optional like the stores
     /// above: a page without it simply shows no release section.
     var releaseFeeds: ReleaseFeedService?
+    /// MangaUpdates' vote-weighted categories; nil skips the section.
+    var mangaUpdatesCategories: MangaUpdatesClient?
+    @State var categories: [MangaUpdatesCategories.Category] = []
+    @State var isCategoriesLoading = false
+    @State var categoriesFailure: APIError?
     /// Opens a publisher's or studio's page from the credits.
     var onOpenPublisher: ((String) -> Void)?
     /// Opens a creator's page — everything they wrote or drew.
@@ -46,6 +62,10 @@ struct SeriesDetailView: View {
     @State var similarFailure: APIError?
     @State var alsoLike: [Series] = []
     @State var alsoLikeFailure: APIError?
+    /// Nearest neighbours by embedding — see `loadSimilarByDescription()`.
+    /// No failure state: an on-device file read either has a vector for this
+    /// series or it does not, and both leave this empty.
+    @State var similarByDescription: [Series] = []
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
     @State var appleVolumes: [AppleBooksVolume] = []
@@ -184,6 +204,7 @@ struct SeriesDetailView: View {
                     relationships: extras.relationships,
                     similar: similar,
                     alsoLike: alsoLike,
+                    similarByDescription: similarByDescription,
                     isLoading: isLoading,
                     similarFailure: similarFailure,
                     alsoLikeFailure: alsoLikeFailure,
@@ -192,6 +213,10 @@ struct SeriesDetailView: View {
                     path: $path
                 )
                 TrackerScores(series: shown)
+                DetailCategories(
+                    categories: categories, isLoading: isCategoriesLoading,
+                    failure: categoriesFailure, onRetry: loadCategories
+                )
                 readElsewhere
                 newsSection
                 provenance
@@ -406,7 +431,12 @@ extension SeriesDetailView {
         // not depend on it. It does depend on `extras.links`, which `loadCore`
         // has already populated by the time `loadOnward` runs.
         async let onward: Void = loadReleases()
-        _ = await (cast, cadence, taste, store, onward)
+        // On-device, no network — grouped here anyway so it does not delay
+        // "Detail readable" (`loadCore`), the same reasoning as every other
+        // leg in this group.
+        async let byDescription: Void = loadSimilarByDescription()
+        async let categories: Void = loadCategories()
+        _ = await (cast, cadence, taste, store, onward, byDescription, categories)
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it
