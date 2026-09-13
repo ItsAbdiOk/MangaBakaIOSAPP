@@ -118,12 +118,42 @@ enum CharacterDescriptionParser {
     /// boundary is the outermost structure, and bold/link markers inside a
     /// spoiler must not be parsed as if they belonged to the surrounding text.
     private static let spoilerPattern = "~!([\\s\\S]*?)!~"
-    /// `__bold__` or `[text](url)`, matched within one spoiler-delimited
-    /// segment. Not `[\s\S]` here: AniList's own bold fields are always
-    /// single-line ("__Guild:__ Hunters Guild"), and letting `.` cross
-    /// newlines risks swallowing an entire multi-line paragraph the moment a
-    /// stray "__" appears without its closing pair.
-    private static let markupPattern = "__(.+?)__|\\[([^\\]]+)\\]\\(([^)]+)\\)"
+
+    /// `__bold__`, `[text](url)`, and the rest of AniList's dialect the first
+    /// pass here missed: `*italic*`, `_italic_`, `<i>`/`<b>`, `<br>`, a
+    /// `~~~centered~~~` block (rendered as plain text — nothing in
+    /// `CharacterDescription.Span` represents centering), and a leading `#`
+    /// heading (rendered as bold, same choice `ShikimoriDescriptionParser`
+    /// makes for `[h1-6]`, so the two sources render the same way through one
+    /// view). `img220(url)`-style inline images are dropped outright — there
+    /// is no image span, and a bare image with no link text has nothing to
+    /// show in its place. None of the additions below were hit by the two
+    /// live ids checked on 2026-09-12; they are AniList's documented markdown
+    /// dialect, added to close docs/reviews/third-parties.md finding 7
+    /// (2026-09-13) — worth re-checking against a live description that uses
+    /// one.
+    ///
+    /// Matched within one spoiler-delimited segment, same as before. Not
+    /// `[\s\S]` for the single-line markers (bold, italics, centered): AniList's
+    /// own fields are single-line ("__Guild:__ Hunters Guild"), and letting
+    /// `.` cross newlines risks swallowing an entire paragraph the moment a
+    /// stray marker appears without its closing pair. `<i>`/`<b>`/`<br>` and
+    /// the heading line are the exceptions that need multiline handling:
+    /// `<i>`/`<b>` because AniList does wrap real paragraphs in them, and the
+    /// heading pattern is anchored to a whole line by construction.
+    private static let markupPattern = """
+    __(.+?)__\
+    |\\[([^\\]]+)\\]\\(([^)]+)\\)\
+    |\\*(.+?)\\*\
+    |(?<![A-Za-z0-9_])_(.+?)_(?![A-Za-z0-9_])\
+    |<i>([\\s\\S]*?)</i>\
+    |<b>([\\s\\S]*?)</b>\
+    |(<br\\s*/?>)\
+    |~~~(.+?)~~~\
+    |img\\d+\\(([^)]+)\\)\
+    |^#{1,6}[ \\t]*(.+)$\\n?
+    """
+    private static let markupOptions: NSRegularExpression.Options = [.anchorsMatchLines]
 
     static func parse(_ raw: String) -> CharacterDescription {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -176,11 +206,11 @@ enum CharacterDescriptionParser {
         return segments
     }
 
-    /// Parses `__bold__` and `[text](url)` out of one segment, preserving the
+    /// Parses `markupPattern`'s markers out of one segment, preserving the
     /// plain text between and around them.
     private static func spans(in text: String) -> [CharacterDescription.Span] {
         let ns = text as NSString
-        guard let regex = try? NSRegularExpression(pattern: markupPattern) else {
+        guard let regex = try? NSRegularExpression(pattern: markupPattern, options: markupOptions) else {
             return [.plain(text)]
         }
         var spans: [CharacterDescription.Span] = []
@@ -192,26 +222,47 @@ enum CharacterDescriptionParser {
                 let range = NSRange(location: cursor, length: full.location - cursor)
                 spans.append(.plain(ns.substring(with: range)))
             }
-            if match.range(at: 1).location != NSNotFound {
-                spans.append(.bold(ns.substring(with: match.range(at: 1))))
-            } else if match.range(at: 2).location != NSNotFound, match.range(at: 3).location != NSNotFound {
-                let linkText = ns.substring(with: match.range(at: 2))
-                let rawURL = ns.substring(with: match.range(at: 3))
-                // A link AniList sent that does not parse as a URL is shown as
-                // plain text rather than dropped — the words are still part of
-                // the sentence even if the destination is unusable.
-                if let url = URL(string: rawURL) {
-                    spans.append(.link(text: linkText, url: url))
-                } else {
-                    spans.append(.plain(linkText))
-                }
-            }
+            spans.append(contentsOf: matchedSpans(match, in: ns))
             cursor = full.location + full.length
         }
         if cursor < ns.length {
             spans.append(.plain(ns.substring(from: cursor)))
         }
         return spans.isEmpty ? [.plain(text)] : spans
+    }
+
+    /// One matched marker's spans, split out of `spans(in:)` to keep that
+    /// function under the lint's complexity ceiling — an `if`/`else if` chain
+    /// over `markupPattern`'s capture groups, numbered in the order the
+    /// pattern lists its alternatives.
+    private static func matchedSpans(
+        _ match: NSTextCheckingResult, in ns: NSString
+    ) -> [CharacterDescription.Span] {
+        func text(_ group: Int) -> String? {
+            let range = match.range(at: group)
+            return range.location == NSNotFound ? nil : ns.substring(with: range)
+        }
+
+        if let bold = text(1) { return [.bold(bold)] }
+        if let linkText = text(2), let rawURL = text(3) {
+            // A link AniList sent that does not parse as a URL is shown as
+            // plain text rather than dropped — the words are still part of
+            // the sentence even if the destination is unusable.
+            if let url = URL(string: rawURL) { return [.link(text: linkText, url: url)] }
+            return [.plain(linkText)]
+        }
+        if let italic = text(4) ?? text(5) ?? text(6) { return [.italic(italic)] }
+        if let bold = text(7) { return [.bold(bold)] }
+        if text(8) != nil { return [.plain("\n")] }
+        // `~~~centered~~~`: no span represents centering, so the words are
+        // kept as plain text rather than dropped.
+        if let centered = text(9) { return [.plain(centered)] }
+        // `imgWIDTH(url)`: no image span exists, and a bare image carries no
+        // text of its own to show in its place — dropped rather than leaving
+        // either the markup or a bare URL on screen.
+        if text(10) != nil { return [] }
+        if let heading = text(11) { return [.bold(heading), .plain("\n")] }
+        return []
     }
 
     private static func replacing(pattern: String, in text: String, template: String) -> String {

@@ -122,7 +122,13 @@ actor ShikimoriClient {
     private var spacing = RequestSpacing(minimumInterval: ShikimoriClient.minimumInterval)
 
     init(
-        baseURL: URL = URL(string: "https://shikimori.one").unsafeCharacterFallback,
+        // shikimori.one 301s to shikimori.io behind a DDoS-guard edge as of
+        // 2026-09-13 (verified live: HTTP/2 301, server: ddos-guard, three
+        // __ddg tracking cookies set on the redirect). URLSession follows the
+        // redirect today, but that is an extra round trip per request and per
+        // portrait, plus accepting cookies from a third party's edge for no
+        // reason — pointing at the real host directly avoids both.
+        baseURL: URL = URL(string: "https://shikimori.io").unsafeCharacterFallback,
         session: URLSession = .shared,
         clock: any Clock = SystemClock()
     ) {

@@ -43,8 +43,12 @@ enum ShikimoriDescriptionParser {
     /// Where a `[character=id]` link points by default: Shikimori's own
     /// public site, never AniList's — the id in the tag is a Shikimori id,
     /// and the two id spaces must never be crossed (see `CharacterProfileRequest`).
+    ///
+    /// `shikimori.one` now 301s to `shikimori.io` behind a DDoS-guard edge
+    /// (verified live 2026-09-13) — see `ShikimoriClient.init`'s `baseURL`
+    /// for the same fix on the request side.
     private static let defaultCharactersURL =
-        URL(string: "https://shikimori.one/characters/").unsafeShikimoriCharactersFallback
+        URL(string: "https://shikimori.io/characters/").unsafeShikimoriCharactersFallback
 
     /// - Parameter charactersURL: overridable for tests; see `defaultCharactersURL`.
     static func parse(
@@ -112,7 +116,7 @@ enum ShikimoriDescriptionParser {
     private static func spans(in text: String, charactersURL: URL) -> [CharacterDescription.Span] {
         let ns = text as NSString
         guard let regex = try? NSRegularExpression(pattern: markupPattern) else {
-            return [.plain(text)]
+            return [.plain(strippingUnhandledTags(text))]
         }
         var spans: [CharacterDescription.Span] = []
         var cursor = 0
@@ -121,15 +125,37 @@ enum ShikimoriDescriptionParser {
             let full = match.range
             if full.location > cursor {
                 let range = NSRange(location: cursor, length: full.location - cursor)
-                spans.append(.plain(ns.substring(with: range)))
+                spans.append(.plain(strippingUnhandledTags(ns.substring(with: range))))
             }
             spans.append(contentsOf: matchedSpans(match, in: ns, charactersURL: charactersURL))
             cursor = full.location + full.length
         }
         if cursor < ns.length {
-            spans.append(.plain(ns.substring(from: cursor)))
+            spans.append(.plain(strippingUnhandledTags(ns.substring(from: cursor))))
         }
-        return spans.isEmpty ? [.plain(text)] : spans
+        return spans.isEmpty ? [.plain(strippingUnhandledTags(text))] : spans
+    }
+
+    /// A final pass for any bracket tag `markupPattern` did not recognise —
+    /// Shikimori's documented BBCode also has `[anime=id]`, `[manga=id]`,
+    /// `[person=id]`, `[br]`, `[list]`/`[*]`, `[quote]`, `[image=id]`, `[s]`,
+    /// `[u]`, none of which `CharacterDescription.Span` has a case for — and
+    /// for a tag nested inside `[b]`/`[i]`/`[h1-6]`: those three patterns
+    /// capture their raw inside as one blob, so `markupPattern` itself never
+    /// sees a tag nested inside one (a `[character=1]` inside a `[b]…[/b]`
+    /// is invisible to the outer match). Without this, either case reaches
+    /// the screen — and the translator, for a Russian description — as
+    /// literal brackets (docs/reviews/third-parties.md finding 6, 2026-09-13).
+    /// Every tag this strips is reduced to its own inner text rather than
+    /// dropped outright: the words were still part of the sentence.
+    private static func strippingUnhandledTags(_ text: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: "\\[/?[a-zA-Z]+(?:=[^\\]]*)?\\]") else {
+            return text
+        }
+        let ns = text as NSString
+        return regex.stringByReplacingMatches(
+            in: text, range: NSRange(location: 0, length: ns.length), withTemplate: ""
+        )
     }
 
     /// One matched tag's spans, split out of `spans(in:charactersURL:)` to
@@ -144,14 +170,18 @@ enum ShikimoriDescriptionParser {
             return range.location == NSNotFound ? nil : ns.substring(with: range)
         }
 
-        if let heading = text(1) { return [.bold(heading), .plain("\n")] }
-        if let bold = text(2) { return [.bold(bold)] }
-        if let italic = text(3) { return [.italic(italic)] }
+        // Every captured group below can itself contain a tag `markupPattern`
+        // does not see (nested inside this one) — stripped here rather than
+        // left as literal brackets. See `strippingUnhandledTags`.
+        if let heading = text(1) { return [.bold(strippingUnhandledTags(heading)), .plain("\n")] }
+        if let bold = text(2) { return [.bold(strippingUnhandledTags(bold))] }
+        if let italic = text(3) { return [.italic(strippingUnhandledTags(italic))] }
         if let href = text(4), let linkText = text(5) {
             // An `[url=href]` whose href does not parse is shown as plain
             // text rather than dropped, same rule as the AniList parser's
             // markdown links: the words are still part of the sentence even
             // when the destination is unusable.
+            let linkText = strippingUnhandledTags(linkText)
             if let url = URL(string: href) { return [.link(text: linkText, url: url)] }
             return [.plain(linkText)]
         }
@@ -161,7 +191,7 @@ enum ShikimoriDescriptionParser {
         }
         if let id = text(7), let name = text(8) {
             let url = URL(string: id, relativeTo: charactersURL)?.absoluteURL ?? charactersURL
-            return [.link(text: name, url: url)]
+            return [.link(text: strippingUnhandledTags(name), url: url)]
         }
         return []
     }

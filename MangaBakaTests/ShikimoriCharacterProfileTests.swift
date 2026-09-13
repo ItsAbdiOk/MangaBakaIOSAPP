@@ -128,6 +128,34 @@ struct ShikimoriCharacterProfileTests {
         #expect(ShikimoriDescriptionParser.parse("  \r\n\r\n ").blocks.isEmpty)
     }
 
+    /// A tag nested inside `[b]`/`[i]`/`[h1-6]` is invisible to
+    /// `markupPattern`'s own alternation — that pattern captures everything
+    /// up to the matching close tag as one raw blob, so a further tag inside
+    /// it is never matched in its own right. Before the fix
+    /// (docs/reviews/third-parties.md finding 6, 2026-09-13) this survived as
+    /// literal brackets. Expected to fail before the fix with: the bold span
+    /// would equal "[character=1]Name[/character]", not "Name".
+    @Test("A character reference nested inside bold does not reach the screen as literal brackets")
+    func nestedTagInsideBoldIsStripped() {
+        let description = ShikimoriDescriptionParser.parse("[b][character=1]Name[/character][/b]")
+        #expect(description.blocks == [.init(spans: [.bold("Name")], isSpoiler: false)])
+    }
+
+    /// Shikimori's documented BBCode also has `[anime=id]`, `[manga=id]`,
+    /// `[person=id]`, `[list]`/`[*]`, `[quote]`, `[image=id]`, `[s]`, `[u]` —
+    /// none in the nine-id sample `markupPattern` was built from
+    /// (docs/reviews/tests.md F16, docs/reviews/third-parties.md finding 6,
+    /// both 2026-09-13). Expected to fail before the fix with: the plain span
+    /// would equal "Стальной алхимик" wrapped in "[anime=5114]...[/anime]",
+    /// not the bare name.
+    @Test("An unlisted tag outside the handled set is stripped to its inner text")
+    func unlistedTagIsStrippedToInnerText() {
+        let description = ShikimoriDescriptionParser.parse("См. также [anime=5114]Стальной алхимик[/anime].")
+        #expect(description.blocks == [
+            .init(spans: [.plain("См. также Стальной алхимик.")], isSpoiler: false)
+        ])
+    }
+
     private static func text(of span: CharacterDescription.Span) -> String {
         switch span {
         case let .plain(text), let .bold(text), let .italic(text): text

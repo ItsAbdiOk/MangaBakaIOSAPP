@@ -415,12 +415,30 @@ extension AniListClient {
     /// approximately. Nil when there is no month at all: a day with no month
     /// names nothing, and a bare year answers "how old", which `age` already
     /// covers.
-    static func formattedBirthday(_ date: ProfileDate?) -> String? {
+    ///
+    /// Built with `Date.FormatStyle` rather than hand-joining `monthSymbols`
+    /// and the day number — the old version always printed "<month> <day>",
+    /// which is only the English order. A French phone reads "4 mars", not
+    /// "mars 4" (docs/reviews/third-parties.md finding 14, 2026-09-13);
+    /// `Date.FormatStyle` orders month and day per the given locale.
+    ///
+    /// - Parameter locale: overridable for tests; defaults to the device's own.
+    static func formattedBirthday(_ date: ProfileDate?, locale: Locale = .autoupdatingCurrent) -> String? {
         guard let month = date?.month, (1...12).contains(month) else { return nil }
-        let symbols = DateFormatter().monthSymbols ?? []
-        guard symbols.indices.contains(month - 1) else { return nil }
-        let name = symbols[month - 1]
-        guard let day = date?.day, day > 0 else { return name }
-        return "\(name) \(day)"
+        let day = date?.day.flatMap { $0 > 0 ? $0 : nil }
+
+        // Only month and day are ever formatted below — the year is never
+        // read back out, so a fixed reference year is fine, and Gregorian
+        // guarantees day 1...31 is always valid for every month in it.
+        var components = DateComponents()
+        components.year = 2001
+        components.month = month
+        components.day = day ?? 1
+        guard let reference = Calendar(identifier: .gregorian).date(from: components) else { return nil }
+
+        if day != nil {
+            return reference.formatted(Date.FormatStyle(locale: locale).month(.wide).day())
+        }
+        return reference.formatted(Date.FormatStyle(locale: locale).month(.wide))
     }
 }

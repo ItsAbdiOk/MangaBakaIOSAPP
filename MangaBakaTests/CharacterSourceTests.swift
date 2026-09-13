@@ -140,7 +140,15 @@ struct CharacterSourceTests {
     }
 
     /// An empty cast is not a better answer than the other source's cast.
-    @Test("An AniList response with no cast falls back")
+    ///
+    /// Before the fix (docs/reviews/third-parties.md finding 2, 2026-09-13),
+    /// `CharacterService` treated any `.server` error as an outage, so one
+    /// series with an empty AniList cast blacked out AniList for every other
+    /// series page for 15 minutes. Expected to fail before the fix with:
+    /// "AniList must still be asked for a second, unrelated series" —
+    /// `URLProtocolStub.requests` would show only the one Shikimori request
+    /// for the second call, not one to each host.
+    @Test("An AniList response with no cast falls back, and does not black out AniList")
     func fallsBackOnEmptyCast() async {
         defer { URLProtocolStub.reset() }
         route(
@@ -150,6 +158,36 @@ struct CharacterSourceTests {
 
         let subject = service()
         #expect(await subject.characters(aniListID: 1, shikimoriID: 2).map(\.name) == ["Fallback"])
+
+        // A second, unrelated series must still ask AniList — the first
+        // series having no cast says nothing about whether AniList is up.
+        let beforeSecondCall = URLProtocolStub.requests.count
+        _ = await subject.characters(aniListID: 3, shikimoriID: 4)
+        let newCount = URLProtocolStub.requests.count - beforeSecondCall
+        let secondCallHosts = URLProtocolStub.requests.suffix(newCount)
+        #expect(secondCallHosts.contains { $0.url?.host()?.contains("anilist") == true })
+    }
+
+    /// A stale or unknown AniList id answers 404 — AniList itself correctly
+    /// saying "no such series", not a refusal. Treating it as an outage would
+    /// black out AniList for every other series over one bad id.
+    @Test("A 404 for an unknown AniList id falls back without blacking out AniList")
+    func fallsBackOn404WithoutOutage() async {
+        defer { URLProtocolStub.reset() }
+        let counter = AniListCounter()
+        let shikimori = shikimoriBody(names: ["Fallback"])
+        URLProtocolStub.setHandler { request in
+            guard request.url?.host()?.contains("anilist") == true else {
+                return .respond(.init(body: shikimori))
+            }
+            _ = counter.bump()
+            return .respond(.init(statusCode: 404, body: Data()))
+        }
+
+        let subject = service()
+        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        _ = await subject.characters(aniListID: 3, shikimoriID: 4)
+        #expect(counter.calls == 2, "A 404 is not an outage; the second series must still ask AniList")
     }
 
     @Test("A network failure falls back")
@@ -398,6 +436,45 @@ struct AniListShapeTests {
     func querySpecifics() {
         #expect(AniListClient.query.contains("type: MANGA"))
         #expect(AniListClient.query.contains("sort: [ROLE, RELEVANCE]"))
+    }
+
+    // MARK: Birthday formatting
+
+    /// Before the fix (docs/reviews/third-parties.md finding 14, 2026-09-13),
+    /// the birthday was hand-joined as "\(monthName) \(day)" — always the
+    /// English "month day" order. Expected to fail before the fix with:
+    /// "4 mars" != "mars 4" — a French phone reads day-before-month.
+    @Test("A French locale orders the day before the month")
+    func frenchLocaleOrdersDayFirst() {
+        let date = AniListClient.ProfileDate(year: nil, month: 3, day: 4)
+        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "fr_FR"))
+        #expect(formatted == "4 mars")
+    }
+
+    /// Control: the same date in English keeps the "month day" order the app
+    /// has always shown, so the French case above is proving locale-awareness
+    /// was added, not that formatting broke generally.
+    @Test("An English locale keeps the month before the day")
+    func englishLocaleOrdersMonthFirst() {
+        let date = AniListClient.ProfileDate(year: nil, month: 3, day: 4)
+        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "en_US"))
+        #expect(formatted == "March 4")
+    }
+
+    /// A month with no day — a birthday AniList knows only approximately —
+    /// still has to print something, with no day number attached.
+    @Test("A month with no day prints the month alone")
+    func monthAloneWithNoDay() {
+        let date = AniListClient.ProfileDate(year: nil, month: 3, day: nil)
+        let formatted = AniListClient.formattedBirthday(date, locale: Locale(identifier: "en_US"))
+        #expect(formatted == "March")
+    }
+
+    @Test("No month at all prints nothing")
+    func noMonthPrintsNothing() {
+        let yearOnly = AniListClient.ProfileDate(year: 1999, month: nil, day: nil)
+        #expect(AniListClient.formattedBirthday(yearOnly) == nil)
+        #expect(AniListClient.formattedBirthday(nil) == nil)
     }
 }
 

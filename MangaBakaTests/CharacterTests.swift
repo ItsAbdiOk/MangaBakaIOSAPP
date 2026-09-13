@@ -9,7 +9,7 @@ import Testing
 /// temporarily disabled due to severe stability issues" — checked repeatedly on
 /// 2026-09-10, so not a blip. Shikimori is already one of MangaBaka's upstream
 /// sources and its id arrives in every series' `source` block.
-@Suite("Characters")
+@Suite("Characters", .serialized)
 struct CharacterTests {
     private static let base = URL(string: "https://shikimori.one")!
 
@@ -133,6 +133,24 @@ struct CharacterTests {
         #expect(ShikimoriClient.userAgent.contains("github.com"))
         // Their published limit is five a second; this must stay under it.
         #expect(ShikimoriClient.minimumInterval >= 0.2)
+    }
+
+    /// `shikimori.one` now 301s to `shikimori.io` behind a DDoS-guard edge
+    /// (docs/reviews/third-parties.md finding 5, verified live 2026-09-13).
+    /// Expected to fail before the fix with: "no request went to the
+    /// redirecting host" — `ShikimoriClient`'s default `baseURL` pointed at
+    /// `shikimori.one`, so this would have found exactly one such request.
+    @Test("The default host is shikimori.io, not the redirecting shikimori.one")
+    func defaultHostIsShikimoriIO() async {
+        defer { URLProtocolStub.reset() }
+        URLProtocolStub.setHandler { _ in .respond(.init(body: Data("[]".utf8))) }
+
+        let client = ShikimoriClient(session: URLProtocolStub.makeSession())
+        _ = try? await client.characters(mangaId: 1)
+
+        #expect(URLProtocolStub.requests.first?.url?.host() == "shikimori.io")
+        #expect(URLProtocolStub.requests.allSatisfy { $0.url?.host() != "shikimori.one" },
+                "no request went to the redirecting host")
     }
 }
 

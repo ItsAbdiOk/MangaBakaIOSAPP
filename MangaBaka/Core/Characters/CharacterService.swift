@@ -75,8 +75,9 @@ actor CharacterService {
                 // Only the service's own refusal counts as an outage. A rate
                 // limit is about us; offline and transport failures are about
                 // the network; a decode failure is a shape problem that will
-                // recur and is cheap to hit again.
-                if case .server = error {
+                // recur and is cheap to hit again. `.server` itself is not
+                // enough either — see `isAniListOutage(status:)`.
+                if case let .server(status, _) = error, Self.isAniListOutage(status: status) {
                     aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
                 }
             }
@@ -117,10 +118,28 @@ actor CharacterService {
         do {
             try await aniList.healthCheck()
         } catch {
-            if case .server = error {
+            if case let .server(status, _) = error, Self.isAniListOutage(status: status) {
                 aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
             }
         }
+    }
+
+    /// Whether a `.server` failure is AniList's edge refusing us, versus
+    /// AniList answering normally with nothing useful for this one series.
+    ///
+    /// `AniListClient` throws `.server` for three different things: an actual
+    /// non-2xx refusal (403, 5xx — and 404 for a stale/unknown media id, which
+    /// is AniList correctly saying "no such series", not an outage), a
+    /// GraphQL `errors` body arriving inside a 200, and a 200 with an edges
+    /// array that is simply empty (a real manga AniList just has no cast
+    /// for). The last two carry the original 200 status through unchanged.
+    /// Before this fix every one of them set the same 15-minute outage timer,
+    /// so one series with no AniList cast blacked out AniList for every other
+    /// series page for 15 minutes (docs/reviews/third-parties.md finding 2,
+    /// 2026-09-13). Only a refusal AniList's own edge sent — 403 or 5xx — is
+    /// actually a reason to stop asking it.
+    private static func isAniListOutage(status: Int) -> Bool {
+        status == 403 || (500...599).contains(status)
     }
 }
 
