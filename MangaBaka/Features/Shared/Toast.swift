@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// A brief, non-blocking confirmation, floating above the tab bar.
@@ -12,24 +13,70 @@ import SwiftUI
 @MainActor
 @Observable
 final class ToastCentre {
-    private(set) var message: String?
-    private var dismissal: Task<Void, Never>?
+    /// Which of two things a toast is confirming. Purely presentational today
+    /// (both render as the same capsule) — the split exists because a
+    /// `.failure` gets a longer window and cannot be pre-empted by a
+    /// `.success` arriving inside it. A save that quietly failed and then
+    /// looked, two seconds later, like every other successful save is exactly
+    /// how "Saved here" after a throw (`StackModel.swift:267`) went
+    /// unnoticed.
+    enum Kind {
+        case success
+        case failure
+    }
 
-    /// Shows a message, replacing whatever was there.
+    private(set) var message: String?
+    private var kind: Kind = .success
+    private var dismissal: Task<Void, Never>?
+    /// When the current toast should stop protecting itself from replacement.
+    /// Only set for `.failure` — a `.success` toast has never needed this,
+    /// because nothing before now ever asked to keep it up over an
+    /// interruption.
+    private var protectedUntil: Date?
+
+    /// Shows a message, replacing whatever was there — with one exception: a
+    /// `.failure` toast holds the screen for `failureDuration`, and a
+    /// `.success` arriving inside that window does not clear it. A write that
+    /// failed and then a moment later reported "Saved" (the reload that
+    /// follows a failed write can still succeed) must not read as the write
+    /// having worked.
     ///
-    /// Replacing rather than queueing: three quick saves should leave one
-    /// message, not three shown in turn while the reader waits for the last.
-    func show(_ message: String, for duration: Duration = .seconds(2)) {
+    /// `failureDuration` is 4s: **a guess.** Long enough to read a full
+    /// sentence rather than glimpse it (the existing 2s default suits a
+    /// three-word confirmation, not a failure explaining itself), short
+    /// enough that it does not become the next thing the reader has to wait
+    /// out. No usability measurement backs the number; revisit if a real
+    /// session recording says otherwise.
+    static let failureDuration: Duration = .seconds(4)
+
+    func show(_ message: String, kind: Kind = .success, for duration: Duration? = nil) {
+        let now = Date()
+        if let protectedUntil, now < protectedUntil, kind == .success {
+            // A failure is still holding the floor; a success does not get to
+            // clear it early. A second failure, or the reader triggering a
+            // new one deliberately, still replaces it — only `.success` is
+            // held back, because only a false "it worked" is actively
+            // misleading.
+            return
+        }
+
         dismissal?.cancel()
         self.message = message
+        self.kind = kind
+        let resolvedDuration = duration ?? (kind == .failure ? Self.failureDuration : .seconds(2))
+        protectedUntil = kind == .failure
+            ? now.addingTimeInterval(resolvedDuration.timeInterval)
+            : nil
+
         // The only confirmation the app gives for a write. The overlay does
         // not take focus, so without this a VoiceOver reader who saved a
         // series got a haptic and no words.
         AccessibilityNotification.Announcement(message).post()
         dismissal = Task { [weak self] in
-            try? await Task.sleep(for: duration)
+            try? await Task.sleep(for: resolvedDuration)
             guard !Task.isCancelled else { return }
             self?.message = nil
+            self?.protectedUntil = nil
         }
     }
 }
@@ -73,5 +120,15 @@ extension View {
     /// Puts the app's toasts over this view. Applied once, at the root.
     func toasts(_ centre: ToastCentre) -> some View {
         modifier(ToastOverlay(centre: centre))
+    }
+}
+
+private extension Duration {
+    /// `Duration` has no direct `TimeInterval` accessor; `APIClient` computes
+    /// this same conversion inline for `NetworkLedger`, and this is the
+    /// second call site, so it earns a name here rather than a second copy of
+    /// the arithmetic.
+    var timeInterval: TimeInterval {
+        Double(components.seconds) + Double(components.attoseconds) / 1e18
     }
 }

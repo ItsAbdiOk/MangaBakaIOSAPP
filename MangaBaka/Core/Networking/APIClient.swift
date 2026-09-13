@@ -21,7 +21,30 @@ actor APIClient {
 
     private let limiter = RateLimitGate()
 
-    init(baseURL: URL, session: URLSession = .shared, tokenProvider: TokenProvider) {
+    /// The configuration every default session for this client is built with.
+    ///
+    /// `timeoutIntervalForRequest = 20`: **a guess.** Nothing on record times
+    /// how long MangaBaka itself typically takes to answer; 20s is chosen as
+    /// long enough that no ordinary request on a slow connection should ever
+    /// hit it, short enough that a hung host (gap 27 — nothing in this app
+    /// ever timed out; one third-party outage held a request open 60s+) gives
+    /// up inside one screen's patience rather than several. Revisit once
+    /// `NetworkLedger`'s recorded latencies give a real p99 to size this
+    /// against instead.
+    static let defaultSessionConfiguration: URLSessionConfiguration = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 20
+        return configuration
+    }()
+
+    /// The session every caller gets unless a test substitutes its own.
+    ///
+    /// Not `.shared`: `.shared` is built from `URLSessionConfiguration.default`
+    /// with Apple's own (much longer) timeout, so callers that relied on the
+    /// old default silently kept the old, untimed behaviour.
+    static let defaultSession = URLSession(configuration: defaultSessionConfiguration)
+
+    init(baseURL: URL, session: URLSession = APIClient.defaultSession, tokenProvider: TokenProvider) {
         self.baseURL = baseURL
         self.session = session
         self.tokenProvider = tokenProvider
@@ -122,9 +145,12 @@ actor APIClient {
     ) async throws(APIError) -> (data: Data, http: HTTPURLResponse) {
         // Refuse before spending a request we already know will be refused.
         // The limit is per IP and shared with strangers on the same network, so
-        // hammering it during a backoff makes their searches fail too.
-        if let wait = await limiter.secondsUntilAllowed() {
-            throw APIError.rateLimited(retryAfter: wait)
+        // hammering it during a backoff makes their searches fail too. For
+        // search specifically this also catches the 30th-in-a-minute request
+        // before it is ever sent, rather than spending it to earn the same
+        // refusal from the server (gap 8).
+        if let until = await limiter.until(for: path) {
+            throw APIError.rateLimited(until: until)
         }
 
         var authorized = request
@@ -143,6 +169,13 @@ actor APIClient {
             || error.code == .networkConnectionLost
             || error.code == .dataNotAllowed {
             throw APIError.offline
+        } catch let error as URLError where error.code == .cancelled {
+            // The reader left, or a newer request superseded this one — not a
+            // network failure. `.transport("…cancelled…")` used to reach here,
+            // which told the kit to hide cached content
+            // (`staleContentRemainsUseful == false` for `.transport`) over a
+            // screen the reader simply isn't looking at anymore (gap 26).
+            throw APIError.cancelled
         } catch {
             throw APIError.transport(underlying: error.localizedDescription)
         }
@@ -217,7 +250,7 @@ actor APIClient {
         } catch {
             // 409 means it is already there, which is an ordinary answer to
             // "add this" rather than a failure.
-            if case let .server(status, _) = error, status == 409 { return false }
+            if case let .server(status, _, _) = error, status == 409 { return false }
             throw error
         }
     }
@@ -459,9 +492,22 @@ extension APIClient {
 
     /// `Retry-After` may be delta-seconds or an HTTP-date; only the first was
     /// ever parsed, so the second silently vanished.
+    ///
+    /// `TimeInterval("nan")` and `TimeInterval("inf")` both parse successfully
+    /// to non-finite doubles rather than failing — confirmed on device, not an
+    /// assumption — so `isFinite` must be checked explicitly. Without it, a
+    /// malformed header of literally `Retry-After: nan` survives `max(_, 0)`
+    /// (`max` with a NaN operand returns NaN in Swift) into
+    /// `RateLimitGate.recordRateLimit`, which then blocks every request until
+    /// the process relaunches, because every future
+    /// `blockedUntil.timeIntervalSince(now)` compares against a NaN deadline
+    /// and never reads `<= 0` (gap 5).
     static func parseRetryAfter(_ header: String?) -> TimeInterval? {
         guard let header, !header.isEmpty else { return nil }
-        if let seconds = TimeInterval(header) { return max(seconds, 0) }
+        if let seconds = TimeInterval(header) {
+            guard seconds.isFinite else { return nil }
+            return max(seconds, 0)
+        }
         guard let date = retryAfterDateFormatter.date(from: header) else { return nil }
         return max(date.timeIntervalSinceNow, 0)
     }

@@ -79,6 +79,51 @@ struct APIErrorPresentationTests {
         #expect(error.userFacingMessage == "That series doesn't exist.")
     }
 
+    /// Gap 23, 100: a third-party failure spoke as if it were MangaBaka's own
+    /// — `CharacterProfileView` showed AniList's 403 as "This part needs an
+    /// account" with the MangaBaka-token paragraph, and MangaUpdates' raw
+    /// "MangaUpdates returned 503." landed under a "MangaBaka had a problem"
+    /// headline. `.server` had no way to say who actually answered.
+    ///
+    /// Expected to fail before the fix: `.server(status:message:)` took no
+    /// `party` argument at all, so this call could not even be written
+    /// against the old signature — the strongest form of "fails today".
+    @Test("A third party's failure names the third party, not MangaBaka")
+    func thirdPartyServerErrorNamesItself() {
+        let error = APIError.server(status: 403, message: "AniList returned 403.", party: .aniList)
+        #expect(error.headline == "AniList had a problem")
+        #expect(!error.needsAccount, "Only MangaBaka's own 401/403 is fixed by a MangaBaka token")
+        #expect(
+            error.userFacingMessage.range(of: #"returned \d{3}"#, options: .regularExpression) == nil,
+            "A status code is not a sentence a reader can act on"
+        )
+    }
+
+    /// Every existing construction predates `party`, and every existing
+    /// pattern match like `case let .server(status, _)` predates the third
+    /// associated value — both must keep working unchanged, since six other
+    /// batches already code against this shape.
+    @Test("party defaults to MangaBaka, so every existing construction is unchanged")
+    func partyDefaultsToMangaBaka() {
+        #expect(APIError.server(status: 500, message: "x").party == .mangaBaka)
+        #expect(APIError.server(status: 500, message: "x").needsAccount == false)
+        #expect(APIError.server(status: 401, message: "x").needsAccount)
+        #expect(APIError.decoding(underlying: "x").party == .mangaBaka)
+        #expect(APIError.transport(underlying: "x").party == .mangaBaka)
+        #expect(APIError.offline.party == .mangaBaka)
+        #expect(APIError.rateLimited(retryAfter: 30).party == .mangaBaka)
+    }
+
+    /// Gap 26: `URLError.cancelled` used to fall through to `.transport`,
+    /// which told the kit the cached copy was no longer trustworthy
+    /// (`staleContentRemainsUseful == false`) — over a screen the reader
+    /// simply isn't waiting on anymore.
+    @Test("A cancellation is not a failure the kit should hide content for")
+    func cancellationKeepsStaleContentUseful() {
+        #expect(APIError.cancelled.staleContentRemainsUseful)
+        #expect(!APIError.cancelled.needsAccount)
+    }
+
     @Test("Each failure gets a symbol matching its cause")
     func symbolsDiffer() {
         let symbols = [

@@ -77,7 +77,7 @@ actor CharacterService {
                 // the network; a decode failure is a shape problem that will
                 // recur and is cheap to hit again. `.server` itself is not
                 // enough either — see `isAniListOutage(status:)`.
-                if case let .server(status, _) = error, Self.isAniListOutage(status: status) {
+                if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
                     aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
                 }
             }
@@ -118,7 +118,7 @@ actor CharacterService {
         do {
             try await aniList.healthCheck()
         } catch {
-            if case let .server(status, _) = error, Self.isAniListOutage(status: status) {
+            if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
                 aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
             }
         }

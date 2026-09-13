@@ -246,7 +246,11 @@ struct StackResetTests {
     @Test("It is confirmed, and the confirmation is honest")
     func resetIsConfirmed() throws {
         let menu = try SourceTree.read("MangaBaka/Features/Stack/StackResetMenu.swift")
-        #expect(menu.contains("confirmationDialog"))
+        // The dialog moved into the shared `ConfirmDestructive` modifier; the
+        // menu must still route through it.
+        #expect(menu.contains(".confirmDestructive("))
+        let modifier = try SourceTree.read("MangaBaka/Features/Shared/ConfirmDestructive.swift")
+        #expect(modifier.contains("confirmationDialog"))
         #expect(menu.contains("MangaBaka library stays there"))
 
         let view = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")

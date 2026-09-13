@@ -7,8 +7,12 @@ import Testing
 @Suite("Rate limit backoff")
 struct RateLimitGateTests {
     /// A clock the test moves by hand, so a 60-second backoff takes no time
-    /// to verify and never flakes.
-    private final class MovableClock: @unchecked Sendable {
+    /// to verify and never flakes. Conforms to the app's own `Clock` protocol
+    /// (the one `SeriesRepository`'s cache-expiry tests already use) now that
+    /// `RateLimitGate` takes a `Clock` rather than a bare closure — a second,
+    /// parallel clock abstraction for the same purpose was the thing worth
+    /// not adding.
+    private final class MovableClock: Clock, @unchecked Sendable {
         private let lock = NSLock()
         private var current = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -25,13 +29,21 @@ struct RateLimitGateTests {
 
     private func makeGate() -> (RateLimitGate, MovableClock) {
         let clock = MovableClock()
-        return (RateLimitGate(now: { clock.now }), clock)
+        return (RateLimitGate(clock: clock), clock)
+    }
+
+    /// `until`'s deadline is absolute; these helpers read it back as "seconds
+    /// from the clock's current time" so the assertions below read the same
+    /// as they did against the old seconds-returning method.
+    private func secondsUntilAllowed(_ gate: RateLimitGate, _ clock: MovableClock) async -> TimeInterval? {
+        guard let until = await gate.until(for: "/v1/my/profile") else { return nil }
+        return until.timeIntervalSince(clock.now)
     }
 
     @Test("Nothing is blocked before any rate limit is seen")
     func startsOpen() async {
-        let (gate, _) = makeGate()
-        #expect(await gate.secondsUntilAllowed() == nil)
+        let (gate, clock) = makeGate()
+        #expect(await secondsUntilAllowed(gate, clock) == nil)
     }
 
     @Test("The server's Retry-After is honoured exactly")
@@ -39,14 +51,53 @@ struct RateLimitGateTests {
         let (gate, clock) = makeGate()
         await gate.recordRateLimit(retryAfter: 30)
 
-        let wait = await gate.secondsUntilAllowed()
+        let wait = await secondsUntilAllowed(gate, clock)
         #expect(wait == 30, "The server knows its own window better than we do")
 
         clock.advance(29)
-        #expect(await gate.secondsUntilAllowed() != nil, "Still inside the window")
+        #expect(await secondsUntilAllowed(gate, clock) != nil, "Still inside the window")
 
         clock.advance(2)
-        #expect(await gate.secondsUntilAllowed() == nil, "Window passed")
+        #expect(await secondsUntilAllowed(gate, clock) == nil, "Window passed")
+    }
+
+    /// Gap 8: a single 429 earned by search used to block Discover, detail
+    /// and the library too, because every path shared the same refusal
+    /// clock. The sliding window is the other half of the fix — refusing the
+    /// 31st search locally, before it ever earns a real 429 — but this
+    /// specifically pins that the *existing* global backoff still leaves
+    /// unrelated paths alone, which the new method must preserve.
+    @Test("A global 429 backoff blocks every path, search-scoped or not")
+    func globalBackoffIsPathAgnostic() async {
+        let (gate, _) = makeGate()
+        await gate.recordRateLimit(retryAfter: 60)
+        #expect(await gate.until(for: "/v1/series/search") != nil)
+        #expect(await gate.until(for: "/v1/my/profile") != nil)
+    }
+
+    /// Gap 8: search is capped at 30 a minute; this is the preventive half —
+    /// refusing the 31st *before* it is sent, rather than spending it to earn
+    /// the 429 the server would give anyway.
+    ///
+    /// Expected to fail before the fix: `RateLimitGate` had no per-path
+    /// concept at all, so `until(for:)` did not exist, and a 31st search
+    /// would have gone out exactly like the first.
+    @Test("The 31st search in a rolling minute is refused before it is sent")
+    func searchSlidingWindowRefusesTheThirtyFirst() async {
+        let (gate, clock) = makeGate()
+        for _ in 0..<RateLimitGate.searchLimit {
+            #expect(await gate.until(for: "/v1/series/search") == nil)
+        }
+        let deadline = await gate.until(for: "/v1/series/search")
+        #expect(deadline != nil, "The 31st request in the window must be refused")
+
+        // A different path is unaffected — the search window is scoped to
+        // paths containing `/series/search`.
+        #expect(await gate.until(for: "/v1/discover/rising") == nil)
+
+        // Once the oldest of the thirty ages past the window, a slot reopens.
+        clock.advance(RateLimitGate.searchWindow + 1)
+        #expect(await gate.until(for: "/v1/series/search") == nil)
     }
 
     /// GUESS (labelled in `RateLimitGate.maxHonouredRetryAfter`): nothing on
@@ -56,9 +107,9 @@ struct RateLimitGateTests {
     /// applied to the exponential fallback, not to the server's own value.
     @Test("An honoured Retry-After is capped, not trusted verbatim")
     func honouredRetryAfterIsCapped() async {
-        let (gate, _) = makeGate()
+        let (gate, clock) = makeGate()
         await gate.recordRateLimit(retryAfter: 36000)
-        let wait = await gate.secondsUntilAllowed() ?? 0
+        let wait = await secondsUntilAllowed(gate, clock) ?? 0
         #expect(wait <= RateLimitGate.maxHonouredRetryAfter)
     }
 
@@ -66,12 +117,12 @@ struct RateLimitGateTests {
     /// exponentially rather than retrying immediately into the same refusal.
     @Test("Backoff grows when the server gives no Retry-After")
     func exponentialFallback() async {
-        let (gate, _) = makeGate()
+        let (gate, clock) = makeGate()
 
         await gate.recordRateLimit(retryAfter: nil)
-        let first = await gate.secondsUntilAllowed() ?? 0
+        let first = await secondsUntilAllowed(gate, clock) ?? 0
         await gate.recordRateLimit(retryAfter: nil)
-        let second = await gate.secondsUntilAllowed() ?? 0
+        let second = await secondsUntilAllowed(gate, clock) ?? 0
 
         #expect(second > first, "Repeated refusals must wait longer each time")
     }
@@ -80,20 +131,20 @@ struct RateLimitGateTests {
     /// spike, which is worse than the problem it solves.
     @Test("Backoff is capped")
     func backoffIsCapped() async {
-        let (gate, _) = makeGate()
+        let (gate, clock) = makeGate()
         for _ in 0..<12 { await gate.recordRateLimit(retryAfter: nil) }
-        let wait = await gate.secondsUntilAllowed() ?? 0
+        let wait = await secondsUntilAllowed(gate, clock) ?? 0
         #expect(wait <= 60, "A transient spike must not lock the app out for minutes")
     }
 
     @Test("A success reopens the gate immediately")
     func successClearsBackoff() async {
-        let (gate, _) = makeGate()
+        let (gate, clock) = makeGate()
         await gate.recordRateLimit(retryAfter: 60)
-        #expect(await gate.secondsUntilAllowed() != nil)
+        #expect(await secondsUntilAllowed(gate, clock) != nil)
 
         await gate.recordSuccess()
-        #expect(await gate.secondsUntilAllowed() == nil, "The window has evidently reopened")
+        #expect(await secondsUntilAllowed(gate, clock) == nil, "The window has evidently reopened")
     }
 }
 

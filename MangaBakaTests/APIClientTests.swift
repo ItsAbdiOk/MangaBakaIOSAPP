@@ -18,6 +18,25 @@ struct APIClientFailurePathTests {
         )
     }
 
+    /// `.rateLimited` now stores an absolute `Date` rather than a duration
+    /// (so `Countdown` can tick against it — gap 24), and two `Date()` calls a
+    /// few microseconds apart are never exactly equal — so these three tests
+    /// share this instead of each repeating an exact `#expect(throws:)`.
+    private func expectRateLimitedDeadline() async -> Date? {
+        do {
+            let _: [Int] = try await makeClient().get("/things")
+            Issue.record("Expected the request to throw")
+            return nil
+        } catch let error {
+            guard case let .rateLimited(until, party) = error, let until else {
+                Issue.record("Expected .rateLimited with a deadline, got \(error)")
+                return nil
+            }
+            #expect(party == .mangaBaka)
+            return until
+        }
+    }
+
     /// A count is read from the pagination block. It used to decode the whole
     /// series that came back in the one-item page, so a series that would not
     /// decode cost a saved lens its count.
@@ -80,9 +99,8 @@ struct APIClientFailurePathTests {
         }
         defer { URLProtocolStub.reset() }
 
-        await #expect(throws: APIError.rateLimited(retryAfter: 30)) {
-            let _: [Int] = try await makeClient().get("/things")
-        }
+        let until = await expectRateLimitedDeadline()
+        #expect((until?.timeIntervalSinceNow ?? 0) > 25 && (until?.timeIntervalSinceNow ?? 999) <= 30)
     }
 
     /// `Retry-After` may be delta-seconds or an HTTP-date (RFC 7231 §7.1.3);
@@ -108,16 +126,9 @@ struct APIClientFailurePathTests {
         }
         defer { URLProtocolStub.reset() }
 
-        do {
-            let _: [Int] = try await makeClient().get("/things")
-            Issue.record("Expected the request to throw")
-        } catch let error {
-            guard case let .rateLimited(retryAfter) = error, let retryAfter else {
-                Issue.record("Expected .rateLimited with a value, got \(error)")
-                return
-            }
-            #expect(retryAfter > 25 && retryAfter <= 30, "Within a few seconds of the parsed date")
-        }
+        let until = await expectRateLimitedDeadline()
+        let retryAfter = until?.timeIntervalSinceNow ?? -1
+        #expect(retryAfter > 25 && retryAfter <= 30, "Within a few seconds of the parsed date")
     }
 
     /// A `Retry-After` above the cap is capped, not honoured verbatim — a
@@ -135,16 +146,8 @@ struct APIClientFailurePathTests {
         }
         defer { URLProtocolStub.reset() }
 
-        do {
-            let _: [Int] = try await makeClient().get("/things")
-            Issue.record("Expected the request to throw")
-        } catch let error {
-            guard case let .rateLimited(retryAfter) = error, let retryAfter else {
-                Issue.record("Expected .rateLimited with a value, got \(error)")
-                return
-            }
-            #expect(retryAfter <= RateLimitGate.maxHonouredRetryAfter)
-        }
+        let until = await expectRateLimitedDeadline()
+        #expect((until?.timeIntervalSinceNow ?? 0) <= RateLimitGate.maxHonouredRetryAfter)
     }
 
     @Test("429 without Retry-After still reports rateLimited")
@@ -261,13 +264,30 @@ struct APIClientFailurePathTests {
             let _: [Int] = try await makeClient().get("/things")
             Issue.record("Expected the request to throw")
         } catch {
-            guard case let .server(status, message) = error else {
+            guard case let .server(status, message, _) = error else {
                 Issue.record("Expected .server, got \(error)")
                 return
             }
             #expect(status == 500)
             #expect(!message.isEmpty)
         }
+    }
+
+}
+
+/// Split from `APIClientFailurePathTests` to keep `type_body_length` under
+/// the project's limit — these are all still API-client failure paths, just
+/// specifically the decoding-shaped ones.
+@Suite("APIClient decoding failure paths", .serialized)
+struct APIClientDecodingFailureTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeClient() -> APIClient {
+        APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
     }
 
     @Test("Malformed JSON becomes a decoding error, not a crash")
@@ -328,6 +348,51 @@ struct APIClientFailurePathTests {
         let transport = APIError.transport(underlying: "NSURLErrorDomain -1200")
         #expect(!decoding.userFacingMessage.contains("CodingKeys"))
         #expect(!transport.userFacingMessage.contains("NSURLError"))
+    }
+}
+
+/// Gap 26: a cancelled task used to surface as `.transport`, telling the kit
+/// the cached copy was untrustworthy over a screen the reader isn't even
+/// waiting on anymore.
+@Suite("Cancellation", .serialized)
+struct APIClientCancellationTests {
+    private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
+
+    private func makeClient() -> APIClient {
+        APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
+    }
+
+    /// Expected to fail before the fix: `error == .cancelled` is false — the
+    /// thrown value was `.transport(underlying: "cancelled")`.
+    @Test("A cancelled request throws .cancelled, not a plain transport failure")
+    func cancellationIsNamed() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.cancelled)) }
+        defer { URLProtocolStub.reset() }
+
+        await #expect(throws: APIError.cancelled) {
+            let _: [Int] = try await makeClient().get("/things")
+        }
+    }
+}
+
+/// Gap 27: nothing in this client ever timed out. A genuine end-to-end hang
+/// test is not written here — `URLProtocolStub` has no "never respond"
+/// outcome, and it is shared infrastructure outside this batch's owned files
+/// — so this asserts the configuration value directly instead, which is fast,
+/// deterministic, and unverified only in the sense that it does not exercise
+/// a real hung socket.
+@Suite("Request timeout")
+struct APIClientTimeoutTests {
+    /// Expected to fail before the fix: the client defaulted to `.shared`,
+    /// whose configuration keeps Apple's much longer default timeout.
+    @Test("The default session times out a request in 20s, not 60")
+    func defaultSessionHasAShortTimeout() {
+        #expect(APIClient.defaultSessionConfiguration.timeoutIntervalForRequest == 20)
+        #expect(APIClient.defaultSession.configuration.timeoutIntervalForRequest == 20)
     }
 }
 

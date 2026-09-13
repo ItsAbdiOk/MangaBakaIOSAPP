@@ -1,5 +1,29 @@
 import SwiftUI
 
+/// Makes a second tap a no-op while a retry is already running.
+///
+/// Pulled out of `FailureState` as a plain `@Observable` object, rather than
+/// left as private `@State` inside the view, so the double-tap rule (gap 24:
+/// "Retry now" stayed live during a retry and a second tap fired a second,
+/// overlapping one) can be proven by a unit test — this project has no
+/// ViewInspector, so logic that only exists as SwiftUI `@State` cannot be
+/// driven from `StateFamilyTests` at all.
+@MainActor
+@Observable
+final class RetryGate {
+    private(set) var isRetrying = false
+
+    /// Runs `operation` unless one is already in flight, in which case this
+    /// call does nothing — the second tap `FailureState`'s button no longer
+    /// even needs to distinguish, since it disables itself off `isRetrying`.
+    func fire(_ operation: () async -> Void) async {
+        guard !isRetrying else { return }
+        isRetrying = true
+        await operation()
+        isRetrying = false
+    }
+}
+
 /// A whole-screen failure, shown only when there is genuinely nothing to
 /// display. Anywhere content exists, the content wins and the reason becomes a
 /// `StaleBar` instead.
@@ -14,6 +38,23 @@ struct FailureState: View {
     /// Where "Open Settings" goes. Absent on screens that cannot present it,
     /// in which case the account failure falls back to a retry.
     var openSettings: (() -> Void)?
+    /// Fires `retry` once, automatically, the instant the rate-limit window
+    /// reopens — for a screen that would rather resume itself than make the
+    /// reader tap "Retry now" the moment it becomes live. Off by default: an
+    /// automatic retry the reader did not ask for is a surprise on a screen
+    /// they may not even be looking at.
+    var autoRetry = false
+
+    /// A tap already in flight. A second tap while one retry is still running
+    /// used to fire a second, overlapping one and show nothing for either
+    /// (gap 24) — this makes the second tap a no-op instead, and the button
+    /// itself renders as disabled so the reader can see why. See `RetryGate`.
+    @State private var gate = RetryGate()
+
+    private var rateLimitDeadline: Date? {
+        guard case let .rateLimited(until, _) = error else { return nil }
+        return until
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,9 +75,10 @@ struct FailureState: View {
 
             // The live half of a rate limit. Bold and attached to the body
             // rather than to the button, because it is a fact about the wait
-            // and not a label for the tap.
-            if let countdown = error.countdown {
-                Text(countdown)
+            // and not a label for the tap. A real `TimelineView` now, not a
+            // string frozen at the instant this rendered — see `Countdown`.
+            if let rateLimitDeadline {
+                Countdown(until: rateLimitDeadline, onReachZero: autoRetry ? { fireRetry() } : nil)
                     .typeSubtitle()
                     .fontWeight(.semibold)
                     .foregroundStyle(Palette.textPrimary)
@@ -49,6 +91,11 @@ struct FailureState: View {
         .frame(maxWidth: 280)
         .frame(maxWidth: .infinity)
         .padding(.top, 60)
+    }
+
+    private func fireRetry() {
+        guard let retry else { return }
+        Task { await gate.fire(retry) }
     }
 
     /// One button, and only one of the six gets the accent.
@@ -64,13 +111,13 @@ struct FailureState: View {
     private var action: some View {
         if error.needsAccount, let openSettings {
             StateAction(title: "Open Settings", weight: .fixes, action: openSettings)
-        } else if let retry {
+        } else if retry != nil {
             StateAction(
-                title: error.countdown == nil ? "Try again" : "Retry now",
-                weight: .wayOut
-            ) {
-                Task { await retry() }
-            }
+                title: gate.isRetrying ? "Retrying…" : (error.countdown == nil ? "Try again" : "Retry now"),
+                weight: .wayOut,
+                action: fireRetry
+            )
+            .disabled(gate.isRetrying)
         }
     }
 }

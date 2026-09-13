@@ -29,20 +29,15 @@ struct StackResetMenu: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel("Stack options")
-        .confirmationDialog(
-            "Start the stack over?",
+        .confirmDestructive(
             isPresented: $isConfirming,
-            titleVisibility: .visible
-        ) {
-            Button("Start over", role: .destructive) {
-                Task { await onReset() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("""
+            title: "Start the stack over?",
+            consequence: """
             Forgets every save and skip on this device, and deals a fresh stack. \
             Anything already added to your MangaBaka library stays there.
-            """)
-        }
+            """,
+            label: "Start over",
+            action: onReset
+        )
     }
 }

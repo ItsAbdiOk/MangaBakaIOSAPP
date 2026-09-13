@@ -8,49 +8,154 @@ import Foundation
 /// carrier NAT can exhaust the budget.
 enum APIError: Error, Equatable {
     /// No network path. The caller should fall back to cached content.
+    ///
+    /// Carries no `Party`: losing the network is a device-level condition,
+    /// not something any one server did, so there is nothing to name.
     case offline
 
     /// HTTP 429. Back off and serve cache.
-    /// - Parameter retryAfter: seconds from the `Retry-After` header, when present.
-    case rateLimited(retryAfter: TimeInterval?)
+    /// - Parameters:
+    ///   - until: the deadline the window reopens, when the server (or the
+    ///     gate's own backoff) gave one. A `Date` rather than the seconds
+    ///     that used to sit here, so a countdown view can tick against it
+    ///     with `TimelineView` instead of freezing the instant it was read —
+    ///     see `retryAfter` below for what this replaced.
+    ///   - party: who imposed the limit. Every third-party client can also
+    ///     429 (AniList, Shikimori, MangaUpdates all do), and the body text
+    ///     used to say "MangaBaka is throttling this connection" regardless.
+    case rateLimited(until: Date?, party: Party = .mangaBaka)
 
     /// A non-2xx response carrying the API's own message.
     ///
-    /// The API documents `message` as safe to show end users verbatim:
+    /// MangaBaka documents `message` as safe to show end users verbatim:
     /// "The `message` field can be safely shown to end-users, as it generally
-    /// does not contain technical terminology."
-    case server(status: Int, message: String)
+    /// does not contain technical terminology." That guarantee is MangaBaka's
+    /// own, not any other party's, so a non-MangaBaka `party` never passes its
+    /// `message` through verbatim — see `userFacingMessage`.
+    case server(status: Int, message: String, party: Party = .mangaBaka)
 
     /// The response was not valid JSON, or did not match the expected shape.
-    case decoding(underlying: String)
+    case decoding(underlying: String, party: Party = .mangaBaka)
 
     /// Anything URLSession reported that is not covered above.
-    case transport(underlying: String)
+    case transport(underlying: String, party: Party = .mangaBaka)
+
+    /// The request was cancelled — the reader left the screen, a newer
+    /// request superseded it, or a `Task` was torn down. Not a failure of
+    /// anything: the request simply stopped mattering. Named separately from
+    /// `.transport` so `staleContentRemainsUseful` can say yes and callers can
+    /// tell "the network is broken" from "nobody's waiting for this answer
+    /// anymore" and drop it silently instead of flashing an error over
+    /// content the reader is still looking at.
+    ///
+    /// `headline`/`userFacingMessage` exist only so every `APIError` has one —
+    /// no caller should ever put a cancellation on screen.
+    case cancelled
+
+    /// Who answered — MangaBaka itself, or a third party MangaBaka's schedule
+    /// and character data are stitched together from.
+    ///
+    /// `mangaBaka` is the default everywhere a `Party` is threaded through, so
+    /// every construction site that predates this type keeps compiling
+    /// unchanged.
+    enum Party: Sendable, Equatable {
+        case mangaBaka
+        case aniList
+        case shikimori
+        case appleBooks
+        case googleBooks
+        case webtoons
+        case naver
+        case gigaViewer
+        case mangaUpdates
+
+        var displayName: String {
+            switch self {
+            case .mangaBaka: "MangaBaka"
+            case .aniList: "AniList"
+            case .shikimori: "Shikimori"
+            case .appleBooks: "Apple Books"
+            case .googleBooks: "Google Books"
+            case .webtoons: "Webtoons"
+            case .naver: "Naver"
+            case .gigaViewer: "GigaViewer"
+            case .mangaUpdates: "MangaUpdates"
+            }
+        }
+    }
+
+    /// Who this particular failure came from. `.mangaBaka` for every case that
+    /// carries no `Party` of its own (`.offline`, `.cancelled`), since neither
+    /// names a server.
+    var party: Party {
+        switch self {
+        case .offline, .cancelled: .mangaBaka
+        case let .rateLimited(_, party): party
+        case let .server(_, _, party): party
+        case let .decoding(_, party): party
+        case let .transport(_, party): party
+        }
+    }
+
+    /// Compatibility constructor for the seconds-based payload this case used
+    /// to carry directly. Every existing third-party client throws
+    /// `.rateLimited(retryAfter: someSeconds)`; this keeps that call
+    /// compiling and converts to the `Date` the case now stores.
+    ///
+    /// New call sites — `RateLimitGate`, `APIClient` — should prefer
+    /// `.rateLimited(until:party:)` directly, since they already have the
+    /// deadline rather than a duration to convert.
+    static func rateLimited(retryAfter seconds: TimeInterval?, party: Party = .mangaBaka) -> APIError {
+        .rateLimited(until: seconds.map { Date().addingTimeInterval($0) }, party: party)
+    }
+
+    /// The seconds remaining, computed from `until` against the current time,
+    /// for callers written against the old seconds-based payload. Recomputed
+    /// on every access rather than cached, because "seconds remaining" is
+    /// only ever true at the instant it's read.
+    var retryAfter: TimeInterval? {
+        guard case let .rateLimited(until, _) = self, let until else { return nil }
+        return max(until.timeIntervalSinceNow, 0)
+    }
 
     /// A short, plain phrase for a wait, e.g. "30 seconds" or "2 minutes".
+    ///
+    /// Rounds to the nearest whole second *before* choosing the seconds-or-
+    /// minutes branch. `countdown` now feeds this a live
+    /// `until.timeIntervalSinceNow` rather than a value fixed at throw time,
+    /// so a caller asking for "60 seconds away" a few microseconds later gets
+    /// 59.9999-something — rounding after the branch test would read that as
+    /// "60 seconds" instead of "1 minute".
     private static func humanDuration(_ seconds: TimeInterval) -> String {
-        if seconds < 60 {
-            let rounded = max(Int(seconds.rounded()), 1)
+        let wholeSeconds = seconds.rounded()
+        if wholeSeconds < 60 {
+            let rounded = max(Int(wholeSeconds), 1)
             return "\(rounded) second\(rounded == 1 ? "" : "s")"
         }
-        let minutes = max(Int((seconds / 60).rounded()), 1)
+        let minutes = max(Int((wholeSeconds / 60).rounded()), 1)
         return "\(minutes) minute\(minutes == 1 ? "" : "s")"
     }
 
     /// Whether showing stale content alongside this error is the right call.
     /// A rate limit or an outage says nothing about the cached copy, so the
     /// content stays; a decoding failure means the shape changed, and stale
-    /// content may be misleading.
+    /// content may be misleading. A cancellation says nothing about the
+    /// content either — the reader simply isn't waiting on this answer
+    /// anymore, so whatever is already on screen is still exactly as good.
     var staleContentRemainsUseful: Bool {
         switch self {
-        case .offline, .rateLimited, .server: true
+        case .offline, .rateLimited, .server, .cancelled: true
         case .decoding, .transport: false
         }
     }
 
-    /// Whether the reader can fix this by connecting an account.
+    /// Whether the reader can fix this by connecting an account. Only ever
+    /// true for MangaBaka itself: a third party rejecting a request is never
+    /// fixed by the reader's MangaBaka token.
     var needsAccount: Bool {
-        if case let .server(status, _) = self { return status == 401 || status == 403 }
+        if case let .server(status, _, party) = self, party == .mangaBaka {
+            return status == 401 || status == 403
+        }
         return false
     }
 
@@ -61,6 +166,7 @@ enum APIError: Error, Equatable {
         case .rateLimited: "hourglass"
         case .server: needsAccount ? "person.crop.circle.badge.plus" : "exclamationmark.triangle"
         case .decoding, .transport: "questionmark.circle"
+        case .cancelled: "xmark.circle"
         }
     }
 
@@ -75,6 +181,15 @@ enum APIError: Error, Equatable {
         switch self {
         case .offline:
             "Showing what was downloaded. Nothing new can load until you're back."
+        case let .rateLimited(_, party) where party != .mangaBaka:
+            // Not "shared by everyone on your network": that fact is
+            // MangaBaka's own admission about its own per-IP limit, and
+            // nothing on record says a third party's limit works the same
+            // way, so it is not repeated for one.
+            """
+            \(party.displayName) is asking us to slow down. Nothing is wrong on \
+            this phone, and what you already have is still here.
+            """
         case .rateLimited:
             // Never phrased as the reader's fault. The limit is per IP and
             // shared, so this can be triggered entirely by a stranger on the
@@ -88,24 +203,37 @@ enum APIError: Error, Equatable {
         // 401 and 403 have a fix the reader can actually carry out, and the
         // API's own message for them ("Unauthenticated.") names a state, not
         // an action.
-        case let .server(_, message):
+        case let .server(_, message, party):
             if needsAccount {
                 """
                 Your library, recommendations and schedule are tied to a \
                 MangaBaka token. Discovery, search and the stack keep working \
                 without one.
                 """
-            } else if !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                // The API's own words when it has any. It documents these as
-                // safe to show, and "That series doesn't exist." tells a reader
-                // something the design board's generic line cannot. The board
-                // wrote for the case where the server says nothing useful; it
-                // did not know the server often says something better.
-                message
+            } else if party == .mangaBaka {
+                if !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    // The API's own words when it has any. It documents these
+                    // as safe to show, and "That series doesn't exist." tells
+                    // a reader something the design board's generic line
+                    // cannot. The board wrote for the case where the server
+                    // says nothing useful; it did not know the server often
+                    // says something better.
+                    message
+                } else {
+                    """
+                    Their server answered with an error. Nothing is wrong on this \
+                    phone, and what you already have is still here.
+                    """
+                }
             } else {
+                // A third party's own wording is never passed through
+                // verbatim: MangaBaka documents its `message` as reader-safe,
+                // nothing on record makes the same promise for anyone else,
+                // and in practice these read like "AniList returned 403." —
+                // a status code, not a sentence a reader can use.
                 """
-                Their server answered with an error. Nothing is wrong on this \
-                phone, and what you already have is still here.
+                \(party.displayName) answered with an error. Nothing is wrong on \
+                this phone, and what you already have is still here.
                 """
             }
         case .decoding:
@@ -115,6 +243,11 @@ enum APIError: Error, Equatable {
             """
         case .transport:
             "The request didn't complete."
+        case .cancelled:
+            // Never meant to reach a screen — the whole point of this case is
+            // that callers drop it silently — but it needs real words rather
+            // than an empty string in case one forgets to check.
+            "This didn't finish, because something else happened first."
         }
     }
 
@@ -126,9 +259,18 @@ enum APIError: Error, Equatable {
     var headline: String {
         switch self {
         case .offline: "You're offline"
-        case .rateLimited: "Too many requests, briefly"
-        case .server: needsAccount ? "This part needs an account" : "MangaBaka had a problem"
+        case let .rateLimited(_, party):
+            party == .mangaBaka ? "Too many requests, briefly" : "\(party.displayName) had a problem"
+        case let .server(_, _, party):
+            if needsAccount {
+                "This part needs an account"
+            } else if party == .mangaBaka {
+                "MangaBaka had a problem"
+            } else {
+                "\(party.displayName) had a problem"
+            }
         case .decoding, .transport: "Something went wrong"
+        case .cancelled: "Cancelled"
         }
     }
 
@@ -138,9 +280,11 @@ enum APIError: Error, Equatable {
     /// piece of this family that is a live number: it belongs at the end of the
     /// body in bold, and it is absent when the server did not say.
     var countdown: String? {
-        guard case let .rateLimited(retryAfter) = self,
-              let retryAfter, retryAfter > 0
+        guard case let .rateLimited(until, _) = self,
+              let until
         else { return nil }
-        return "Retrying in \(Self.humanDuration(retryAfter))."
+        let remaining = until.timeIntervalSinceNow
+        guard remaining.isFinite, remaining > 0 else { return nil }
+        return "Retrying in \(Self.humanDuration(remaining))."
     }
 }
