@@ -58,9 +58,10 @@ actor APIClient {
     func get<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
+        priority: RequestPriority = .userInitiated,
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
-        let data = try await rawData(path: path, query: query)
+        let data = try await rawData(path: path, query: query, priority: priority)
         let envelope: APIEnvelope<Payload>
         do {
             envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
@@ -88,9 +89,10 @@ actor APIClient {
     func getWithPagination<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
+        priority: RequestPriority = .userInitiated,
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> (payload: Payload, pagination: Pagination?) {
-        let data = try await rawData(path: path, query: query)
+        let data = try await rawData(path: path, query: query, priority: priority)
         let envelope: APIEnvelope<Payload>
         do {
             envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
@@ -119,8 +121,12 @@ actor APIClient {
     /// `Series` that came back in the one-item page, which made the count
     /// hostage to that row's shape — any of the decode failures this app has
     /// had would have cost a saved lens its count.
-    func total(_ path: String, query: [URLQueryItem] = []) async throws(APIError) -> Int? {
-        let data = try await rawData(path: path, query: query)
+    func total(
+        _ path: String,
+        query: [URLQueryItem] = [],
+        priority: RequestPriority = .userInitiated
+    ) async throws(APIError) -> Int? {
+        let data = try await rawData(path: path, query: query, priority: priority)
         do {
             return try decoder.decode(PaginationOnly.self, from: data).pagination?.count
         } catch {
@@ -141,17 +147,12 @@ actor APIClient {
     /// request-budget number excluded the bursty half of the traffic.
     private func perform(
         _ request: URLRequest,
-        path: String
+        path: String,
+        priority: RequestPriority = .userInitiated
     ) async throws(APIError) -> (data: Data, http: HTTPURLResponse) {
-        // Refuse before spending a request we already know will be refused.
-        // The limit is per IP and shared with strangers on the same network, so
-        // hammering it during a backoff makes their searches fail too. For
-        // search specifically this also catches the 30th-in-a-minute request
-        // before it is ever sent, rather than spending it to earn the same
-        // refusal from the server (gap 8).
-        if let until = await limiter.until(for: path) {
-            throw APIError.rateLimited(until: until)
-        }
+        // Refuse before spending a request already known to be refused (gap
+        // 8); `.background` may wait here instead — see `RateLimitGate`.
+        try await limiter.reserveSlot(for: path, priority: priority)
 
         var authorized = request
         if let header = await tokenProvider.authorizationHeader() {
@@ -186,8 +187,11 @@ actor APIClient {
             bytes: data.count,
             seconds: Double(elapsed.components.seconds)
                 + Double(elapsed.components.attoseconds) / 1e18,
-            failed: (response as? HTTPURLResponse).map { !(200..<300).contains($0.statusCode) }
-                ?? true
+            // Only a real failure, never a 304: a run of "nothing changed"
+            // conditional GETs used to count as a run of failures here, which
+            // is exactly the shape `NetworkLedger`'s own success rate reads
+            // as a client falling over (services audit finding).
+            failed: (response as? HTTPURLResponse).map { $0.statusCode >= 400 } ?? true
         )
 
         guard let http = response as? HTTPURLResponse else {
@@ -195,22 +199,27 @@ actor APIClient {
         }
         if http.statusCode == 429 {
             let retryAfter = Self.parseRetryAfter(http.value(forHTTPHeaderField: "Retry-After"))
-            await limiter.recordRateLimit(retryAfter: retryAfter)
+            await limiter.recordRateLimit(retryAfter: retryAfter, path: path)
             // Capped the same way the gate caps what it honours (see
             // `RateLimitGate.maxHonouredRetryAfter`) — otherwise the gate
             // could reopen in 15 minutes while the screen still read
             // "Retrying in 3 hours," which is the app calling itself wrong.
             let displayed = retryAfter.map { min($0, RateLimitGate.maxHonouredRetryAfter) }
-            throw APIError.rateLimited(retryAfter: displayed)
+            let isSearch = RateLimitGate.family(for: path) == .search
+            throw APIError.rateLimited(retryAfter: displayed, party: isSearch ? .mangaBakaSearch : .mangaBaka)
         }
         return (data, http)
     }
 
     /// Performs the request and returns the raw body, having already turned
     /// every transport and status failure into a named `APIError`.
-    private func rawData(path: String, query: [URLQueryItem]) async throws(APIError) -> Data {
+    private func rawData(
+        path: String,
+        query: [URLQueryItem],
+        priority: RequestPriority = .userInitiated
+    ) async throws(APIError) -> Data {
         let request = try makeRequest(path: path, query: query)
-        let (data, http) = try await perform(request, path: path)
+        let (data, http) = try await perform(request, path: path, priority: priority)
 
         guard (200...299).contains(http.statusCode) else {
             // Errors always carry `message`, and it is documented as safe to
@@ -225,7 +234,7 @@ actor APIClient {
         // Only a success clears the backoff. A 500 says the server is unwell,
         // not that the rate-limit window has reopened, and treating it as
         // permission to resume would put us straight back into the limit.
-        await limiter.recordSuccess()
+        await limiter.recordSuccess(path: path)
         return data
     }
 
@@ -313,7 +322,7 @@ actor APIClient {
             throw APIError.server(status: http.statusCode, message: message)
         }
         _ = data
-        await limiter.recordSuccess()
+        await limiter.recordSuccess(path: path)
     }
 
     /// Decodes a response that has no envelope at all.
@@ -493,16 +502,17 @@ extension APIClient {
         _ path: String,
         query: [URLQueryItem] = [],
         ifModifiedSince: String?,
+        priority: RequestPriority = .userInitiated,
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Conditional<Payload> {
         let request = try makeRequest(path: path, query: query, ifModifiedSince: ifModifiedSince)
-        let (data, http) = try await perform(request, path: path)
+        let (data, http) = try await perform(request, path: path, priority: priority)
 
         if http.statusCode == 304 {
             // A success, not a failure: a run of "nothing changed" answers
             // must not be mistaken for a run of failures and trip the 429
             // backoff logic that lives only in `perform`'s 429 branch.
-            await limiter.recordSuccess()
+            await limiter.recordSuccess(path: path)
             return .notModified
         }
 
@@ -513,7 +523,7 @@ extension APIClient {
                 message: message ?? "MangaBaka returned an unexpected response."
             )
         }
-        await limiter.recordSuccess()
+        await limiter.recordSuccess(path: path)
 
         let envelope: APIEnvelope<Payload>
         do {

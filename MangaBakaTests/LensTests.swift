@@ -58,6 +58,45 @@ struct LensTests {
         #expect(RecentSearches(defaults: store).terms == ["murim"])
     }
 
+    @Test("A term dismissed with its row's × is dropped, not just hidden")
+    func removeDropsOneTerm() throws {
+        let recents = RecentSearches(defaults: try defaults())
+        recents.record("murim")
+        recents.record("regression")
+
+        recents.remove("murim")
+
+        #expect(recents.terms == ["regression"])
+    }
+
+    /// Six are stored (`RecentSearches.limit`) but only the newest four ever
+    /// draw on the idle screen — Abdi asked for "the last three or four
+    /// searches" on 2026-09-13, so the screen shows fewer than the history
+    /// actually keeps.
+    @Test("Only the newest four recents are shown, even though six are kept")
+    func visibleCapsAtFour() throws {
+        let recents = RecentSearches(defaults: try defaults())
+        for index in 1...6 { recents.record("term\(index)") }
+
+        #expect(recents.terms.count == 6, "Sanity: all six are still stored")
+        let visible = RecentSearches.visible(recents.terms)
+        #expect(visible.count == 4)
+        #expect(visible == ["term6", "term5", "term4", "term3"])
+    }
+
+    @Test("visible(_:limit:) never asks for more than there are")
+    func visibleShortListIsUnchanged() {
+        #expect(RecentSearches.visible(["only"], limit: 4) == ["only"])
+        #expect(RecentSearches.visible([], limit: 4).isEmpty)
+    }
+
+    /// A lens as it would be built from a plain query, for tests that need
+    /// one but do not care about its name or filters — presets used to fill
+    /// this role; see `SearchLens`'s doc comment for why they are gone.
+    private func lens(_ id: String, text: String = "x") -> SearchLens {
+        SearchLens(id: id, name: id, rule: "q: \(text)", query: SearchQuery(text: text))
+    }
+
     /// A count that could not be fetched is absent, never zero.
     ///
     /// "0 now" beside a saved search says it found nothing — a real and much
@@ -67,7 +106,7 @@ struct LensTests {
     func missingCountIsNotZero() async throws {
         let repository = SilentRepository()
         let counts = LensCounts(repository: repository)
-        let lens = try #require(SearchLens.presets.first)
+        let lens = lens("a")
 
         counts.load([lens])
         // Gate on the repository having actually been asked, rather than
@@ -81,7 +120,7 @@ struct LensTests {
     func countsOncePerLens() async throws {
         let repository = CountingRepository()
         let counts = LensCounts(repository: repository)
-        let lenses = Array(SearchLens.presets.prefix(2))
+        let lenses = [lens("a"), lens("b")]
 
         counts.load(lenses)
         await waitUntil { repository.calls == lenses.count }
@@ -98,7 +137,7 @@ struct LensTests {
     func cancelledWalkIsResumed() async throws {
         let repository = CountingRepository()
         let counts = LensCounts(repository: repository)
-        let lenses = Array(SearchLens.presets.prefix(3))
+        let lenses = [lens("a"), lens("b"), lens("c")]
 
         counts.load(lenses)
         // Cancel as soon as one lens has been counted, instead of racing a
@@ -120,7 +159,7 @@ struct LensTests {
     func unansweredCountIsRetried() async throws {
         let repository = FlakyRepository()
         let counts = LensCounts(repository: repository)
-        let lens = try #require(SearchLens.presets.first)
+        let lens = lens("a")
 
         counts.load([lens])
         await waitUntil { repository.attempts == 1 }
@@ -136,6 +175,59 @@ struct LensTests {
         }
         await waitUntil { counts.counts[lens.id] == 12 }
         #expect(counts.counts[lens.id] == 12, "The second ask must reach the network")
+    }
+
+    /// 2026-09-13: never retry into a 429. A nil answer here is almost always
+    /// the search window refusing this walk (`LensCounts` now runs at
+    /// `.background` priority, which shares the same 30/min window a
+    /// reader's own search needs), so the rest of the queue must not be asked
+    /// one at a time into the same refusal.
+    ///
+    /// Expected to fail before the fix: the old loop only skipped the failed
+    /// lens and slept before asking the next one, so `repository.calls` would
+    /// have reached `lenses.count` well within the wait below, not stopped
+    /// at 1.
+    @Test("A failed count stops the walk instead of asking the rest of the queue")
+    func failedCountStopsTheWalk() async throws {
+        let repository = FailsFirstThenSucceedsRepository()
+        let counts = LensCounts(repository: repository)
+        let lenses = [lens("a"), lens("b"), lens("c")]
+
+        counts.load(lenses)
+        await waitUntil { repository.calls >= 1 }
+        // Long enough that the old sleep-and-continue behaviour would have
+        // reached the second and third lens well within it.
+        try? await Task.sleep(for: .milliseconds(400))
+        #expect(repository.calls == 1, "The walk must stop at the first failure, not press on")
+        #expect(counts.counts.isEmpty)
+
+        // The next `load()` retries the failed lens and reaches the ones left
+        // behind it, same as any other failed lens (see `queued`'s doc
+        // comment) — a stop is not a drop.
+        // Wait on the answers landing, not on the asks going out: `calls`
+        // ticks when a count is asked, `counts` fills when it returns.
+        await waitUntil {
+            counts.load(lenses)
+            return counts.counts.count == lenses.count
+        }
+        #expect(counts.counts.count == lenses.count, "A later walk must still reach every lens")
+        #expect(repository.calls == 1 + lenses.count)
+    }
+
+    /// Fails the very first count ever asked for, across any lens; answers
+    /// every one after that.
+    private final class FailsFirstThenSucceedsRepository: StubRepositoryBase, @unchecked Sendable {
+        private let lock = NSLock()
+        private var asks = 0
+        var calls: Int { lock.lock(); defer { lock.unlock() }; return asks }
+
+        override func count(_ query: SearchQuery) async -> Int? {
+            let isFirstEver = lock.withLock {
+                asks += 1
+                return asks == 1
+            }
+            return isFirstEver ? nil : 12
+        }
     }
 
     /// Fails the first ask, answers the rest.
@@ -211,24 +303,73 @@ struct LensTests {
     }
 }
 
-/// One save control, in the sheet that owns filters.
+/// One save control, in the panel that owns filters.
+///
+/// Lived in `FilterSheet.swift` until 2026-09-13, when the controls moved
+/// into `FilterPanel` so the same panel could sit inline on the idle screen
+/// as well as inside the sheet — see `FilterPanel`'s doc comment.
 @Suite("Saving a lens has one home", .enabled(if: SourceTree.isAvailable))
 struct LensSaveEntryTests {
     @Test("Search does not offer a second way to save")
     func onlyTheSheetSaves() throws {
-        // Two entry points for one action is how they drift apart: the sheet
+        // Two entry points for one action is how they drift apart: the panel
         // knows the filters, and a button on the results screen has to be told
         // about them separately.
         let search = try SourceTree.read("MangaBaka/Features/Search/SearchView.swift")
         #expect(!search.contains("Save as a lens"))
-        let sheet = try SourceTree.read("MangaBaka/Features/Search/FilterSheet.swift")
-        #expect(sheet.contains("SaveLensButton"))
+        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
+        #expect(panel.contains("SaveLensButton"))
     }
 
     @Test("The save control is inert until something is filtered")
     func inertUntilFiltered() throws {
+        let panel = try SourceTree.read("MangaBaka/Features/Search/FilterPanel.swift")
+        #expect(panel.contains("SaveLensButton(isEnabled: !query.isEmpty)"))
+    }
+}
+
+/// The three preset lenses are gone — see `SearchLens`'s doc comment for
+/// where they came from and why Abdi asked (2026-09-13) to scrap them.
+@Suite("Presets are gone", .enabled(if: SourceTree.isAvailable))
+struct SearchLensPresetsGoneTests {
+    @Test("SearchLens no longer defines any presets")
+    func noPresetsProperty() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Search/SearchLens.swift")
+        #expect(!source.contains("static let presets"))
+    }
+
+    @Test("Nothing in the app still reaches for SearchLens.presets")
+    func noPresetReferences() throws {
+        for path in [
+            "MangaBaka/Features/Search/SearchIdleView.swift",
+            "MangaBaka/Features/Search/SearchView.swift",
+            "MangaBaka/Features/Search/FilterSheet.swift",
+            "MangaBaka/Features/Search/FilterPanel.swift"
+        ] {
+            let source = try SourceTree.read(path)
+            #expect(!source.contains("SearchLens.presets"), "\(path) still references the removed presets")
+            #expect(!source.contains("\"Presets\""), "\(path) still labels a Presets section")
+        }
+    }
+}
+
+/// One `FilterPanel`, worn by two hosts — the sheet reached from mid-search
+/// "Filters", and the idle screen's own inline copy. Abdi: "I like the
+/// Filter sheet... keep that on the main search page" — this is what makes
+/// that one panel rather than two designs of the same controls.
+@Suite("The filter panel has one definition and two hosts", .enabled(if: SourceTree.isAvailable))
+struct FilterPanelWiringTests {
+    @Test("FilterSheet wraps FilterPanel rather than duplicating its controls")
+    func sheetUsesThePanel() throws {
         let sheet = try SourceTree.read("MangaBaka/Features/Search/FilterSheet.swift")
-        #expect(sheet.contains("SaveLensButton(isEnabled: !query.isEmpty)"))
+        #expect(sheet.contains("FilterPanel("))
+        #expect(!sheet.contains("RatingSegments("), "the sheet must not re-implement the panel's controls")
+    }
+
+    @Test("The idle screen wires the same FilterPanel inline")
+    func idleScreenUsesThePanel() throws {
+        let idle = try SourceTree.read("MangaBaka/Features/Search/SearchIdleView.swift")
+        #expect(idle.contains("FilterPanel("))
     }
 }
 

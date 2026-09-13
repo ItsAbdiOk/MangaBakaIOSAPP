@@ -15,6 +15,10 @@ extension SeriesRepository {
     /// Nil on any failure. A lens whose count could not be fetched shows no
     /// count; it does not show zero.
     func count(_ query: SearchQuery) async -> Int? {
+        await count(query, priority: .userInitiated)
+    }
+
+    func count(_ query: SearchQuery, priority: RequestPriority) async -> Int? {
         var narrowed = query
         // One item, because only the total is wanted. The API reports the total
         // in its pagination block whatever the page size.
@@ -23,6 +27,6 @@ extension SeriesRepository {
 
         var items = narrowed.queryItems
         items.append(contentsOf: filterQuery(overridingTypes: narrowed.types))
-        return try? await client.total("/v2/series/search", query: items)
+        return try? await client.total("/v2/series/search", query: items, priority: priority)
     }
 }

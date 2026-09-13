@@ -120,7 +120,20 @@ final class PublisherFollows {
             query.sort = "latest"
             query.limit = 1
 
-            let result = await repository.search(query)
+            // Background: a follow check runs on its own schedule, not
+            // because the reader asked right now, so it must not spend the
+            // window a reader's own search needs (2026-09-13).
+            let result = await repository.search(query, priority: .background)
+            if case let .staleAfter(error) = result.origin, case .rateLimited = error {
+                // Never retry into a 429: the remaining due follows would
+                // each ask the same question and earn the same refusal one at
+                // a time. Stop the whole run rather than mark this follow
+                // checked — it genuinely was not — so the next run (or the
+                // once-a-day throttle lapsing) tries it again instead of
+                // waiting a full day over a refusal that had nothing to do
+                // with whether anything new came out.
+                break
+            }
             follows[index].lastCheckedAt = currentNow
             guard let top = result.series.first else { continue }
             defer { follows[index].lastSeenSeriesID = top.id }

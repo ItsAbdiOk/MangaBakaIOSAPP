@@ -13,6 +13,10 @@ import Foundation
 /// a tag search got stuck at 30 results forever. See `FeedResult.hasMore`.
 extension SeriesRepository {
     func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
+        await feedPage(feed, page: page, priority: .userInitiated)
+    }
+
+    func feedPage(_ feed: FeedKind, page: Int, priority: RequestPriority) async -> FeedResult {
         guard feed.supportsPaging, page > 1 else {
             return FeedResult(series: [], origin: .network)
         }
@@ -24,7 +28,7 @@ extension SeriesRepository {
         query.append(contentsOf: filterQuery())
         do {
             let (series, pagination): ([Series], Pagination?) =
-                try await client.getWithPagination(feed.path, query: query)
+                try await client.getWithPagination(feed.path, query: query, priority: priority)
             return FeedResult(
                 series: series.filter { $0.isDiscoverable && allowsFormat($0) },
                 origin: .network,
@@ -44,13 +48,17 @@ extension SeriesRepository {
     }
 
     func search(_ query: SearchQuery) async -> FeedResult {
+        await search(query, priority: .userInitiated)
+    }
+
+    func search(_ query: SearchQuery, priority: RequestPriority) async -> FeedResult {
         var items = query.queryItems
         // An explicit choice in the filter sheet wins over the standing
         // preference — see `filterQuery`'s doc comment for why.
         items.append(contentsOf: filterQuery(overridingTypes: query.types))
         do {
             let (series, pagination): ([Series], Pagination?) =
-                try await client.getWithPagination("/v2/series/search", query: items)
+                try await client.getWithPagination("/v2/series/search", query: items, priority: priority)
             return FeedResult(
                 series: series.filter { $0.isDiscoverable && allowsFormat($0) },
                 origin: .network,

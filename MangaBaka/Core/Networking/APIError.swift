@@ -60,6 +60,25 @@ enum APIError: Error, Equatable {
     /// unchanged.
     enum Party: Sendable, Equatable {
         case mangaBaka
+        /// MangaBaka's own search endpoint specifically, not MangaBaka in
+        /// general. 2026-09-13: `RateLimitGate` started backing search off
+        /// separately from every other MangaBaka path (a 429 earned by
+        /// search must not close the series page), and the copy needs to say
+        /// which one paused — "Too many requests, briefly" for a reader whose
+        /// series page just failed to load reads as the whole connection
+        /// being throttled, when only search was. Not a real third party:
+        /// `displayName` still says "MangaBaka", and this exists purely so
+        /// `userFacingMessage`/`headline` can special-case it. Modelled as a
+        /// `Party` rather than a new `rateLimited` associated value on
+        /// purpose — `.rateLimited(until:party:)` already has ~25 call and
+        /// pattern-match sites across the app (schedule clients, character
+        /// clients, `FailureState`, several test suites); widening its
+        /// associated-value tuple breaks every `case let .rateLimited(x, y)`
+        /// there (arity must match exactly — verified, it does not degrade
+        /// gracefully), where `Party` gaining a case only requires an
+        /// exhaustive `switch Party` to be updated, and the only one in the
+        /// app lives in this file.
+        case mangaBakaSearch
         case aniList
         case shikimori
         case appleBooks
@@ -72,7 +91,7 @@ enum APIError: Error, Equatable {
 
         var displayName: String {
             switch self {
-            case .mangaBaka: "MangaBaka"
+            case .mangaBaka, .mangaBakaSearch: "MangaBaka"
             case .aniList: "AniList"
             case .shikimori: "Shikimori"
             case .appleBooks: "Apple Books"
@@ -183,6 +202,16 @@ enum APIError: Error, Equatable {
         switch self {
         case .offline:
             "Showing what was downloaded. Nothing new can load until you're back."
+        case .rateLimited(_, .mangaBakaSearch):
+            // Distinct from the plain MangaBaka case below: a reader on the
+            // series page whose search-window budget got spent by background
+            // work should not read "MangaBaka is throttling this connection"
+            // as if the whole page had failed — only search is paused, and
+            // everything already on screen keeps working.
+            """
+            Search is paused, briefly. The limit is shared by everyone on \
+            your network, and everything else on this page keeps working.
+            """
         case let .rateLimited(_, party) where party != .mangaBaka:
             // Not "shared by everyone on your network": that fact is
             // MangaBaka's own admission about its own per-IP limit, and
@@ -261,8 +290,9 @@ enum APIError: Error, Equatable {
     var headline: String {
         switch self {
         case .offline: "You're offline"
-        case let .rateLimited(_, party):
-            party == .mangaBaka ? "Too many requests, briefly" : "\(party.displayName) had a problem"
+        case .rateLimited(_, .mangaBaka): "Too many requests, briefly"
+        case .rateLimited(_, .mangaBakaSearch): "Search is paused, briefly"
+        case let .rateLimited(_, party): "\(party.displayName) had a problem"
         case let .server(_, _, party):
             if needsAccount {
                 "This part needs an account"

@@ -82,19 +82,37 @@ final class LensCounts {
         guard running == nil, !queued.isEmpty else { return }
 
         running = Task { [repository] in
+            // `defer` rather than resetting `running` only after the loop
+            // exits normally: the 429-stop below is a new early `return`, and
+            // without this it would leave `running` pointing at a finished
+            // task forever, wedging every later `load()` call's `guard
+            // running == nil` shut for the rest of the session.
+            defer { running = nil }
             while !queued.isEmpty {
                 if Task.isCancelled { return }
                 let lens = queued.removeFirst()
                 inFlight.insert(lens.id)
-                let total = await repository.count(lens.query)
+                // 2026-09-13: background priority. This walk is the app's own
+                // idea, run the instant the idle screen appears — it must not
+                // spend the same 30/min search window a reader's own typed
+                // search needs.
+                let total = await repository.count(lens.query, priority: .background)
                 inFlight.remove(lens.id)
-                if let total {
-                    counts[lens.id] = total
-                    asked.insert(lens.id)
+                guard let total else {
+                    // A nil answer here is almost always the search window
+                    // refusing this — `count` doesn't say which, but walking
+                    // the rest of the queue would only ask each remaining
+                    // lens the same question and get the same refusal one at
+                    // a time (never retry into a 429). Stop; the lens this
+                    // failed for, and everything still in `queued`, are
+                    // neither `asked` nor removed from consideration, so the
+                    // next `load()` call retries them.
+                    return
                 }
+                counts[lens.id] = total
+                asked.insert(lens.id)
                 try? await Task.sleep(for: Self.spacing)
             }
-            running = nil
         }
     }
 
@@ -115,21 +133,40 @@ final class LensCounts {
         // `asked`, so it must not stay marked in flight either.
         inFlight.removeAll()
     }
+
+    /// A single ad hoc count for a query being built on the idle screen's
+    /// filter panel — not a saved lens, so it bypasses `load`'s queue,
+    /// dedup and cache entirely. This is one request for one query at a
+    /// time, debounced by the caller (`FilterPanel`); nothing here needs to
+    /// remember it happened.
+    func count(_ query: SearchQuery) async -> Int? {
+        await repository.count(query)
+    }
 }
 
 /// What the reader searched for recently, on this device.
 ///
 /// Raw terms, not lenses: a lens is a saved question, and this is just the last
-/// few things typed. They are shown as chips rather than rows for exactly that
-/// reason — a chip is a shortcut that fills the field, a row is a thing with a
-/// count that can break.
+/// few things typed. Shown as rows on the idle screen (2026-09-13: were
+/// chips, alongside the presets that crowded the screen — see `SearchLens`'s
+/// doc comment), each with its own "×", because a single stray recent term is
+/// now something the reader removes on its own rather than only by clearing
+/// the whole list.
 @MainActor
 @Observable
 final class RecentSearches {
     private static let key = "search.recent"
-    /// Six. Enough to catch the thing you typed and lost, few enough that the
-    /// section never competes with the lenses above it.
+    /// Six stored, so the history survives longer than the screen shows —
+    /// only the newest four ever render (`visible(limit:)`), per Abdi's
+    /// 2026-09-13 ask to keep "the last three or four searches" without
+    /// throwing away what falls off the visible list.
     private static let limit = 6
+    /// How many rows the idle screen actually draws. A guess at "three or
+    /// four" read literally as the smaller number that still shows something
+    /// useful without competing with Filters below it. `nonisolated` so
+    /// `visible(_:limit:)` below can default to it without becoming
+    /// actor-isolated itself.
+    nonisolated static let visibleLimit = 4
 
     private(set) var terms: [String] = []
     private let defaults: UserDefaults
@@ -150,8 +187,22 @@ final class RecentSearches {
         defaults.set(terms, forKey: Self.key)
     }
 
+    /// Drops one term the reader dismissed with its row's "×", rather than
+    /// the whole list.
+    func remove(_ term: String) {
+        terms.removeAll { $0 == term }
+        defaults.set(terms, forKey: Self.key)
+    }
+
     func clear() {
         terms = []
         defaults.removeObject(forKey: Self.key)
+    }
+
+    /// The rows the idle screen actually draws: the newest `limit`, out of
+    /// however many are stored. Pure and `nonisolated static` so it is
+    /// testable without a live `RecentSearches` instance.
+    nonisolated static func visible(_ terms: [String], limit: Int = RecentSearches.visibleLimit) -> [String] {
+        Array(terms.prefix(max(0, limit)))
     }
 }

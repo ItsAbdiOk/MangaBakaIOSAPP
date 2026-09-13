@@ -204,6 +204,18 @@ final class StackModel {
     /// stack reads as a sequence with a behind and an ahead.
     private(set) var previous: Series?
 
+    /// Whether the reader is actually looking at the Stack tab right now.
+    ///
+    /// Set by the view (an `.onAppear`/tab-selection observer — not yet
+    /// wired; see the 2026-09-13 rate-limit report). Defaults to `true` so a
+    /// view that never sets this keeps today's behaviour — always
+    /// `.userInitiated` — rather than silently degrading to background.
+    /// `fetchBatch` reads this to decide whether a catalogue deal is
+    /// something the reader is watching happen or work this app started on
+    /// its own while they are elsewhere (Discover, say) — the latter must not
+    /// spend the search window a foreground search needs.
+    var isVisible = true
+
     private let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
     private let library: (any LibraryProviding)?
@@ -612,7 +624,12 @@ extension StackModel {
         // or one include tag is required", HTTP 400), so an empty pool has to
         // take the random path rather than fail.
         let feed: FeedKind = seeds.isEmpty ? .surprise : .mix(seeds: seeds)
-        let result = await repository.feed(feed, forceRefresh: queue.isEmpty)
+        // A deal the reader is watching happen (they're on this tab) keeps
+        // the whole search window; a deal dealt while they're elsewhere is
+        // this app filling the stack ahead of a visit that may not even
+        // happen, and must not compete with a foreground search for it.
+        let priority: RequestPriority = isVisible ? .userInitiated : .background
+        let result = await repository.feed(feed, forceRefresh: queue.isEmpty, priority: priority)
         let fresh = result.series.filter { !reacted.contains($0.id) }
         if let blocking = result.blockingError {
             failure = blocking

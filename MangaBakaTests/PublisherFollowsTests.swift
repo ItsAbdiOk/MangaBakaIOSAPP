@@ -96,6 +96,30 @@ struct PublisherFollowsTests {
         #expect(repository.callCount == 2, "a full day has now passed")
     }
 
+    /// 2026-09-13: never retry into a 429. `check` used to mark a follow
+    /// `lastCheckedAt` and move on regardless of what `search` answered, so a
+    /// rate limit earned by the first due follow was asked again by every
+    /// other one, one at a time, into the same refusal.
+    ///
+    /// Expected to fail before the fix: `repository.callCount` would reach
+    /// 2 (both follows asked), and Alpha's `lastCheckedAt` would be set even
+    /// though it was never actually answered.
+    @Test("A rate-limited check stops the run rather than asking every other follow")
+    func rateLimitStopsTheRun() async throws {
+        let follows = try store()
+        follows.follow("Alpha", kind: .publisher)
+        follows.follow("Beta", kind: .publisher)
+        let repository = RateLimitedFirstRepository()
+
+        let updates = await follows.check(using: repository)
+
+        #expect(updates.isEmpty)
+        #expect(repository.callCount == 1, "The second follow must not be asked into the same refusal")
+        // Not marked checked — it genuinely was not — so the next run, not
+        // tomorrow's throttle lapsing, retries it.
+        #expect(follows.follows.first { $0.name == "Alpha" }?.lastCheckedAt == nil)
+    }
+
     @Test("A publisher and staff use their own search key")
     func searchesByTheRightKey() async throws {
         let follows = try store()
@@ -127,5 +151,24 @@ private final class StubSearchRepository: StubRepositoryBase, @unchecked Sendabl
         callCount += 1
         lastQuery = query
         return FeedResult(series: results, origin: .network)
+    }
+}
+
+/// Refuses the first search with a rate limit, answers any later one. The
+/// follows check must stop at the refusal rather than walk into it again.
+private final class RateLimitedFirstRepository: StubRepositoryBase, @unchecked Sendable {
+    private(set) var callCount = 0
+
+    // The priority overload is a protocol-extension forward onto this one,
+    // so this is the method to override.
+    override func search(_ query: SearchQuery) async -> FeedResult {
+        callCount += 1
+        if callCount == 1 {
+            return FeedResult(
+                series: [],
+                origin: .staleAfter(.rateLimited(retryAfter: 30, party: .mangaBakaSearch))
+            )
+        }
+        return FeedResult(series: [SeriesFactory.make(id: callCount)], origin: .network)
     }
 }

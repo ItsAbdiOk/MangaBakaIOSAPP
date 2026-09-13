@@ -13,10 +13,29 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// - Returns: the series, and whether they came from the network or cache.
     func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult
 
+    /// Same as `feed(_:forceRefresh:)`, tagged with a `RequestPriority` so a
+    /// feed dealt in the background (the swipe stack, dealing from the
+    /// catalogue while the reader isn't on that tab) cannot spend the search
+    /// window a foreground search needs — see `RateLimitGate`. A protocol
+    /// requirement of its own, not a default parameter on the method above:
+    /// protocol requirements cannot carry default argument values (verified —
+    /// `error: default argument not permitted in a protocol method`), so a
+    /// second requirement with a default *implementation* is what lets every
+    /// existing caller of the two-argument form keep compiling unchanged. See
+    /// the matching extension below.
+    func feed(_ feed: FeedKind, forceRefresh: Bool, priority: RequestPriority) async -> FeedResult
+
     /// Runs a search. Deliberately never cached: a query is typed once and the
     /// answer is expected to be current, and caching every keystroke's result
     /// would fill the database with rows nobody reads twice.
     func search(_ query: SearchQuery) async -> FeedResult
+
+    /// Same as `search(_:)`, tagged with a priority — see `feed(_:forceRefresh:priority:)`'s
+    /// doc comment for why this is a second requirement rather than a default
+    /// parameter. `PublisherFollows.check` is the one caller that passes
+    /// `.background`: a follow check the reader did not ask for must not
+    /// spend the same window their own search needs.
+    func search(_ query: SearchQuery, priority: RequestPriority) async -> FeedResult
 
     /// A later page of a feed. Only feeds whose endpoint takes `page` can
     /// answer this; the rest return empty, which callers read as "no more".
@@ -25,6 +44,12 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// feed — writing it would replace page 1 in the cache and lose the
     /// beginning of the row.
     func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult
+
+    /// Same as `feedPage(_:page:)`, tagged with a priority. `DiscoverModel`
+    /// passes `.background` for a row's page-2-and-beyond prefetch — the
+    /// reader is looking at page 1 already, so filling in more of the row
+    /// ahead of a scroll is this app's own idea, not something asked for.
+    func feedPage(_ feed: FeedKind, page: Int, priority: RequestPriority) async -> FeedResult
 
     /// Blends recommendations from seed series, with the reason each matched
     /// and the DNA the blend was derived from.
@@ -99,6 +124,14 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// How many series a query would return, without downloading them.
     /// Nil when the answer is unknown — never zero, which means something else.
     func count(_ query: SearchQuery) async -> Int?
+
+    /// Same as `count(_:)`, tagged with a priority — see
+    /// `feed(_:forceRefresh:priority:)`'s doc comment for why this is a
+    /// second requirement. `LensCounts` passes `.background`: the idle
+    /// screen's lens counts are this app's own idea, not something the reader
+    /// asked for the instant they land there, and must not spend the window a
+    /// search they go on to type needs.
+    func count(_ query: SearchQuery, priority: RequestPriority) async -> Int?
 
 }
 
@@ -406,11 +439,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     var cachedRelationships: [Int: [SeriesRelationship]] = [:]
 
     init(
-        client: APIClient,
-        database: AppDatabase,
-        clock: any Clock = SystemClock(),
-        contentRatings: [String]? = ["safe", "suggestive"],
-        formats: [String] = [],
+        client: APIClient, database: AppDatabase, clock: any Clock = SystemClock(),
+        contentRatings: [String]? = ["safe", "suggestive"], formats: [String] = [],
         defaults: UserDefaults = .standard
     ) {
         self.client = client
@@ -425,7 +455,16 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         self.decoder = decoder
     }
 
+    /// The plain, protocol-required entry point — always `.userInitiated`.
+    /// Every existing caller (Discover's own rows, the detail screen's
+    /// similar/readers-also-like, onboarding) is the reader looking straight
+    /// at the thing being fetched, so this is not a compatibility shim for a
+    /// case nothing hits — it is genuinely what those callers want.
     func feed(_ feed: FeedKind, forceRefresh: Bool = false) async -> FeedResult {
+        await self.feed(feed, forceRefresh: forceRefresh, priority: .userInitiated)
+    }
+
+    func feed(_ feed: FeedKind, forceRefresh: Bool, priority: RequestPriority) async -> FeedResult {
         if !forceRefresh, let fresh = try? readCache(feed, requireFresh: true), !fresh.isEmpty {
             return FeedResult(series: fresh, origin: .cache)
         }
@@ -452,13 +491,17 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // filter catches up.
             query.append(contentsOf: filterQuery())
 
-            // Split into SeriesRepository+Cache.swift only for the lint's
-            // line-count ceiling on this type — collapses the two response
-            // shapes (recommendation-wrapped or bare) into one
-            // `Conditional<[Series]>`.
-            let conditional = try await fetchConditionalFeed(
-                feed, query: query, ifModifiedSince: existing.lastModified
-            )
+            // `fetchConditionalFeed` (+Cache.swift) always asks at
+            // `.userInitiated` — fine for `.similar`/`.readersAlsoLike`/`.mix`
+            // (`isRecommendationShaped`), none of which hit `/series/search`
+            // (`FeedKind.path`) and so are never search-budgeted. The ones
+            // that are — `.trending`, `.newReleases`, `.surprise` — go through
+            // `client.get` directly so a background deal can wait its turn.
+            let conditional: APIClient.Conditional<[Series]> = try await feed.isRecommendationShaped
+                ? fetchConditionalFeed(feed, query: query, ifModifiedSince: existing.lastModified)
+                : client.get(
+                    feed.path, query: query, ifModifiedSince: existing.lastModified, priority: priority
+                )
 
             switch conditional {
             case .notModified:
@@ -489,11 +532,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
-    func mix(
-        seeds: [Int],
-        filters: SearchQuery,
-        excludedTags: [Int] = []
-    ) async -> MixResult {
+    func mix(seeds: [Int], filters: SearchQuery, excludedTags: [Int] = []) async -> MixResult {
         guard !seeds.isEmpty else { return .empty }
         var items = filters.queryItems.filter { $0.name != "q" && $0.name != "sort_by" }
         // Repeated keys; the comma form is rejected with HTTP 400. See
@@ -511,10 +550,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         })
 
         do {
-            let envelope: MixEnvelope = try await client.getRoot(
-                "/v1/series/mix",
-                query: items
-            )
+            let envelope: MixEnvelope = try await client.getRoot("/v1/series/mix", query: items)
             return MixResult(
                 recommendations: (envelope.data ?? [])
                     .filter { $0.series.isDiscoverable && allowsFormat($0.series) },
@@ -875,4 +911,10 @@ extension SeriesRepositoryProtocol {
     /// cheaper path than `extras(for:)` should not be made to pay for a
     /// network fetch just to answer "is anything cached".
     func cachedExtras(for seriesId: Int) async -> SeriesExtras? { nil }
+
+    // The four `RequestPriority` default overloads live in
+    // SeriesRepository+Priority.swift — this file was already at the lint's
+    // 400-line ceiling before they existed, the same reason `+Cache`,
+    // `+Paging` and `+Count` are split out. Not a widening of who touches
+    // this protocol.
 }

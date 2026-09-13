@@ -197,7 +197,12 @@ final class DiscoverModel {
 
         let nextPage = rows[index].page + 1
         let reloads = rows[index].reloads
-        let result = await repository.feedPage(rows[index].kind, page: nextPage)
+        // Background: the reader is looking at page 1 already (or scrolling
+        // toward the end of it) — filling in the next page ahead of that is
+        // this app getting ahead of itself, not something asked for, and must
+        // not compete with a foreground search for the same window
+        // (2026-09-13).
+        let result = await repository.feedPage(rows[index].kind, page: nextPage, priority: .background)
 
         // A pull-to-refresh while this page was in flight has replaced the
         // row with a fresh page 1. Appending would leave the row holding the

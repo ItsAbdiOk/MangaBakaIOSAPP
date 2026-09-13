@@ -157,3 +157,73 @@ struct StackResetReportsFailureTests {
         #expect(succeeded)
     }
 }
+
+/// 2026-09-13: a catalogue deal (`fetchBatch`, via `.mix`/`.surprise`) shares
+/// MangaBaka's 30/min search window with a reader's own typed search. A deal
+/// made while the reader is watching the Stack tab is exactly what they asked
+/// for and keeps the whole window; one made while they are elsewhere
+/// (Discover, say) is this app's own idea and must leave room for a search.
+///
+/// A fresh conformer rather than a `StubRepositoryBase` subclass: overriding
+/// `feed(_:forceRefresh:priority:)` on a subclass would not actually be
+/// picked up through the protocol's dispatch, because the base class itself
+/// never declares that method — see the same caveat documented on
+/// `DueThisWeekTests.StubExtrasRepository`.
+@Suite("A stack deal's priority follows tab visibility")
+@MainActor
+struct StackModelPriorityTests {
+    private final class PriorityCapturingRepository: SeriesRepositoryProtocol, @unchecked Sendable {
+        private(set) var lastPriority: RequestPriority?
+
+        func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
+            await self.feed(feed, forceRefresh: forceRefresh, priority: .userInitiated)
+        }
+        func feed(_ feed: FeedKind, forceRefresh: Bool, priority: RequestPriority) async -> FeedResult {
+            lastPriority = priority
+            return FeedResult(series: [SeriesFactory.make(id: 1, title: "One")], origin: .network)
+        }
+        func search(_ query: SearchQuery) async -> FeedResult { FeedResult(series: [], origin: .network) }
+        func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
+            FeedResult(series: [], origin: .network)
+        }
+        func mix(seeds: [Int], filters: SearchQuery, excludedTags: [Int]) async -> MixResult { .empty }
+        func extras(for seriesId: Int) async -> SeriesExtras { SeriesExtras() }
+        func images(for seriesId: Int) async -> [SeriesImage]? { [] }
+        func relationships(for seriesId: Int) async -> [SeriesRelationship]? { nil }
+        func updateContentRatings(_ ratings: [String]) async {}
+        func updateFormats(_ formats: [String]) async {}
+        func updateLibraryExclusion(userID: String?) async {}
+        func updateBlockedTags(_ ids: [Int]) async {}
+        func cachedSeriesCount() async -> Int { 0 }
+        func count(_ query: SearchQuery) async -> Int? { nil }
+    }
+
+    @Test("Visible on the Stack tab deals at userInitiated")
+    func visibleDealsAtUserInitiated() async throws {
+        let repository = PriorityCapturingRepository()
+        let model = StackModel(
+            repository: repository, shelf: ShelfStore(database: try AppDatabase.inMemory())
+        )
+        model.isVisible = true
+
+        await model.loadIfNeeded()
+
+        #expect(repository.lastPriority == .userInitiated)
+    }
+
+    /// Expected to fail before the fix: `StackModel` had no `isVisible`
+    /// property, `fetchBatch` had no way to be told the reader was elsewhere,
+    /// and always dealt at `.userInitiated`.
+    @Test("Dealing while off the Stack tab deals at background priority")
+    func invisibleDealsAtBackgroundPriority() async throws {
+        let repository = PriorityCapturingRepository()
+        let model = StackModel(
+            repository: repository, shelf: ShelfStore(database: try AppDatabase.inMemory())
+        )
+        model.isVisible = false
+
+        await model.loadIfNeeded()
+
+        #expect(repository.lastPriority == .background)
+    }
+}
