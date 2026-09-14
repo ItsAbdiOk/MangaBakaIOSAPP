@@ -47,13 +47,22 @@ struct AppServices {
     /// terms ask for was violated by construction on every page open and a
     /// 429 back-off on one was invisible to the other.
     let mangaUpdates: MangaUpdatesClient
-    let publisherFollows = PublisherFollows()
+    /// Deferred (item 107): a JSON file read out of Application Support, for
+    /// a list only Settings shows and only `refreshReminders` walks — and
+    /// `refreshReminders` returns before touching it when reminders are off,
+    /// which is the default. Built on the first ask instead of in `init`.
+    let publisherFollows = AppServices.deferredPublisherFollows()
     let openLibraryCovers = OpenLibraryCovers()
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
-    let lenses = SearchLensStore()
-    let recents = RecentSearches()
+    /// Deferred (item 107): a `UserDefaults` read plus a `JSONDecoder` pass
+    /// over the reader's saved lenses, wanted by Search and Mix and by
+    /// nothing else.
+    let lenses = AppServices.deferredLenses()
+    /// Deferred (item 107): a `UserDefaults.stringArray` read for at most six
+    /// terms, wanted by the Search field alone.
+    let recents = AppServices.deferredRecents()
     let session: SessionModels
     let calendar: ReleaseCalendar
     let librarySnapshot: LibrarySnapshot
@@ -205,6 +214,34 @@ struct AppServices {
         blocked.onChange = { ids in
             await repository.updateBlockedTags(ids)
         }
+    }
+
+    /// The three stores that are not on the launch path (item 107).
+    ///
+    /// Named factories rather than `Deferred { … }` written inline at each
+    /// property, so the test can exercise the exact expression `init` uses
+    /// instead of a copy of it: a second `Deferred { SearchLensStore() }` in
+    /// the test file would pass whether or not the property still used one.
+    ///
+    /// **What this saves is a guess and unmeasured.** Cold launch is ~900 ms
+    /// with about 300 ms of app work; these three are a `stringArray` read,
+    /// a small `JSONDecoder` pass over `UserDefaults` data, and one
+    /// Application Support file read plus decode. GUESS: under 1 ms for the
+    /// first two and 1–3 ms for the file, so single-digit milliseconds in
+    /// total, and possibly under one. `UserDefaults.standard` itself is not
+    /// saved — `ContentPreferencesStore` and two others still open it in
+    /// `init`, so the first-touch cost is paid regardless. The reason to do
+    /// it is that a screen nobody opens should cost nothing, not the number.
+    static func deferredLenses() -> Deferred<SearchLensStore> {
+        Deferred { SearchLensStore() }
+    }
+
+    static func deferredRecents() -> Deferred<RecentSearches> {
+        Deferred { RecentSearches() }
+    }
+
+    static func deferredPublisherFollows() -> Deferred<PublisherFollows> {
+        Deferred { PublisherFollows() }
     }
 
     /// The two pieces of launch work that must not be on the launch path.

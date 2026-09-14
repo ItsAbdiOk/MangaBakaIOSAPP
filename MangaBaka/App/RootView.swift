@@ -29,13 +29,18 @@ struct RootView: View {
     /// categories hit MangaUpdates concurrently on every page open and a
     /// 429 back-off on one was invisible to the other.
     let mangaUpdates: MangaUpdatesClient
-    let publisherFollows: PublisherFollows
+    /// Deferred, not built (item 107). Settings' follow list and
+    /// `refreshReminders` are the only things that ask, and neither happens
+    /// before the first frame — see `AppServices.deferredPublisherFollows`.
+    let publisherFollows: Deferred<PublisherFollows>
     let openLibraryCovers: OpenLibraryCovers
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
-    let lenses: SearchLensStore
-    let recents: RecentSearches
+    /// Deferred, not built (item 107): Search and Mix ask, nothing else does.
+    let lenses: Deferred<SearchLensStore>
+    /// Deferred, not built (item 107): only the Search field asks.
+    let recents: Deferred<RecentSearches>
     /// The models that live for the session rather than for a screen. Built in
     /// `MangaBakaApp` alongside everything else they depend on, rather than
     /// lazily here — a lazily-initialised @State plus an accessor, per model,
@@ -182,13 +187,13 @@ struct RootView: View {
         embeddingIndex: EmbeddingIndex,
         offlineCatalogue: OfflineCatalogue,
         mangaUpdates: MangaUpdatesClient,
-        publisherFollows: PublisherFollows,
+        publisherFollows: Deferred<PublisherFollows>,
         openLibraryCovers: OpenLibraryCovers,
         taste: TasteProfile,
         catalogue: CatalogueService,
         blockedTags: BlockedTagsStore,
-        lenses: SearchLensStore,
-        recents: RecentSearches,
+        lenses: Deferred<SearchLensStore>,
+        recents: Deferred<RecentSearches>,
         session: SessionModels,
         calendar: ReleaseCalendar,
         librarySnapshot: LibrarySnapshot,

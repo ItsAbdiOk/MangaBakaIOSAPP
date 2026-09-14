@@ -131,3 +131,61 @@ struct BrowseVocabularyFailureTests {
         #expect(model.subtitle != "Loading the vocabulary")
     }
 }
+
+/// What VoiceOver actually says on a tag row.
+///
+/// `AccessibilityTests.tagRowIsOneElement` pinned the *call*
+/// (`accessibilityLabel(Self.label(for: tag))`) and nothing else, so a
+/// `label(for:)` that returned `""` — or dropped the count, or stopped saying
+/// "spoiler tag" — passed it. The call-site pin stays there, because whether
+/// the modifier is attached is not observable outside SwiftUI; what the label
+/// says is, and it is asserted here.
+///
+/// Expected to fail against a same-named stub with: `label(for:)` returning
+/// anything but these exact strings — an empty body fails all four.
+/// Not gated on `SourceTree`: these run on Xcode Cloud, where the pin does not.
+@Suite("A tag row says what it is")
+struct BrowseTagLabelTests {
+    private func tag(name: String, count: Int?, spoiler: Bool?) -> MangaBaka.Tag {
+        MangaBaka.Tag(
+            id: 1, name: name, namePath: nil, parentId: nil, level: 1,
+            description: nil, seriesCount: count, isGenre: nil, isSpoiler: spoiler,
+            mergedWith: nil, contentRating: nil
+        )
+    }
+
+    /// The doc comment's own example.
+    @Test("Name and count, comma-separated")
+    func nameAndCount() {
+        #expect(BrowseView.label(for: tag(name: "Boxing", count: 19, spoiler: false)) == "Boxing, 19 series")
+    }
+
+    /// `seriesCount` is nullable on the wire (`Tag.seriesCount`), and a row
+    /// that announced "Boxing, series" would be worse than one that just
+    /// announced the name.
+    @Test("A tag with no count announces only its name")
+    func missingCountIsOmitted() {
+        #expect(BrowseView.label(for: tag(name: "Boxing", count: nil, spoiler: nil)) == "Boxing")
+    }
+
+    /// The reason this label exists at all: a sighted reader sees the spoiler
+    /// marker, and without this clause a VoiceOver reader hears the tag with
+    /// no warning that it gives the plot away.
+    @Test("A spoiler tag says so, last")
+    func spoilerIsAnnounced() {
+        #expect(
+            BrowseView.label(for: tag(name: "Boxing", count: 19, spoiler: true))
+                == "Boxing, 19 series, spoiler tag"
+        )
+        #expect(
+            BrowseView.label(for: tag(name: "Boxing", count: nil, spoiler: true))
+                == "Boxing, spoiler tag"
+        )
+    }
+
+    /// `isSpoiler` is `Bool?`: nil is "the API did not say", not "yes".
+    @Test("An unknown spoiler flag is not announced as a spoiler")
+    func unknownSpoilerIsSilent() {
+        #expect(!BrowseView.label(for: tag(name: "Boxing", count: 19, spoiler: nil)).contains("spoiler"))
+    }
+}

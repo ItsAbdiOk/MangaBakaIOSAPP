@@ -65,6 +65,12 @@ struct CoverGallery: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .foregroundStyle(Palette.accent)
+                        // Same clamp as the blocked-tags sheet's Done, and
+                        // the same mitigation — see the comment there.
+                        // `UINavigationBar` stops growing its bar items
+                        // partway up the Dynamic Type range; the Large
+                        // Content Viewer is what Apple offers instead.
+                        .accessibilityShowsLargeContentViewer()
                 }
             }
         }
@@ -278,9 +284,9 @@ private struct ZoomableCover: View {
             case .failure:
                 Image(systemName: "photo")
                     .typeSymbol(size: 40, weight: .regular, relativeTo: .largeTitle)
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textTertiary)
             default:
-                ProgressView().tint(Palette.textQuaternary)
+                ProgressView().tint(Palette.textTertiary)
             }
         }
         .frame(width: size.width, height: size.height)

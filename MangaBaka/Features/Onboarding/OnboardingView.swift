@@ -100,7 +100,7 @@ private struct PageDots: View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { index in
                 Circle()
-                    .fill(index == current ? Palette.accent : Palette.textQuaternary)
+                    .fill(index == current ? Palette.accent : Palette.textTertiary)
                     .frame(width: 6, height: 6)
             }
         }

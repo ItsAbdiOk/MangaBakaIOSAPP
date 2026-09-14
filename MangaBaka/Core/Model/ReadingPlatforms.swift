@@ -18,6 +18,32 @@ import Foundation
 /// risk this list exists for is *latent* in the data, not present in it. It is
 /// the edit that has not happened yet that this guards against.
 ///
+/// **Audited entry by entry against 5.2.3 on 2026-09-14**, once the app was
+/// confirmed to be going to the App Store, taking the strict reading: an
+/// official publisher or licensed platform stays, an aggregator goes. The
+/// result is a negative one and worth recording so nobody re-runs it: **no
+/// aggregator was found.** Fourteen of the entries nobody here could name on
+/// sight were checked with one live request each and turned out to be
+/// official — `manga-park.com` is Hakusensha's マンガPark and not MangaPark
+/// the scanlation site, `junemanga.com` is Digital Manga's Juné imprint
+/// store, `jumptoon.com` is Shueisha's, `bs-garden.com` and `hanaoto.net` are
+/// publishers' own magazine sites, and `qtoon.co.kr`, `mootoon.co.kr`,
+/// `anytoon.co.kr`, `peanutoon.com`, `lalatoon.com`, `komogi.com`,
+/// `wecomics.in.th` and `webcomicsapp.com` are commercial platforms. The rest
+/// were taken on recognition, which is not a licence check — say so rather
+/// than calling this list cleared.
+///
+/// One removal: `ono.live`, at the line below where it used to sit.
+///
+/// One residual, left alone deliberately: `seiga.nicovideo.jp` is a reader
+/// subdomain *and* a user-upload surface — the official and the user-drawn
+/// works share `/watch/mg…`, so there is no path split that keeps the first
+/// and drops the second. Removing it would break real official Nico manga
+/// links; scoping it would be a guess dressed as a rule. Recorded as
+/// unresolved rather than fixed wrongly. (Note this is the creator's own
+/// upload, not a reupload, so it is a weaker case than the portal roots
+/// finding 74 named.)
+///
 /// The single host from that sample deliberately left out is `web.archive.org`
 /// (one series). An archived copy of a reader page is exactly the "unauthorised
 /// access" case, whoever archived it.
@@ -86,7 +112,15 @@ enum ReadingPlatforms {
         "webtoons.com", "dongmanmanhua.cn", "tapas.io", "tappytoon.com", "manta.net",
         "crunchyroll.com", "inkr.com", "mangaplaza.com", "coolmic.me", "mangamo.com",
         "comikey.com", "mangas.io", "delitoon.com", "delitoon.de", "delitoonb.de",
-        "ono.live", "mangetsu-manga.fr", "webnovel.com", "webcomicsapp.com",
+        // `ono.live` was removed 2026-09-14 in the 5.2.3 audit. It is the one
+        // entry in this list I could not identify: a live request answers 202
+        // with an empty body and no title, there is no recognisable publisher
+        // or platform behind the name, and nothing in the 2026-09-12 sample
+        // records what it served. The allowlist's whole value is that it
+        // fails closed, so an entry nobody can defend is the one kind that
+        // must not stay. If a real `webplatform | ono.live` link turns up
+        // with evidence of who runs it, add it back with that evidence.
+        "mangetsu-manga.fr", "webnovel.com", "webcomicsapp.com",
         "mangatoon.mobi", "junemanga.com", "manga-park.com", "azuki.co",
         // Kakao's licensed Japanese platform — 3397's only Japanese reading
         // link (`webplatform | ja | piccoma.com`) was hidden outright before

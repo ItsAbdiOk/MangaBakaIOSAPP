@@ -5,7 +5,16 @@ import Testing
 /// MangaBaka's data is community-maintained, so every URL the app might open
 /// was typed in by someone else. Opening an arbitrary scheme on a reader's
 /// behalf hands a contributor the ability to trigger another installed app.
-@Suite("Link safety", .enabled(if: SourceTree.isAvailable))
+///
+/// The gate moved from the suite to the two tests that need it on
+/// 2026-09-14. It was on the suite, so the scheme allow-list below — the
+/// rule this file exists for — was skipped on every Xcode Cloud build,
+/// because `SourceTree.isAvailable` is false wherever the checkout is not
+/// reachable from inside the simulator. Nothing reports the difference
+/// between a local run and a cloud one, so it read as green both times.
+/// Four tests that decode a URL and call `SafeLink.web` never needed the
+/// checkout at all.
+@Suite("Link safety")
 struct SafeLinkTests {
     @Test("Ordinary web links are allowed")
     func allowsWebLinks() {
@@ -62,17 +71,59 @@ struct SafeLinkTests {
     }
 
     /// The views must use the filtered accessor, not the raw one.
-    @Test("The links view never opens a raw URL")
+    ///
+    /// The positive half stays a call-site pin — whether `LinksSection`'s
+    /// button hands `openURL` the filtered value is not readable from outside
+    /// SwiftUI, and only a UI test tapping the row could prove it. The
+    /// negative half does not stay pinned to this one file: see
+    /// `noFileReadsARawLinkURL` below.
+    @Test("The links view uses the filtered accessor", .enabled(if: SourceTree.isAvailable))
     func viewUsesFilteredURL() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/LinksSection.swift")
 
         #expect(source.contains("link.safeURL"))
         #expect(source.contains("item.safeURL"))
-        // The raw accessor must not appear at all: `safeURL` is the only way
-        // a URL should reach openURL from this view.
-        #expect(!source.contains("link.url "), "The raw URL must not reach openURL")
-        #expect(!source.contains("item.url "), "The raw URL must not reach openURL")
-        #expect(!source.contains("$0.url != nil"), "Filtering must use safeURL")
+    }
+
+    /// The same three negative checks, asked of the whole app rather than of
+    /// the one file that happened to have the bug.
+    ///
+    /// They were scoped to `LinksSection.swift` and that is precisely the
+    /// n−1 shape `XcconfigAssertions.swift:6-13` names as this project's
+    /// characteristic defect: `PublisherView.swift:240` and `ReadRow.swift:61`
+    /// open `SeriesLink`s too, and neither was covered. A new screen that
+    /// lists links is the case that matters, and no per-file pin can see one.
+    ///
+    /// The rule is "nothing reads the raw accessor", not "nothing calls
+    /// openURL": `RemindersSection`, `AppleVolumesRow` and `VolumesSection`
+    /// legitimately open URLs that never came off the wire as free text.
+    ///
+    /// Cost, stated rather than discovered later: `link` and `item` are
+    /// ordinary names, so an unrelated type with a `url` property bound to
+    /// either would fail this and need renaming or an exemption here. As of
+    /// 2026-09-14 the whole tree has zero matches, so nothing is exempted.
+    ///
+    /// Expected to fail without the fix — reverting `ReadRow.swift:61` to
+    /// `if let url = link.url { openURL(url) }` — with: "ReadRow.swift reads
+    /// a raw link URL". The old per-file test passes that revert.
+    @Test("No file anywhere reads a raw link or news URL", .enabled(if: SourceTree.isAvailable))
+    func noFileReadsARawLinkURL() throws {
+        let files = try SourceTree.swiftFiles(under: "MangaBaka")
+        #expect(!files.isEmpty, "No sources found: the loop below would pass on nothing")
+        var exercised = 0
+        for file in files {
+            let source = try SourceTree.read(file)
+            if source.contains("safeURL") { exercised += 1 }
+            for raw in ["link.url", "item.url", "$0.url"] {
+                #expect(
+                    !source.contains(raw),
+                    "\(file) reads a raw link URL (\(raw)); only safeURL may reach openURL"
+                )
+            }
+        }
+        // `safeURL` has to still exist somewhere, or the rule above is
+        // satisfied by an app that opens no links at all.
+        #expect(exercised > 0, "Nothing in the app names safeURL; the rule was never exercised")
     }
 }
 

@@ -68,7 +68,7 @@ extension RootView {
                         // screen that already does that well rather than
                         // building a second, worse picker inside Mix.
                         catalogue: catalogue,
-                        lenses: lenses
+                        lenses: lenses.value
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
                 }
@@ -88,10 +88,10 @@ extension RootView {
                         model: searchModel,
                         path: $searchPath,
                         onBrowse: { showsBrowse = true },
-                        lenses: lenses,
+                        lenses: lenses.value,
                         counts: session.counts,
                         catalogue: catalogue,
-                        recents: recents,
+                        recents: recents.value,
                         library: library
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }

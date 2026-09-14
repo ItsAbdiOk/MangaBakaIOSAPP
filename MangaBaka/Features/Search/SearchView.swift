@@ -443,7 +443,7 @@ private struct SurpriseMeButton: View {
         Button(action: action) {
             Text("Surprise me")
                 .typeInstruction()
-                .foregroundStyle(isActuallyEnabled ? Palette.textSecondary : Palette.textQuaternary)
+                .foregroundStyle(isActuallyEnabled ? Palette.textSecondary : Palette.textTertiary)
                 .tapTarget()
         }
         .buttonStyle(.press)

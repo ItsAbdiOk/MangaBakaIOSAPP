@@ -50,14 +50,38 @@ enum Palette {
     /// `#EBEBF5` @ 0.60 — `secondaryLabel`'s dark resolution exactly, so this
     /// is the system token rather than a copy of its numbers.
     static let textSecondary = Color(.secondaryLabel)
-    /// A deliberate departure: `tertiaryLabel` dark is `#EBEBF5` @ 0.30 and
-    /// this is 0.45. The spec's four text levels are spaced more evenly than
-    /// Apple's three, and at 0.30 the tertiary level drops under 3:1 against
-    /// the app's near-black ground.
+    /// **Marks and inactive controls, not running text.** A deliberate
+    /// departure: `tertiaryLabel` dark is `#EBEBF5` @ 0.30 and this is 0.45.
+    /// The spec's four text levels are spaced more evenly than Apple's three,
+    /// and at 0.30 the tertiary level drops under 3:1 against the app's
+    /// near-black ground.
+    ///
+    /// 3.96:1 on `ground` and 3.89:1 on a row's tinted ground (computed
+    /// 2026-09-14, `PaletteContrastFloorTests`). That clears WCAG 1.4.11's
+    /// 3:1 for non-text — a chevron, a spinner, an empty star, a status dot —
+    /// and clears the "inactive user interface component" exemption in both
+    /// 1.4.3 and 1.4.11 for a disabled control. It does **not** clear 4.5:1,
+    /// so anything a reader has to read wants `textMuted` (4.66:1) or better.
     static let textTertiary = Color(hex: 0xEBEBF5).opacity(0.45)
-    /// Provenance and attribution footnotes. A deliberate departure:
-    /// `quaternaryLabel` dark is `#EBEBF5` @ 0.18 and this is 0.32.
-    static let textQuaternary = Color(hex: 0xEBEBF5).opacity(0.32)
+
+    // There is no fifth level. `textQuaternary` was `#EBEBF5` @ 0.32, and it
+    // was retired on 2026-09-14 rather than repaired, because the arithmetic
+    // left nowhere to put it (computed in `PaletteContrastFloorTests`):
+    //
+    //   - it measured 2.52:1 on `ground`, which fails 4.5:1 for text and also
+    //     3:1 for non-text, so it failed on every reading;
+    //   - reaching 4.5:1 on this ground needs alpha 0.489, and reaching even
+    //     3:1 needs 0.369 — so a "quaternary" level that passes AA for text
+    //     is brighter than `textTertiary` at 0.45 and all but identical to
+    //     `textMuted` at 0.50. A fifth level below the fourth cannot both
+    //     exist and pass;
+    //   - none of its 15 call sites was the "provenance and attribution
+    //     footnote" its own doc comment described. Every one was a mark, a
+    //     disabled control, or body text that had no business being there.
+    //
+    // The spec collapsed the text levels to four; this is that, arrived at
+    // from the contrast side. Reaching for a fainter level than
+    // `textTertiary` is the mistake this note exists to catch.
 
     // MARK: Accent
 

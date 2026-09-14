@@ -30,7 +30,7 @@ extension LibraryView {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textTertiary)
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 13)
@@ -120,7 +120,7 @@ extension LibraryView {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.textQuaternary)
+                    .foregroundStyle(Palette.textTertiary)
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 13)

@@ -425,7 +425,11 @@ struct AppleBooksClientTests {
     }
 }
 
-@Suite("Apple volumes on the page", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Apple volumes on the page")
 struct AppleVolumesRowTests {
     /// One spine on the shelf, built the way the page builds it.
     @MainActor
@@ -474,7 +478,7 @@ struct AppleVolumesRowTests {
     /// a build without the feature. Now a failure says so.
     /// A series the reader's store does not sell falls back to the Japanese
     /// store's edition — covers and a count, no price, and it says so.
-    @Test("Nothing at home, so the Japanese edition, labelled")
+    @Test("Nothing at home, so the Japanese edition, labelled", .enabled(if: SourceTree.isAvailable))
     func japaneseFallback() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
         // `(try? answer.get())?.isEmpty`, not `answer?.isEmpty`, since item
@@ -493,7 +497,10 @@ struct AppleVolumesRowTests {
     /// bare sentence with no retry; `appleFailure: APIError?` carries the
     /// reason, and the section renders the same `InlineFailure` every other
     /// section on the page has had since gap 10.
-    @Test("A store that could not be reached says which failure, and offers a retry")
+    @Test(
+        "A store that could not be reached says which failure, and offers a retry",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func failureIsSaid() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
         #expect(source.contains("case let .failure(error):"))
@@ -502,7 +509,10 @@ struct AppleVolumesRowTests {
         #expect(source.contains("retry: { await loadAppleVolumes() },"))
     }
 
-    @Test("The store's shelf replaces MangaBaka's editions, never joins them")
+    @Test(
+        "The store's shelf replaces MangaBaka's editions, never joins them",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func replaces() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
         // `shelf`, not `appleVolumes`: the shelf is now Apple's volumes plus

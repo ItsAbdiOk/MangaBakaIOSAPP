@@ -9,12 +9,16 @@ import Testing
 /// resource is packaged or not — both sides of its `if` are satisfiable — so
 /// on its own it cannot fail on the packaging bug it was written for (review
 /// item 117). These two can.
-@Suite("Tag taxonomy packaging", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Tag taxonomy packaging")
 struct TagTaxonomyPackagingTests {
     /// The checkout: the file is there and is a whole taxonomy, so a truncated
     /// or half-written commit fails here rather than quietly shipping a picker
     /// with four tags in it.
-    @Test("The taxonomy resource in the checkout is whole")
+    @Test("The taxonomy resource in the checkout is whole", .enabled(if: SourceTree.isAvailable))
     func taxonomyResourceIsWhole() throws {
         let path = "\(SourceTree.root)/MangaBaka/Resources/TagTaxonomy.json"
         let data = try Data(contentsOf: URL(fileURLWithPath: path))

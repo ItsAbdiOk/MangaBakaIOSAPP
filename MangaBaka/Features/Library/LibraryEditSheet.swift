@@ -186,7 +186,7 @@ struct LibraryEditSheet: View {
                     } label: {
                         Image(systemName: step <= rating ? "star.fill" : "star")
                             .font(.system(size: 22))
-                            .foregroundStyle(step <= rating ? Palette.accent : Palette.textQuaternary)
+                            .foregroundStyle(step <= rating ? Palette.accent : Palette.textTertiary)
                             .frame(width: 38, height: 38)
                             .contentShape(Rectangle())
                     }

@@ -172,7 +172,7 @@ struct DetailTagSections: View {
                 if tag.isImplied {
                     Image(systemName: "arrow.turn.down.right")
                         .typeSymbol(size: 9, weight: .semibold)
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textTertiary)
                 }
                 Text(tag.name)
                     .typeChip()

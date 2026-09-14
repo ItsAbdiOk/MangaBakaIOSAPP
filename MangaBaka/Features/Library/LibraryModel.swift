@@ -49,6 +49,17 @@ final class LibraryModel {
     /// move, so "It finished without telling you" kept listing a series the
     /// reader had just marked Completed.
     private(set) var revision = 0
+    /// Bumps every time `listed` is rebuilt, and at no other time.
+    ///
+    /// `LibraryList` animates its reshape, and SwiftUI needs a value that
+    /// changes exactly when the list does. That value used to be
+    /// `model.listed.map(\.id)` — a fresh `[Int]` of one element per row,
+    /// allocated and then element-wise compared against the previous one on
+    /// every body pass. On a 513-row library that is a 513-element allocation
+    /// and 513 comparisons to answer a question an `Int` answers. Same trigger
+    /// points: the bump hangs off `listed`'s own `didSet`, so there is no way
+    /// to reshape the list and forget to move it.
+    private(set) var listedRevision = 0
     /// Whether every page arrived. False means the counts on screen are a floor,
     /// not a total, and nothing may be stated as absent on the strength of them.
     private(set) var isComplete = true
@@ -150,7 +161,7 @@ final class LibraryModel {
     /// against a 16.7ms frame. They are recomputed when their inputs change and
     /// at no other time.
     private(set) var shape: [(state: LibraryEntry.State, count: Int)] = []
-    private(set) var listed: [LibraryEntry] = []
+    private(set) var listed: [LibraryEntry] = [] { didSet { listedRevision += 1 } }
     private(set) var jumpTargets: [(letter: String, id: Int)] = []
 
     /// Recomputes what depends only on `entries`.

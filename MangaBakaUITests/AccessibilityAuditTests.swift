@@ -12,8 +12,11 @@ import XCTest
 /// performance tests: it launches a real app per test and is slow. Run it on
 /// purpose:
 ///   xcodebuild test -scheme MangaBaka -only-testing:MangaBakaUITests
-// Swift 6 makes XCUIApplication main-actor-isolated, so every test that
-// touches it has to be too.
+///
+/// `@MainActor` because Swift 6 makes `XCUIApplication` main-actor-isolated,
+/// so every test that touches it has to be too. (This used to be two `//`
+/// lines between the doc comment and the declaration, which the lint reads
+/// as an orphaned doc comment.)
 @MainActor
 final class AccessibilityAuditTests: XCTestCase {
 
@@ -211,10 +214,62 @@ final class AccessibilityAuditTests: XCTestCase {
         try audit(app, screen: "Blocked tags")
     }
 
+    /// The label the fan's peeking covers carry, and the proof the gallery
+    /// will open at all — see `openSeriesWithCoverFan`.
+    private static let fannedCover = "Another cover for this series"
+
+    /// How many Discover cards to try before giving up on finding a fan.
+    /// A guess: the feed is popular series, most of which have alternates.
+    private static let coverFanSearchLimit = 6
+
+    /// Opens series after series from Discover until one has a cover fan.
+    ///
+    /// Tapping the first card's cover is not enough any more, and this is why
+    /// "Cover gallery" was recorded on 2026-09-13 as "never reached its
+    /// marker": `SeriesDetailView.openCovers` guards on `otherCovers` being
+    /// non-empty, so a series with only its own front cover swallows the tap
+    /// rather than presenting a full-screen pager over nothing. The audit's
+    /// own screenshot from that run shows the series it landed on —
+    /// "Gekijouban Hunter x Hunter: Hiiro no Genei", a film entry — with a
+    /// single unfanned cover. So the screen was not broken and the test was
+    /// not wrong about where it was; there was simply no gallery to open.
+    ///
+    /// The fan's peeking cards are the marker to use, because they are drawn
+    /// from the same `otherCovers` the guard reads: `CoverStack` renders one
+    /// button labelled `fannedCover` per peeking cover, so that button exists
+    /// exactly when the tap will open something.
+    private func openSeriesWithCoverFan(in app: XCUIApplication) throws -> XCUIElement {
+        app.tabBars.buttons["Discover"].tap()
+        let cards = app.scrollViews.buttons.matching(
+            NSPredicate(format: "NOT (label BEGINSWITH[c] 'Open the stack')")
+        )
+        guard cards.firstMatch.waitForExistence(timeout: 15) else {
+            throw XCTSkip("no series on Discover to open — offline or empty feed")
+        }
+        for index in 0..<min(cards.count, Self.coverFanSearchLimit) {
+            let card = cards.element(boundBy: index)
+            guard card.exists else { continue }
+            card.tap()
+            let hero = app.buttons.matching(Self.heroCover).firstMatch
+            guard hero.waitForExistence(timeout: 10) else { continue }
+            if app.buttons[Self.fannedCover].waitForExistence(timeout: 5) {
+                return hero
+            }
+            // Back to Discover and on to the next card. The cover fan is
+            // built from covers that arrive with the page, so five seconds
+            // of absence is an answer, not a slow network.
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            _ = cards.firstMatch.waitForExistence(timeout: 10)
+        }
+        throw XCTSkip(
+            "none of the first \(Self.coverFanSearchLimit) series on Discover has a second cover"
+        )
+    }
+
     /// The cover gallery, which is the only full-screen surface in the app.
     func testCoverGalleryPassesTheAudit() throws {
         let app = launchedApp()
-        let hero = try openSeries(in: app)
+        let hero = try openSeriesWithCoverFan(in: app)
         hero.tap()
         // The gallery is a full-screen cover with its own Done button; that
         // button existing is the only proof it opened.
@@ -259,6 +314,18 @@ final class AccessibilityAuditTests: XCTestCase {
         let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = card.coordinate(withNormalizedOffset: CGVector(dx: 1.4, dy: 0.5))
         start.press(forDuration: 0.2, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 1.5)
+        // `arrived` above proves the Stack was reached; this proves the drag
+        // did not leave it, which is a different claim and the one that was
+        // false. On 2026-09-13 this test filed fourteen issues under "Stack
+        // mid-drag" and every one of them was Discover's: the screenshot it
+        // saved of itself is pixel-identical to `/tmp/mb-a11y-discover.png`
+        // everywhere above the tab bar, and the tab bar shows Discover
+        // selected. Whether the drag switches tabs for a real reader too, or
+        // whether `app.images.firstMatch` is simply not the card, is not
+        // settled — but either way the audit was measuring the wrong screen
+        // and saying nothing about it, which is the same false record the
+        // `arrived` guard was written for.
+        guard arrived(app.staticTexts["The stack"], "Stack, after the drag") else { return }
         try audit(app, screen: "Stack mid-drag")
     }
 }

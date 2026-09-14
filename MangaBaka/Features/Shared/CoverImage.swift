@@ -315,9 +315,47 @@ struct CoverCard: View {
     /// At accessibility text sizes a two-line clamp truncates almost every
     /// title. Allowing more lines costs vertical space, which a horizontal row
     /// has to spare, and keeps titles readable rather than merely present.
-    private var titleLineLimit: Int {
-        typeSize.isAccessibilitySize ? 4 : 2
+    ///
+    /// Four was not enough and the audit said so: the 2026-09-13 run reported
+    /// "Text clipped" on the card titles of Discover's rows (`Gekijouban
+    /// Hunter x Hunter: Hiiro no Genei`, `GATE: Where the JSDF Fought`). A
+    /// row card is 118pt, 177pt once widened, and `typeCardTitle` reaches
+    /// about 30pt at the largest size — call it twelve characters a line, so
+    /// a 41-character title wants four lines at best and five when a long
+    /// word will not break. That arithmetic is an ESTIMATE, not a device
+    /// measurement. `nil` rather than a bigger number because any number is
+    /// a new guess about the longest title MangaBaka carries, and a title
+    /// that runs long in a vertically scrolling row costs only height.
+    private var titleLineLimit: Int? {
+        Self.titleLineLimit(isAccessibilitySize: typeSize.isAccessibilitySize)
     }
+
+    /// Pure, for the same reason `scaledWidth` is: `cardsWidenWithText`
+    /// asserted the source contained a word and passed for months against a
+    /// grid that overflowed.
+    nonisolated static func titleLineLimit(isAccessibilitySize: Bool) -> Int? {
+        isAccessibilitySize ? nil : 2
+    }
+
+    /// The meta line wraps at accessibility sizes for the same reason.
+    ///
+    /// `lineLimit(1)` was the other half of the same audit rows ("Manga ·
+    /// 8.9", "Manhwa · 8.6", reported clipped). "Light novel · 9.9" is
+    /// seventeen characters and does not fit 177pt at 30pt type on any
+    /// reading of it.
+    private var metaLineLimit: Int? {
+        Self.metaLineLimit(isAccessibilitySize: typeSize.isAccessibilitySize)
+    }
+
+    nonisolated static func metaLineLimit(isAccessibilitySize: Bool) -> Int? {
+        isAccessibilitySize ? nil : 1
+    }
+
+    /// The level the meta line is drawn at, named so the contrast test can
+    /// assert on the colour the view actually uses rather than on this file
+    /// containing the word `textSecondary`. See
+    /// `DiscoveryStackAccessibilityTests.rowMetaSurvivesTheAmbientTint`.
+    nonisolated static let metaColour = Palette.textSecondary
 
     private var scaledWidth: CGFloat {
         Self.scaledWidth(width, sizing: sizing, isAccessibilitySize: typeSize.isAccessibilitySize)
@@ -363,8 +401,22 @@ struct CoverCard: View {
             if let meta {
                 Text(meta)
                     .typeGridMeta()
-                    .foregroundStyle(Palette.textMuted)
-                    .lineLimit(1)
+                    // `textSecondary`, not `textMuted`, and the string moved
+                    // rather than the token. Measured off the audit's own
+                    // screenshot (/tmp/mb-a11y-discover.png, 2026-09-13):
+                    // "Manhwa · 8.6" came out at 4.76:1, which passes 4.5:1
+                    // — but only where the row's ambient tint has already
+                    // faded. Sampled inside the same row at its strongest the
+                    // ground is (35, 31, 20), not the (8, 8, 11) every
+                    // `Palette` figure is quoted against, and `textMuted`
+                    // computes to 4.48:1 there: a miss by 0.02, which is
+                    // small and is still the wrong side of the line.
+                    // `textSecondary` is 6.32:1 on the ground and 5.83:1 on
+                    // that tint, so it passes wherever the card lands. See
+                    // `RowAmbient.strength` and `sampledGround`.
+                    .foregroundStyle(Self.metaColour)
+                    .lineLimit(metaLineLimit)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
             }
         }

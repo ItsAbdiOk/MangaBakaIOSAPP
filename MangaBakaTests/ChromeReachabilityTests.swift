@@ -10,9 +10,13 @@ import Testing
 /// These read source rather than run the view because the failure is a missing
 /// entry point, not a wrong value: nothing to assert at runtime when the
 /// control does not exist.
-@Suite("Chrome reachability", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Chrome reachability")
 struct ChromeReachabilityTests {
-    @Test("Settings is reachable from the Library screen's own header")
+    @Test("Settings is reachable from the Library screen's own header", .enabled(if: SourceTree.isAvailable))
     func settingsHasAnEntryPoint() throws {
         let library = try SourceTree.read("MangaBaka/Features/Library/LibraryView.swift")
         #expect(library.contains("onOpenSettings"))
@@ -33,7 +37,7 @@ struct ChromeReachabilityTests {
     /// `onChange` rather than fired inline from `onConnectAccount` — see
     /// that file for why. The route itself is unchanged; only which file it
     /// lives in moved.
-    @Test("Onboarding's account route still lands on Settings")
+    @Test("Onboarding's account route still lands on Settings", .enabled(if: SourceTree.isAvailable))
     func onboardingRouteSurvives() throws {
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(root.contains(".onChange(of: onboarding.hasCompleted)"))
@@ -44,7 +48,7 @@ struct ChromeReachabilityTests {
 
     /// The floating tab bar is the only chrome now. A second bar above it would
     /// reintroduce the stacked-header spacing that was just removed.
-    @Test("No second top bar was reintroduced")
+    @Test("No second top bar was reintroduced", .enabled(if: SourceTree.isAvailable))
     func noTopBar() throws {
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(!root.contains("AppTopBar("))

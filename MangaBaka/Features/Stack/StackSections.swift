@@ -1,6 +1,24 @@
 import SwiftUI
 
 /// SKIP and SAVE, shown on the card's corners as a drag commits.
+///
+/// Hidden from VoiceOver (below). It is decoration on a gesture VoiceOver
+/// cannot perform, and the same two words already reach a VoiceOver reader as
+/// the card's own "Save" and "Skip" custom actions and as the visible buttons
+/// under the stack — `StackView.cardArea` and the action row. Announcing a
+/// badge as well would be the third copy.
+///
+/// It is also a finding generator. The badge is mounted at rest and held at
+/// `opacity(0)` until the drag crosses far enough (`badgeStrength`), so the
+/// accessibility tree carries it on a screen that never draws it, and the
+/// 2026-09-13 audit filed two contrast failures against it. Sampling its own
+/// screenshot at the reported frames (/tmp/mb-a11y-stack.png, SKIP at
+/// 95,200 33x14) gives mean 97.1, sd 18.4 — flat cover art, no glyphs; the
+/// real text on that screen samples at sd ~90. The audit was measuring the
+/// artwork behind an invisible view. Drawn, both badges pass: SKIP is
+/// `textPrimary` on `surfaceBadge` over the worst case of a white cover at
+/// 4.99:1, and SAVE is `onAccent` on the opaque accent at 7.27:1 (computed
+/// 2026-09-14, `DiscoveryStackAccessibilityTests.stackBadgesPassWhenDrawn`).
 struct StackBadge: View {
     let text: String
     let fill: Color
@@ -22,6 +40,7 @@ struct StackBadge: View {
                         .strokeBorder(Palette.glassEdge, lineWidth: 0.5)
                 }
             }
+            .accessibilityHidden(true)
     }
 }
 
@@ -36,6 +55,8 @@ struct StackCaption: View {
     let reason: String?
     /// Shown when a save reached the local shelf but not the account.
     let warning: String?
+
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,21 +77,8 @@ struct StackCaption: View {
 
             let tags = Self.orderedTags(for: series)
             if !tags.isEmpty {
-                // One line, always. Three chips wrapped to a second row as soon
-                // as one name was long — "Primarily Adult Cast" beside "Male
-                // Protagonist" is enough — and the extra row pushed the card's
-                // actions under the tab bar. This drops to two chips, then to
-                // one, rather than wrapping.
-                //
-                // Replaces a FlowLayout, whose job here was stopping a long tag
-                // hanging off the screen edge. The last candidate truncates
-                // instead, so overflow is still impossible.
-                ViewThatFits(in: .horizontal) {
-                    chips(Array(tags.prefix(3)))
-                    chips(Array(tags.prefix(2)))
-                    chips(Array(tags.prefix(1)), truncating: true)
-                }
-                .padding(.top, 12)
+                tagRow(Array(tags.prefix(3)))
+                    .padding(.top, 12)
             }
 
             if let reason {
@@ -95,6 +103,50 @@ struct StackCaption: View {
         .padding(.top, 6)
     }
 
+    /// The tags under the card: one line at ordinary text sizes, one chip per
+    /// line at accessibility ones.
+    ///
+    /// At ordinary sizes this is unchanged and deliberately does not wrap.
+    /// Three chips went to a second row as soon as one name was long —
+    /// "Primarily Adult Cast" beside "Male Protagonist" is enough — and the
+    /// extra row pushed the card's actions under the tab bar, so it drops to
+    /// two chips and then to one truncating chip instead. That replaced a
+    /// `FlowLayout` whose job was the same.
+    ///
+    /// **The accessibility branch is new, 2026-09-14.** `ViewThatFits` was
+    /// the reason the audit reported "Dynamic Type font sizes are partially
+    /// unsupported" on all three of the stack's chips ("Shounen", "Fantasy",
+    /// "Action") on 2026-09-13: the type itself scales — `typeSmallMeta` is
+    /// anchored to `.subheadline`, which the ramp measured as the one anchor
+    /// with no stalls — but the branch carrying chips two and three stops
+    /// fitting, so those elements do not grow with the text, they vanish
+    /// from it. A tag the reader can no longer see is not a Dynamic Type
+    /// response. The caption sits inside `StackView`'s `ScrollView`, so the
+    /// extra height scrolls rather than burying the actions the way a second
+    /// row did at the default size.
+    @ViewBuilder
+    private func tagRow(_ tags: [String]) -> some View {
+        if typeSize.isAccessibilitySize {
+            // One per line, centred with the rest of the caption: two 30pt
+            // chips do not share 216pt (268pt card less 26pt of padding each
+            // side), so a wrapping layout would produce this column anyway
+            // and would left-align it against centred text. No `lineLimit`
+            // either — a long tag wraps inside its capsule rather than
+            // truncating, which is the other half of what the audit saw.
+            VStack(spacing: 7) {
+                ForEach(tags, id: \.self) { tag in
+                    chip(tag)
+                }
+            }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                chips(tags)
+                chips(Array(tags.prefix(2)))
+                chips(Array(tags.prefix(1)), truncating: true)
+            }
+        }
+    }
+
     /// One row of tag chips, on one line.
     ///
     /// `fixedSize` on every chip but the truncating candidate is what makes
@@ -103,18 +155,25 @@ struct StackCaption: View {
     private func chips(_ tags: [String], truncating: Bool = false) -> some View {
         HStack(spacing: 7) {
             ForEach(tags, id: \.self) { tag in
-                Text(tag)
-                    .typeSmallMeta()
+                chip(tag)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundStyle(Palette.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Palette.surfaceChip, in: Capsule())
-                    .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
                     .fixedSize(horizontal: !truncating, vertical: true)
             }
         }
+    }
+
+    /// One chip. The capsule only — whether it clamps to a line and whether it
+    /// refuses to compress belongs to the layout that placed it, because those
+    /// are the two things the row and the accessibility column disagree about.
+    private func chip(_ tag: String) -> some View {
+        Text(tag)
+            .typeSmallMeta()
+            .foregroundStyle(Palette.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Palette.surfaceChip, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
     }
 
     private var metaLine: String? { Self.metaLine(for: series) }

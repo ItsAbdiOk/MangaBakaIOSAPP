@@ -163,7 +163,9 @@ struct BrowseView: View {
 
     /// "Boxing, 19 series" — and it says when a tag is a spoiler, since that is
     /// the reason a reader might not want to hear it.
-    static func label(for tag: Tag) -> String {
+    /// `nonisolated` so `BrowseTagLabelTests` can ask it for a string
+    /// without an actor hop — it reads nothing but its argument.
+    nonisolated static func label(for tag: Tag) -> String {
         var parts = [tag.name]
         if let count = tag.seriesCount {
             parts.append("\(count) series")
@@ -220,17 +222,22 @@ struct BrowseView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                         // Dimmed below 100: a tag on nineteen series is not
-                        // worth the same weight as one on nine thousand.
+                        // worth the same weight as one on nine thousand. The
+                        // dim level is `textMuted` (4.66:1 on the ground), not
+                        // the retired quaternary level that drew it at 2.52:1
+                        // — this is a number the reader is meant to read, and
+                        // it was the only thing on the row below AA
+                        // (computed 2026-09-14).
                         Text((tag.seriesCount ?? 0).formatted())
                             .typeSmallMeta()
                             .foregroundStyle(
                                 (tag.seriesCount ?? 0) < 100
-                                    ? Palette.textQuaternary
+                                    ? Palette.textMuted
                                     : Palette.textSecondary
                             )
                         Image(systemName: "chevron.right")
                             .typeSymbol(size: 12, weight: .semibold)
-                            .foregroundStyle(Palette.textQuaternary)
+                            .foregroundStyle(Palette.textTertiary)
                     }
                     .padding(.vertical, 13)
                     .frame(minHeight: 48)

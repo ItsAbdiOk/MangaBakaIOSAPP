@@ -7,7 +7,11 @@ import Testing
 /// at accessibility text sizes, the hero title, and the library search
 /// field's hit area. These assert the shape of each fix rather than the
 /// symptom, the same way `DynamicTypeLayoutTests` does for the earlier round.
-@Suite("Dynamic Type leftovers", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Dynamic Type leftovers")
 struct DynamicTypeLeftoversTests {
     private static let ownedFiles = [
         "MangaBaka/Features/Detail/DetailStatsStrip.swift",
@@ -23,7 +27,7 @@ struct DynamicTypeLeftoversTests {
     /// A hard-coded point size does not grow with the reader's text size
     /// setting. Every one of these four files should reach for a text style
     /// or `scaledFont`/`@ScaledMetric` instead.
-    @Test("No fixed-point fonts on the audited files")
+    @Test("No fixed-point fonts on the audited files", .enabled(if: SourceTree.isAvailable))
     func noFixedPointFonts() throws {
         for path in Self.ownedFiles {
             let text = try source(path)
@@ -37,7 +41,7 @@ struct DynamicTypeLeftoversTests {
     /// A fixed height around scaled text clips it once Dynamic Type grows
     /// past whatever the height was measured at. `frame(minHeight:` is fine —
     /// it is `frame(height:` that clips.
-    @Test("No fixed heights on the audited files")
+    @Test("No fixed heights on the audited files", .enabled(if: SourceTree.isAvailable))
     func noFixedHeights() throws {
         for path in Self.ownedFiles {
             let text = try source(path)
@@ -54,7 +58,7 @@ struct DynamicTypeLeftoversTests {
     /// textTertiary ~4.0:1, textQuaternary ~2.6:1 — see Palette.swift for the
     /// opacities). Guards against a future edit reaching for the fainter
     /// tokens that read as "more subtle" but fail contrast.
-    @Test("Stats strip labels use a token that passes contrast")
+    @Test("Stats strip labels use a token that passes contrast", .enabled(if: SourceTree.isAvailable))
     func statsStripLabelUsesPassingToken() throws {
         let text = try source("MangaBaka/Features/Detail/DetailStatsStrip.swift")
         #expect(text.contains("stat.label.uppercased())"))
@@ -77,7 +81,7 @@ struct DynamicTypeLeftoversTests {
     /// The search field grows to at least Apple's 44pt minimum tap height
     /// instead of the mockup's fixed 40 (`Metrics.field`), so it clears the
     /// hit-area audit and still grows if the row's content ever needs more.
-    @Test("The library search field has no fixed height")
+    @Test("The library search field has no fixed height", .enabled(if: SourceTree.isAvailable))
     func searchFieldMinimumHeight() throws {
         let text = try source("MangaBaka/Features/Shared/InlineSearchField.swift")
         #expect(text.contains("frame(minHeight: Metrics.tapTarget)"))

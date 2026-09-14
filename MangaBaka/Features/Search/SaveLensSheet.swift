@@ -170,7 +170,7 @@ struct SaveLensButton: View {
         } label: {
             Image(systemName: "bookmark")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(isEnabled ? Palette.accent : Palette.textQuaternary)
+                .foregroundStyle(isEnabled ? Palette.accent : Palette.textTertiary)
                 .frame(width: Metrics.ctaPrimary, height: Metrics.ctaPrimary)
                 .background(
                     isEnabled ? Palette.accentTint : Palette.surface,

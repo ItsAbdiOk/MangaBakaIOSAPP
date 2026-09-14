@@ -11,6 +11,7 @@ struct LibraryList: View {
     @Bindable var model: LibraryModel
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
     /// Opens the edit sheet for one row. The redesign that replaced shelf
     /// cards with this list dropped the per-row edit, and the only copy
@@ -51,7 +52,11 @@ struct LibraryList: View {
         // A filter, a shape-bar tap or a sort change all reshape this list;
         // this is what makes rows leaving and arriving read as one list
         // resettling rather than a screen cut to a different one.
-        .animation(Motion.reduced(Motion.settle), value: model.listed.map(\.id))
+        // `listedRevision`, not `listed.map(\.id)`: the map allocated a
+        // 513-element `[Int]` and compared it element by element on every body
+        // pass, to detect a change the model already counts in an `Int`. Same
+        // trigger points — the counter hangs off `listed`'s own `didSet`.
+        .animation(Motion.reduced(Motion.settle), value: model.listedRevision)
     }
 
     private var header: some View {
@@ -127,7 +132,7 @@ struct LibraryList: View {
                     Text(entry.series?.displayTitle ?? "Untitled series")
                         .typeRowTitle()
                         .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(Self.titleLineLimit(isAccessibilitySize: typeSize.isAccessibilitySize))
 
                     HStack(spacing: 8) {
                         LibraryStateChip(state: entry.state)
@@ -163,6 +168,20 @@ struct LibraryList: View {
         // state chip, and under a title sort the stack left a screen-high gap
         // where it had collapsed identities together.
         .id(entry.seriesId)
+    }
+
+    /// How many lines a row title gets.
+    ///
+    /// One at the ordinary sizes: this list's whole argument is that a
+    /// thousand entries are navigable, and that depends on every row being the
+    /// same height. At an accessibility size one line is no longer a trim, it
+    /// is a title the reader cannot read — Apple's audit reported "Text
+    /// clipped" against the only library row it could see on 2026-09-13 (the
+    /// other four were behind the keyboard, so it never measured them; they
+    /// are the same view). Three is the cap: past that one row fills the
+    /// screen and the list stops being a list.
+    nonisolated static func titleLineLimit(isAccessibilitySize: Bool) -> Int {
+        isAccessibilitySize ? 3 : 1
     }
 
     /// "Ch 112 / 179", and only where progress means something.
@@ -333,6 +352,19 @@ struct LibraryFilterRow: View {
     let total: Int
     @Binding var selected: LibraryEntry.State?
 
+    /// How far the count is knocked back from the title inside a selected pill.
+    ///
+    /// 0.8, not the 0.7 it was. `onAccent` at 0.7 over `accent` composites to
+    /// #5B2C23 and measures 4.32:1 against the pill — under the 4.5:1
+    /// small-text minimum, and the one contrast finding on the library screen
+    /// that a reader actually meets ("516" at 52,235, Apple's audit,
+    /// 2026-09-13; the twelve outright failures beside it were all behind the
+    /// keyboard). At 0.8 it composites to #452119 and measures 5.34:1, and is
+    /// still visibly lighter than the title beside it, which is the only thing
+    /// the opacity is for. `LibraryListTests` recomputes the ratio from this
+    /// constant rather than trusting the number in this comment.
+    static let countOpacity: Double = 0.8
+
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
@@ -360,7 +392,7 @@ struct LibraryFilterRow: View {
                 Text(count.formatted())
                     .countsNotCuts()
                     .typeChip()
-                    .foregroundStyle(isOn ? Palette.onAccent.opacity(0.7) : Palette.textMuted)
+                    .foregroundStyle(isOn ? Palette.onAccent.opacity(Self.countOpacity) : Palette.textMuted)
             }
             .foregroundStyle(isOn ? Palette.onAccent : Palette.textSecondary)
             .padding(.horizontal, 13)

@@ -28,8 +28,41 @@ struct RowAmbient: View {
     /// measured (28, 27, 26) against a page ground of (8, 8, 11) — there,
     /// but only if you looked. A row's average of six covers tends to a warm
     /// grey, so the strength has to carry more than a single colour would.
+    ///
+    /// **This tint is the reason text over a Discover row does not measure
+    /// what `Palette` says it does.** Sampled from the accessibility audit's
+    /// own screenshot (see `sampledGround` below, 2026-09-13): the ground
+    /// beside a row reads (35, 31, 20) where the gradient is strongest, a
+    /// relative luminance of 0.0139 against the page ground's 0.0025 —
+    /// 5.6×. Every contrast figure quoted in `Palette` is measured against
+    /// the page ground, so on a row they are all a little worse (computed
+    /// 2026-09-14, `DiscoveryStackAccessibilityTests`):
+    ///
+    ///     textMuted      4.66:1 → 4.48:1   under AA
+    ///     textTertiary   3.96:1 → 3.89:1   under AA either way
+    ///     textSecondary  6.32:1 → 5.83:1
+    ///     textPrimary   18.37:1 → 15.22:1
+    ///
+    /// The margin is small — `textMuted` misses by 0.02 — but it is the
+    /// wrong side of the line, and it is why `CoverCard`'s meta line was
+    /// moved up a level rather than this number being turned down: the tint
+    /// is the design and the text level was the thing chosen wrongly.
+    /// Anything new drawn over a row wants `textSecondary` or stronger.
     nonisolated static let strength = 0.26
     nonisolated static let sampled = 6
+
+    /// The ground a row's own text really sits on: **sampled, not derived.**
+    ///
+    /// Read straight out of the accessibility audit's screenshot of itself
+    /// (/tmp/mb-a11y-discover.png, 2026-09-13) at the left edge of a row
+    /// where the gradient is at full strength — an 8x8pt patch at 5,600
+    /// whose darkest and brightest pixels differ by 1.06:1, so it is flat
+    /// tint rather than an edge. Recorded here rather than in the test that
+    /// uses it, because the number is a fact about this view and copying it
+    /// into a second file is how a measurement goes stale without anyone
+    /// noticing. It depends on the covers that happened to be on screen, so
+    /// it is one real row, not the worst possible one.
+    nonisolated static let sampledGround = Color(hex: 0x231F14)
 
     var body: some View {
         if let colour = Self.tint(for: series) {

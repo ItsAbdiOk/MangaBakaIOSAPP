@@ -185,9 +185,13 @@ struct DetailFidelityTests {
 /// The page's order is an argument about what a reader wants: what it is, then
 /// what to do about it, then the numbers, then the words, then everywhere else
 /// to go. Reordering it silently would undo that.
-@Suite("The series page keeps the mockup's order", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("The series page keeps the mockup's order")
 struct DetailOrderTests {
-    @Test("Sections appear in the mockup's sequence")
+    @Test("Sections appear in the mockup's sequence", .enabled(if: SourceTree.isAvailable))
     func order() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
         let sequence = [
@@ -223,7 +227,7 @@ struct DetailOrderTests {
 
     /// Tapping a tag searches for it. Without the route the tags are decoration
     /// and the most obvious onward path on the page goes nowhere.
-    @Test("Tags, seeds and the schedule all lead somewhere")
+    @Test("Tags, seeds and the schedule all lead somewhere", .enabled(if: SourceTree.isAvailable))
     func onwardRoutesWired() throws {
         // `detail(_:path:)` lives in the +Session extension since RootView
         // reached the body-length cap (2026-09-13).
@@ -345,9 +349,16 @@ struct DetailTagsTests {
 /// first page and offered "Add to library" for a series the reader was already
 /// reading. The write would then fail with a 409, having told them something
 /// false first.
-@Suite("The library lookup sees the whole library", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("The library lookup sees the whole library")
 struct LibraryLookupTests {
-    @Test("The control reads the shared library rather than fetching a page")
+    @Test(
+        "The control reads the shared library rather than fetching a page",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func usesSharedStore() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/LibraryControl.swift")
         #expect(source.contains("await store.load()"))
@@ -388,7 +399,7 @@ struct LibraryLookupTests {
     /// at all. `LibraryControlTests.writeNeverReWalks` pins the case this
     /// test used to miss entirely: a write is visible immediately and never
     /// costs another page read of the library.
-    @Test("Writes patch the shared store in place, not a full re-walk")
+    @Test("Writes patch the shared store in place, not a full re-walk", .enabled(if: SourceTree.isAvailable))
     func writesPatchShared() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/LibraryControl.swift")
         #expect(source.contains("await store.apply(change, to: seriesId)"))
@@ -459,7 +470,10 @@ struct TitleCopyTests {
         // Declarative, tied to a counter, so it cannot fire twice for one
         // tap or during a body pass. It was an imperative impactOccurred().
         #expect(source.contains(".haptic(Haptics.copied, onEach: copies)"))
-        #expect(!source.contains("impactOccurred()"), "Haptics go through .sensoryFeedback; see Haptics")
+        // The `!contains("impactOccurred()")` half moved out on 2026-09-14:
+        // `AccessibilityTests.noImperativeHaptics` now asks it of every file
+        // under `MangaBaka/`, this one included, so the rule covers a screen
+        // written tomorrow rather than only the file that had the bug.
         #expect(source.contains("accessibilityHint(\"Copies the title\")"))
     }
 

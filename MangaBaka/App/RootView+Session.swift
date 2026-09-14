@@ -104,7 +104,7 @@ extension RootView {
                                     catalogue: catalogue,
                                     focusAccount: wantsAccountFocus,
                                     reminders: reminders,
-                                    publisherFollows: publisherFollows,
+                                    publisherFollows: publisherFollows.value,
                                     onRemindersChanged: { await refreshReminders() },
                                     history: history,
                                     taste: taste,
@@ -329,7 +329,7 @@ extension RootView {
         // `notify` closure — Abdi's rule (2026-09-13) is two conditions only,
         // and a publisher follow is neither; the check still runs so
         // `lastSeenSeriesID` stays current for whenever this list does notify.
-        await publisherFollows.check(using: repository)
+        await publisherFollows.value.check(using: repository)
         // Whatever a prior series-page visit already cached — never a fetch:
         // this reads the six-hour detail cache and nothing else, so the call
         // site still costs zero requests. A series with nothing cached (never
@@ -493,7 +493,7 @@ extension RootView {
         .navigationDestination(item: $openPublisher) { route in
             PublisherView(
                 name: route.name, kind: route.kind, catalogue: catalogue,
-                repository: repository, path: path, follows: publisherFollows
+                repository: repository, path: path, follows: publisherFollows.value
             )
         }
         // Grows out of the cover that was tapped. Every screen that pushes a

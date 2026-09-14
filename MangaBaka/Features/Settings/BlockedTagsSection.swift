@@ -185,7 +185,20 @@ struct BlockTagPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.foregroundStyle(Palette.accent)
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(Palette.accent)
+                        // The only issue Apple's audit raised against this
+                        // screen on 2026-09-13: "Dynamic Type font sizes are
+                        // partially unsupported", on this button, at
+                        // 318,82 64x36. It is not a fixed-size font — the
+                        // button names none — it is `UINavigationBar`
+                        // clamping its bar items partway up the range, which
+                        // an app cannot lift. The Large Content Viewer is
+                        // Apple's own answer for a bar item that cannot
+                        // grow: press and hold shows the label at full size
+                        // in a HUD. UNVERIFIED that it clears the audit
+                        // line — it was reasoned from the clamp, not run.
+                        .accessibilityShowsLargeContentViewer()
                 }
             }
         }

@@ -82,9 +82,16 @@ private enum ContactedHosts {
 /// Checks the constant above — and so the manifest comment it mirrors —
 /// against the network clients themselves, by grepping their source for each
 /// host, rather than trusting a hand-typed list to stay in sync with them.
-@Suite("Every contacted host is named", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Every contacted host is named")
 struct ContactedHostsTests {
-    @Test("Every host in the privacy-manifest list is actually referenced by a client")
+    @Test(
+        "Every host in the privacy-manifest list is actually referenced by a client",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func everyHostIsReferenced() throws {
         let files = try SourceTree.swiftFiles(under: "MangaBaka/Core")
         let combined = try files.map { try SourceTree.read($0) }.joined()

@@ -14,19 +14,40 @@
        2026-09-11 before the first submission; the App Store Connect
        questionnaire must say the same.
 
-       Every host this build actually contacts, verified 2026-09-13 by
-       grepping every network client for its base URL (the constant
-       `PrivacyManifestTests.declaredHosts` mirrors, and checks, this list):
-       api.mangabaka.org (the account above); graphql.anilist.co and
-       shikimori.io (cast data, no reader identifier sent); itunes.apple.com
-       and www.googleapis.com (volume search, unauthenticated, no reader
-       identifier sent); www.webtoons.com and comic.naver.com (release
-       feeds); the seven GigaViewer magazine hosts — tonarinoyj.jp,
-       shonenjumpplus.com, comic-days.com, magcomi.com, shonenmagazine.com,
-       comic-gardo.com, comic-earthstar.com — read as plain RSS with no
-       request parameters at all; api.mangaupdates.com (release cadence,
-       unauthenticated). None of the nine non-MangaBaka hosts receives
-       anything that identifies the reader. -->
+       Every host this build actually contacts. Re-checked 2026-09-14, and
+       the earlier method was wrong twice over — worth saying, because the
+       same method would miss the same things again.
+
+       It was: grep every network client for its base URL. That finds only
+       hosts spelled out in the source, so it missed every host that arrives
+       inside a response and is fetched because the payload said so. Cover
+       art is the whole of that class and it is the app's largest single
+       source of requests: cdn.mangabaka.dev and images.mangabaka.dev (cover
+       art, in the app and in the widget extension, no reader identifier
+       sent) and s4.anilist.co (cast portraits), none of which appeared in
+       this list or in `PrivacyManifestTests.ContactedHosts` before today.
+       covers.openlibrary.org (fallback cover art) was in the test's list and
+       not in this comment — the two had already drifted, which is what the
+       test was added to prevent.
+
+       And comic.naver.com is no longer contacted at all: the Naver adapter
+       was deleted on 2026-09-14 (Q8). The name survives in
+       `ReleaseSource.scopedHosts`, where it classifies a link the reader may
+       tap, so a grep still finds it — a mention is not a request.
+
+       The list, then: api.mangabaka.org (the account above);
+       cdn.mangabaka.dev and images.mangabaka.dev (cover art);
+       graphql.anilist.co, s4.anilist.co and shikimori.io (cast data and
+       portraits, no reader identifier sent); itunes.apple.com,
+       www.googleapis.com and books.google.com (volume search,
+       unauthenticated, no reader identifier sent); covers.openlibrary.org
+       (fallback covers); www.webtoons.com (release feeds); the seven
+       GigaViewer magazine hosts — tonarinoyj.jp, shonenjumpplus.com,
+       comic-days.com, magcomi.com, shonenmagazine.com, comic-gardo.com,
+       comic-earthstar.com — read as plain RSS with no request parameters at
+       all; api.mangaupdates.com (release cadence, unauthenticated). None of
+       the non-MangaBaka hosts receives anything that identifies the reader.
+       -->
   <key>NSPrivacyCollectedDataTypes</key>
   <array>
     <dict>
@@ -63,13 +84,41 @@
        not on the source — so an undeclared use is found at submission time
        rather than here.
 
-       Audited on 2026-09-11: UserDefaults is the only one this app touches.
-       Eleven files use it, all for the reader's own settings on their own
-       device — title language, content rating, formats, blocked tags,
-       onboarding state, reminders. CA92.1 is the reason for exactly that:
+       Audited 2026-09-11, re-audited 2026-09-14 for the App Store decision.
+       UserDefaults is still the only one this app touches. Twelve files use
+       it — two more name it only in a comment, which is why the old count of
+       eleven was both stale and arrived at the wrong way — all for the
+       reader's own settings on their own device: title language, content
+       rating, formats, blocked tags, onboarding state, reminders, saved
+       lenses, recent searches. CA92.1 is the reason for exactly that:
        accessing information from the app itself, and no data is sent
-       anywhere. File timestamps, disk space, system boot time and active
-       keyboards were each searched for and are not used. -->
+       anywhere.
+
+       Verified by finding the call, not by assuming: every UserDefaults use
+       above, and the absence of the other three categories — file timestamps
+       (no `attributesOfItem`, no `resourceValues`, no `creationDate` or
+       `contentModificationDate` anywhere in MangaBaka/ or MangaBakaWidgets/),
+       disk space (no `volumeAvailableCapacity`, `systemFreeSize` or
+       `statfs`), system boot time (no `systemUptime`, no
+       `mach_absolute_time`) and active keyboards (no `activeInputModes`, no
+       `UITextInputMode`).
+
+       Assumed, not verified: GRDB. It is the only third-party code linked in
+       and it opens, renames and deletes SQLite files, which is where a file
+       timestamp call would plausibly live. GRDB ships its own manifest
+       (SourcePackages/checkouts/GRDB.swift/GRDB/PrivacyInfo.xcprivacy,
+       read 2026-09-14) declaring no collected data and no accessed API
+       types, and Apple evaluates a package's own manifest — so this rests on
+       GRDB's declaration rather than on anyone here having read its source.
+       If ITMS-91053 ever names a category this app does not use, GRDB is the
+       first place to look.
+
+       Not declared here and not needed here: the widget extension. It is its
+       own bundle and has no manifest of its own, which is correct only for
+       as long as it uses no required-reason API — checked 2026-09-14, it
+       uses none (no UserDefaults, no file attributes; it reads one JSON file
+       out of the App Group container and fetches cover art). Adding one to
+       MangaBakaWidgets is the fix if that ever changes. -->
   <key>NSPrivacyAccessedAPITypes</key>
   <array>
     <dict>

@@ -127,7 +127,7 @@ struct SearchIdleView: View {
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Palette.textQuaternary)
+                        .foregroundStyle(Palette.textTertiary)
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 15)

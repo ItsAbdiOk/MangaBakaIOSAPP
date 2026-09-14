@@ -21,12 +21,26 @@ import Testing
 struct SourceTestGuardTests {
     /// Any way of reaching the source tree, checked against a chunk of source
     /// text — a test's own body, or a helper's.
+    ///
+    /// `SourceTree.files`, `SourceTree.exists` and `SourceTree.containsRun`
+    /// were added to `SourceTree` after this list was written and were not
+    /// added here, so a test using only one of them read as source-blind:
+    /// `AccessibilityTests.usesTheSystemTabBar` (`SourceTree.exists`) and
+    /// `OnboardingTests.shipsNoBorrowedArtwork` (`SourceTree.files`) are both
+    /// gated today, but by their suite rather than because this noticed them
+    /// — ungate either suite and the guard said nothing. That is the same
+    /// hole builds 16 and 21 fell through, one accessor later. Every public
+    /// member of `SourceTree` is listed now, `containsRun` included: it does
+    /// no I/O itself, but its haystack has always come from `SourceTree.read`
+    /// and naming it costs only a gate on a test that used it for something
+    /// else. `guardMatchesTheAccessor` below asserts each still exists by
+    /// that name. Added 2026-09-14.
     private static func readsSourceDirectly(_ text: Substring) -> Bool {
-        text.contains("SourceTree.read")
-            || text.contains("SourceTree.root")
-            || text.contains("SourceTree.swiftFiles")
-            || text.contains("contentsOfFile:")
-            || text.contains("#filePath")
+        [
+            "SourceTree.read", "SourceTree.root", "SourceTree.swiftFiles",
+            "SourceTree.files", "SourceTree.exists", "SourceTree.containsRun",
+            "contentsOfFile:", "#filePath"
+        ].contains { text.contains($0) }
     }
 
     /// Names of every function declared in the suite — `@Test` or not — whose
@@ -86,16 +100,25 @@ struct SourceTestGuardTests {
         return names
     }
 
-    /// Every `@Test` in `source` whose suite is not itself gated but whose
-    /// body reads the source tree — directly, or by calling a helper that
-    /// does. `file` only labels the result.
-    private static func ungatedTests(in source: String, file: String) -> [String] {
-        var ungated: [String] = []
-
-        // Suites are split at a line start, not anywhere the attribute name
-        // appears — prose in a comment mentioning it must not be read as a
-        // declaration. This check failed on its own documentation the first
-        // time it ran.
+    /// Every suite in the file as its own chunk, a nested one de-indented so
+    /// it reads like a top-level suite and the rest of this logic applies to
+    /// it unchanged.
+    ///
+    /// Suites are split at a line start, not anywhere the attribute name
+    /// appears — prose in a comment mentioning it must not be read as a
+    /// declaration. This check failed on its own documentation the first time
+    /// it ran.
+    ///
+    /// A nested `@Suite` used to be invisible here: nothing split on it, and
+    /// its members are indented eight spaces, so `"\n    @Test"` never matched
+    /// them either. The whole nested suite — gate, tests and all — was
+    /// swallowed into the *outer* suite's last test chunk, which then trivially
+    /// "read source" through code that was not its own. `AppGroupParityTests`
+    /// is the first nested suite in this tree and it reported `constantsAgree`
+    /// — an `==` between two constants, touching no file — as an ungated source
+    /// reader. Found 2026-09-14.
+    private static func suiteChunks(in source: String) -> [String] {
+        var chunks: [String] = []
         for rawSuite in source.components(separatedBy: "\n@Suite").dropFirst() {
             // `components(separatedBy:)` only cuts at the *next* `@Suite`, so
             // a suite's raw chunk runs past its own closing brace and into
@@ -109,7 +132,30 @@ struct SourceTestGuardTests {
             // drops everything written about the next suite before it is
             // ever looked at.
             let bodyEnd = rawSuite.range(of: "\n}")?.lowerBound ?? rawSuite.endIndex
-            let suite = rawSuite[..<bodyEnd]
+            let body = String(rawSuite[..<bodyEnd])
+            let nested = body.components(separatedBy: "\n    @Suite")
+            chunks.append(nested[0])
+            chunks.append(contentsOf: nested.dropFirst().map(Self.deindented))
+        }
+        return chunks
+    }
+
+    /// Drops one level of indentation from every line, so a nested suite's
+    /// members sit where the markers above expect them.
+    private static func deindented(_ text: String) -> String {
+        text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.hasPrefix("    ") ? String($0.dropFirst(4)) : String($0) }
+            .joined(separator: "\n")
+    }
+
+    /// Every `@Test` in `source` whose suite is not itself gated but whose
+    /// body reads the source tree — directly, or by calling a helper that
+    /// does. `file` only labels the result.
+    private static func ungatedTests(in source: String, file: String) -> [String] {
+        var ungated: [String] = []
+
+        for suite in suiteChunks(in: source) {
             let declaration = suite.components(separatedBy: "{").first ?? ""
             let suiteIsGated = declaration.contains("SourceTree.isAvailable")
             let helperNames = sourceReadingHelperNames(in: suite[...])
@@ -162,6 +208,14 @@ struct SourceTestGuardTests {
         let source = try SourceTree.read("MangaBakaTests/SourceTree.swift")
         #expect(source.contains("static func read("))
         #expect(source.contains("static var isAvailable"))
+        // The rest of `readsSourceDirectly`'s list, for the same reason: a
+        // renamed accessor the guard no longer names is a silent hole, not a
+        // failure. `root` is a `let`, the others are funcs.
+        #expect(source.contains("static let root"))
+        #expect(source.contains("static func swiftFiles("))
+        #expect(source.contains("static func files("))
+        #expect(source.contains("static func exists("))
+        #expect(source.contains("static func containsRun("))
     }
 
     /// The hole this guard actually had: a helper declared before the
@@ -197,6 +251,66 @@ struct SourceTestGuardTests {
         #expect(
             ungated == ["Fixture.swift: readsThroughTheHelper"],
             "The helper-indirected read was not detected: \(ungated)"
+        )
+    }
+
+    /// The nested-suite hole, built from `AppGroupParityTests`'s real shape:
+    /// an ungated outer suite whose only test compares two constants, and a
+    /// gated inner suite that does the reading.
+    ///
+    /// Expected to fail before the fix with
+    /// `["Fixture.swift: constantsAgree"]` — the outer test swallowed the
+    /// inner suite's `SourceTree.read` and was reported as an ungated source
+    /// reader, so the guard failed on a test that touches no file, and the
+    /// only ways out were gating a test that does not need it or deleting
+    /// the nesting.
+    @Test("A gated suite nested inside an ungated one is read as its own suite")
+    func nestedSuiteIsNotFoldedIntoItsParent() {
+        let fixture = """
+        // A fixture with a nested suite.
+        @Suite("Outer")
+        struct OuterSuite {
+            @Test("constants agree")
+            func constantsAgree() {
+                #expect(A.id == B.id)
+            }
+
+            @Suite("Inner", .enabled(if: SourceTree.isAvailable))
+            struct InnerSuite {
+                @Test("reads the entitlements")
+                func entitlementsGrantIt() throws {
+                    #expect(try SourceTree.read("Configs/x.entitlements").contains("y"))
+                }
+            }
+        }
+        """
+        #expect(
+            Self.ungatedTests(in: fixture, file: "Fixture.swift").isEmpty,
+            "The outer suite's test reads nothing; the inner one is gated"
+        )
+    }
+
+    /// The same fixture with the inner gate removed: the nested suite must
+    /// still be checked rather than merely ignored, or the fix above would
+    /// have traded a false positive for a blind spot.
+    @Test("A nested suite that is not gated is still caught")
+    func ungatedNestedSuiteIsCaught() {
+        let fixture = """
+        // A fixture with an ungated nested suite.
+        @Suite("Outer")
+        struct OuterSuite {
+            @Suite("Inner")
+            struct InnerSuite {
+                @Test("reads the entitlements")
+                func entitlementsGrantIt() throws {
+                    #expect(try SourceTree.read("Configs/x.entitlements").contains("y"))
+                }
+            }
+        }
+        """
+        #expect(
+            Self.ungatedTests(in: fixture, file: "Fixture.swift")
+                == ["Fixture.swift: entitlementsGrantIt"]
         )
     }
 }

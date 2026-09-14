@@ -143,7 +143,7 @@ struct AccountCard: View {
         case .signedIn: Palette.positive
         case .failed, .notStored: Palette.accent
         case .checking: Palette.accent.opacity(0.45)
-        case .idle, .unverified: Palette.textQuaternary
+        case .idle, .unverified: Palette.textTertiary
         }
     }
 
@@ -261,6 +261,23 @@ struct AccountCard: View {
                     .background(Palette.surfaceField, in: RoundedRectangle(
                         cornerRadius: Metrics.radiusChip, style: .continuous
                     ))
+                    // The `.frame` above grows the drawn field to 44pt, and
+                    // Apple's audit on 2026-09-13 still reported "Hit area is
+                    // too small" against it at 44,342 229x17. The layout
+                    // frame and the accessibility element are not the same
+                    // rectangle: the field's element hugs its text line, 17pt
+                    // tall, inside a 44pt box. Sampling the audit's own
+                    // screenshot at 30,330 340x44 on 2026-09-14 reads the
+                    // field fill (#282828) across the full 44pt, so the
+                    // drawing was already right and only the element was
+                    // short. `.accessibility` is the one content shape that
+                    // moves the element's rectangle rather than the hit test.
+                    .contentShape(
+                        .accessibility,
+                        RoundedRectangle(
+                            cornerRadius: Metrics.radiusChip, style: .continuous
+                        )
+                    )
 
                 StateAction(
                     title: status.isRejection ? "Paste a new one" : "Save",

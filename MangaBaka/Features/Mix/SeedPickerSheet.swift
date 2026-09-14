@@ -171,7 +171,7 @@ struct SeedPickerSheet: View {
     private var results: some View {
         if search.isSearching && search.results.isEmpty {
             Spacer()
-            ProgressView().tint(Palette.textQuaternary)
+            ProgressView().tint(Palette.textTertiary)
             Spacer()
         } else if search.results.isEmpty {
             // Read straight off `failure`; the `message` shim on

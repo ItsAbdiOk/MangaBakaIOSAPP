@@ -96,7 +96,11 @@ struct BlendDNAView: View {
                 weight: share > 0.75 ? .semibold : .regular,
                 relativeTo: .footnote
             )
-            .foregroundStyle(isOff ? Palette.textQuaternary : Palette.textBody)
+            // An excluded strand is struck through, not erased — the reader
+            // still has to read the tag name to put it back. `textMuted`
+            // (4.66:1 on the ground) rather than the retired quaternary level,
+            // which drew this at 2.52:1 (computed 2026-09-14).
+            .foregroundStyle(isOff ? Palette.textMuted : Palette.textBody)
             .padding(.horizontal, 12)
             .frame(minHeight: 34)
             .background(isOff ? Palette.surfaceInset : Palette.surfaceChip, in: Capsule())

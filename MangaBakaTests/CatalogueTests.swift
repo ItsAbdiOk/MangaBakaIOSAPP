@@ -506,11 +506,15 @@ struct TagAudienceTests {
 /// `tag_mode=or`, with `tag_mode=and`, and with neither; `tag=isekai` alone
 /// is 7,116, so a working OR would be far above 164. The control is dead on
 /// both ends, so it is no longer presented.
-@Suite("Tag picker match mode", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Tag picker match mode")
 struct TagPickerModeTests {
     /// Fails without the fix — expected to fail with:
     /// `!source.contains("Match any")`.
-    @Test("The picker no longer offers a Match any control")
+    @Test("The picker no longer offers a Match any control", .enabled(if: SourceTree.isAvailable))
     func noMatchAnyControl() throws {
         let source = try SourceTree.read("MangaBaka/Features/Search/TagPickerSheet.swift")
         #expect(!source.contains("\"Match any\""))

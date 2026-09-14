@@ -46,6 +46,25 @@ struct DetailBarTitle: ViewModifier {
 
     private var heroTitleIsHidden: Bool { crossfade >= 1 }
 
+    /// Whether the bar's copy is in the view at all.
+    ///
+    /// It used to be mounted always and drawn at `opacity(crossfade)`, so at
+    /// the top of the page — where every reader starts, and where the
+    /// accessibility audit measures — a fully transparent copy of the title
+    /// sat in the layout at 72,76 200x16. Apple's audit on 2026-09-13 filed
+    /// three separate issues against it there: "Contrast failed" (nothing
+    /// against nothing), "Text clipped" (the `lineLimit(1)` below) and
+    /// "Dynamic Type font sizes are partially unsupported". None of the three
+    /// is something a reader meets: at that scroll position the words are
+    /// invisible, and the hero is showing the same title at 24pt a few points
+    /// below. An element drawn at zero opacity should not be in the tree.
+    ///
+    /// `> 0` rather than a threshold, so the fade itself is untouched — the
+    /// copy mounts on the first frame of the crossfade and leaves on the last.
+    /// `accessibilityHidden` is still applied while it fades, for the reason
+    /// recorded below.
+    nonisolated static func showsBarTitle(crossfade: CGFloat) -> Bool { crossfade > 0 }
+
     func body(content: Content) -> some View {
         content
             .navigationTitle(title)
@@ -68,14 +87,17 @@ struct DetailBarTitle: ViewModifier {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text(title)
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(1)
-                        .opacity(crossfade)
-                        // Announcing a title the reader cannot see would make
-                        // VoiceOver read the same words twice on this screen.
-                        .accessibilityHidden(!heroTitleIsHidden)
+                    if Self.showsBarTitle(crossfade: crossfade) {
+                        Text(title)
+                            .typeRowTitle()
+                            .foregroundStyle(Palette.textPrimary)
+                            .lineLimit(1)
+                            .opacity(crossfade)
+                            // Announcing a title the reader cannot see would
+                            // make VoiceOver read the same words twice on
+                            // this screen.
+                            .accessibilityHidden(!heroTitleIsHidden)
+                    }
                 }
             }
     }

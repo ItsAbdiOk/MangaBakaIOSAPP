@@ -5,7 +5,11 @@ import Testing
 
 /// Accessibility is a build requirement the design spec names but the mockup
 /// does not demonstrate, so it is asserted here rather than assumed.
-@Suite("Accessibility", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Accessibility")
 struct AccessibilityTests {
     /// Cover art carries the title visually. Without a label, a VoiceOver
     /// reader hears nothing at all on a screen made almost entirely of covers.
@@ -29,7 +33,7 @@ struct AccessibilityTests {
 
     /// The type ramp is anchored to text styles so it scales. If a size were
     /// hard-coded it would stay put while everything around it grew.
-    @Test("Every ramp entry is anchored to a text style")
+    @Test("Every ramp entry is anchored to a text style", .enabled(if: SourceTree.isAvailable))
     func rampIsScalable() throws {
         let source = try SourceTree.read("MangaBaka/DesignSystem/Typography.swift")
         // Every scaledFont call in the named ramp must pass relativeTo, which
@@ -47,7 +51,10 @@ struct AccessibilityTests {
 
     /// The stack is a drag surface, and VoiceOver cannot drag. Without explicit
     /// actions the whole screen is unreachable with the screen reader on.
-    @Test("The stack exposes save and skip as actions, not only as gestures")
+    @Test(
+        "The stack exposes save and skip as actions, not only as gestures",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func stackHasActions() throws {
         let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
         #expect(source.contains("accessibilityAction(named: \"Save\")"))
@@ -56,7 +63,7 @@ struct AccessibilityTests {
 
     /// A card thrown the full width of the screen is a lot of motion for
     /// someone who has asked for less of it.
-    @Test("The stack honours Reduce Motion")
+    @Test("The stack honours Reduce Motion", .enabled(if: SourceTree.isAvailable))
     func stackHonoursReduceMotion() throws {
         let source = try SourceTree.read("MangaBaka/Features/Stack/StackView.swift")
         #expect(source.contains("accessibilityReduceMotion"))
@@ -64,7 +71,7 @@ struct AccessibilityTests {
 
     /// Decorative images announced by VoiceOver are noise between the things
     /// that matter.
-    @Test("Decorative symbols are hidden from VoiceOver")
+    @Test("Decorative symbols are hidden from VoiceOver", .enabled(if: SourceTree.isAvailable))
     func decorativeIsHidden() throws {
         let source = try SourceTree.read("MangaBaka/Features/Shared/FailureState.swift")
         #expect(source.contains("accessibilityHidden(true)"))
@@ -75,7 +82,11 @@ struct AccessibilityTests {
 /// Fixed heights containing scaled text are the recurring Dynamic Type bug in
 /// this codebase: three separate places clipped or collided at accessibility
 /// sizes. These assert the shape of the fix rather than the symptom.
-@Suite("Dynamic Type layout", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Dynamic Type layout")
 struct DynamicTypeLayoutTests {
     private func source(_ path: String) throws -> String {
         try SourceTree.read(path)
@@ -88,7 +99,7 @@ struct DynamicTypeLayoutTests {
     /// format rows arrived in a second file and were outside the check. There
     /// is one row component now, so there is one place to check — and one place
     /// where the mistake can be made.
-    @Test("Settings rows size to their content")
+    @Test("Settings rows size to their content", .enabled(if: SourceTree.isAvailable))
     func settingsRowsAreFlexible() throws {
         let text = try source("MangaBaka/Features/Settings/SettingsRow.swift")
         #expect(text.contains("frame(minHeight: 63)"))
@@ -105,7 +116,7 @@ struct DynamicTypeLayoutTests {
     /// The stack's caption is two stacked lines of scaled text over a card.
     /// Without this it truncates to a single line at accessibility sizes and
     /// the reason — the whole point of showing it — is the half that goes.
-    @Test("The stack's caption is allowed to wrap")
+    @Test("The stack's caption is allowed to wrap", .enabled(if: SourceTree.isAvailable))
     func stackCaptionWraps() throws {
         // Lives in StackSections.swift since StackView hit the body-length cap.
         let text = try source("MangaBaka/Features/Stack/StackSections.swift")
@@ -120,7 +131,7 @@ struct DynamicTypeLayoutTests {
     /// passed for months against code that never ran, which is the case
     /// against source-grep tests in one line. The chips a reader actually sees
     /// are in `DetailTagSections`.
-    @Test("Chips size to their content")
+    @Test("Chips size to their content", .enabled(if: SourceTree.isAvailable))
     func chipsAreFlexible() throws {
         let text = try source("MangaBaka/Features/Detail/DetailTagSections.swift")
         #expect(text.contains("frame(minHeight: Metrics.headerPill)"))
@@ -143,7 +154,10 @@ struct DynamicTypeLayoutTests {
 
     /// One item wider than its container used to hang off the screen edge. At
     /// large text sizes a single long publisher name is enough to trigger it.
-    @Test("The flow layout caps an over-wide item instead of overflowing")
+    @Test(
+        "The flow layout caps an over-wide item instead of overflowing",
+        .enabled(if: SourceTree.isAvailable)
+    )
     func flowLayoutCapsWidth() throws {
         let text = try source("MangaBaka/Features/Shared/FlowLayout.swift")
         #expect(text.contains("min(size.width, bounds.width)"))
@@ -154,7 +168,11 @@ struct DynamicTypeLayoutTests {
 /// Every scrolling screen must be able to scroll clear of the floating tab bar.
 /// Content passing *under* the translucent bar is intended; content that can
 /// never emerge from behind it is not.
-@Suite("Tab bar clearance", .enabled(if: SourceTree.isAvailable))
+/// Gated per test, not per suite (2026-09-14): the gate on the suite also
+/// skipped the tests below that assert on a value and never touch the
+/// checkout, so they did not run on Xcode Cloud at all — and nothing
+/// reports the difference between a local run and a cloud one.
+@Suite("Tab bar clearance")
 struct TabBarClearanceTests {
     private static let scrollingScreens = [
         "MangaBaka/Features/Discovery/DiscoverView.swift",
@@ -206,6 +224,7 @@ struct TabBarClearanceTests {
     /// business here.
     @Test(
         "Every scrolling screen names the top inset rather than writing one",
+        .enabled(if: SourceTree.isAvailable),
         arguments: TabBarClearanceTests.screensWithATopInset
     )
     func topInsetIsNamedNotNumbered(path: String) throws {
@@ -217,7 +236,7 @@ struct TabBarClearanceTests {
     }
 
     @Test(
-        "Every scrolling screen reserves the clearance",
+        "Every scrolling screen reserves the clearance", .enabled(if: SourceTree.isAvailable),
         arguments: TabBarClearanceTests.scrollingScreens
     )
     func everyScreenReservesIt(path: String) throws {
@@ -377,6 +396,13 @@ struct TabBarSizingTests {
 struct NewScreenAccessibilityTests {
     /// A tag row is three views. Left alone it is three focus stops: the name,
     /// a bare number, and an unlabelled chevron.
+    ///
+    /// These two stay source-text pins on purpose. Whether a modifier is
+    /// *applied* to a view is not observable from outside SwiftUI — there is
+    /// no value to read and no seam to inject — so the only alternative is a
+    /// UI test driving VoiceOver, which this target cannot run. What the
+    /// label *says* is a different matter, and that half moved to
+    /// `BrowseTagLabelTests` below, where a stub cannot pass it.
     @Test("A tag row is one element that says what it is")
     func tagRowIsOneElement() throws {
         let source = try SourceTree.read("MangaBaka/Features/Browse/BrowseView.swift")
@@ -476,13 +502,40 @@ struct NewScreenAccessibilityTests {
     /// Every haptic goes through `.sensoryFeedback`, which is tied to a value
     /// change and honours the system setting. An imperative generator fired
     /// from a button action can fire twice for one tap.
+    ///
+    /// Construction was the only thing scanned until 2026-09-14, which is
+    /// half the rule: a generator held as a stored property is constructed
+    /// once — somewhere this scan would have to be reading to see — and then
+    /// *fired* from a button action, which is the part that double-taps.
+    /// The three fire methods are named here too. `DetailFidelityTests:462`
+    /// asked the same question of one file; this asks it of all of them, so
+    /// a new screen is covered on the day it is written rather than when
+    /// somebody remembers to add a file to a list.
+    ///
+    /// Expected to fail without the fix — adding
+    /// `UIImpactFeedbackGenerator(style: .light).impactOccurred()` to any
+    /// button action in any file — with: "<file> fires a haptic imperatively
+    /// (impactOccurred()". The pre-2026-09-14 version catches that one only
+    /// because the construction is on the same line; move it to a stored
+    /// property and the old version passes.
     @Test("No haptic is fired imperatively")
     func noImperativeHaptics() throws {
         let files = try SourceTree.swiftFiles(under: "MangaBaka")
         #expect(!files.isEmpty)
+        // `FeedbackGenerator(` covers the impact, notification and selection
+        // generators in one term without matching `Haptics.swift`'s own
+        // comment naming the type it forbids.
+        let banned = [
+            "FeedbackGenerator(", "impactOccurred(", "notificationOccurred(", "selectionChanged("
+        ]
         for file in files {
             let source = try SourceTree.read(file)
-            #expect(!source.contains("FeedbackGenerator("), "\(file) fires a haptic imperatively")
+            for term in banned {
+                #expect(
+                    !source.contains(term),
+                    "\(file) fires a haptic imperatively (\(term)); use .sensoryFeedback"
+                )
+            }
         }
     }
 
