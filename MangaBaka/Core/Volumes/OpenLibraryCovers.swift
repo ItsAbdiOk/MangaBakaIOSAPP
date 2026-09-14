@@ -15,13 +15,16 @@ import Foundation
 /// MangaBaka's own images all come first, and this is a gap-filler behind
 /// all three — see `SeriesDetailView+Store.loadOpenLibraryCovers`.
 actor OpenLibraryCovers {
-    /// Open Library's own guideline is "about 100 requests every 5 minutes"
-    /// per IP (their stated politeness policy, not a hard limit they
-    /// enforce with a status code the way Apple's 429 does). 3 seconds a
-    /// request keeps to 100 in 300 seconds with no margin at all, so this is
-    /// A GUESS at a gap comfortably inside it, matching the spacing already
-    /// used for Apple's and Google's clients.
-    static let minimumInterval: TimeInterval = 3.0
+    /// The gap this client actually waits out, which since 2026-09-14 is the
+    /// *host's* and not this client's own.
+    ///
+    /// It was 3.0 here — A GUESS at a gap inside Open Library's stated "about
+    /// 100 requests every 5 minutes" — while `OpenLibraryEditions` used 4.0,
+    /// measured. Two clients, two `RequestSpacing` values, one host: they could
+    /// put two requests on openlibrary.org inside one gap however either
+    /// number was set. `HostRateGate.openLibrary` is now the single gate and
+    /// this reads from it rather than restating a number.
+    static var minimumInterval: TimeInterval { HostRateGate.openLibrary.minimumInterval }
     /// A GUESS. A 404 is unlikely to become a 200 overnight — nobody uploads
     /// a cover to a specific ISBN on a schedule — but "cached forever" risks
     /// hiding a genuinely late upload for good, so this expires like the
@@ -32,16 +35,21 @@ actor OpenLibraryCovers {
     private let session: URLSession
     private let clock: any Clock
     private let cacheDirectory: URL?
-    private var spacing = RequestSpacing(minimumInterval: OpenLibraryCovers.minimumInterval)
+    /// Shared with `OpenLibraryEditions`. Injectable so a test gets a gate of
+    /// its own rather than queueing behind whatever another suite left on the
+    /// process-wide one.
+    private let gate: HostRateGate
 
     init(
         session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
+        gate: HostRateGate = .openLibrary,
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("openlibrary", isDirectory: true)
     ) {
         self.session = session
         self.clock = clock
+        self.gate = gate
         self.cacheDirectory = cacheDirectory
     }
 
@@ -53,7 +61,7 @@ actor OpenLibraryCovers {
         if let cached = readCache(key) { return cached.url }
         guard let url = Self.requestURL(isbn: isbn) else { return nil }
 
-        let wait = spacing.claim(now: clock.now)
+        let wait = await gate.claim(now: clock.now)
         if wait > 0 {
             try? await Task.sleep(for: .seconds(wait))
             // Same gap as `AppleBooksClient.search` (gap 28): `try?` alone
@@ -71,6 +79,17 @@ actor OpenLibraryCovers {
               let http = response as? HTTPURLResponse
         else { return nil }
 
+        // A 429 is not "this ISBN has no cover". Cached as a negative it would
+        // remember a rate limit for thirty days (`cacheLife`) as a fact about
+        // the publisher's artwork. Found while giving the host one gate,
+        // 2026-09-14 — and the back-off goes through the gate so
+        // `OpenLibraryEditions` stops firing at a host that just refused this.
+        if http.statusCode == 429 {
+            await gate.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
+            return nil
+        }
         let found = (200..<300).contains(http.statusCode)
         writeCache(key, found ? url : nil)
         return found ? url : nil

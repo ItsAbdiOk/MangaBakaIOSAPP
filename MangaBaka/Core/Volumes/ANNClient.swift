@@ -113,8 +113,12 @@ actor ANNClient {
         }
         // Versioned like the sibling clients' keys: a parsing rule that
         // tightens must not be outlived by a week of answers made under the
-        // looser one.
-        let key = "v1-ann-\(identifier)"
+        // looser one. v2 (2026-09-14): `EditionVolume` grew `alsoFrom` and
+        // `dateFrom` for the cross-source dedupe. Its decoder tolerates their
+        // absence, so a v1 file would still read — the bump is belt and braces,
+        // because the cost of being wrong here is a client that answers
+        // nothing for a week.
+        let key = "v2-ann-\(identifier)"
         if let cached = readCache(key) {
             return .loaded(cached.answer, fetchedAt: cached.storedAt, isPartial: false)
         }

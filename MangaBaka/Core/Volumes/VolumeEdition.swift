@@ -40,11 +40,46 @@ import Foundation
 /// for a second case.
 enum VolumeCatalogue: String, Codable, Sendable, CaseIterable {
     case animeNewsNetwork
+    /// Open Library's editions API. Its rows arrive as `BookEdition` and are
+    /// mapped in at the boundary by `BookEditionShelf` — `BookEdition` stays
+    /// `OpenLibraryEditions`' own return type, because an edition list is a
+    /// bibliographic record before it is a shelf row.
+    case openLibrary
+    /// The National Diet Library's SRU catalogue — the Japanese half, and the
+    /// only source in the app that carries a volume before it is published.
+    case nationalDietLibrary
 
     var displayName: String {
         switch self {
         case .animeNewsNetwork: "Anime News Network"
+        case .openLibrary: "Open Library"
+        case .nationalDietLibrary: "国立国会図書館サーチ"
         }
+    }
+
+    /// The `BookEdition.Source` this catalogue is, for the two that are one.
+    ///
+    /// Exists so `credit` below can *read* the obligation rather than restate
+    /// it. Copying "Edition data from Open Library" into a second file is the
+    /// duplication this project rejects outright: the terms are recorded on
+    /// `BookEdition.Source.credit` and in `docs/licences.md`, and a view that
+    /// showed a stale copy of a licence string would be showing the wrong
+    /// credit, not merely an out-of-date one.
+    var bookSource: BookEdition.Source? {
+        switch self {
+        case .animeNewsNetwork: nil
+        case .openLibrary: .openLibrary
+        case .nationalDietLibrary: .nationalDietLibrary
+        }
+    }
+
+    /// The words a section showing this source's rows must carry.
+    ///
+    /// For ANN this is *not* sufficient on its own — see
+    /// `requiresPerEntryLink`, which is an additional per-row obligation, not
+    /// an alternative to this one.
+    var credit: String {
+        bookSource?.credit ?? "Volume data from \(displayName)"
     }
 
     /// Whether this source's terms require a link to **its own entry on every
@@ -66,6 +101,11 @@ enum VolumeCatalogue: String, Codable, Sendable, CaseIterable {
     var requiresPerEntryLink: Bool {
         switch self {
         case .animeNewsNetwork: true
+        // Open Library and NDL both require credit and neither requires a
+        // per-row backlink — `BookEdition.Source.credit` is what they oblige,
+        // and the section carries it. Recorded as `false` rather than left to
+        // a `default:` so a new case has to state its own answer.
+        case .openLibrary, .nationalDietLibrary: false
         }
     }
 }
@@ -149,7 +189,82 @@ struct EditionVolume: Sendable, Equatable, Codable, Identifiable {
     /// render it** — see `VolumeCatalogue.requiresPerEntryLink`.
     let sourceLink: URL?
 
+    /// The *other* catalogues that described this same book, when more than one
+    /// did. Empty for a row only one source stated.
+    ///
+    /// This is what makes the dedupe honest. `VolumeEditions.merge` collapses
+    /// two sources' rows for one ISBN-13 into one row — otherwise a reader sees
+    /// the same book twice — and the source that lost the collapse still said
+    /// it, and is still owed its credit. Dropping the loser's name would be
+    /// taking its data and crediting someone else.
+    let alsoFrom: [VolumeCatalogue]
+
+    /// Which catalogue's date `releaseDate` came from, when it was not this
+    /// row's own.
+    ///
+    /// Merge prefers a full date over a partial one regardless of which source
+    /// won the row (`docs/sources/bibliographic.md`, 2026-09-14: Open Library
+    /// answers `2021-03-02`, `Apr 07, 2021` and a bare `2012` in one response,
+    /// so "which source" and "how precise" are independent questions). Nil
+    /// means the date is this row's catalogue's own.
+    let dateFrom: VolumeCatalogue?
+
+    /// Every catalogue that stands behind this row, the owner first. What a
+    /// section's credit list is built from.
+    var contributors: [VolumeCatalogue] { [edition.catalogue] + alsoFrom }
+
     var id: String { "\(edition.id)-\(isbn13 ?? title)" }
+
+    /// `alsoFrom` and `dateFrom` default to "only one source said this", which
+    /// is what every client produces before merge runs — written out because a
+    /// `let` with a default value is left out of the synthesised memberwise
+    /// init entirely.
+    init(
+        number: Int?,
+        title: String,
+        releaseDate: PartialDate?,
+        isbn13: String?,
+        format: VolumeFormat,
+        edition: VolumeEdition,
+        sourceLink: URL?,
+        alsoFrom: [VolumeCatalogue] = [],
+        dateFrom: VolumeCatalogue? = nil
+    ) {
+        self.number = number
+        self.title = title
+        self.releaseDate = releaseDate
+        self.isbn13 = isbn13
+        self.format = format
+        self.edition = edition
+        self.sourceLink = sourceLink
+        self.alsoFrom = alsoFrom
+        self.dateFrom = dateFrom
+    }
+
+    /// Written out rather than synthesised: the synthesis of `CodingKeys`
+    /// depends on the compiler still deriving *one* of the two conformances,
+    /// and a hand-written `init(from:)` beside a synthesised `encode(to:)` is
+    /// a thing to state plainly rather than lean on.
+    private enum CodingKeys: String, CodingKey {
+        case number, title, releaseDate, isbn13, format, edition, sourceLink, alsoFrom, dateFrom
+    }
+
+    /// Decoded tolerantly for the two fields merge adds, so a cache written by
+    /// a build before they existed is still readable. `ANNClient`'s key is
+    /// bumped to `v2` as well — belt and braces, because the cost of getting
+    /// this wrong is a week of a client answering nothing at all.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        number = try container.decodeIfPresent(Int.self, forKey: .number)
+        title = try container.decode(String.self, forKey: .title)
+        releaseDate = try container.decodeIfPresent(PartialDate.self, forKey: .releaseDate)
+        isbn13 = try container.decodeIfPresent(String.self, forKey: .isbn13)
+        format = try container.decode(VolumeFormat.self, forKey: .format)
+        edition = try container.decode(VolumeEdition.self, forKey: .edition)
+        sourceLink = try container.decodeIfPresent(URL.self, forKey: .sourceLink)
+        alsoFrom = try container.decodeIfPresent([VolumeCatalogue].self, forKey: .alsoFrom) ?? []
+        dateFrom = try container.decodeIfPresent(VolumeCatalogue.self, forKey: .dateFrom)
+    }
 }
 
 /// What a source can say about the next volume.
@@ -230,6 +345,14 @@ struct VolumeEditionAnswer: Sendable, Equatable {
 
     var isEmpty: Bool { shelves.isEmpty }
 
+    /// Nothing asked yet. `unaskedReason: .notAsked` rather than nil, so a view
+    /// holding this before its legs have run says "we haven't looked" and not
+    /// the weaker "nobody listed one" — which is the distinction
+    /// `ForthcomingVolume.UnknownReason` exists to keep.
+    static let empty = VolumeEditionAnswer(
+        shelves: [], credits: [], failures: [:], unaskedReason: .notAsked
+    )
+
     /// The soonest announced volume across every shelf, or why there isn't
     /// one.
     ///
@@ -247,93 +370,5 @@ struct VolumeEditionAnswer: Sendable, Equatable {
             (lhs.releaseDate?.date ?? .distantFuture) < (rhs.releaseDate?.date ?? .distantFuture)
         }) else { return .unknown(.noneListed) }
         return .announced(soonest)
-    }
-}
-
-/// Turns a client's answer into the shelf's.
-enum VolumeEditions {
-    /// - Parameters:
-    ///   - ann: `ANNClient.volumes(for:)`'s answer. `.idle` when the series
-    ///     carries no ANN id to ask with, which is a real and common state —
-    ///     not an error, and not an empty shelf either.
-    ///   - series: read for `coverLanguages` (the existing "English plus the
-    ///     original" rule) and for the native language the roles are tagged
-    ///     against. Passing the series rather than two strings keeps that
-    ///     rule in one place.
-    static func merge(ann: Fetched<ANNVolumes>, for series: Series) -> VolumeEditionAnswer {
-        let shown = series.coverLanguages
-        let visible = (ann.value?.volumes ?? []).filter { volume in
-            shown.map { $0.contains(volume.edition.language.lowercased()) } ?? true
-        }
-        var grouped: [VolumeEdition: [EditionVolume]] = [:]
-        for volume in visible { grouped[volume.edition, default: []].append(volume) }
-
-        // Built in two named steps with explicit types: chaining `map` into
-        // `sorted` with a ternary inside the comparator is what the type
-        // checker gave up on ("unable to type-check in reasonable time",
-        // 2026-09-14).
-        let unsorted: [EditionShelf] = grouped.map { edition, volumes in
-            EditionShelf(edition: edition, volumes: volumes.sorted(by: byNumber))
-        }
-        let shelves: [EditionShelf] = unsorted.sorted { lhs, rhs in
-            if lhs.volumes.count != rhs.volumes.count {
-                return lhs.volumes.count > rhs.volumes.count
-            }
-            return lhs.id < rhs.id
-        }
-        var failures: [VolumeCatalogue: APIError] = [:]
-        if let error = ann.error { failures[.animeNewsNetwork] = error }
-        // Each step named rather than nested: as one expression the type
-        // checker gave up outright ("unable to type-check in reasonable
-        // time"), 2026-09-14 — the same shape that defeated it in
-        // `SeriesImage.stableID`.
-        let present: Set<VolumeCatalogue> = Set(shelves.map { $0.edition.catalogue })
-        let credits: [VolumeCatalogue] = VolumeCatalogue.allCases.filter { present.contains($0) }
-        let reason: ForthcomingVolume.UnknownReason? = shelves.isEmpty ? unasked(ann) : nil
-        return VolumeEditionAnswer(
-            shelves: shelves,
-            credits: credits,
-            failures: failures,
-            unaskedReason: reason
-        )
-    }
-
-    /// Which kind of nothing an empty answer is.
-    ///
-    /// A filtered-out shelf (ANN answered with English volumes for a series
-    /// whose shown languages somehow exclude "en") lands on `.noneListed`
-    /// rather than `.notCatalogued`, because ANN did have a record — the app
-    /// chose not to show it.
-    private static func unasked(_ ann: Fetched<ANNVolumes>) -> ForthcomingVolume.UnknownReason {
-        switch ann {
-        case .idle, .loading: .notAsked
-        case let .failed(error, _): .couldNotAsk(error)
-        case let .loaded(value, _, _): value.isCatalogued ? .noneListed : .notCatalogued
-        }
-    }
-
-    /// Which of "English" and "the original" a language code is, for this
-    /// series.
-    ///
-    /// English wins a tie. An English-original series (`type: "oel"`) has no
-    /// implied language and `nativeLanguage` is usually absent, so it never
-    /// reaches the tie anyway — but a series that did carry `en` as native
-    /// should read as the English edition, which is the heading a reader
-    /// recognises.
-    ///
-    /// `nonisolated static` so `ANNClient` can tag an edition without
-    /// building a shelf, and so the tests can reach it directly.
-    nonisolated static func role(of language: String, in series: Series) -> EditionLanguageRole {
-        let code = language.lowercased()
-        if code == "en" { return .english }
-        let own = (series.nativeLanguage ?? series.impliedLanguage)?.lowercased()
-        return code == own ? .original : .other
-    }
-
-    /// Unnumbered releases — box sets, mostly — sort after every numbered one
-    /// rather than to the front, which is where a nil-as-zero sort would put
-    /// them.
-    private static func byNumber(_ lhs: EditionVolume, _ rhs: EditionVolume) -> Bool {
-        (lhs.number ?? Int.max, lhs.title) < (rhs.number ?? Int.max, rhs.title)
     }
 }

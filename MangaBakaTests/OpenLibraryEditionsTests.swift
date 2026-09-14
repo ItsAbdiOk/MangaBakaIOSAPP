@@ -20,9 +20,12 @@ struct OpenLibraryEditionsTests {
         OpenLibraryEditions(
             session: URLProtocolStub.makeSession(),
             clock: clock,
-            // Zero, or the two sequential requests one lookup makes would
-            // sleep for a real 4 seconds between them.
-            minimumInterval: 0,
+            // A gate of this suite's own, at zero: the two sequential requests
+            // one lookup makes would otherwise sleep for a real 4 seconds
+            // between them, and the shared `HostRateGate.openLibrary` would
+            // also queue this suite behind whatever `OpenLibraryCoversTests`
+            // left on it.
+            gate: HostRateGate(minimumInterval: 0),
             cacheDirectory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("ol-editions-tests-\(UUID().uuidString)", isDirectory: true)
         )

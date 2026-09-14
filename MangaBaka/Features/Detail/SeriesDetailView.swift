@@ -38,6 +38,30 @@ struct SeriesDetailView: View {
     var mangaUpdatesCategories: MangaUpdatesClient?
     /// Cover gap-filler by ISBN, asked only for volumes no store has art for.
     var openLibrary: OpenLibraryCovers?
+    /// Anime News Network's Encyclopedia: English print volumes, forthcoming
+    /// ones included. Optional like every other third party — a page without it
+    /// simply shows no ANN shelf, and no credit either.
+    var ann: ANNClient?
+    /// Open Library's editions API: the other printings of the same work,
+    /// including the original-language one. Not the same actor as
+    /// `openLibrary` above — that one asks for cover images — though both now
+    /// queue on one `HostRateGate`.
+    var openLibraryEditions: OpenLibraryEditions?
+    /// The National Diet Library: the Japanese volumes, and the only source in
+    /// the app that carries a volume before it is published.
+    var ndl: NDLClient?
+    /// The bundled Wikidata identity table, for the one question no other
+    /// source answers structurally: is this series a comic or is it prose.
+    /// Not optional and not defaulted, for the reason `embeddingIndex` is
+    /// neither — it is a file-backed actor there should be exactly one of.
+    var wikidata: WikidataIdentityTable
+    /// What the three catalogue legs merged to. `.empty` until `loadEditions`
+    /// answers; an empty answer is "we do not know", never "there is nothing"
+    /// — see `ForthcomingVolume`.
+    @State var editions: VolumeEditionAnswer = .empty
+    /// True while the three legs are still out, so the section can show a
+    /// skeleton rather than an empty shelf it is about to replace (gap 22).
+    @State var isLoadingEditions = false
     @State var openLibraryCovers: [Int: URL] = [:]
     /// Where the Open Library gap-fill pass stands — overall, and per volume
     /// number for the ones whose own answer has already landed. Per volume
@@ -592,6 +616,12 @@ extension SeriesDetailView {
         async let cadence: Void = loadCadence()
         async let taste: Void = loadTaste()
         async let store: Void = loadAppleVolumes()
+        // A fourth network leg beside the store's, not folded into it: the
+        // three catalogues answer a different question (what printings exist,
+        // and what is coming) and none of them can hold up the shelf the
+        // reader is already looking at. See `SeriesDetailView+Editions` for
+        // what this costs in requests.
+        async let catalogues: Void = loadEditions()
         // After `store` in the argument list only for readability; it does
         // not depend on it. It does depend on `extras.links`, which `loadCore`
         // has already populated by the time `loadOnward` runs.
@@ -602,6 +632,7 @@ extension SeriesDetailView {
         async let byDescription: Void = loadSimilarByDescription()
         async let categories: Void = loadCategories()
         _ = await (cast, cadence, taste, store, onward, byDescription, categories)
+        await catalogues
     }
 
     /// Grouped `tags_v2` where the series has them, the flat v1 names where it

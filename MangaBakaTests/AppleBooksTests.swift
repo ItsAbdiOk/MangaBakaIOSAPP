@@ -368,7 +368,9 @@ struct AppleBooksClientTests {
         _ = await client.volumes(for: series, country: "gb")
         clock.advance(by: 6 * 24 * 3600)
 
-        let key = "v5-\(series.id)-gb-any"
+        // v6 since 2026-09-14: Wikidata can overrule MangaBaka's `type` on the
+        // novel question, so an answer matched under v5 must not outlive it.
+        let key = "v6-\(series.id)-gb-any"
         let cached = await client.readCache(key)
         #expect(cached?.storedAt == writtenAt, "the age must be the write time, not the read time")
     }

@@ -7,13 +7,28 @@ import Testing
 /// on `AppleBooksClient`/`GoogleBooksClient`.
 @Suite("Open Library covers", .serialized)
 struct OpenLibraryCoversTests {
-    private func makeClient(clock: TestClock = TestClock()) -> OpenLibraryCovers {
+    /// - Parameter gate: this suite's own, not `HostRateGate.openLibrary`.
+    ///   Since 2026-09-14 both Open Library clients share one process-wide
+    ///   gate, so a client built with the default would queue behind whatever
+    ///   `OpenLibraryEditionsTests` last claimed on it — a test that passes or
+    ///   fails depending on suite order.
+    private func makeClient(
+        clock: TestClock = TestClock(), gate: HostRateGate = HostRateGate(minimumInterval: 0)
+    ) -> OpenLibraryCovers {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("openlibrary-tests-\(UUID().uuidString)", isDirectory: true)
         return OpenLibraryCovers(
-            session: URLProtocolStub.makeSession(), clock: clock, cacheDirectory: directory
+            session: URLProtocolStub.makeSession(), clock: clock, gate: gate,
+            cacheDirectory: directory
         )
     }
+
+    /// The gap the spacing test asserts. Small enough to keep the suite quick
+    /// and large enough to be well clear of scheduling noise — the real number
+    /// is `HostRateGate.openLibrary.minimumInterval`, and this proves the
+    /// client waits out whatever gate it is given, which is the behaviour that
+    /// changed.
+    private static let testInterval: TimeInterval = 1.0
 
     @Test("A 200 answers with the cover URL, HEAD, default=false")
     func found() async throws {
@@ -81,7 +96,7 @@ struct OpenLibraryCoversTests {
             return .respond(.init(statusCode: 200))
         }
         defer { URLProtocolStub.reset() }
-        let client = makeClient()
+        let client = makeClient(gate: HostRateGate(minimumInterval: Self.testInterval))
 
         // A warm-up so the slot is already taken: a cold first caller never
         // waits, and so never exercises the spacing at all.
@@ -92,7 +107,7 @@ struct OpenLibraryCoversTests {
 
         let gap = try #require(arrivals.lastGap)
         #expect(
-            gap >= .seconds(OpenLibraryCovers.minimumInterval - 0.5),
+            gap >= .seconds(Self.testInterval - 0.5),
             "requests reached the network \(gap) apart"
         )
     }
@@ -106,7 +121,9 @@ struct OpenLibraryCoversTests {
     func cancelledWaitDoesNotFireTheRequest() async {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 200)) }
         defer { URLProtocolStub.reset() }
-        let client = makeClient()
+        // A real gap, or there is no wait to cancel *during* and the test
+        // proves nothing — the guard it exercises sits after the sleep.
+        let client = makeClient(gate: HostRateGate(minimumInterval: Self.testInterval))
 
         let warm = Task { await client.coverURL(isbn: "0000000000") }
         _ = await warm.value

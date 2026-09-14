@@ -34,6 +34,19 @@ struct RootView: View {
     /// before the first frame — see `AppServices.deferredPublisherFollows`.
     let publisherFollows: Deferred<PublisherFollows>
     let openLibraryCovers: OpenLibraryCovers
+    /// The three bibliographic catalogues behind the series page's "Other
+    /// editions" section. One instance each, like every other client here: each
+    /// holds a disk cache and a spacing rule, and a second instance would keep
+    /// its own and violate the host's limit by construction (item 14's lesson,
+    /// applied before it could happen again).
+    let ann: ANNClient
+    let openLibraryEditions: OpenLibraryEditions
+    let ndl: NDLClient
+    /// The bundled Wikidata identity table. One instance for the same reason
+    /// `embeddingIndex` and `offlineCatalogue` are: it loads a 451 KB gzipped
+    /// file lazily and holds it, and a per-page instance would reload it per
+    /// page.
+    let wikidata: WikidataIdentityTable
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -198,6 +211,10 @@ struct RootView: View {
         mangaUpdates: MangaUpdatesClient,
         publisherFollows: Deferred<PublisherFollows>,
         openLibraryCovers: OpenLibraryCovers,
+        ann: ANNClient,
+        openLibraryEditions: OpenLibraryEditions,
+        ndl: NDLClient,
+        wikidata: WikidataIdentityTable,
         taste: TasteProfile,
         catalogue: CatalogueService,
         blockedTags: BlockedTagsStore,
@@ -229,6 +246,10 @@ struct RootView: View {
         self.mangaUpdates = mangaUpdates
         self.publisherFollows = publisherFollows
         self.openLibraryCovers = openLibraryCovers
+        self.ann = ann
+        self.openLibraryEditions = openLibraryEditions
+        self.ndl = ndl
+        self.wikidata = wikidata
         self.taste = taste
         self.catalogue = catalogue
         self.blockedTags = blockedTags

@@ -65,6 +65,23 @@ struct AppServices {
     /// which is the default. Built on the first ask instead of in `init`.
     let publisherFollows = AppServices.deferredPublisherFollows()
     let openLibraryCovers = OpenLibraryCovers()
+    /// The three bibliographic catalogues wired into the series page's "Other
+    /// editions" section on 2026-09-14. They were built, tested and shipping
+    /// before that date with nothing on screen using them.
+    ///
+    /// One instance each, for the reason `mangaUpdates` above records: two
+    /// instances mean two spacing rules on one host, so the politeness gap is
+    /// violated by construction and a 429 one learns is invisible to the other.
+    /// The two Open Library clients go further and share `HostRateGate`, since
+    /// they are two *different* clients on one host.
+    let ann = ANNClient()
+    let openLibraryEditions = OpenLibraryEditions()
+    let ndl = NDLClient()
+    /// One instance: a 451 KB gzipped file, loaded lazily on the first question
+    /// and held. Nothing on the launch path touches it — see
+    /// `WikidataIdentityTable`, which is deliberately lazier than
+    /// `OfflineCatalogue` for that reason.
+    let wikidata = WikidataIdentityTable()
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore

@@ -42,17 +42,23 @@ actor AppleBooksClient {
     /// with no retry. The reason was thrown away here, at the source, so no
     /// amount of work on the view could recover it.
     ///
-    /// - Parameter language: the reader's language; a volume whose blurb is
-    ///   confidently in another is not theirs, whatever store it is sold in.
+    /// - Parameters:
+    ///   - language: the reader's language; a volume whose blurb is
+    ///     confidently in another is not theirs, whatever store it is sold in.
+    ///   - format: what Wikidata says this series is, or nil when the bundled
+    ///     table has never heard of it. See `isNovel(series:format:)` for what
+    ///     it changes and — measured — what it does not.
     func volumes(
-        for series: Series, country: String, language: String? = nil
+        for series: Series, country: String, language: String? = nil, format: WikidataFormat? = nil
     ) async -> Result<[AppleBooksVolume], APIError> {
         guard let query = series.displayTitle, !query.isEmpty else { return .success([]) }
         // Versioned: a match rule that tightens must not be outlived by a
         // week of cached answers made under the looser one. v5: the
         // tagged-vs-untagged and bracket-before-marker rules changed again
-        // (T1/F3/T4, 2026-09-13).
-        let key = "v5-\(series.id)-\(country.lowercased())-\(language ?? "any")"
+        // (T1/F3/T4, 2026-09-13). v6: Wikidata can now overrule MangaBaka's
+        // `type` on the novel question, so an answer matched under the old
+        // rule must not outlive it.
+        let key = "v6-\(series.id)-\(country.lowercased())-\(language ?? "any")"
         if let cached = readCache(key) { return .success(cached.volumes) }
 
         let results: [AppleBooksResult]
@@ -61,13 +67,51 @@ actor AppleBooksClient {
         case let .failure(error): return .failure(error)
         }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
-        let isNovel = series.type?.lowercased().contains("novel") ?? false
+        let isNovel = Self.isNovel(series: series, format: format)
         let creators = (series.authors ?? []) + (series.artists ?? [])
         let matched = AppleBooksMatch.volumes(
             in: results, titles: titles, creators: creators, isNovel: isNovel, language: language
         )
         writeCache(key, matched)
         return .success(matched)
+    }
+
+    /// Whether the shelf being built is a novel's, and which source decided.
+    ///
+    /// **What this was before Wikidata, and what the table actually buys.**
+    /// The rule was `series.type?.lowercased().contains("novel") ?? false` and
+    /// nothing else. That is a good rule when MangaBaka states a type; it has
+    /// exactly one failure, and it is the failure mode this project keeps
+    /// finding — **an absent field read as a negative**. A series MangaBaka
+    /// gives no `type` for built a *comic* shelf, and every light-novel volume
+    /// in the store's answer was then judged by `AppleBooksMatch`'s tag rules
+    /// alone.
+    ///
+    /// **The Apothecary Diaries bug is not one this fixes, and saying so is the
+    /// point.** That series' `type` is "manga", so the old rule already
+    /// answered `false` correctly; the novel leaked in because the store's
+    /// untagged "The Apothecary Diaries: Volume 1" rows outranked the tagged
+    /// comic ones, and `matchedVolumes`' `comicShelfHasTaggedEdition` guard
+    /// (T4, 2026-09-13) is what fixed it. Wikidata does not touch that path. A
+    /// fix with no before-number is not a result, and the honest before-number
+    /// here is: unknown, because nobody has counted how many series MangaBaka
+    /// returns with a nil `type`. This is a real improvement on a case that is
+    /// currently silent, not a fix for the bug that was loud.
+    ///
+    /// MangaBaka wins a disagreement. It is the series the reader is looking
+    /// at; Wikidata is joined to it by id and the join is exact, but the table
+    /// reaches a quarter of the catalogue by row and its `P31` is one
+    /// statement. Wikidata is consulted **only** where MangaBaka said nothing.
+    ///
+    /// `nonisolated static` so the tests can assert the rule without a client
+    /// and a request.
+    nonisolated static func isNovel(series: Series, format: WikidataFormat?) -> Bool {
+        if let stated = series.type?.lowercased(), !stated.isEmpty {
+            return stated.contains("novel")
+        }
+        // Nil, or `.other` (Wikidata knows the item and calls it an anime or a
+        // film): no answer, so the old default stands.
+        return format?.isProse ?? false
     }
 
     /// The Japanese edition, from the Japanese store, when the reader's own

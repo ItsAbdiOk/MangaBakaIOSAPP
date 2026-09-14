@@ -82,11 +82,12 @@ actor OpenLibraryEditions {
     /// The documented limit is 1 req/s; the observed ceiling is far below it
     /// and is not purely time-based.
     ///
-    /// **A caveat this actor cannot fix on its own:** `OpenLibraryCovers` is a
-    /// separate actor with its own `RequestSpacing`, so the two can still put
-    /// two requests on the same host inside one gap. A host-level gate shared
-    /// by both is the real fix and belongs with whoever owns `Core/Volumes`.
-    static let minimumInterval: TimeInterval = 4.0
+    /// **The caveat this used to carry is fixed.** It read: `OpenLibraryCovers`
+    /// is a separate actor with its own `RequestSpacing`, so the two can still
+    /// put two requests on the same host inside one gap. They now share
+    /// `HostRateGate.openLibrary`, which carries the 4.0 and which both clients
+    /// read rather than restate — so this is the host's number, in one place.
+    static var minimumInterval: TimeInterval { HostRateGate.openLibrary.minimumInterval }
     /// A GUESS, and deliberately long: an edition list changes when a
     /// publisher licenses a new translation, which is a thing that happens
     /// perhaps twice a year per series, not daily. A week keeps a new French
@@ -102,23 +103,26 @@ actor OpenLibraryEditions {
     private let session: URLSession
     private let clock: any Clock
     private let cacheDirectory: URL?
-    private var spacing: RequestSpacing
+    /// Shared with `OpenLibraryCovers` — see `HostRateGate`.
+    private let gate: HostRateGate
 
-    /// - Parameter minimumInterval: injectable only because one lookup makes
-    ///   **two** sequential requests, so a test of the happy path would
-    ///   otherwise sleep for a real `minimumInterval` between them. The sleep
-    ///   is `Task.sleep`, which the injected `clock` cannot fast-forward.
+    /// - Parameter gate: injectable for the same reason `minimumInterval` was
+    ///   before it. One lookup makes **two** sequential requests, so a test of
+    ///   the happy path against the real gate would sleep for two real
+    ///   intervals — `Task.sleep`, which the injected `clock` cannot
+    ///   fast-forward. A test passes `HostRateGate(minimumInterval: 0)`, which
+    ///   also keeps it off the process-wide gate the other suites share.
     init(
         session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
-        minimumInterval: TimeInterval = OpenLibraryEditions.minimumInterval,
+        gate: HostRateGate = .openLibrary,
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("openlibrary-editions", isDirectory: true)
     ) {
         self.session = session
         self.clock = clock
+        self.gate = gate
         self.cacheDirectory = cacheDirectory
-        spacing = RequestSpacing(minimumInterval: minimumInterval)
     }
 
     /// Every printing Open Library files under the same work as this ISBN.
@@ -228,7 +232,7 @@ actor OpenLibraryEditions {
     /// - Returns: the body, or nil for a 404 — which is an answer here, not a
     ///   failure. Every other non-2xx throws.
     private func load(_ url: URL) async throws(APIError) -> Data? {
-        let wait = spacing.claim(now: clock.now)
+        let wait = await gate.claim(now: clock.now)
         if wait > 0 {
             try? await Task.sleep(for: .seconds(wait))
             // Gap 28, as in `OpenLibraryCovers.coverURL`: `try?` alone
@@ -252,7 +256,7 @@ actor OpenLibraryEditions {
             // Parsed and clamped in one place (`RequestSpacing.backOff`), the
             // same as every other client — a bare `TimeInterval.init` accepted
             // "nan" and ended a client's spacing for the process.
-            let retryAfter = spacing.backOff(
+            let retryAfter = await gate.backOff(
                 retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
             )
             throw .rateLimited(retryAfter: retryAfter, party: .openLibrary)

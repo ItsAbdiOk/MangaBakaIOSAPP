@@ -11,8 +11,23 @@ extension SeriesDetailView {
         VolumeShelf.merge(apple: appleVolumes, google: googleVolumes)
     }
 
+    /// The store's shelf (or MangaBaka's), and under it the catalogues' —
+    /// which is a different question and answers it for both branches.
+    ///
+    /// Under, not merged into: the shelf above is what you can buy, and
+    /// `EditionShelvesSection` is what exists and what is coming. Merging them
+    /// would put a library record with no price and no cover in a row of
+    /// spines, and would lose the per-row link ANN's terms require.
     @ViewBuilder
     var volumesShelf: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            storeShelf
+            EditionShelvesSection(answer: editions, isLoading: isLoadingEditions)
+        }
+    }
+
+    @ViewBuilder
+    private var storeShelf: some View {
         if shelf.isEmpty {
             VolumesSection(
                 volumes: extras.volumes,
@@ -55,7 +70,15 @@ extension SeriesDetailView {
         isLoadingVolumes = true
         let country = Locale.current.region?.identifier ?? "us"
         let language = Locale.current.language.languageCode?.identifier
-        var answer = await appleBooks.volumes(for: shown, country: country, language: language)
+        // On-device, no network. Read here as well as in `loadEditions` — the
+        // table memoises after its first load, so this is a dictionary lookup,
+        // and threading one value between two independent legs would couple
+        // them for no gain. See `AppleBooksClient.isNovel(series:format:)` for
+        // what it changes and what, measured, it does not.
+        let format = await wikidata.format(for: shown)
+        var answer = await appleBooks.volumes(
+            for: shown, country: country, language: language, format: format
+        )
         appleEdition = nil
         // Nothing in the reader's store: the Japanese edition, for the covers
         // and the count. Not for buying — Apple Books purchases are locked to

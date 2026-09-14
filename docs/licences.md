@@ -88,9 +88,9 @@ conditions to *use*, not just to redistribution, so they belong in this file.
 
 | Source | Used by | Condition | How that was established |
 |---|---|---|---|
-| Anime News Network Encyclopedia | `ANNClient` | **Per-entry backlink mandatory** — every volume row shown from ANN renders its own `sourceLink`, and the section names Anime News Network. A footer credit does not satisfy it. | Their API page states the condition; recorded when the client was written, 2026-09-14. |
-| Open Library / Internet Archive | `OpenLibraryEditions`, `OpenLibraryCovers` | **No licence is named.** Attribution displayed by choice | Their licensing page asserts no new copyright over the database and concedes the legal issues "are, frankly, very confusing". That is not CC0 and must not be written up as CC0. The credit string lives in `BookEdition.Source.credit`: "Edition data from Open Library". |
-| NDL Search (国立国会図書館サーチ) | `NDLClient` | Credit mandatory; **commercial use needs prior application** | NDL's API help, read on 2026-09-14. See the open question below. |
+| Anime News Network Encyclopedia | `ANNClient` → `EditionShelvesSection` | **Per-entry backlink mandatory** — every volume row shown from ANN renders its own `sourceLink`, and the section names Anime News Network. A footer credit does not satisfy it. | Their API page states the condition; recorded when the client was written, 2026-09-14. **Discharged on screen since 2026-09-14**: `EditionShelvesSection.row` draws `sourceLink` per row and refuses to draw an ANN row that has none; `creditLine(for:)` names the source on the group. |
+| Open Library / Internet Archive | `OpenLibraryEditions`, `OpenLibraryCovers` → `EditionShelvesSection` | **No licence is named.** Attribution displayed by choice | Their licensing page asserts no new copyright over the database and concedes the legal issues "are, frankly, very confusing". That is not CC0 and must not be written up as CC0. The credit string lives in `BookEdition.Source.credit`: "Edition data from Open Library". |
+| NDL Search (国立国会図書館サーチ) | `NDLClient` → `EditionShelvesSection` | Credit mandatory; **commercial use needs prior application** | NDL's API help, read on 2026-09-14. See the open question below. |
 
 ### NEEDS ABDI — NDL's commercial-use term
 
