@@ -337,7 +337,14 @@ extension ReminderTests {
         let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
         let iso = DateFormatter()
         iso.locale = Locale(identifier: "en_US_POSIX")
-        iso.timeZone = TimeZone(secondsFromGMT: 0)
+        // The reader's own zone, not UTC. `daysFromNow: 0` means "out today
+        // as the reader sees it", and `NotificationPolicy` judges a release
+        // against `Calendar.current.startOfDay` (see `UpcomingWork.localDay`,
+        // which is deliberately local so "out today" is not dropped once UTC
+        // midnight has passed). Printing the UTC day here made these tests
+        // pass in London and fail on a runner west of UTC, where 01:51 UTC on
+        // the 14th is still the 13th — Xcode Cloud build 75, 2026-09-14.
+        iso.timeZone = Calendar.current.timeZone
         iso.dateFormat = "yyyy-MM-dd"
         return try JSONDecoder.snakeCased.decode(UpcomingWork.self, from: Data("""
         {"id": "\(id)", "series_id": \(series), "release_date": "\(iso.string(from: date))",

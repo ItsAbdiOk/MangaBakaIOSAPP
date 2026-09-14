@@ -205,15 +205,22 @@ struct APIClientFailurePathTests {
         URLProtocolStub.setHandler { _ in .fail(URLError(.networkConnectionLost)) }
         defer { URLProtocolStub.reset() }
 
-        let before = await NetworkLedger.shared.totalRequests
+        // This path, not the session total: `NetworkLedger.shared` is a
+        // process-wide singleton and other suites run in parallel against it,
+        // so a delta on `totalRequests` counts their requests too. That is
+        // how this passed here and failed on Xcode Cloud build 75 with
+        // "totalRequests == before + 1" off by one, 2026-09-14.
+        let path = "/ledger-probe-\(UUID().uuidString)"
+        let before = await NetworkLedger.shared.byPath[path]?.requests ?? 0
         await #expect(throws: APIError.offline) {
-            try await makeClient().post("/things", body: ["id": 1])
+            try await makeClient().post(path, body: ["id": 1])
         }
         // Not counted: the request never got a response. But a write that does
         // must be, so the budget numbers stop excluding the bursty half.
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 201, body: Data("{}".utf8))) }
-        _ = try? await makeClient().post("/things", body: ["id": 1])
-        #expect(await NetworkLedger.shared.totalRequests == before + 1, "Writes were invisible to the ledger")
+        _ = try? await makeClient().post(path, body: ["id": 1])
+        let after = await NetworkLedger.shared.byPath[path]?.requests ?? 0
+        #expect(after == before + 1, "Writes were invisible to the ledger")
     }
 
     /// `JSONSerialization.data(withJSONObject:)` raises an Objective-C

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Testing
 @testable import MangaBaka
 
@@ -6,8 +7,19 @@ import Testing
 /// answer, so "how many times was this fetched" is an assertion rather than
 /// an inference.
 private final class CountingFeedRepository: StubRepositoryBase, @unchecked Sendable {
-    private(set) var feedCalls = 0
-    private(set) var pageCalls = 0
+    /// Locked, not bare `+= 1`: `DiscoverModel.loadRows` asks all four rows
+    /// at once in a `TaskGroup`, so an unsynchronised counter loses updates.
+    /// That is what failed on Xcode Cloud build 75 — 7 calls counted of 8
+    /// made, on a runner with a different core count — while passing here.
+    private let counts = OSAllocatedUnfairLock(initialState: Counts())
+
+    private struct Counts {
+        var feed = 0
+        var page = 0
+    }
+
+    var feedCalls: Int { counts.withLock { $0.feed } }
+    var pageCalls: Int { counts.withLock { $0.page } }
     /// How the first page of every row comes back.
     var origin: FeedResult.Origin = .network
 
@@ -19,12 +31,12 @@ private final class CountingFeedRepository: StubRepositoryBase, @unchecked Senda
     }
 
     override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
-        feedCalls += 1
+        counts.withLock { $0.feed += 1 }
         return FeedResult(series: Self.page(1), origin: origin, cachedAt: nil, hasMore: true)
     }
 
     override func feedPage(_ feed: FeedKind, page: Int) async -> FeedResult {
-        pageCalls += 1
+        counts.withLock { $0.page += 1 }
         return FeedResult(series: Self.page(page), origin: .network, cachedAt: nil, hasMore: true)
     }
 }
