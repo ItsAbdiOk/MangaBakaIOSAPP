@@ -35,7 +35,7 @@ actor OpenLibraryCovers {
     private var spacing = RequestSpacing(minimumInterval: OpenLibraryCovers.minimumInterval)
 
     init(
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("openlibrary", isDirectory: true)

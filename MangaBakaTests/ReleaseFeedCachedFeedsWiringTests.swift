@@ -45,7 +45,9 @@ struct ReleaseFeedCachedFeedsWiringTests {
             return
         }
         let body = source[range.lowerBound...]
-        #expect(body.contains("cachedExtras("))
+        // Item 64: one batched hop over the whole library, not one
+        // `cachedExtras(for:)` per entry — 939 of them on the launch path.
+        #expect(body.contains("cachedExtrasLinks(for:"))
         #expect(!body.contains(".extras(for:"))
     }
 }

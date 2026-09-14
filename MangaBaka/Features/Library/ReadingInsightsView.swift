@@ -22,6 +22,14 @@ struct ReadingInsightsView: View {
     /// behaving exactly as before until the shell (batch 6) passes the real
     /// value from `LibraryModel.isComplete`.
     var isComplete = true
+    /// Work-list 85: count-plus-completedness does not move when a rating
+    /// or a state changes through `LibraryModel.apply(_:to:)`, so "It
+    /// finished without telling you" kept listing a series the reader had
+    /// just marked Completed. `LibraryModel.revision` bumps on any change to
+    /// `entries`, including a one-row patch. Defaulted so a preview or a test
+    /// that passes rows directly keeps working.
+    var libraryRevision = 0
+
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
 
@@ -48,7 +56,7 @@ struct ReadingInsightsView: View {
     /// this screen used to show stale insights after a library reload landed
     /// while it was open. Count plus completedness is enough to catch both a
     /// changed library and a walk finishing.
-    private var revision: String { "\(entries.count)-\(isComplete)" }
+    private var revision: String { "\(entries.count)-\(isComplete)-\(libraryRevision)" }
 
     private struct Derived {
         var waiting: [ReadingInsights.Behind] = []

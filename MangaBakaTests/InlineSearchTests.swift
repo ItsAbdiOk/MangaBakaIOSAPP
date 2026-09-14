@@ -52,26 +52,18 @@ struct InlineSearchTests {
     }
 }
 
-/// The field only appears where it earns its place, and both screens use the
-/// same control so they cannot drift apart.
+/// The field only appears where it earns its place.
+///
+/// This suite used to pin two screens against each other, and a `12`-entry
+/// threshold literal inside `ShelfDetailView`. That screen was deleted
+/// (review Q6), and with it the second copy these tests existed to keep in
+/// step — so the pin on its threshold went too rather than being re-homed
+/// onto a file that never had one.
 @Suite("Inline search is shared and conditional", .enabled(if: SourceTree.isAvailable))
 struct InlineSearchReachabilityTests {
-    @Test("Library and shelf detail use the same field")
+    @Test("The library screen uses the shared field")
     func oneField() throws {
-        for path in [
-            "MangaBaka/Features/Library/LibraryView.swift",
-            "MangaBaka/Features/Library/ShelfDetailView.swift"
-        ] {
-            #expect(try SourceTree.read(path).contains("InlineSearchField("))
-        }
-    }
-
-    /// A field that filters six rows is furniture. The threshold has to be in
-    /// the source, not in a reviewer's memory.
-    @Test("A small shelf gets no search field")
-    func thresholdExists() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Library/ShelfDetailView.swift")
-        #expect(source.contains("shelf.entries.count >= 12"))
-        #expect(source.contains("No series here match this filter."))
+        let source = try SourceTree.read("MangaBaka/Features/Library/LibraryView.swift")
+        #expect(source.contains("InlineSearchField("))
     }
 }

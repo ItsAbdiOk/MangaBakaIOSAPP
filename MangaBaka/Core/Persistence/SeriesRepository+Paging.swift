@@ -31,7 +31,7 @@ extension SeriesRepository {
         query.append(contentsOf: filterQuery())
         do {
             let (series, pagination): ([Series], Pagination?) =
-                try await client.getWithPagination(feed.path, query: query, priority: priority)
+                try await client.getLossyWithPagination(feed.path, query: query, priority: priority)
             return FeedResult(
                 series: series.filter { $0.isDiscoverable && allowsFormat($0) },
                 origin: .network,

@@ -42,8 +42,37 @@ enum ReadingPlatforms {
         // A bare host root ("https://webtoons.com/") is not an offer to read
         // a series — it is the platform's front door. A genuine reading link
         // always names at least one path segment.
-        return !url.path.split(separator: "/", omittingEmptySubsequences: true).isEmpty
+        let segments = url.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard let firstSegment = segments.first else { return false }
+        // Most entries above are reading-only hosts, so any non-empty path is
+        // fine. `scopedPathPrefixes` covers the rare host — Crunchyroll — that
+        // is a reading surface at one path and something far bigger everywhere
+        // else on the same registrable domain, so a host match alone would
+        // fail open exactly the way finding 74 (wire review, 2026-09-14)
+        // describes.
+        let scoped = scopedPathPrefixes.first { bare == $0.key || bare.hasSuffix("." + $0.key) }
+        if let scoped {
+            return firstSegment == scoped.value
+        }
+        return true
     }
+
+    /// Hosts allowed above whose comics surface is one path on an otherwise
+    /// much larger site, keyed by registrable domain (or reader subdomain) to
+    /// the required first path segment.
+    private static let scopedPathPrefixes: [String: String] = [
+        // Crunchyroll Manga shut down its own app in December 2023 and
+        // relaunched, browser included, on 2025-10-15 at `crunchyroll.com/manga`
+        // rather than a subdomain of its own (Wikipedia, "Crunchyroll Manga",
+        // retrieved 2026-09-14; the file could not be re-sampled against a live
+        // link, so this is the launch announcement, not a captured `webplatform`
+        // value). `crunchyroll.com` is otherwise crunchyroll's video-streaming
+        // site — the thing `allows`'s plain host+path check would otherwise wave
+        // an episode page through as "Read it" for. A guess pending a captured
+        // sample; if a real `webplatform | crunchyroll.com` link turns up with a
+        // different path, this needs updating, not the rejection of the entry.
+        "crunchyroll.com": "manga"
+    ]
 
     /// Registrable domains, grouped by who runs them. Subdomains are covered by
     /// the suffix match in `allows`, so only the root belongs here.
@@ -90,7 +119,13 @@ enum ReadingPlatforms {
     /// `pixiv.net` and `nicovideo.jp` are portal roots the same way the
     /// Korean ones are — `*.pixiv.net` covers a contributor's personal
     /// gallery, not just the licensed reader — so only the specific reader
-    /// subdomain is listed for each.
+    /// subdomain is listed for each. `line.me` is the same shape: LINE is a
+    /// messaging and payments platform with `store.line.me`, `shop.line.me`
+    /// and more far outside comics, so only its manga reader subdomain is
+    /// listed (wire review finding 74, 2026-09-14; `manga.line.me` responds —
+    /// checked live with `curl -sI`, a 412 from what looks like bot
+    /// protection, which confirms the host exists and answers, not what it
+    /// serves — no sample link was re-captured to confirm the path shape).
     private static let japanesePublishers: Set<String> = [
         "shueisha.co.jp", "shonenjumpplus.com", "shonenjump.com", "kodansha.com",
         "kodansha.co.jp", "comic-days.com", "shonenmagazine.com", "yanmaga.jp",
@@ -106,13 +141,22 @@ enum ReadingPlatforms {
         "flowercomics.jp", "championcross.jp", "lala.ne.jp", "rimacomiplus.jp",
         "comicbox.co.jp", "komogi.com", "bs-garden.com", "moae.jp", "bookwalker.jp",
         "booklive.jp", "ebookjapan.yahoo.co.jp", "ebookrenta.com", "k-manga.jp",
-        "line.me"
+        "manga.line.me"
     ]
 
     /// `bilibili.com` is a portal root too — `space.bilibili.com` is any
     /// user's profile page, not the licensed comics reader.
+    ///
+    /// iQIYI's comics are not a subdomain of `iqiyi.com` at all — they live on
+    /// a separate registrable domain, `comic.iq.com` (`iq.com` is iQIYI's
+    /// international streaming site, the same portal problem `iqiyi.com`
+    /// itself would be; searched 2026-09-14, no live sample re-captured).
+    /// `iqiyi.com` admitted any subdomain and any path on the streaming site
+    /// itself — wire review finding 74. `comic.iq.com` answered a plain
+    /// request with a 404, which confirms the host exists and requires a real
+    /// path, consistent with (but not proof of) a comics reader.
     private static let chinesePlatforms: Set<String> = [
-        "manga.bilibili.com", "kuaikanmanhua.com", "ac.qq.com", "iqiyi.com",
+        "manga.bilibili.com", "kuaikanmanhua.com", "ac.qq.com", "comic.iq.com",
         "ching-win.com.tw"
     ]
 }

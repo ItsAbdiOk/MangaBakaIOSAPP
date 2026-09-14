@@ -131,7 +131,13 @@ struct ScheduleRow: View {
     /// between them — wrong in both directions depending on which question
     /// the reader thought they were asking.
     static func provenance(_ cadence: Cadence) -> String {
-        let last = cadence.lastRelease.formatted(.dateTime.day().month(.abbreviated).year())
+        // GMT, not the device's zone. A `Cadence` date is derived from
+        // MangaUpdates release dates, which are UTC midnights, so formatting
+        // one in a zone west of UTC prints the *previous* day — "last 13 Sep"
+        // for a release MangaUpdates dates 14 Sep. Same rule as
+        // `Calendar.utc`, which the schedule's own grouping already uses.
+        let style = Date.FormatStyle(timeZone: .gmt).day().month(.abbreviated).year()
+        let last = cadence.lastRelease.formatted(style)
         let evidence = cadence.gaps.map { "\($0) gaps between releases" }
             ?? "\(cadence.samples) release days"
         return "From \(evidence) on MangaUpdates · last \(last)"

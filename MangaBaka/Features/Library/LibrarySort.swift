@@ -21,6 +21,29 @@ enum LibrarySort: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The rows in this order.
+    ///
+    /// A Schwartzian transform for `.title`, a plain sort for the rest.
+    /// `sortTitle` reaches `DisplayTitle.choose`, whose default arguments
+    /// evaluate `Locale.preferredLanguages` (a CFPreferences read) and
+    /// `TitleSettings.preference` (a lock) on every call whether the early
+    /// return uses them or not — and a comparison sort asks each side for it
+    /// once per comparison. On 513 rows that is ~9k comparisons, so ~18k of
+    /// each plus ~54k `lowercased()`, on the main actor, per keystroke in the
+    /// search box (work-list 79). Decorating first makes it 513.
+    func sorted(_ rows: [LibraryEntry]) -> [LibraryEntry] {
+        guard self == .title else { return rows.sorted(by: comparator) }
+        return rows
+            .map { (entry: $0, key: $0.sortTitle) }
+            .sorted { left, right in
+                if left.key != right.key {
+                    return left.key.localizedCaseInsensitiveCompare(right.key) == .orderedAscending
+                }
+                return left.entry.seriesId < right.entry.seriesId
+            }
+            .map(\.entry)
+    }
+
     /// Ordering, with a stable tiebreak so the list does not reshuffle itself
     /// between launches when two entries compare equal — which they constantly
     /// do on rating, and always do on a library with no dates.

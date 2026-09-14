@@ -48,32 +48,13 @@ struct PresentationTests {
         """.utf8))
     }
 
-    @Test("Progress reads as a fraction and a percentage")
-    func progressLine() throws {
-        let series = SeriesFactory.make(id: 1, totalChapters: 112)
-        #expect(
-            LibraryRow.progressLine(try entry(chapter: 18), series: series)
-                == "left at 18/112 · 16%"
-        )
-    }
-
-    /// An ongoing series has no denominator, and a chapter number is still more
-    /// use than nothing.
-    @Test("With no chapter count, the chapter still shows")
-    func progressWithoutTotal() throws {
-        #expect(
-            LibraryRow.progressLine(try entry(chapter: 17), series: SeriesFactory.make(id: 1))
-                == "left at ch 17"
-        )
-    }
-
-    @Test("Never started reads as the shelf it is on, not as zero progress")
-    func progressUnstarted() throws {
-        #expect(
-            LibraryRow.progressLine(try entry(chapter: nil), series: SeriesFactory.make(id: 1))
-                == "Dropped"
-        )
-    }
+    // Three progress-line tests used to live here, pinning
+    // `LibraryRow.progressLine(_:series:)` — the formatter inside
+    // `ShelfDetailView`, the unreachable screen deleted on 2026-09-14
+    // (review Q6). No surviving screen shows that string. What readers do
+    // see is covered: `LibraryListTests` holds the list's own line
+    // (fraction, volume-and-chapter, and the nil case), and
+    // `LibraryModelTests` holds `PickBackUp.chapterLabel`.
 
     // MARK: - Schedule rows
 

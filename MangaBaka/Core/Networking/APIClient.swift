@@ -62,15 +62,7 @@ actor APIClient {
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
         let data = try await rawData(path: path, query: query, priority: priority)
-        let envelope: APIEnvelope<Payload>
-        do {
-            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
-        } catch {
-            throw APIError.decoding(underlying: String(describing: error))
-        }
-        guard let payload = envelope.data else {
-            throw APIError.decoding(underlying: "Successful response carried no `data`.")
-        }
+        let (payload, _): (Payload, Pagination?) = try decodeEnvelope(data)
         return payload
     }
 
@@ -93,16 +85,7 @@ actor APIClient {
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> (payload: Payload, pagination: Pagination?) {
         let data = try await rawData(path: path, query: query, priority: priority)
-        let envelope: APIEnvelope<Payload>
-        do {
-            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
-        } catch {
-            throw APIError.decoding(underlying: String(describing: error))
-        }
-        guard let payload = envelope.data else {
-            throw APIError.decoding(underlying: "Successful response carried no `data`.")
-        }
-        return (payload, envelope.pagination)
+        return try decodeEnvelope(data)
     }
 
     /// How many results a query has, without downloading them.
@@ -152,7 +135,7 @@ actor APIClient {
     ) async throws(APIError) -> (data: Data, http: HTTPURLResponse) {
         // Refuse before spending a request already known to be refused (gap
         // 8); `.background` may wait here instead — see `RateLimitGate`.
-        try await limiter.reserveSlot(for: path, priority: priority)
+        let reservedAt = try await limiter.reserveSlot(for: path, priority: priority)
 
         var authorized = request
         if let header = await tokenProvider.authorizationHeader() {
@@ -164,11 +147,19 @@ actor APIClient {
         let began = ContinuousClock.now
         let data: Data
         let response: URLResponse
+        // One instance per request, not shared across the session — see the
+        // type's doc comment. It serves two unrelated findings that both
+        // asked for "a `URLSessionTaskDelegate`" (wire review #30, #73).
+        let metricsDelegate = ClientRequestDelegate()
         do {
-            (data, response) = try await session.data(for: authorized)
+            (data, response) = try await session.data(for: authorized, delegate: metricsDelegate)
         } catch let error as URLError where error.code == .notConnectedToInternet
             || error.code == .networkConnectionLost
             || error.code == .dataNotAllowed {
+            // Never reached the network, so the search slot `reserveSlot`
+            // spent above was reserved for nothing — see
+            // `RateLimitGate.refund`. Folded in from wire review #13.
+            await limiter.refund(path: path, reservedAt: reservedAt)
             throw APIError.offline
         } catch let error as URLError where error.code == .cancelled {
             // The reader left, or a newer request superseded this one — not a
@@ -176,23 +167,63 @@ actor APIClient {
             // which told the kit to hide cached content
             // (`staleContentRemainsUseful == false` for `.transport`) over a
             // screen the reader simply isn't looking at anymore (gap 26).
+            // Same "never reached the network" reasoning as `.offline` above:
+            // the slot goes back (wire review #13/#30).
+            await limiter.refund(path: path, reservedAt: reservedAt)
             throw APIError.cancelled
         } catch {
             throw APIError.transport(underlying: error.localizedDescription)
         }
 
-        let elapsed = began.duration(to: .now)
-        await NetworkLedger.shared.record(
-            path: path,
-            bytes: data.count,
-            seconds: Double(elapsed.components.seconds)
-                + Double(elapsed.components.attoseconds) / 1e18,
-            // Only a real failure, never a 304: a run of "nothing changed"
-            // conditional GETs used to count as a run of failures here, which
-            // is exactly the shape `NetworkLedger`'s own success rate reads
-            // as a client falling over (services audit finding).
-            failed: (response as? HTTPURLResponse).map { $0.statusCode >= 400 } ?? true
-        )
+        // Identity-carrying responses are evicted here rather than refused at
+        // `willCacheResponse`, because that callback is never delivered.
+        // MEASURED 2026-09-14 (standalone Foundation snippet, and the
+        // simulator failure that prompted it): with
+        // `session.data(for:delegate:)` neither a task-specific delegate nor
+        // the session's own delegate receives
+        // `urlSession(_:dataTask:willCacheResponse:completionHandler:)` — the
+        // response is stored regardless of what the delegate would have
+        // answered, and regardless of a `no-store` header when a
+        // `URLProtocol` hands the loader `.allowed`. So the refusal is done
+        // after the fact, against whatever `URLCache` the session actually
+        // carries (injected or default — `session.configuration.urlCache` is
+        // the same object, not a copy).
+        //
+        // The residual this does NOT close: the bytes are written to the
+        // cache and removed again, so an identity-carrying response touches
+        // the on-disk cache file for the length of this call rather than
+        // never at all. Closing that properly needs the response never to be
+        // offered for storage, which this API gives no hook for.
+        //
+        // `authorized.cachePolicy`, not a second copy of the rule: the one
+        // place that decides what carries identity is `makeRequest`.
+        if authorized.cachePolicy == .reloadIgnoringLocalAndRemoteCacheData {
+            session.configuration.urlCache?.removeCachedResponse(for: authorized)
+        }
+
+        if metricsDelegate.wasServedFromCache {
+            // URLCache answered this without a network round trip — the
+            // request never reached MangaBaka, so the search slot reserved
+            // above is refunded, and the ledger row below is skipped so
+            // `NetworkLedger`'s recorded latencies (the p99 the client's
+            // 20s timeout is meant to be sized against — see
+            // `defaultSessionConfiguration`) aren't salted with ~0ms rows
+            // for requests that never left the device (wire review #30).
+            await limiter.refund(path: path, reservedAt: reservedAt)
+        } else {
+            let elapsed = began.duration(to: .now)
+            await NetworkLedger.shared.record(
+                path: path,
+                bytes: data.count,
+                seconds: Double(elapsed.components.seconds)
+                    + Double(elapsed.components.attoseconds) / 1e18,
+                // Only a real failure, never a 304: a run of "nothing changed"
+                // conditional GETs used to count as a run of failures here, which
+                // is exactly the shape `NetworkLedger`'s own success rate reads
+                // as a client falling over (services audit finding).
+                failed: (response as? HTTPURLResponse).map { $0.statusCode >= 400 } ?? true
+            )
+        }
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.transport(underlying: "Response was not HTTP.")
@@ -428,7 +459,14 @@ actor APIClient {
         // Never let a response carrying the reader's own data sit in the shared
         // URLCache on disk. MangaBaka does send "private, no-store" on those
         // endpoints today (verified 2026-09-09), but that is their guarantee to
-        // change, not ours to depend on.
+        // change, not ours to depend on — and `.reloadIgnoringLocalAndRemoteCacheData`
+        // alone only ever governed whether the cache is *consulted* for the
+        // load, not whether the response is *stored*, so until the eviction
+        // in `perform` (wire review #7/#73, 2026-09-14) this promise rested
+        // entirely on MangaBaka's header, not on anything this app itself
+        // enforced. `perform` now removes the cached entry for exactly the
+        // requests marked below, independent of whatever headers the
+        // response carries.
         //
         // The path prefix is not sufficient on its own. `/v1/series/mix` is a
         // public endpoint by path, but once it carries `exclude_user_library`
@@ -460,6 +498,34 @@ actor APIClient {
 /// `private` is scoped to the enclosing declaration and its extensions *in
 /// the same file*, and this is that file.
 extension APIClient {
+    /// The envelope decode, error map and "carried no data" guard every
+    /// `data`-wrapped endpoint needs, in one place. `get`, `getWithPagination`
+    /// and the conditional `get` below each wrote this out by hand — three
+    /// copies meant any change to the "carried no data" message, or to what
+    /// counts as a decode failure, was three edits kept in sync by hand.
+    /// Lives in this extension, not the primary actor body, for the same
+    /// `type_body_length` reason the rest of this file is split up — see the
+    /// doc comment above. (wire review #9/#70, 2026-09-14)
+    private func decodeEnvelope<Payload: Decodable>(_ data: Data) throws(APIError) -> (Payload, Pagination?) {
+        let envelope: APIEnvelope<Payload>
+        do {
+            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
+        } catch {
+            throw APIError.decoding(underlying: String(describing: error))
+        }
+        guard let payload = envelope.data else {
+            throw APIError.decoding(underlying: "Successful response carried no `data`.")
+        }
+        return (payload, envelope.pagination)
+    }
+
+    /// Test-only: the rate-limit gate's own view of the search window, so a
+    /// test can prove a URLCache hit or an attempt that never reached the
+    /// network didn't spend a slot from it (wire review #30/#13).
+    var searchTimestampCountForTesting: Int {
+        get async { await limiter.searchTimestampCountForTesting }
+    }
+
     /// What a conditional `get` produced.
     enum Conditional<Payload: Sendable>: Sendable {
         /// HTTP 304: the server confirms the cached copy is still current.
@@ -528,15 +594,7 @@ extension APIClient {
         }
         await limiter.recordSuccess(path: path)
 
-        let envelope: APIEnvelope<Payload>
-        do {
-            envelope = try decoder.decode(APIEnvelope<Payload>.self, from: data)
-        } catch {
-            throw APIError.decoding(underlying: String(describing: error))
-        }
-        guard let payload = envelope.data else {
-            throw APIError.decoding(underlying: "Successful response carried no `data`.")
-        }
+        let (payload, _): (Payload, Pagination?) = try decodeEnvelope(data)
         return .fresh(payload, lastModified: http.value(forHTTPHeaderField: "Last-Modified"))
     }
 }
@@ -560,11 +618,8 @@ extension APIClient {
         // response over a missing ".000".
         decoder.dateDecodingStrategy = .custom { decoder in
             let text = try decoder.singleValueContainer().decode(String.self)
-            let withFraction = ISO8601DateFormatter()
-            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = withFraction.date(from: text) { return date }
-            let plain = ISO8601DateFormatter()
-            if let date = plain.date(from: text) { return date }
+            if let date = Self.isoFormatterWithFraction.date(from: text) { return date }
+            if let date = Self.isoFormatterPlain.date(from: text) { return date }
             // A bare calendar day, no time at all — `"start_date": "2026-08-27"`,
             // seen on the wire alongside the two timestamped forms above. Fixed
             // to UTC for the same reason `SeriesWork.date` is: parsing a
@@ -592,6 +647,28 @@ extension APIClient {
 
     /// A bare `yyyy-MM-dd` day. Third and last date-decoding fallback.
     fileprivate static let dateOnlyFormatter = utcFormatter("yyyy-MM-dd")
+
+    /// The two ISO-8601 date decoders `makeDecoder`'s custom strategy tries,
+    /// built once rather than per decoded date *value*. They used to be
+    /// constructed fresh inside the closure — i.e. per date field per row —
+    /// while `dateOnlyFormatter` right above was already a `static let`.
+    /// `LibraryEntry.startDate`/`finishDate` alone put up to two dates on
+    /// every one of the library's 937 rows, so a full sync walk was up to
+    /// ~3,700 constructions of these two types (GUESS 20-60 µs each per
+    /// wire review #6/#71, so 75-225 ms of actor time — pure waste, not a
+    /// hitch, and it grows with the library). `ISO8601DateFormatter` is
+    /// documented thread-safe, so one shared instance of each is safe to
+    /// reuse from every decode. (wire review #6/#71, 2026-09-14)
+    /// `nonisolated(unsafe)` is the honest spelling: the compiler cannot see
+    /// that `ISO8601DateFormatter` is thread-safe, and Apple's own
+    /// documentation says it is. Neither instance is ever mutated after the
+    /// initialiser below.
+    nonisolated(unsafe) fileprivate static let isoFormatterWithFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    nonisolated(unsafe) fileprivate static let isoFormatterPlain = ISO8601DateFormatter()
 
     /// `Retry-After`'s HTTP-date form (RFC 7231 §7.1.3), e.g.
     /// "Wed, 21 Oct 2015 07:28:00 GMT". The delta-seconds form is far more
@@ -621,4 +698,55 @@ extension APIClient {
         guard let date = retryAfterDateFormatter.date(from: header) else { return nil }
         return max(date.timeIntervalSinceNow, 0)
     }
+}
+
+/// Records whether the response was served by `URLCache` without a network
+/// round trip, via `URLSessionTaskMetrics.transactionMetrics`, so `perform`
+/// can refund the rate-limit slot `reserveSlot` already spent and skip the
+/// `NetworkLedger` row for a request that never left the device (wire review
+/// #30, 2026-09-14).
+///
+/// It used to also answer `willCacheResponse` with nil for identity-carrying
+/// requests (wire review #73). It never fired: MEASURED 2026-09-14, neither a
+/// task-specific delegate nor a session delegate receives that callback under
+/// `session.data(for:delegate:)`, and the response was stored anyway. That
+/// promise is now kept by `perform` evicting the entry after the load — see
+/// the comment there.
+///
+/// One instance per request, not shared across the session: `perform` runs
+/// concurrently for overlapping requests (a series page alone fires seven),
+/// and `wasServedFromCache` has no other way to answer "was *this* task a
+/// cache hit" if one instance were answering delegate callbacks for several
+/// tasks at once.
+///
+/// `didFinishCollecting` firing before `session.data(for:delegate:)` returns
+/// is assumed, not verified — there is no simulator available to this
+/// change to confirm the ordering on device, the same limitation noted
+/// beside `TokenStore`'s cache (wire review #72). Apple documents metrics
+/// collection as happening once a task's transfer is complete, which is the
+/// same event `data(for:delegate:)` resolves on, but the two are not
+/// documented as strictly ordered relative to each other.
+final class ClientRequestDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _wasServedFromCache = false
+
+    /// Whether the last (and, for this instance, only) transaction was
+    /// answered from `URLCache` rather than the network.
+    var wasServedFromCache: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _wasServedFromCache
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didFinishCollecting metrics: URLSessionTaskMetrics
+    ) {
+        let servedFromCache = metrics.transactionMetrics.last?.resourceFetchType == .localCache
+        lock.lock()
+        _wasServedFromCache = servedFromCache
+        lock.unlock()
+    }
+
 }

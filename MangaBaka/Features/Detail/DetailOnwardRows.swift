@@ -87,10 +87,23 @@ struct DetailOnwardRows: View {
                     .padding(.horizontal, Metrics.gutter)
 
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                    // Lazy: an eager stack starts a `CoverStore` fetch for
+                    // every card in the first frame, and `CoverStore`
+                    // deliberately never cancels — three ~20-card rows here
+                    // alone outlived every pop (item 58).
+                    LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(relationships) { relation in
                             Button {
                                 zoomRoute?.source = ZoomRoute.id("related", relation.series.id)
+                                // This row's own siblings, not whatever row
+                                // pushed *this* page: `neighbours` was never
+                                // cleared, so tapping a related series that
+                                // happened to also be in the originating row
+                                // wrapped it in that row's pager and swiping
+                                // stepped through the wrong list — the case
+                                // `RootView+Session`'s guard comment claims
+                                // it rules out (item 122).
+                                zoomRoute?.neighbours = relationships.map(\.series)
                                 path.append(relation.series)
                             } label: {
                                 CoverCard(
@@ -150,10 +163,13 @@ struct DetailOnwardRows: View {
                 VStack(alignment: .leading, spacing: 11) {
                     header(title)
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                        // Lazy, same reasoning as `relatedRow` (item 58).
+                        LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                             ForEach(items) { item in
                                 Button {
                                     zoomRoute?.source = ZoomRoute.id(title, item.id)
+                                    // This row's items (item 122).
+                                    zoomRoute?.neighbours = items
                                     path.append(item)
                                 } label: {
                                     CoverCard(series: item, width: Metrics.coverDetailRowWidth)
@@ -189,10 +205,13 @@ struct DetailOnwardRows: View {
             VStack(alignment: .leading, spacing: 11) {
                 header("Similar by description")
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                    // Lazy, same reasoning as `relatedRow` (item 58).
+                    LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                         ForEach(items) { item in
                             Button {
                                 zoomRoute?.source = ZoomRoute.id("Similar by description", item.id)
+                                // This row's items (item 122).
+                                zoomRoute?.neighbours = items
                                 path.append(item)
                             } label: {
                                 CoverCard(series: item, width: Metrics.coverDetailRowWidth)

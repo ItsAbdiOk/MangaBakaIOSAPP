@@ -25,7 +25,12 @@ struct CharacterOutageTests {
         let subject = characterService()
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
         let afterFirst = URLProtocolStub.requests.count
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        // The second ask is a *different* series. `CharacterService` caches a
+        // merged cast per (aniListID, shikimoriID, limit) for 24 h since item
+        // 27, so asking for the same pair twice proves nothing about the
+        // outage memory — and the outage memory is service-wide, which is the
+        // thing under test.
+        _ = await subject.characters(aniListID: 3, shikimoriID: 4)
 
         // The second call makes one request, not two: Shikimori only.
         #expect(URLProtocolStub.requests.count == afterFirst + 1)
@@ -47,7 +52,12 @@ struct CharacterOutageTests {
 
         let subject = characterService()
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        // The second ask is a *different* series. `CharacterService` caches a
+        // merged cast per (aniListID, shikimoriID, limit) for 24 h since item
+        // 27, so asking for the same pair twice proves nothing about the
+        // outage memory — and the outage memory is service-wide, which is the
+        // thing under test.
+        _ = await subject.characters(aniListID: 3, shikimoriID: 4)
         #expect(aniListCalls == 2)
     }
 
@@ -70,7 +80,12 @@ struct CharacterOutageTests {
 
         let subject = characterService()
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        let cast = await subject.characters(aniListID: 1, shikimoriID: 2)
+        // The second ask is a *different* series. `CharacterService` caches a
+        // merged cast per (aniListID, shikimoriID, limit) for 24 h since item
+        // 27, so asking for the same pair twice proves nothing about the
+        // outage memory — and the outage memory is service-wide, which is the
+        // thing under test.
+        let cast = await subject.characters(aniListID: 3, shikimoriID: 4)
         #expect(counter.calls == 2, "AniList must be asked again after a transport failure")
         // Shikimori is asked concurrently every time, union semantics or not,
         // so its non-matching "Fallback" is still in the merged cast.
@@ -95,11 +110,16 @@ struct CharacterOutageTests {
         let clock = TestClock()
         let subject = characterService(clock: clock)
         _ = await subject.characters(aniListID: 1, shikimoriID: 2)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        // The second ask is a *different* series. `CharacterService` caches a
+        // merged cast per (aniListID, shikimoriID, limit) for 24 h since item
+        // 27, so asking for the same pair twice proves nothing about the
+        // outage memory — and the outage memory is service-wide, which is the
+        // thing under test.
+        _ = await subject.characters(aniListID: 3, shikimoriID: 4)
         #expect(counter.calls == 1, "Inside the window the outage is remembered")
 
         clock.advance(by: CharacterService.outageMemory + 1)
-        _ = await subject.characters(aniListID: 1, shikimoriID: 2)
+        _ = await subject.characters(aniListID: 5, shikimoriID: 6)
         #expect(counter.calls == 2, "After the window AniList is tried again")
     }
 

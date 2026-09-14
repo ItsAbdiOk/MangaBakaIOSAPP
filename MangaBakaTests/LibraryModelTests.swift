@@ -80,15 +80,13 @@ struct LibraryModelTests {
         #expect(PickBackUp.chapterLabel(subject) == "ch 12.5")
     }
 
-    /// L7: `ShelfDetailView.progressLine` truncated the same way.
-    /// Expected to fail before the fix with: "left at 12/179 · 7%", not
-    /// "left at 12.5/179 · 7%".
-    @Test("The shelf detail progress line does not truncate a fractional chapter")
-    func shelfDetailKeepsTheFraction() throws {
-        let subject = try entry(1, .reading, chapter: 12.5, total: 179)
-        let series = try #require(subject.series)
-        #expect(LibraryRow.progressLine(subject, series: series) == "left at 12.5/179 · 7%")
-    }
+    // `shelfDetailKeepsTheFraction` used to live here, pinning
+    // `LibraryRow.progressLine` — a formatter that lived inside
+    // `ShelfDetailView`, the unreachable screen deleted on 2026-09-14
+    // (review Q6). The rule it guarded, that a half chapter is not truncated
+    // to a whole one (L7), is still asserted against the two formatters the
+    // app actually shows: `PickBackUp.chapterLabel` just above, and
+    // `LibraryList.progressLine` in `LibraryListTests.swift:156`.
 
     /// The subtitle used to count shelves. It counts what is rated now: the
     /// shape bar says how the library is divided far better than a number of
@@ -114,19 +112,6 @@ struct LibraryModelTests {
         let model = LibraryModel(library: StubLibrary(entries: []))
         await model.load()
         #expect(model.subtitle == "Nothing here yet")
-    }
-
-    /// The closing line states the shape of the library rather than flattering
-    /// it.
-    @Test("The shape line reports reading against the whole library")
-    func shapeLine() async throws {
-        let model = LibraryModel(library: StubLibrary(entries:
-            (try (1...9).map { try entry($0, .dropped) }) + [try entry(10, .reading)]
-        ))
-        await model.load()
-
-        let line = try #require(model.shapeLine)
-        #expect(line.contains("Reading is 1 of 10"))
     }
 
     /// The "All" pill said 937 over a list of about 500, because the list
@@ -238,81 +223,6 @@ struct LibraryModelTests {
     }
 }
 
-/// The dropped shelf's filters, which are the reason that shelf is navigable at
-/// 429 items.
-@Suite("Dropped filters")
-struct DroppedFilterTests {
-    private func entry(chapter: Double?, rating: Double?, note: String?) throws -> LibraryEntry {
-        let noteJSON = note.map { "\"\($0)\"" } ?? "null"
-        let chapterJSON = chapter.map { String($0) } ?? "null"
-        let ratingJSON = rating.map { String($0) } ?? "null"
-        return try Fixture.decoder().decode(LibraryEntry.self, from: Data("""
-        {"id":1,"series_id":1,"state":"dropped",
-         "progress_chapter":\(chapterJSON),"rating":\(ratingJSON),"note":\(noteJSON)}
-        """.utf8))
-    }
-
-    @Test("Has a note matches only entries carrying one")
-    func hasNote() throws {
-        #expect(ShelfDetailView.Filter.hasNote.matches(
-            try entry(chapter: nil, rating: nil, note: "gave up")
-        ))
-        #expect(!ShelfDetailView.Filter.hasNote.matches(
-            try entry(chapter: nil, rating: nil, note: nil)
-        ))
-        #expect(!ShelfDetailView.Filter.hasNote.matches(
-            try entry(chapter: nil, rating: nil, note: "")
-        ))
-    }
-
-    @Test("Never rated matches only unrated entries")
-    func neverRated() throws {
-        #expect(ShelfDetailView.Filter.neverRated.matches(
-            try entry(chapter: 5, rating: nil, note: nil)
-        ))
-        #expect(!ShelfDetailView.Filter.neverRated.matches(
-            try entry(chapter: 5, rating: 40, note: nil)
-        ))
-    }
-
-    /// "Left before ch 10" means started and abandoned early. Something never
-    /// opened at all is a different thing and should not match.
-    @Test("Left early excludes what was never started")
-    func leftEarly() throws {
-        #expect(ShelfDetailView.Filter.leftEarly.matches(
-            try entry(chapter: 4, rating: nil, note: nil)
-        ))
-        #expect(!ShelfDetailView.Filter.leftEarly.matches(
-            try entry(chapter: nil, rating: nil, note: nil)
-        ))
-        #expect(!ShelfDetailView.Filter.leftEarly.matches(
-            try entry(chapter: 40, rating: nil, note: nil)
-        ))
-    }
-}
-
-/// A filter that can never match anything is a control that does nothing.
-@Suite("Shelf filters offered")
-struct ShelfFilterAvailabilityTests {
-    private func entry(note: String?) throws -> LibraryEntry {
-        let noteJSON = note.map { "\"\($0)\"" } ?? "null"
-        return try Fixture.decoder().decode(LibraryEntry.self, from: Data("""
-        {"id":1,"series_id":1,"state":"dropped","note":\(noteJSON)}
-        """.utf8))
-    }
-
-    /// Measured on the real library: one entry of 937 carries a note, and none
-    /// of them are on the dropped shelf, so the chip read "Has a note 0".
-    @Test("A filter matching nothing is not offered")
-    func emptyFilterIsHidden() throws {
-        let none = [try entry(note: nil), try entry(note: "")]
-        #expect(!none.contains(where: ShelfDetailView.Filter.hasNote.matches))
-
-        let some = [try entry(note: "gave up"), try entry(note: nil)]
-        #expect(some.contains(where: ShelfDetailView.Filter.hasNote.matches))
-    }
-}
-
 /// Searching your own library, which at 937 entries is the difference between
 /// a list and an archive.
 @Suite("Library search")
@@ -357,7 +267,12 @@ struct LibrarySearchTests {
             try entry(2, "Omniscient Reader", .dropped)
         ])
         #expect(!subject.isSearching)
-        #expect(subject.visibleShelves.count == 2)
+        // Dropped is absent from an unfiltered list by design, so "every
+        // shelf unchanged" is the reading entry here. `visibleShelves` was
+        // deleted with the shelf-card screen (work-list 87); the list on the
+        // Library screen is the one surface a search narrows now.
+        #expect(subject.listed.count == 1)
+        #expect(subject.shelves.count == 2)
     }
 
     /// Results stay grouped by shelf, so a hit keeps the context of where it
@@ -372,17 +287,18 @@ struct LibrarySearchTests {
         subject.searchText = "solo"
 
         #expect(subject.isSearching)
-        #expect(subject.matchCount == 2)
-        // Reading has one match, dropped has one; the shelf with none is gone.
-        #expect(Set(subject.visibleShelves.map(\.state)) == [.reading, .dropped])
-        #expect(subject.visibleShelves.allSatisfy { !$0.entries.isEmpty })
+        // Reading has one match, dropped has one — and dropped is out of an
+        // unfiltered list, so the list shows the reading one.
+        #expect(subject.listed.map(\.seriesId) == [1])
+        subject.filter = .dropped
+        #expect(subject.listed.map(\.seriesId) == [3])
     }
 
     @Test("Matching ignores case and whitespace around the query")
     func matchingIsForgiving() async throws {
         let subject = await model([try entry(1, "Solo Leveling", .reading)])
         subject.searchText = "  LEVELING  "
-        #expect(subject.matchCount == 1)
+        #expect(subject.listed.count == 1)
     }
 
     /// A search matching nothing is a real answer, not an empty library.
@@ -390,8 +306,8 @@ struct LibrarySearchTests {
     func noMatches() async throws {
         let subject = await model([try entry(1, "Solo Leveling", .reading)])
         subject.searchText = "berserk"
-        #expect(subject.matchCount == 0)
-        #expect(subject.visibleShelves.isEmpty)
+        #expect(subject.listed.isEmpty)
+        #expect(subject.isFiltering)
     }
 }
 

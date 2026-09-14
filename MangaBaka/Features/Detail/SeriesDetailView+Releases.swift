@@ -86,6 +86,15 @@ extension SeriesDetailView {
         case let .measured(estimate):
             cadence = estimate
             cadenceFailure = nil
+        case .failed(.cancelled):
+            // The reader left, or the page was replaced under the pager.
+            // `ReleaseScheduleService.cadence(for:)` returns this rather than
+            // swallowing it, deliberately, so the one caller that can tell a
+            // live page from a dead one makes the call — and a live page has
+            // nothing to say about a request nobody is waiting for.
+            // `APIError.cancelled`'s own doc comment: never on screen
+            // (item 40).
+            cadenceFailure = nil
         case let .failed(error):
             // Distinct from `.none` (measured, too little history) and
             // `.unavailable` (no MangaUpdates id) — both of those stay

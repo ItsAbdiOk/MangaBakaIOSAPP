@@ -35,6 +35,12 @@ enum LibraryExport {
         var seriesId: Int
         var title: String?
         var state: LibraryEntry.State
+        /// The server's own spelling of `state`, when it is one this build
+        /// does not know. Work-list 90: `state` coerces an unrecognised value
+        /// to `considering`, so without this a backup taken on an older build
+        /// silently rewrote every entry in a state added since. Absent — and
+        /// omitted from the file — whenever it agrees with `state`.
+        var rawState: String?
         var progressChapter: Double?
         var progressVolume: Double?
         var rating: Double?
@@ -49,6 +55,7 @@ enum LibraryExport {
             seriesId = entry.seriesId
             title = entry.series?.displayTitle
             state = entry.state
+            rawState = entry.exportedState == entry.state.rawValue ? nil : entry.exportedState
             progressChapter = entry.progressChapter
             progressVolume = entry.progressVolume
             rating = entry.rating
@@ -64,7 +71,8 @@ enum LibraryExport {
             seriesId: Int, title: String?, state: LibraryEntry.State,
             progressChapter: Double?, progressVolume: Double?, rating: Double?,
             note: String?, startDate: Date?, finishDate: Date?,
-            numberOfRereads: Int?, priority: Int?, isPrivate: Bool?
+            numberOfRereads: Int?, priority: Int?, isPrivate: Bool?,
+            rawState: String? = nil
         ) {
             self.seriesId = seriesId
             self.title = title
@@ -78,6 +86,7 @@ enum LibraryExport {
             self.numberOfRereads = numberOfRereads
             self.priority = priority
             self.isPrivate = isPrivate
+            self.rawState = rawState
         }
     }
 
@@ -139,12 +148,12 @@ enum LibraryExport {
     private static func row(for entry: LibraryEntry) -> [String] {
         [
             String(entry.seriesId),
-            entry.series?.displayTitle ?? "",
-            entry.state.rawValue,
+            defused(entry.series?.displayTitle ?? ""),
+            entry.exportedState,
             entry.progressChapter.map(numberText) ?? "",
             entry.progressVolume.map(numberText) ?? "",
             entry.rating.map(numberText) ?? "",
-            entry.note ?? "",
+            defused(entry.note ?? ""),
             entry.startDate.map(iso) ?? "",
             entry.finishDate.map(iso) ?? "",
             entry.numberOfRereads.map(String.init) ?? "",
@@ -167,6 +176,23 @@ enum LibraryExport {
             || field.contains("\n") || field.contains("\r")
         else { return field }
         return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+
+    /// Stops a spreadsheet treating an exported note as a formula.
+    ///
+    /// RFC 4180 quoting is about parsing, not about what Excel and Numbers do
+    /// afterwards: a field beginning `=`, `+`, `-` or `@` is read as a formula
+    /// and executed when the reader opens their own backup (work-list 91).
+    /// The note is the reader's own text, but pasted text is real input and
+    /// this file is meant to be opened in exactly those two apps. A leading
+    /// apostrophe is the conventional defusal — spreadsheets strip it on
+    /// display, and `LibraryImport` sees it only in a field that could not
+    /// have been a number anyway. Applied to the title and the note only:
+    /// every other column is a number, a date or an enum, and a negative
+    /// priority is `-1`, not a formula.
+    private static func defused(_ field: String) -> String {
+        guard let first = field.first, "=+-@".contains(first) else { return field }
+        return "'" + field
     }
 
     /// "MangaBaka library 2026-09-13" — the base name both export formats

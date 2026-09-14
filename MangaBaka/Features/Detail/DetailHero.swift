@@ -34,6 +34,23 @@ struct DetailHero: View {
     @State private var bylineHeight: CGFloat?
     /// The richest form's height — the full column plus the chapter count.
     @State private var chaptersHeight: CGFloat?
+    /// The column width the three heights above were measured at, and for
+    /// which series. The measurers are three whole extra columns, each
+    /// carrying its own `.sheet` presenter, and they were laid out on every
+    /// pass of the hero — four columns' worth of text layout to read three
+    /// numbers that only change when the series, the width or the type size
+    /// does (item 120). Once they have answered for a given key they are
+    /// taken out of the tree; a new key puts them back.
+    @State private var measuredFor: MeasureKey?
+    /// The visible column's width, which is what the measurers are proposed.
+    @State private var columnWidth: CGFloat = 0
+
+    /// What a set of measured heights is true for.
+    struct MeasureKey: Equatable {
+        var seriesID: Int
+        var width: CGFloat
+        var typeSize: DynamicTypeSize
+    }
 
     /// Side by side normally; stacked at accessibility text sizes.
     ///
@@ -158,30 +175,45 @@ struct DetailHero: View {
         // it. A column taller than the cover is left alone.
         return column(form, fill: true)
             .frame(minHeight: coverHeight, alignment: .top)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
             // The measurers are a background: proposed the visible column's
             // width, which is what decides the wrapping, and their own
             // heights cannot grow the column — the whole point.
-            .background {
+            .background { measurers }
+    }
+
+    /// The three off-screen columns, mounted only while their answer for the
+    /// current series, width and type size is not already known.
+    @ViewBuilder
+    private var measurers: some View {
+        let key = MeasureKey(seriesID: series.id, width: columnWidth, typeSize: typeSize)
+        if columnWidth > 0, measuredFor != key {
+            ZStack {
                 column(.chapters, fill: false)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         chaptersHeight = $0
                     }
-            }
-            .background {
                 column(.full, fill: false)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         fullHeight = $0
                     }
-            }
-            .background {
                 column(.byline, fill: false)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         bylineHeight = $0
                     }
             }
+            // Recorded off the ZStack's own height rather than inside one of
+            // the three actions above: an action only fires when its value
+            // changes, and a re-measure that happens to land on the same
+            // number would otherwise never retire the measurers.
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                guard height > 0 else { return }
+                measuredFor = key
+            }
+        }
     }
 
     /// `fill` puts spacers between the blocks, which is what lets the

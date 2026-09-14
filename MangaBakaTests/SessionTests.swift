@@ -44,7 +44,8 @@ struct SessionWiringTests {
     func forgetPreviousAccountForgetsLibrary() throws {
         let source = try session()
         #expect(source.contains("await session.library.forget()"))
-        #expect(source.contains("stackModel?.ranker = nil"))
+        // Item 61: non-optional now, built in `RootView.init`.
+        #expect(source.contains("stackModel.ranker = nil"))
     }
 
     /// Gap 3: told once, from the one place a launch actually runs its
@@ -86,7 +87,9 @@ struct SessionWiringTests {
     func skipsReindexOnFailedWalk() throws {
         let source = try session()
         #expect(source.contains("let walk = await librarySnapshot.load()"))
-        #expect(source.contains("guard walk.failure == nil else { return }"))
+        // Item 12 added a `needsAccount` branch inside the guard, so it is no
+        // longer a one-liner; what matters is that the guard is still there.
+        #expect(source.contains("guard walk.failure == nil else {"))
         #expect(source.contains("await spotlight.reindex(walk.entries)"))
     }
 }
@@ -104,8 +107,12 @@ struct RootViewWiringTests {
         let source = try SourceTree.read("MangaBaka/App/RootView+Failures.swift")
         let function = try #require(source.range(of: "func useAsSeedTapped"))
         let body = String(source[function.lowerBound...])
-        #expect(body.contains("guard let mixModel else {"))
-        #expect(body.contains("kind: .failure"))
+        // Item 61 closed the window this guard existed for: `mixModel` is
+        // built in `RootView.init`, so there is no nil case to confirm
+        // success over. The addition is unconditional because it now always
+        // happens.
+        #expect(body.contains("mixModel.addSeed(series)"))
+        #expect(!body.contains("mixModel?.addSeed(series)"))
         let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
         #expect(root.contains("onUseAsSeed: useAsSeedTapped,"))
     }

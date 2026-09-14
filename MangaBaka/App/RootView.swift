@@ -24,7 +24,11 @@ struct RootView: View {
     let releaseFeeds: ReleaseFeedService
     let embeddingIndex: EmbeddingIndex
     let offlineCatalogue: OfflineCatalogue
-    let mangaUpdatesCategories: MangaUpdatesClient
+    /// One client, shared with `ReleaseScheduleService` (item 14). Two
+    /// instances each kept their own `RequestSpacing`, so cadence and
+    /// categories hit MangaUpdates concurrently on every page open and a
+    /// 429 back-off on one was invisible to the other.
+    let mangaUpdates: MangaUpdatesClient
     let publisherFollows: PublisherFollows
     let openLibraryCovers: OpenLibraryCovers
     let taste: TasteProfile
@@ -47,9 +51,9 @@ struct RootView: View {
     /// The library in iOS search. A struct with no state, so it is built here
     /// rather than passed through `AppServices`.
     let spotlight = SpotlightIndex()
-    @State private var whatsNew = WhatsNewState()
+    @State var whatsNew = WhatsNewState()
     /// "More of what you finished" on the Library screen; see Continuations.
-    @State var continuations: ContinuationsModel?
+    @State var continuations: ContinuationsModel
     /// A publisher or studio page, pushed from any series page. See
     /// `PublisherRoute`: the paths are [Series], so this rides beside them.
     @State var openPublisher: PublisherRoute?
@@ -67,33 +71,32 @@ struct RootView: View {
     // type's body.
     @State var selection: AppTab = .discover
     @State var discoverPath: [Series] = []
-    @State private var stackPath: [Series] = []
+    @State var stackPath: [Series] = []
     @State var shelfPath: [Series] = []
     @State var showsSchedule = false
     @State var showsTaste = false
     @State var showsWrapped = false
     @State var showsSettings = false
-    @State var openShelf: LibraryModel.Shelf?
-    @State private var searchPath: [Series] = []
-    @State private var mixPath: [Series] = []
-    @State var searchModel: SearchModel?
-    @State private var browseModel: BrowseModel?
-    @State private var showsBrowse = false
+    @State var searchPath: [Series] = []
+    @State var mixPath: [Series] = []
+    @State var searchModel: SearchModel
+    @State var browseModel: BrowseModel
+    @State var showsBrowse = false
     /// Internal rather than private: `RootView+Failures.swift` reads this to
     /// guard "Use as seed" against a tap landing before the tab's own
     /// `.task` has built the model (gap 77).
-    @State var mixModel: MixModel?
+    @State var mixModel: MixModel
     /// Held here for the same reason as the three above, and for one more:
     /// the `.id(titleRevision)` on the tab tree rebuilds it when the title
     /// preference changes, and a model built inline in the body went with it
     /// — the stack's queue and its "seen this run" counts were reset by a
     /// display setting. Models above the `.id` survive it.
-    @State private var discoverModel: DiscoverModel?
+    @State var discoverModel: DiscoverModel
     /// Internal rather than private: `forgetPreviousAccount` (in
     /// `RootView+Session.swift`) has to clear `ranker` on an account change
     /// (gap 89) — a taste ranker built from the previous account's library
     /// otherwise keeps weighting the new account's stack until relaunch.
-    @State var stackModel: StackModel?
+    @State var stackModel: StackModel
     /// The cover the detail page should grow out of, and the namespace the
     /// source and destination share. See `ZoomRoute`.
     @State var zoomRoute = ZoomRoute()
@@ -120,6 +123,106 @@ struct RootView: View {
     /// the new names. Titles are read in a hundred places and changed roughly
     /// never; a version number is cheaper than making all of them observe.
     @State var titleRevision = 0
+    /// Item 11: `refreshReminders()`'s own doc comment has always promised
+    /// "and when the app comes back to the foreground", and no `scenePhase`
+    /// handler existed anywhere in the app — so a pending list built at
+    /// launch went stale for as long as the process lived. Tracked rather
+    /// than read off `onChange`'s old value: returning from the background
+    /// arrives as .background → .inactive → .active, so the old value at the
+    /// moment it matters is .inactive, which is also what a Control Centre
+    /// pull looks like.
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var wasBackgrounded = false
+    /// One handle, so two quick foregrounds do not run two walks.
+    @State private var reminderRefresh: Task<Void, Never>?
+
+    /// Builds the six session-lived models up front, rather than leaving them
+    /// nil until the tab tree's own `.task` runs.
+    ///
+    /// Item 61: they used to be optional `@State`, and the first body pass
+    /// reached them through `?? DiscoverModel(…)` fallbacks. `DiscoverView`,
+    /// `StackView` and the rest capture what they are handed in
+    /// `State(initialValue:)`, so the tab kept the throwaway — and the `.task`
+    /// then stored a *second* set that only `RootView` could see. Every
+    /// `stackModel.ranker` write, including `forgetPreviousAccount`'s
+    /// `= nil`, landed on the object nobody was showing. `SessionModels`
+    /// already builds its own this way and says why.
+    init(
+        repository: SeriesRepository,
+        shelf: ShelfStore,
+        history: HistoryStore,
+        client: APIClient,
+        content: ContentPreferencesStore,
+        formats: FormatPreferencesStore,
+        library: LibraryService,
+        schedule: ReleaseScheduleService,
+        characters: CharacterService,
+        appleBooks: AppleBooksClient,
+        googleBooks: GoogleBooksClient,
+        releaseFeeds: ReleaseFeedService,
+        embeddingIndex: EmbeddingIndex,
+        offlineCatalogue: OfflineCatalogue,
+        mangaUpdates: MangaUpdatesClient,
+        publisherFollows: PublisherFollows,
+        openLibraryCovers: OpenLibraryCovers,
+        taste: TasteProfile,
+        catalogue: CatalogueService,
+        blockedTags: BlockedTagsStore,
+        lenses: SearchLensStore,
+        recents: RecentSearches,
+        session: SessionModels,
+        calendar: ReleaseCalendar,
+        librarySnapshot: LibrarySnapshot,
+        reminders: ReleaseReminders,
+        databaseWasReset: Bool,
+        onboarding: OnboardingState
+    ) {
+        self.repository = repository
+        self.shelf = shelf
+        self.history = history
+        self.client = client
+        self.content = content
+        self.formats = formats
+        self.library = library
+        self.schedule = schedule
+        self.characters = characters
+        self.appleBooks = appleBooks
+        self.googleBooks = googleBooks
+        self.releaseFeeds = releaseFeeds
+        self.embeddingIndex = embeddingIndex
+        self.offlineCatalogue = offlineCatalogue
+        self.mangaUpdates = mangaUpdates
+        self.publisherFollows = publisherFollows
+        self.openLibraryCovers = openLibraryCovers
+        self.taste = taste
+        self.catalogue = catalogue
+        self.blockedTags = blockedTags
+        self.lenses = lenses
+        self.recents = recents
+        self.session = session
+        self.calendar = calendar
+        self.librarySnapshot = librarySnapshot
+        self.reminders = reminders
+        self.databaseWasReset = databaseWasReset
+        self.onboarding = onboarding
+        _continuations = State(initialValue: ContinuationsModel(repository: repository))
+        _searchModel = State(initialValue: SearchModel(
+            repository: repository,
+            offline: offlineCatalogue,
+            allowedRatings: { content.preferences.queryValues },
+            allowedFormats: { formats.preferences.queryValues },
+            blockedTagIDs: { blockedTags.blocked.ids }
+        ))
+        _browseModel = State(initialValue: BrowseModel(catalogue: catalogue))
+        _mixModel = State(initialValue: MixModel(repository: repository, shelf: shelf))
+        _discoverModel = State(initialValue: DiscoverModel(repository: repository))
+        // The shared snapshot, not a private walk of its own (lane C):
+        // `StackModel` reads the library to keep what is already tracked out
+        // of the queue, and a second walk is 24.7 MB on a real account.
+        _stackModel = State(initialValue: StackModel(
+            repository: repository, shelf: shelf, library: library, snapshot: librarySnapshot
+        ))
+    }
 
     var body: some View {
         tabs
@@ -138,14 +241,19 @@ struct RootView: View {
                 blockedIds: Set(blockedTags.blocked.ids)
             ))
             .task { await startSession() }
-            // Primes `characters`' outage memory before any series page asks
-            // for a cast, so the first one opened does not pay AniList's own
-            // timeout before falling back to Shikimori. Its own detached
-            // task, not folded into `startSession()`: that function's own
-            // awaits (reminders, then Spotlight) are sequential, and this
-            // check has no bearing on either — chaining it in front of them
-            // would make a slow AniList delay work that does not depend on it.
-            .task { await characters.primeAniListHealth() }
+            // `primeAniListHealth` used to run here — a POST to
+            // graphql.anilist.co on every cold launch, from every reader,
+            // including those who never open a series page. Deleted
+            // 2026-09-14 on Abdi's call (Q4): both cast sources are asked
+            // concurrently now, so there is no AniList timeout to get ahead
+            // of, and it held one of the 0.7 s slots exactly when the first
+            // real cast request wanted it. See `CharacterService`.
+            //
+            // Dates move and series leave the library while the app sits in
+            // the background, so the pending list is corrected on return
+            // (item 11) — the foreground half of what `refreshReminders`'
+            // own doc comment has always promised.
+            .onChange(of: scenePhase) { _, phase in foregroundChanged(to: phase) }
             // A library series tapped in Spotlight. The page opens in the
             // Library tab, which is where the reader's state on it lives.
             // "Open <series>" from Siri or Shortcuts; see IntentBridge.
@@ -159,8 +267,16 @@ struct RootView: View {
             .onOpenURL { url in
                 // A mangabaka.org series link, or the widgets' own
                 // `mangabaka://series/<id>` — see SeriesWebLink.
+                //
+                // Through the bridge rather than an unstructured
+                // `Task { await openSeries(id:) }` (item 65): that bypassed
+                // the `Task.isCancelled` guards `openSeries` relies on, so
+                // two rapid widget taps could land the *older* series on top
+                // (gap 76, re-opened for links). One entry point for Siri,
+                // widgets and web links, and it is the one already
+                // cancelled-and-restarted by `.task(id:)` above.
                 guard let id = SeriesWebLink.seriesID(from: url) else { return }
-                Task { await openSeries(id: id) }
+                bridge.pendingSeriesID = id
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 guard let id = SpotlightIndex.seriesID(from: activity) else { return }
@@ -183,154 +299,27 @@ struct RootView: View {
             .onChange(of: onboarding.hasCompleted) { _, completed in onboardingCompletionChanged(completed) }
     }
 
-    /// The tab selection, with a re-tap of the current tab popping it to its
-    /// root. `TabView` reports a change of selection and nothing on a re-tap,
-    /// so the binding's setter is where the re-tap is seen: same value in,
-    /// pop. `popToRoot` had sat under a comment describing this behaviour
-    /// with no caller for it.
-    private var tabSelection: Binding<AppTab> {
-        Binding(
-            get: { selection },
-            set: { tab in
-                if tab == selection { popToRoot(tab) }
-                selection = tab
-            }
-        )
-    }
-
-    private var tabs: some View {
-        TabView(selection: tabSelection) {
-            Tab(AppTab.discover.title, systemImage: AppTab.discover.symbol, value: AppTab.discover) {
-                NavigationStack(path: $discoverPath) {
-                    DiscoverView(
-                        model: discoverModel ?? DiscoverModel(repository: repository),
-                        inProgress: session.library.inProgress,
-                        recentlyViewed: session.recentlyViewed,
-                        path: $discoverPath,
-                        pulse: session.pulse,
-                        chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries),
-                        whatsNew: whatsNew,
-                        hasCompletedOnboarding: onboarding.hasCompleted
-                    )
-                    .navigationDestination(for: Series.self) { detail($0, path: $discoverPath) }
-                }
-            }
-            Tab(AppTab.stack.title, systemImage: AppTab.stack.symbol, value: AppTab.stack) {
-                NavigationStack(path: $stackPath) {
-                    StackView(
-                        model: stackModel
-                            ?? StackModel(repository: repository, shelf: shelf, library: library),
-                        path: $stackPath,
-                        onOpenShelf: { selection = .library },
-                        onConfirm: { toasts.show($0) }
-                    )
-                    .navigationDestination(for: Series.self) { detail($0, path: $stackPath) }
-                }
-            }
-            Tab(AppTab.mix.title, systemImage: AppTab.mix.symbol, value: AppTab.mix) {
-                NavigationStack(path: $mixPath) {
-                    MixView(
-                        model: mixModel ?? MixModel(repository: repository, shelf: shelf),
-                        path: $mixPath,
-                        // Picking a seed is a search, so send the reader to the
-                        // screen that already does that well rather than
-                        // building a second, worse picker inside Mix.
-                        catalogue: catalogue,
-                        lenses: lenses
-                    )
-                    .navigationDestination(for: Series.self) { detail($0, path: $mixPath) }
-                }
-            }
-            libraryTab
-            // `.search` is what renders it as the circle beside the capsule
-            // rather than a fifth item inside it — the mockup's arrangement,
-            // done by the system.
-            Tab(
-                AppTab.search.title,
-                systemImage: AppTab.search.symbol,
-                value: AppTab.search,
-                role: .search
-            ) {
-                NavigationStack(path: $searchPath) {
-                    SearchView(
-                        model: searchModel ?? makeSearchModel(),
-                        path: $searchPath,
-                        onBrowse: { showsBrowse = true },
-                        lenses: lenses,
-                        counts: session.counts,
-                        catalogue: catalogue,
-                        recents: recents,
-                        library: library
-                    )
-                    .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
-                    .navigationDestination(isPresented: $showsBrowse) {
-                        BrowseDestination(
-                            model: browseModel ?? BrowseModel(catalogue: catalogue),
-                            blocked: blockedTags,
-                            catalogue: catalogue
-                        ) { pick in
-                            searchModel?.applyBrowse(
-                                genre: pick.genre,
-                                tag: pick.tag,
-                                publisher: pick.publisher
-                            )
-                            showsBrowse = false
-                        }
-                    }
-                }
-            }
-        }
-        // The system tab bar, not a drawing of one.
-        //
-        // This was hand-built to match the mockup's floating capsule plus a
-        // detached search circle, with the real bar hidden underneath. On iOS 26
-        // that is what the system bar already *is* — a floating glass capsule —
-        // and `TabRole.search` is what detaches search from it. Hand-drawing it
-        // cost the things Apple ships with it and nobody can reasonably rebuild:
-        // the selection indicator that resizes to its label and slides between
-        // tabs under a dragging finger, the scroll-away behaviour, and the
-        // specular response of real Liquid Glass to what is behind it.
-        .tabBarMinimizeBehavior(.onScrollDown)
-        .toasts(toasts)
-        // Also in the environment, so a control buried a long way down — the
-        // copy-artwork menu on a character portrait — can confirm itself
-        // without every view between here and it carrying the centre through.
-        .environment(toasts)
-        .task {
-            // Created once and kept: rebuilding them per tab switch would drop
-            // a half-typed query or an assembled set of mix seeds.
-            if searchModel == nil { searchModel = makeSearchModel() }
-            if mixModel == nil { mixModel = MixModel(repository: repository, shelf: shelf) }
-            if browseModel == nil { browseModel = BrowseModel(catalogue: catalogue) }
-            if discoverModel == nil { discoverModel = DiscoverModel(repository: repository) }
-            if continuations == nil { continuations = ContinuationsModel(repository: repository) }
-            if stackModel == nil {
-                stackModel = StackModel(repository: repository, shelf: shelf, library: library)
-            }
-            // The reader's tags, for ordering the stack's blends. After the
-            // models exist, and off the launch path: it walks the library.
-            stackModel?.ranker = await taste.ranker()
-        }
-        .tint(Palette.accent)
-        .preferredColorScheme(.dark)
-    }
-
-    /// Tapping the current tab returns to its root.
-    private func popToRoot(_ tab: AppTab) {
-        switch tab {
-        case .discover: discoverPath.removeAll()
-        case .stack: stackPath.removeAll()
-        case .mix: mixPath.removeAll()
-        case .library:
-            shelfPath.removeAll()
-            openShelf = nil
-            showsSchedule = false
-            showsTaste = false
-            showsWrapped = false
-            showsSettings = false
-        case .search:
-            searchPath.removeAll()
-            showsBrowse = false
+    /// Rebuilds the pending reminders when the app comes back from the
+    /// background.
+    ///
+    /// Item 11: `refreshReminders()` ran only at launch and from the Settings
+    /// switch, while its own doc comment promised the foreground too — and
+    /// no `scenePhase` handler existed anywhere in `App/` or `Features/`.
+    /// Only a real background round trip counts: a Control Centre pull is
+    /// .inactive → .active and would otherwise re-walk on every glance, and
+    /// launch itself is already covered by `startSession`.
+    private func foregroundChanged(to phase: ScenePhase) {
+        switch phase {
+        case .background:
+            wasBackgrounded = true
+        case .active where wasBackgrounded:
+            wasBackgrounded = false
+            // One handle: two quick foregrounds should leave one walk
+            // running, not two racing to reschedule the same list.
+            reminderRefresh?.cancel()
+            reminderRefresh = Task { await refreshReminders() }
+        default:
+            break
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A series as returned by the v2 endpoints.
 ///
@@ -8,6 +9,8 @@ import Foundation
 /// (verified 2026-09-08). The spec lags the API, so this type must never
 /// assume the spec is exhaustive.
 struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "decode")
+
     let id: Int
     /// "active", "merged" or "deleted".
     let state: String
@@ -138,10 +141,27 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         // Absent on v2 entirely, and on any v1 payload that predates it. A
         // series with no rich tags falls back to the flat names.
         //
-        // Element by element, so one malformed tag costs one tag. As a single
-        // array under `try?`, one null name emptied all 146 of Solo Leveling's
-        // — and the flat fallback list hid that the rich ones had gone.
-        tagsV2 = container.lenientElements(SeriesTag.self, forKey: .tagsV2)
+        // `LossyArray`, not a bespoke lenient decode: element by element, so
+        // one malformed tag costs one tag rather than the whole array — a
+        // single array under `try?` once let one null name empty all 146 of
+        // Solo Leveling's, and the flat fallback list hid that the rich ones
+        // had gone. The bespoke version (`lenientElements`) did the same
+        // per-element skip but never counted what it dropped, so the exact
+        // failure `LossyArray`'s own comment says it exists to prevent — a
+        // `tags_v2` shape change going unnoticed — was invisible here. Logged
+        // the same way `SeriesRepository+Paging.swift`'s search page does.
+        let tagsV2Decode = try container.decodeIfPresent(LossyArray<SeriesTag>.self, forKey: .tagsV2)
+        // `id` copied to a local first: interpolating a property of a
+        // still-initialising `self` into an autoclosing log message captures
+        // `self` in an escaping autoclosure, which a mutating initialiser
+        // cannot do.
+        let decodedID = id
+        if let dropped = tagsV2Decode?.dropped, dropped > 0 {
+            Self.logger.error(
+                "tags_v2 dropped \(dropped, privacy: .public) rows for series \(decodedID, privacy: .public)"
+            )
+        }
+        tagsV2 = tagsV2Decode?.elements
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -352,23 +372,6 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
 private struct NamedTag: Decodable { let name: String? }
 
 private extension KeyedDecodingContainer {
-    /// Tag names, whichever of the API's three shapes arrived.
-    /// An array where a bad element is dropped rather than failing the whole
-    /// array. Nil when the key is absent or not an array at all.
-    func lenientElements<Element: Decodable>(_ type: Element.Type, forKey key: Key) -> [Element]? {
-        guard contains(key), var elements = try? nestedUnkeyedContainer(forKey: key) else { return nil }
-        var decoded: [Element] = []
-        while !elements.isAtEnd {
-            if let element = try? elements.decode(Element.self) {
-                decoded.append(element)
-            } else {
-                // Skip the bad one; the container must advance past it.
-                _ = try? elements.decode(AnyDecodable.self)
-            }
-        }
-        return decoded
-    }
-
     func lenientTagNames(forKey key: Key) -> [String]? {
         if let names = try? decodeIfPresent([String].self, forKey: key) { return names }
         if let objects = try? decodeIfPresent([NamedTag].self, forKey: key) {
@@ -412,18 +415,5 @@ extension Series.TrackerEntry {
         }
         rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         ratingNormalized = try container.decodeIfPresent(Double.self, forKey: .ratingNormalized)
-    }
-}
-
-/// Consumes any JSON value, so a lenient array decode can step over one.
-private struct AnyDecodable: Decodable {
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() { return }
-        if (try? container.decode(Bool.self)) != nil { return }
-        if (try? container.decode(Double.self)) != nil { return }
-        if (try? container.decode(String.self)) != nil { return }
-        if (try? container.decode([AnyDecodable].self)) != nil { return }
-        _ = try container.decode([String: AnyDecodable].self)
     }
 }

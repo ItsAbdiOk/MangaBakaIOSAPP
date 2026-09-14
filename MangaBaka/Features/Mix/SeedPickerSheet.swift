@@ -49,6 +49,11 @@ struct SeedPickerSheet: View {
         // Opens with the keyboard up: the reader tapped "+" to type a name,
         // and a field they have to tap again is a wasted step.
         .task { isFieldFocused = true }
+        // A sheet dismissed mid-debounce left a scheduled search behind, and
+        // it went out: one slot from the 30/min window spent on an answer
+        // nobody is on screen to read. The model dies with the sheet, so
+        // there is nothing else that would have stopped it.
+        .onDisappear { search.cancelPendingDebounce() }
     }
 
     /// The query as a non-optional binding, written once.
@@ -143,11 +148,11 @@ struct SeedPickerSheet: View {
         }
     }
 
-    /// `SearchModel.message` is only ever non-nil when `result.blockingError`
-    /// fired — `SearchModel.swift`'s `search()` sets it to
-    /// `result.blockingError?.userFacingMessage` when `series.isEmpty`, and
-    /// `blockingError` is nil for a genuine empty answer. So a non-nil
-    /// `message` here always means a real failure, never a real zero-result
+    /// `SearchModel.failure` is only ever non-nil when `result.blockingError`
+    /// fired — `SearchModel.swift`'s `search()` sets it from
+    /// `result.blockingError` when `series.isEmpty`, and `blockingError` is
+    /// nil for a genuine empty answer. So a non-nil failure here always means
+    /// a real failure, never a real zero-result
     /// search — but the old code showed the same idle copy, "Type a title you
     /// love.", for a failure, an untouched field, AND a search that ran and
     /// matched nothing (gap 44, FAILURES-SUMMARY.md M9), so a reader who had
@@ -169,10 +174,13 @@ struct SeedPickerSheet: View {
             ProgressView().tint(Palette.textQuaternary)
             Spacer()
         } else if search.results.isEmpty {
-            let isFailure = search.message != nil
+            // Read straight off `failure`; the `message` shim on
+            // `SearchModel` that existed for this one call site is gone.
+            let message = search.failure?.userFacingMessage
+            let isFailure = message != nil
             Spacer()
             VStack(spacing: 10) {
-                Text(Self.emptyCopy(message: search.message, queryText: search.query.text))
+                Text(Self.emptyCopy(message: message, queryText: search.query.text))
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .multilineTextAlignment(.center)

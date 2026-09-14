@@ -23,12 +23,16 @@ actor MangaUpdatesClient {
     /// repeat request, not a crash.
     private let cacheDirectory: URL?
 
-    /// Identifies the app, as their terms require.
-    static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
+    /// Identifies the app, as their terms require. One string, in
+    /// `AppUserAgent`; `ThirdPartySession` sends it for every client, and the
+    /// explicit `setValue` below stays for the reason `ShikimoriClient`
+    /// gives — a substituted session must not silently drop a header this
+    /// host refuses requests without.
+    static let userAgent = AppUserAgent.value
 
     init(
         baseURL: URL = URL(string: "https://api.mangaupdates.com/v1").unsafeScheduleFallback,
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("mangaupdates", isDirectory: true)
@@ -140,8 +144,12 @@ actor MangaUpdatesClient {
             throw APIError.transport(underlying: "Not an HTTP response.", party: .mangaUpdates)
         }
         if http.statusCode == 429 {
-            let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .mangaUpdates)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -198,8 +206,12 @@ actor MangaUpdatesClient {
             throw APIError.transport(underlying: "Not an HTTP response.", party: .mangaUpdates)
         }
         if http.statusCode == 429 {
-            let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .mangaUpdates)
         }
         guard (200..<300).contains(http.statusCode) else {

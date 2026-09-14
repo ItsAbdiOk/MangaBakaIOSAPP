@@ -29,4 +29,53 @@ struct RequestSpacing: Sendable {
     mutating func backOff(until date: Date) {
         nextAllowed = max(nextAllowed, date)
     }
+
+    /// How long a third party's own `Retry-After` is honoured for at most.
+    ///
+    /// The same ceiling `RateLimitGate.maxHonouredRetryAfter` applies to
+    /// MangaBaka itself, and **a guess for the same reason it is one there**:
+    /// nothing on record says what AniList, Shikimori, MangaUpdates, Webtoons,
+    /// Naver or GigaViewer actually send on a 429. What is not a guess is what
+    /// an uncapped value costs — `TimeInterval("nan")` and `TimeInterval("inf")`
+    /// both parse to non-finite doubles rather than failing (confirmed on
+    /// device, see `APIClient.parseRetryAfter`), and a NaN reaching
+    /// `nextAllowed` makes every later `claim` return NaN, so `guard wait > 0`
+    /// is false forever and that client never spaces its requests again for the
+    /// life of the process. `86400` is the other end: one malformed header and
+    /// the next caller sleeps for a day.
+    static let maxHonouredRetryAfter = RateLimitGate.maxHonouredRetryAfter
+
+    /// The back-off used when a 429 carries no usable `Retry-After` at all.
+    /// **A guess**, carried over unchanged from the nine call sites that each
+    /// hard-coded it before this function existed.
+    static let unstatedBackOff: TimeInterval = 60
+
+    /// Parses a `Retry-After` header, clamps it, and pushes the next slot out
+    /// by it — the one place the nine third-party clients' copies of this
+    /// two-line pattern now live.
+    ///
+    /// Parsing is `APIClient.parseRetryAfter`, which already rejects
+    /// non-finite values and understands the HTTP-date form (RFC 7231 §7.1.3)
+    /// the bare `TimeInterval.init` the clients used could not.
+    ///
+    /// - Returns: the number of seconds actually honoured, for the caller's
+    ///   `APIError.rateLimited(retryAfter:)` — so what a screen says it is
+    ///   waiting for is what the client is really waiting for, and a
+    ///   nonsense header cannot reach `humanDuration`. Nil when the header
+    ///   was absent or unusable; the slot is still pushed out by
+    ///   `unstatedBackOff` in that case, exactly as before.
+    @discardableResult
+    mutating func backOff(
+        retryAfterHeader header: String?,
+        now: Date,
+        cap: TimeInterval = RequestSpacing.maxHonouredRetryAfter
+    ) -> TimeInterval? {
+        guard let seconds = APIClient.parseRetryAfter(header) else {
+            backOff(until: now.addingTimeInterval(Self.unstatedBackOff))
+            return nil
+        }
+        let honoured = min(max(seconds, 0), cap)
+        backOff(until: now.addingTimeInterval(honoured))
+        return honoured
+    }
 }

@@ -17,14 +17,20 @@ struct VolumesSection: View {
     /// The series' own cover, dimmed in as a stand-in for a volume with no
     /// artwork of its own — see `MissingVolumeCover`.
     var seriesCover: Cover = .empty
-    /// Why this is MangaBaka's shelf rather than the store's, when there is
-    /// a reason worth saying: "Apple Books couldn't be reached". A failure
-    /// shown as silence looks like the feature does not exist — gap 21: with
-    /// no volumes here either, this used to be the whole section's only
-    /// reason to exist, and it was dropped exactly when it was needed most.
-    var note: String?
+    /// Why this is MangaBaka's shelf rather than the store's, when the store
+    /// was asked and could not answer. A failure shown as silence looks like
+    /// the feature does not exist — gap 21: with no volumes here either, this
+    /// used to be the whole section's only reason to exist, and it was
+    /// dropped exactly when it was needed most.
+    ///
+    /// An `APIError` and a retry since item 60, not a `String`: this was the
+    /// last section on the series page outside the failure kit, so offline, a
+    /// 429, a 5xx and a decode failure all rendered the same bare sentence
+    /// and none of them could be tried again.
+    var failure: APIError?
+    var retry: (() async -> Void)?
     /// A store is still being asked, so the final shape (its shelf, or this
-    /// one with `note`) is not decided yet. Shown as a skeleton rather than
+    /// one with `failure`) is not decided yet. Shown as a skeleton rather than
     /// letting MangaBaka's own shelf flash on screen and then be replaced —
     /// gap 22, "shelf swaps content under the reader".
     var isCheckingStore: Bool = false
@@ -33,27 +39,25 @@ struct VolumesSection: View {
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`. Empty for a page that
     /// has not run that pass yet, or found nothing.
     var openLibraryCovers: [Int: URL] = [:]
-    /// Whether the `OpenLibraryCovers` gap-fill pass has been asked at all
-    /// this page load, still out, or done — section-wide, not per volume,
-    /// because `loadOpenLibraryCovers` is one batched pass that finishes for
-    /// every ISBN it was given at once, never volume by volume. Drives
-    /// `MissingVolumeCover.caption` so "No cover from the publisher" is only
-    /// ever said once that pass has actually had its say.
-    var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
+    /// Where the `OpenLibraryCovers` gap-fill pass stands, per volume number
+    /// and overall — see `OpenLibraryProgress`. Drives
+    /// `MissingVolumeCover.caption`, so "No cover from the publisher" is only
+    /// ever said about a volume that was actually asked about and answered.
+    var openLibraryStatus = OpenLibraryProgress()
 
     @State private var opened: SeriesWork.Volume?
 
     /// Whether there is anything worth a "Volumes" header for: real volumes,
     /// a reason there are none from the store, or a check still running.
-    /// Zero volumes and no note is the one case with nothing to say.
+    /// Zero volumes and no failure is the one case with nothing to say.
     nonisolated static func shows(
-        volumes: [SeriesWork.Volume], note: String?, isCheckingStore: Bool = false
+        volumes: [SeriesWork.Volume], failure: APIError?, isCheckingStore: Bool = false
     ) -> Bool {
-        isCheckingStore || !volumes.isEmpty || note != nil
+        isCheckingStore || !volumes.isEmpty || failure != nil
     }
 
     var body: some View {
-        if Self.shows(volumes: volumes, note: note, isCheckingStore: isCheckingStore) {
+        if Self.shows(volumes: volumes, failure: failure, isCheckingStore: isCheckingStore) {
             VStack(alignment: .leading, spacing: 11) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Volumes")
@@ -69,20 +73,29 @@ struct VolumesSection: View {
                         Text("Checking Apple Books…")
                             .typeGridMeta()
                             .foregroundStyle(Palette.textMuted)
-                    } else if let note {
-                        Text(note)
-                            .typeGridMeta()
-                            .foregroundStyle(Palette.textMuted)
                     }
                 }
                 .padding(.horizontal, Metrics.gutter)
+
+                // In the header slot the bare note used to occupy, so the
+                // reason sits where the reader was already told "Apple Books
+                // couldn't be reached" — with the reason and a retry the rest
+                // of the page has had since gap 10 (item 60).
+                if !isCheckingStore, let failure {
+                    InlineFailure(error: failure, retry: retry)
+                }
 
                 if isCheckingStore {
                     CoverSkeletonRow(count: 3, width: Metrics.coverSeedWidth)
                         .transition(.blurReplace)
                 } else if !volumes.isEmpty {
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                        // Lazy, like its sibling `AppleVolumesRow`: an eager
+                        // stack started a `CoverStore` fetch for every spine
+                        // in the first frame, and `CoverStore` deliberately
+                        // never cancels, so a 30-volume series spent thirty
+                        // CDN requests that outlived the pop (item 58).
+                        LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                             ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                                 Button { opened = volume } label: {
                                     spine(volume)
@@ -93,12 +106,14 @@ struct VolumesSection: View {
                             }
                         }
                         .padding(.horizontal, Metrics.gutter)
+                        .scrollTargetLayout()
                     }
                     .scrollIndicators(.hidden)
                     .transition(.blurReplace)
                 }
-                // Zero volumes, not checking, and a note: the header alone
-                // says why (gap 21) — no empty row of spines to draw.
+                // Zero volumes, not checking, and a failure: the header and
+                // the `InlineFailure` above say why (gap 21) — no empty row
+                // of spines to draw.
             }
             // The skeleton and the real shelf swap under this one animation
             // rather than popping: "Checking Apple Books…" is itself content
@@ -156,7 +171,9 @@ struct VolumesSection: View {
                 // `isCheckingStore` has gone false, which only happens after
                 // Apple's own shelf has already come back (empty, or this
                 // screen would be showing `AppleVolumesRow` instead).
-                apple: .answered, openLibrary: openLibraryStatus, numberLabel: volume.number ?? ""
+                apple: .answered,
+                openLibrary: openLibraryStatus.state(for: volume.number.flatMap(Int.init)),
+                numberLabel: volume.number ?? ""
             )
         }
     }
@@ -213,7 +230,10 @@ struct VolumesSection: View {
             // are told the identical story — "cover not available" alone
             // when there's nothing more specific to say yet.
             parts.append(
-                MissingVolumeCover.accessibilityText(apple: .answered, openLibrary: openLibraryStatus)
+                MissingVolumeCover.accessibilityText(
+                    apple: .answered,
+                    openLibrary: openLibraryStatus.state(for: volume.number.flatMap(Int.init))
+                )
             )
         }
         if let date = volume.date {
@@ -269,6 +289,11 @@ struct MissingVolumeCover: View {
         case notAsked
         case loading
         case answered
+        /// Asked, and the ask itself failed — an offline reader, or a source
+        /// that would not answer. Distinct from `.answered`: "No cover from
+        /// the publisher" is a claim about the publisher, and telling it to
+        /// someone whose request never left the phone is simply false.
+        case unreachable
     }
 
     /// `nonisolated static` so `VolumesSectionTests`/`AppleVolumesRowTests`-
@@ -285,6 +310,10 @@ struct MissingVolumeCover: View {
     /// saying so before both sources have actually answered would be a
     /// caption a moment later proves wrong, so a source still `.loading`
     /// (or never asked at all) says nothing rather than guess.
+    /// `.unreachable` falls through the same guard `.loading` and
+    /// `.notAsked` do, and for the same reason: an offline reader was being
+    /// told "No cover from the publisher" about a request that never left the
+    /// phone.
     nonisolated static func caption(apple: SourceState, openLibrary: SourceState) -> String? {
         guard apple == .answered, openLibrary == .answered else { return nil }
         return "No cover from the publisher"
@@ -503,5 +532,29 @@ struct VolumeSheet: View {
             cornerRadius: Metrics.radiusCard, style: .continuous
         ))
         .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
+    }
+}
+
+/// Where the `OpenLibraryCovers` gap-fill pass stands, for the spines that
+/// still have no artwork of their own.
+///
+/// Per volume number, not one flag for the whole shelf. The pass used to
+/// commit everything at the end, so one state for the section was the truth;
+/// since item 57 it asks in volume order, commits each answer as it lands and
+/// stops after `SeriesDetailView.openLibraryPassLimit` — so at any moment
+/// volume 1 may be answered, volume 7 still out, and volume 40 never asked at
+/// all, and `MissingVolumeCover.caption` has to say something different about
+/// each of them.
+struct OpenLibraryProgress: Equatable {
+    /// Where the pass as a whole stands — the answer for a volume the pass
+    /// never had an ISBN to ask about, which is as settled as it will get.
+    var pass: MissingVolumeCover.SourceState = .notAsked
+    /// Per volume number, for the ones the pass actually named.
+    var byNumber: [Int: MissingVolumeCover.SourceState] = [:]
+
+    /// A numberless volume ("Other editions") has nothing to key on and takes
+    /// the pass's own state, same as one with no ISBN.
+    func state(for number: Int?) -> MissingVolumeCover.SourceState {
+        number.flatMap { byNumber[$0] } ?? pass
     }
 }

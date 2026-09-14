@@ -21,13 +21,19 @@ final class JourneyPerformanceTests: XCTestCase {
     /// past it, and the size at which sorting stops being free.
     private static let librarySize = 1_000
 
+    /// Decoded with `APIClient.makeDecoder()`, not a local `.convertFromSnakeCase`
+    /// decoder, as of 2026-09-14 — see `testFeedDecoding` below for why. `start_date`
+    /// is included here specifically so the real decoder's date-only fallback
+    /// branch (a bare `"2026-08-27"`, no time) actually runs on every entry,
+    /// rather than the field being absent and the custom `dateDecodingStrategy`
+    /// closure never firing.
     private func entries(_ count: Int) throws -> [LibraryEntry] {
         let states = LibraryEntry.State.allCases
         return try (0..<count).map { index in
-            try JSONDecoder.performance.decode(LibraryEntry.self, from: Data("""
+            try APIClient.makeDecoder().decode(LibraryEntry.self, from: Data("""
             {"id": \(index), "series_id": \(index),
              "state": "\(states[index % states.count].rawValue)",
-             "rating": \(index % 101),
+             "rating": \(index % 101), "start_date": "2026-01-01",
              "Series": {"id": \(index), "state": "active", "cover": {},
                         "title": "The Series \(index % 26 == 0 ? "A" : "M")\(index)"}}
             """.utf8))
@@ -78,6 +84,16 @@ final class JourneyPerformanceTests: XCTestCase {
 
     /// Decoding a feed. Every screen in the app starts here, and `Series` has a
     /// hand-written decoder that has grown a lot.
+    ///
+    /// Decoded with `APIClient.makeDecoder()`, not a local `.convertFromSnakeCase`
+    /// decoder, as of 2026-09-14: that decoder also runs a custom
+    /// `dateDecodingStrategy` closure (three format attempts per date field before
+    /// giving up), which a bare `.convertFromSnakeCase` decoder skips entirely —
+    /// the F2 bug (`MangaBakaTests/FixtureLoading.swift:28-35`) reproduced in this
+    /// target. `Series` itself carries no `Date` field, so that closure does not
+    /// run here; `testLibrarySortByTitle`'s `entries()` fixture is the one that
+    /// exercises it. What changes here is decoder identity with production, so
+    /// this number is not directly comparable to a pre-fix baseline.
     func testFeedDecoding() throws {
         let rows = (0..<20).map { index in
             """
@@ -91,7 +107,7 @@ final class JourneyPerformanceTests: XCTestCase {
         """.utf8)
 
         measure {
-            _ = try? JSONDecoder.performance.decode(APIEnvelope<[Series]>.self, from: payload)
+            _ = try? APIClient.makeDecoder().decode(APIEnvelope<[Series]>.self, from: payload)
         }
     }
 
@@ -127,14 +143,6 @@ final class JourneyPerformanceTests: XCTestCase {
             }
             wait(for: [expectation], timeout: 30)
         }
-    }
-}
-
-private extension JSONDecoder {
-    static var performance: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return decoder
     }
 }
 

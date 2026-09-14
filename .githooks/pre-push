@@ -9,25 +9,22 @@ set -eu
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
+# One scratch root instead of four scattered /tmp paths, and it is cleaned up.
+# An unsigned .xcarchive is a few hundred MB and four of these were being left
+# behind across install-device.sh, this hook and AccessibilityAuditTests.
+MB_TMP="${TMPDIR:-/tmp}/mangabaka-prepush"
+mkdir -p "$MB_TMP"
+
 RED=$(printf '\033[31m'); GREEN=$(printf '\033[32m'); OFF=$(printf '\033[0m')
 fail() { printf "%spre-push: %s%s\n" "$RED" "$1" "$OFF" >&2; exit 1; }
 ok()   { printf "%s  ok%s  %s\n" "$GREEN" "$OFF" "$1"; }
 
 echo "pre-push checks..."
 
-# 1. A real token must never be committed or pushed.
-if git ls-files --error-unmatch Configs/Secrets.xcconfig >/dev/null 2>&1; then
-    fail "Configs/Secrets.xcconfig is tracked by git. It must stay local."
-fi
-if git grep -nE '"mb-[A-Za-z0-9]{16,}"' -- 'MangaBaka/*.swift' >/dev/null 2>&1; then
-    fail "A token-shaped literal is present in shipping code."
-fi
-# Any tracked file, not just Swift. A real token was once pasted into
-# Configs/Secrets.example.xcconfig, which IS tracked — the Swift-only check
-# above would not have caught it.
-if git grep -nE 'mb-[A-Za-z0-9]{16,}' -- . ':(exclude)*Tests*' >/dev/null 2>&1; then
-    fail "A token-shaped string is present in a tracked file. Move it to Configs/Secrets.xcconfig."
-fi
+# 1. A real token must never be committed or pushed. One script, shared with
+#    ci_scripts/ci_pre_xcodebuild.sh — the two copies had different scopes and
+#    CI had the weaker one.
+Scripts/check-credentials.sh || fail "credential check failed (see above)"
 ok "no credentials staged"
 
 # 2. Lint. Error-severity rules cover force unwraps, print(), catch-alls.
@@ -43,52 +40,86 @@ if ! command -v xcodegen >/dev/null 2>&1; then
 fi
 xcodegen generate --quiet 2>/dev/null || xcodegen generate >/dev/null 2>&1
 if ! git diff --quiet -- MangaBaka.xcodeproj; then
-    fail "MangaBaka.xcodeproj is out of sync with project.yml. Commit the regenerated project."
+    fail "MangaBaka.xcodeproj is out of sync with project.yml. Commit the regenerated project.
+  Note: the line above just ran 'xcodegen generate', which REWRITES the working
+  tree. So this also fires when MangaBaka.xcodeproj was already dirty for an
+  unrelated reason — check 'git diff --stat -- MangaBaka.xcodeproj' before
+  assuming project.yml is the thing that changed."
 fi
 ok "project in sync"
 
 # 4. Tests. The slow step, and the one that matters most.
-SIM=$(xcrun simctl list devices available \
-      | grep -oE 'iPhone [0-9]+ Pro' | sort -V | tail -1)
-[ -n "$SIM" ] || SIM=$(xcrun simctl list devices available \
-      | grep -oE 'iPhone [^(]*' | head -1 | sed 's/[[:space:]]*$//')
-[ -n "$SIM" ] || fail "no iPhone simulator available to test against"
+#
+#    By UDID, not by name. On 2026-09-14 this Mac had two devices called
+#    "iPhone 17 Pro" (iOS 26.5 and 26.3), which makes 'name=' ambiguous:
+#    xcodebuild picks one silently and, when the other is mid-shutdown, the
+#    test host is killed. That is the SIGTERM flake.
+SIM_UDID=$(Scripts/pick-simulator.sh) || fail "no iPhone simulator available to test against"
 
-echo "  running tests on $SIM (this is the slow bit)..."
+echo "  running tests on $SIM_UDID (this is the slow bit)..."
 # Warnings are build errors now, so a warning fails here rather than scrolling
 # past unnoticed the way an infinite-recursion warning once did.
 # Not --quiet: quiet mode suppresses the per-test results, which are the whole
 # reason to read this log when something fails.
+# The timeout is new: neither xcodebuild step had one, so a hung poll or a
+# stalled simulator boot hung the push with no upper bound. 120 s per test is
+# far above anything here (the whole suite is ~70 s) — it is a deadlock guard,
+# not a performance budget. A guess, chosen as "obviously too generous".
 if ! xcodebuild test \
         -project MangaBaka.xcodeproj -scheme MangaBaka \
-        -destination "platform=iOS Simulator,name=$SIM" \
-        >/tmp/mb-prepush.log 2>&1; then
+        -destination "platform=iOS Simulator,id=$SIM_UDID" \
+        -test-timeouts-enabled YES \
+        -default-test-execution-time-allowance 120 \
+        >"$MB_TMP/tests.log" 2>&1; then
     printf "%spre-push: tests failed%s\n" "$RED" "$OFF" >&2
-    grep -E "✘|error:|Expectation failed|Test run with" /tmp/mb-prepush.log \
+    grep -E "✘|error:|Expectation failed|Test run with" "$MB_TMP/tests.log" \
         | sed 's/^/  /' | head -25 >&2
-    echo "  full log: /tmp/mb-prepush.log" >&2
+    echo "  full log: $MB_TMP/tests.log" >&2
     exit 1
 fi
 ok "tests passed"
 
-# The Release archive, the way Xcode Cloud builds it. Builds 69 and 71
+# 5. The Release archive, the way Xcode Cloud builds it. Builds 69 and 71
 # (2026-09-13) died in the Swift 6.3.3 SIL verifier under whole-module
 # optimisation on code that compiled fine in Debug and even in a plain
 # Release *build* — only `xcodebuild archive` reproduced it. Unsigned:
 # signing is Xcode Cloud's job; the compiler is what this checks.
-echo "  archiving unsigned Release (the other slow bit)..."
-if ! xcodebuild archive \
-        -project MangaBaka.xcodeproj -scheme MangaBaka \
-        -destination "generic/platform=iOS" \
-        -archivePath /tmp/mb-prepush-archive/MangaBaka.xcarchive \
-        CODE_SIGNING_ALLOWED=NO \
-        >/tmp/mb-prepush-archive.log 2>&1; then
-    printf "%spre-push: Release archive failed%s\n" "$RED" "$OFF" >&2
-    grep -E "error:|While running pass|for expression at" /tmp/mb-prepush-archive.log \
-        | cut -c1-200 | sed 's/^/  /' | head -12 >&2
-    echo "  full log: /tmp/mb-prepush-archive.log" >&2
-    exit 1
+#
+# Skipped when nothing the compiler sees has changed since the last archive
+# that passed. The archive is the only real lever on a ~10 minute hook, and a
+# docs-only push was paying it in full. The memo lives in .git/, so it is
+# per-clone and never committed; delete it to force a full archive.
+ARCHIVE_MEMO="$(git rev-parse --git-dir)/mb-prepush-archive-ok"
+# Every input to the compile: both source trees, the project description and
+# the build settings. Trees from HEAD, not the working directory, because HEAD
+# is what is being pushed — and because step 3 above just rewrote the tree.
+SOURCE_STAMP=$(git rev-parse HEAD:MangaBaka HEAD:MangaBakaWidgets HEAD:project.yml HEAD:Configs 2>/dev/null | tr '\n' ' ')
+
+if [ -n "$SOURCE_STAMP" ] && [ -f "$ARCHIVE_MEMO" ] \
+   && [ "$(cat "$ARCHIVE_MEMO")" = "$SOURCE_STAMP" ]; then
+    ok "Release archive skipped (no Swift, project or config change since the last one)"
+else
+    echo "  archiving unsigned Release (the other slow bit)..."
+    if ! xcodebuild archive \
+            -project MangaBaka.xcodeproj -scheme MangaBaka \
+            -destination "generic/platform=iOS" \
+            -archivePath "$MB_TMP/MangaBaka.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            >"$MB_TMP/archive.log" 2>&1; then
+        printf "%spre-push: Release archive failed%s\n" "$RED" "$OFF" >&2
+        grep -E "error:|While running pass|for expression at" "$MB_TMP/archive.log" \
+            | cut -c1-200 | sed 's/^/  /' | head -12 >&2
+        echo "  full log: $MB_TMP/archive.log" >&2
+        exit 1
+    fi
+    # Not `[ ... ] && printf`: under `set -e` an empty stamp would make that
+    # line the script's last exit status and abort a push that just passed.
+    if [ -n "$SOURCE_STAMP" ]; then
+        printf '%s' "$SOURCE_STAMP" >"$ARCHIVE_MEMO"
+    fi
+    # A few hundred MB, and nothing reads it after this point.
+    rm -rf "$MB_TMP/MangaBaka.xcarchive"
+    ok "Release archive compiles"
 fi
-ok "Release archive compiles"
 
 echo "pre-push checks passed."

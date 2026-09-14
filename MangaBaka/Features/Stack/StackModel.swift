@@ -176,9 +176,10 @@ final class StackModel {
 
     /// How many of `timestamps` fall within `now`'s local calendar day.
     ///
-    /// Pure so it can be tested without a database: `StackModel` reads the
-    /// device's own `Calendar` and clock, `ShelfStore.reactionTimestamps()`
-    /// supplies the raw dates, this is just the bucketing. Resets at local
+    /// Pure so it can be tested without a database, and kept after
+    /// `refreshTodayProgress` moved the count into SQL (work-list 80): this
+    /// is where the rule for what "today" means lives, and the test holds it
+    /// here rather than against a database. Resets at local
     /// midnight — a guess: nothing in the brief says "today" should follow
     /// the reader's local calendar day rather than, say, a rolling 24h
     /// window, but a rolling window is a stranger fact to explain in a UI
@@ -195,9 +196,14 @@ final class StackModel {
     /// load and after every reaction rather than incremented in place, so a
     /// reset (which clears the shelf) or a reaction that failed to record
     /// cannot leave the ring out of step with what actually persisted.
-    private func refreshTodayProgress(now: Date = Date()) async {
-        let timestamps = (try? await shelf.reactionTimestamps()) ?? []
-        todayAnswered = Self.countToday(timestamps, now: now)
+    private func refreshTodayProgress(now: Date = Date(), calendar: Calendar = .current) async {
+        // The day's bounds are computed here and the count is done in SQL
+        // (work-list 80). This used to read every reaction timestamp the
+        // reader had ever produced — unbounded, growing with every swipe —
+        // to answer a question that is one `COUNT(*)`.
+        let startOfDay = calendar.startOfDay(for: now)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
+        todayAnswered = (try? await shelf.reactionCount(from: startOfDay, to: endOfDay)) ?? 0
     }
 
     /// The cover peeking in from the left: the last one reacted to, so the
@@ -219,6 +225,15 @@ final class StackModel {
     private let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
     private let library: (any LibraryProviding)?
+    /// The shared library walk, when the shell has one.
+    ///
+    /// Work-list 88: the seed pool used to fetch `/v1/my/library?page=1&
+    /// limit=50` itself — ~1.3 MB against the 180/min window — to answer a
+    /// question the snapshot's six-hour disk cache already answers offline,
+    /// and then called the server's first 50 in its own default order
+    /// "highest priority first". Optional so a test that only cares about
+    /// the queue keeps the old single-page path.
+    private let snapshot: LibrarySnapshot?
     private var reacted: Set<Int> = []
 
     /// Every series that could seed a blend, and where we are in it.
@@ -251,21 +266,31 @@ final class StackModel {
     init(
         repository: any SeriesRepositoryProtocol,
         shelf: ShelfStore,
-        library: (any LibraryProviding)? = nil
+        library: (any LibraryProviding)? = nil,
+        snapshot: LibrarySnapshot? = nil
     ) {
         self.repository = repository
         self.shelf = shelf
         self.library = library
+        self.snapshot = snapshot
     }
 
     var current: Series? { queue.first }
     var next: Series? { queue.count > 1 ? queue[1] : nil }
 
+    /// Work-list 80: `.task { loadIfNeeded() }` re-runs on every switch back
+    /// to this tab, and both refreshes used to run to completion — decoding
+    /// every saved payload, then reading every reaction timestamp ever —
+    /// before the code that decides whether to ask the network anything even
+    /// ran. Neither refresh feeds that decision, so they no longer gate it.
     func loadIfNeeded() async {
-        await refreshSaved()
-        await refreshTodayProgress()
-        guard queue.isEmpty else { return }
-        await refill()
+        // A reset empties `saved`, so a non-empty one is already current;
+        // re-decoding every payload to arrive at the same answer is the part
+        // of this that grew with the shelf.
+        async let refreshedSaved: Void = saved.isEmpty ? refreshSaved() : ()
+        async let refreshedProgress: Void = refreshTodayProgress()
+        if queue.isEmpty { await refill() }
+        _ = await (refreshedSaved, refreshedProgress)
     }
 
     /// Tops the queue up, or joins the top-up already in progress.
@@ -382,6 +407,10 @@ final class StackModel {
     ///   still reporting success, since `shelf.clear()` throws `Void`.
     @discardableResult
     func resetStack() async -> Bool {
+        // A refill started from the seeds being thrown away would otherwise
+        // append to the queue this just emptied (work-list 84).
+        refillTask?.cancel()
+        refillTask = nil
         let cleared = (try? await shelf.clear()) != nil
         reacted = []
         saved = []
@@ -389,6 +418,14 @@ final class StackModel {
         previous = nil
         seedPool = []
         saveWarning = nil
+        // Work-list 84: the cursor and the cold-start answer survived a
+        // reset, so a reader who resets *because* a handful of swipes sent
+        // every card the same way got a deal starting at page N+1 — skipping
+        // the very cards they mis-swiped, which are no longer excluded
+        // server-side either. `canUseProfile` deliberately stays: it is a
+        // status answer about the account, not a cursor into a list.
+        recommendationPage = 0
+        isColdStart = false
         await loadIfNeeded()
         return cleared
     }
@@ -570,6 +607,18 @@ extension StackModel {
     /// on the site still got a random queue on their first launch, because the
     /// on-device shelf was empty. The token is only present if they entered
     /// one, so this is silently skipped for everyone else.
+    /// The library to seed from: the shared walk where the shell gave us
+    /// one, the single-page fetch otherwise, and nil when there is neither.
+    ///
+    /// A stable order in both cases — the priority sort below needs one, and
+    /// `sorted` is not documented stable, so the seed pool would otherwise
+    /// differ run to run among the many entries at priority 0.
+    private func snapshotEntries() async -> [LibraryEntry]? {
+        if let snapshot { return await snapshot.all() }
+        guard let library else { return nil }
+        return await library.library(page: 1, limit: 50)
+    }
+
     private func buildSeedPoolIfNeeded() async {
         guard seedPool.isEmpty else { return }
         seedCursor = 0
@@ -581,13 +630,22 @@ extension StackModel {
             return
         }
 
-        if let library {
+        // The shared snapshot first: it is warm after one Library visit and
+        // it answers from disk for six hours, so the common case is zero
+        // requests rather than one 1.3 MB page (work-list 88).
+        if let entries = await snapshotEntries() {
             // Highest priority first, then the ones being read: a series
-            // someone dropped says as much about what they don't want.
-            let entries = await library.library(page: 1, limit: 50)
+            // someone dropped says as much about what they don't want. The
+            // `seriesId` tiebreak is the same one `LibraryModel.inProgress`
+            // carries, and for the same reason (work-list 94).
             let ids = entries
                 .filter { $0.state != .dropped }
-                .sorted { ($0.priority ?? 0) > ($1.priority ?? 0) }
+                .sorted {
+                    let left = $0.priority ?? 0
+                    let right = $1.priority ?? 0
+                    if left != right { return left > right }
+                    return $0.seriesId < $1.seriesId
+                }
                 .map(\.seriesId)
             if !ids.isEmpty {
                 seedPool = ids

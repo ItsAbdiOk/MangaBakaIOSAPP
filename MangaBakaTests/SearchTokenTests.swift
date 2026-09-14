@@ -101,12 +101,16 @@ struct SearchFieldAskTests {
     /// A token removed mid-search re-asks; one removed on the idle panel
     /// does not — the panel is not an ask (UX#1).
     @Test("A changed token re-asks only once something was asked")
-    func tokenChangeReasksAfterAnAsk() async {
+    func tokenChangeReasksAfterAnAsk() async throws {
         let repository = CountingRepository()
         let model = SearchModel(repository: repository)
         model.query.tags = ["Isekai"]
         model.filtersDidChange()
-        await Task.yield()
+        // A single `Task.yield()` only proves the debounced Task has not run
+        // *yet* — a regression that fired the search immediately, or after
+        // one hop, would still read 0 here. Sleep past the 300ms debounce
+        // instead, as `minimumLength` below already does.
+        try await Task.sleep(for: .milliseconds(600))
         #expect(repository.searchCount == 0, "nothing asked, nothing sent")
 
         await model.search()

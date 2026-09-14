@@ -17,8 +17,6 @@ final class LibraryModel {
         func hash(into hasher: inout Hasher) { hasher.combine(id) }
         var label: String { state.title }
         var count: Int { entries.count }
-        /// The first few covers, for the card's strip.
-        var covers: [Series] { entries.prefix(5).compactMap(\.series) }
     }
 
     private(set) var entries: [LibraryEntry] = []
@@ -26,14 +24,31 @@ final class LibraryModel {
     /// Filters every shelf. Local: the whole library is already in memory, and
     /// a request per keystroke against a shared rate limit would be absurd for
     /// something already on the device.
-    var searchText = "" { didSet { refreshDerived() } }
+    var searchText = "" { didSet { refreshListed() } }
 
     /// Which state the list is narrowed to, or nil for all of them.
-    var filter: LibraryEntry.State? { didSet { refreshDerived() } }
+    var filter: LibraryEntry.State? { didSet { refreshListed() } }
 
     /// How the list is ordered.
-    var sort: LibrarySort = .recentlyUpdated { didSet { refreshDerived() } }
+    var sort: LibrarySort = .recentlyUpdated { didSet { refreshListed() } }
     private(set) var isLoading = false
+    /// Whether a walk is still fetching pages.
+    ///
+    /// Distinct from `isLoading`, which goes false the moment the *first*
+    /// page is drawn (that is the point of it — the screen appears in 270 ms
+    /// rather than three and a half seconds). Work-list 4: `LibraryView`'s
+    /// page-cap branch read `isLoading` for "still walking", so from page 2
+    /// to the last page of every healthy walk the reader was shown
+    /// "Showing the first 100" with its this-is-all-you-get icon.
+    private(set) var isWalking = false
+    /// Bumped whenever `entries` changes in any way a derived screen would
+    /// care about — including a one-row patch through `apply(_:to:)`.
+    ///
+    /// Work-list 85: Insights and Wrapped keyed their `.task(id:)` on
+    /// `"\(count)-\(isComplete)"`, which a rating or state change does not
+    /// move, so "It finished without telling you" kept listing a series the
+    /// reader had just marked Completed.
+    private(set) var revision = 0
     /// Whether every page arrived. False means the counts on screen are a floor,
     /// not a total, and nothing may be stated as absent on the strength of them.
     private(set) var isComplete = true
@@ -94,9 +109,12 @@ final class LibraryModel {
     private let snapshot: LibrarySnapshot
     /// Whether the reader has a MangaBaka credential to walk the library
     /// with, checked before any walk rather than inferred from what one
-    /// returned. Defaulted to `true` — every existing caller and test that
-    /// does not pass this keeps its current behaviour — until batch 6 wires
-    /// the real check from `TokenStore` and the build PAT.
+    /// returned. Defaulted to `true` so a test double that has no token
+    /// store keeps its current behaviour; the app passes
+    /// `{ tokenStore.hasToken }` from where `session.library` is built
+    /// (work-list 86). Before that wiring, `ScreenState.noAccount` and the
+    /// screen behind it were dead code and a reader with no token paid a 401
+    /// per Library visit to be shown the generic failure.
     private let hasCredentials: () -> Bool
     /// Bumped by `reload()`, so a walk started before it and still landing
     /// pages cannot interleave its results with the newer walk's (gap 117).
@@ -116,6 +134,9 @@ final class LibraryModel {
     /// What the "All" filter actually lists: everything but dropped. The pill
     /// used to show `total`, 937 over a list of about 500.
     private(set) var allCount = 0
+    /// Chapters the reader has recorded across the whole library. Stored for
+    /// the same reason `shape` and `subtitle` are — see `refreshFromEntries`.
+    private(set) var chaptersRead = 0
 
     /// Every state that has anything in it, in reading order.
     ///
@@ -132,13 +153,28 @@ final class LibraryModel {
     private(set) var listed: [LibraryEntry] = []
     private(set) var jumpTargets: [(letter: String, id: Int)] = []
 
-    /// Recomputes everything derived from the entries, the filter, the search
-    /// box and the sort.
-    private func refreshDerived() {
+    /// Recomputes what depends only on `entries`.
+    ///
+    /// Work-list 93: these four used to be recomputed by the three `didSet`s
+    /// too, so every keystroke in the search box rebuilt the shape bar, two
+    /// whole-library counts and a filter-plus-sort that none of them could
+    /// have changed. Called from both `apply`s and `forget`, and nowhere
+    /// else.
+    private func refreshFromEntries() {
         shape = Self.shape(of: entries)
         allCount = entries.count { $0.state != .dropped }
         subtitle = Self.subtitle(of: entries, isComplete: isComplete)
         inProgress = Self.inProgress(in: entries)
+        // Work-list 106: `RootView` reduced all ~939 entries on every body
+        // pass — every toast, every selection, every path change — to show
+        // one number. It changes when `entries` does and at no other time.
+        chaptersRead = ReadingInsights.chaptersRead(in: entries)
+        revision += 1
+        refreshListed()
+    }
+
+    /// Recomputes what the filter, the search box and the sort decide.
+    private func refreshListed() {
         listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
         jumpTargets = Self.jumpTargets(in: listed)
     }
@@ -187,7 +223,7 @@ final class LibraryModel {
                 return series.matches(trimmed)
             }
         }
-        return rows.sorted(by: sort.comparator)
+        return sort.sorted(rows)
     }
 
     /// The letters actually present, in order, each paired with the first entry
@@ -196,11 +232,19 @@ final class LibraryModel {
     /// The letters present, not A to Z: a rail offering Q and X to a library
     /// with neither is a rail that lies about where it can take you.
     private static func jumpTargets(in listed: [LibraryEntry]) -> [(letter: String, id: Int)] {
-        var seen: [(letter: String, id: Int)] = []
-        for entry in listed where seen.last?.letter != entry.indexLetter {
-            seen.append((entry.indexLetter, entry.seriesId))
+        var targets: [(letter: String, id: Int)] = []
+        // A set, not `targets.last` (work-list 89). `Ø`, `Æ`, `Ł`, `Đ`, `Þ`
+        // and `ß` fail `indexLetter`'s ASCII gate and bucket under "…", while
+        // the collation sorts them among O, A, L, D, T and S — so a
+        // title-sorted library can emit "O", "…", "O", and the rail's
+        // `ForEach(id: \.element.letter)` gets a duplicate id, whose SwiftUI
+        // behaviour is undefined. First occurrence wins, which is also right
+        // for any future non-adjacent case.
+        var seen = Set<String>()
+        for entry in listed where seen.insert(entry.indexLetter).inserted {
+            targets.append((entry.indexLetter, entry.seriesId))
         }
-        return seen
+        return targets
     }
 
     /// Whether a jump index is worth the space.
@@ -225,7 +269,7 @@ final class LibraryModel {
     /// pass, measured 2026-09-11 in `RedrawPerformanceTests`.
     /// Gap 112: this used to default to "Nothing here yet" and stay there
     /// until the first page landed, which read as a genuinely empty library
-    /// for every reader during the walk. Blank until `refreshDerived` has run
+    /// for every reader during the walk. Blank until `refreshFromEntries` has run
     /// at least once — see `screenState`, which is what actually decides
     /// whether "Nothing here yet" belongs on screen.
     private(set) var subtitle = ""
@@ -271,19 +315,17 @@ final class LibraryModel {
                 ($0.state == .reading || $0.state == .rereading)
                     && ($0.progressChapter ?? 0) > 0
             }
-            .sorted { ($0.priority ?? 0) > ($1.priority ?? 0) }
-    }
-
-    /// The closing line. States the shape of the library rather than flattering
-    /// it: on the reference account only 71 of 937 are actually being read.
-    var shapeLine: String? {
-        guard total > 0 else { return nil }
-        let reading = entries.filter { $0.state == .reading }.count
-        return """
-        Reading is \(reading) of \(total.formatted()). The shelves are in size \
-        order rather than reading order, so the library reads as the shape it \
-        actually has.
-        """
+            // An explicit tiebreak, for the reason `LibrarySort` records:
+            // `sort` is not documented stable and most entries share
+            // priority 0, so "Pick back up" — and Discover's copy of it —
+            // could reorder between two refreshes of identical data
+            // (work-list 94).
+            .sorted {
+                let left = $0.priority ?? 0
+                let right = $1.priority ?? 0
+                if left != right { return left > right }
+                return $0.seriesId < $1.seriesId
+            }
     }
 
     /// Re-reads after a write, so the screen reflects the server rather than
@@ -305,6 +347,10 @@ final class LibraryModel {
         // the cache handed back the library as it had been before the write.
         await snapshot.invalidate()
         entries = []
+        // Work-list 5: the previous walk's "Some of your library didn't
+        // load" bar used to stand through the whole of the new walk, so Retry
+        // looked like it had failed again before it had asked anything.
+        failure = nil
         await load()
     }
 
@@ -314,9 +360,21 @@ final class LibraryModel {
 
     private func fetchAll() async {
         guard entries.isEmpty else { return }
-        isLoading = true
-        defer { isLoading = false }
         let myGeneration = generation
+        isLoading = true
+        isWalking = true
+        failure = nil
+        defer {
+            // Only this walk's own end clears the flags: a `reload()` fired
+            // mid-walk has already started a newer one, and clearing them for
+            // it would put the page-cap copy back on screen (work-list 4).
+            // Written as an `if`, not a `guard ... else { return }`: a defer
+            // body cannot transfer control out of itself.
+            if generation == myGeneration {
+                isLoading = false
+                isWalking = false
+            }
+        }
 
         // One walk per session, shared with the taste ledger and the release
         // reminders. Measured on a real account: 939 entries is 24.7 MB, and
@@ -339,6 +397,10 @@ final class LibraryModel {
         guard generation == myGeneration else { return }
         apply(result.entries, isComplete: result.isComplete)
         failure = result.failure
+        // Work-list 15: anything the reader edited between two pages was
+        // overwritten by `entries = rows` and is now replayed. The snapshot
+        // does the same to its own copy before caching, so the two agree.
+        pendingChanges.removeAll()
     }
 
     /// Patches one entry after a write lands, in memory and in the shared
@@ -355,12 +417,23 @@ final class LibraryModel {
     /// caller should `reload()` (or just let the next natural load pick it
     /// up) in that case rather than this silently failing to show it.
     func apply(_ change: LibraryChange, to seriesId: Int) async {
+        // Work-list 15: while the walk is still running, the next page
+        // replaces `entries` wholesale and takes the edit with it — and the
+        // pre-edit row is what the snapshot then caches for six hours. Held
+        // here and replayed onto every page until the walk completes.
+        if !isComplete {
+            pendingChanges[seriesId] = pendingChanges[seriesId]?.merging(change) ?? change
+        }
         guard let index = entries.firstIndex(where: { $0.seriesId == seriesId }) else { return }
         entries[index] = entries[index].applying(change)
         shelves = Self.shelves(from: entries)
-        refreshDerived()
+        refreshFromEntries()
         await snapshot.apply(seriesId: seriesId, change: change)
     }
+
+    /// Edits made while the walk was still landing pages, newest per series.
+    /// See `apply(_:to:)` and work-list 15.
+    private var pendingChanges: [Int: LibraryChange] = [:]
 
     /// Clears everything this model remembers about who was signed in.
     ///
@@ -377,7 +450,9 @@ final class LibraryModel {
         shelves = []
         failure = nil
         isComplete = true
-        refreshDerived()
+        isWalking = false
+        pendingChanges.removeAll()
+        refreshFromEntries()
     }
 
     /// Shows what has arrived so far.
@@ -392,30 +467,19 @@ final class LibraryModel {
         // left `isComplete` at its optimistic default — which is the exact bug
         // this whole partial-data idea exists to prevent. The page observer
         // skips empty emissions instead.
-        entries = rows
+        // Work-list 15: `entries = rows` is what used to lose a mid-walk
+        // edit. The patch is re-applied to every page it survives into.
+        entries = pendingChanges.isEmpty ? rows : rows.map { row in
+            guard let change = pendingChanges[row.seriesId] else { return row }
+            return row.applying(change)
+        }
         isComplete = complete
-        shelves = Self.shelves(from: rows)
-        refreshDerived()
+        shelves = Self.shelves(from: entries)
+        refreshFromEntries()
         // The first page is enough to draw the screen; the spinner should stop
         // there rather than at the thirteenth.
         isLoading = false
     }
-
-    /// Shelves narrowed by the search box, empty ones dropped.
-    var visibleShelves: [Shelf] {
-        let needle = searchText.trimmingCharacters(in: .whitespaces)
-        guard !needle.isEmpty else { return shelves }
-        return shelves.compactMap { shelf in
-            let matches = shelf.entries.filter { entry in
-                entry.series?.matches(needle) == true
-            }
-            guard !matches.isEmpty else { return nil }
-            return Shelf(state: shelf.state, entries: matches, note: shelf.note)
-        }
-    }
-
-    /// How many series the search matched, across every shelf.
-    var matchCount: Int { visibleShelves.reduce(0) { $0 + $1.count } }
 
     var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespaces).isEmpty

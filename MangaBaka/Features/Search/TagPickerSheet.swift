@@ -17,9 +17,15 @@ import SwiftUI
 struct TagPickerSheet: View {
     let catalogue: CatalogueService
     @Binding var selected: [String]
-    /// Settled on `pickedTagMode` whenever a tag is picked. The binding
-    /// stays so the two callers' signatures do not change.
-    @Binding var mode: String?
+    /// Settled on `pickedTagMode` whenever a tag is picked. Optional because
+    /// Mix has no use for it: `SearchQuery` sends `tag_mode=and` whatever the
+    /// field holds, so Mix's copy was a write nobody read.
+    var mode: Binding<String?>?
+    /// Called with the whole `Tag` each time one is picked, for a caller that
+    /// needs more of it than the name `selected` carries — Mix needs the id,
+    /// because `/v1/series/mix` ignores a tag name outright and filters only
+    /// on ids (item 18). Absent where the name is the whole story.
+    var onPick: ((Tag) -> Void)?
 
     @State private var query = ""
     /// Every usable tag, bundled and live folded together — including rows
@@ -180,7 +186,7 @@ struct TagPickerSheet: View {
     private var chosen: some View {
         FlowLayout(spacing: 8) {
             ForEach(selected, id: \.self) { name in
-                Button { toggle(name) } label: {
+                Button { remove(name) } label: {
                     HStack(spacing: 6) {
                         Text(name).typeChip()
                         Image(systemName: "xmark")
@@ -323,20 +329,30 @@ struct TagPickerSheet: View {
             isOn: selected.contains(tag.name),
             isBlocked: audience.isBlocked(tag)
         ) {
-            toggle(tag.name)
+            toggle(tag)
         }
     }
 
-    private func toggle(_ name: String) {
-        if let index = selected.firstIndex(of: name) {
+    /// The chosen-chip ×, which has only the name. Removal never needs the
+    /// rest of the tag — `onPick` exists for what a pick adds, not what a
+    /// removal takes away.
+    private func remove(_ name: String) {
+        selected.removeAll { $0 == name }
+    }
+
+    private func toggle(_ tag: Tag) {
+        if let index = selected.firstIndex(of: tag.name) {
             selected.remove(at: index)
         } else {
-            selected.append(name)
+            selected.append(tag.name)
+            // Told on the way in, not on the way out: the sheet can be
+            // dismissed by a swipe and there is no "done" to hang this on.
+            onPick?(tag)
         }
         // Written on a pick, not on appear: the sheet's callers re-count
         // results on every query change, and a mode flip with no tag behind
         // it would spend a request from the 30/min search window for nothing.
-        mode = Self.pickedTagMode
+        mode?.wrappedValue = Self.pickedTagMode
     }
 }
 

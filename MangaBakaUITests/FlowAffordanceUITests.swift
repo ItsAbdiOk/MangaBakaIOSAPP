@@ -60,7 +60,15 @@ final class FlowAffordanceUITests: XCTestCase {
         // Leave a query behind on the Search tab first, so there is something
         // for the seed picker to wrongly inherit.
         app.tabBars.buttons["Search"].tap()
-        let searchField = app.textFields.firstMatch
+        // `.searchFields`, not `.textFields`. The Search tab's field became the
+        // system's (`.searchable`) on 2026-09-13 and this query kept asking for
+        // a `textField`, so the guard below threw `XCTSkip` on every run from
+        // that day — and a skip reads as green, so the test for "that endless
+        // cycle" has not actually run since. Corrected 2026-09-14.
+        // The seed picker's own field at the end of this test is still a
+        // hand-built `TextField` (`SeedPickerSheet.swift:70`), so that one
+        // stays `.textFields`.
+        let searchField = app.searchFields.firstMatch
         guard searchField.waitForExistence(timeout: 15) else {
             throw XCTSkip("no search field on the Search tab")
         }

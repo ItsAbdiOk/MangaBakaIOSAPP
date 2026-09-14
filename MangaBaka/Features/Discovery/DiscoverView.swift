@@ -174,9 +174,32 @@ struct DiscoverView: View {
     /// ("nothing waiting on a spinner") is dropped — it is a claim about
     /// performance that the app cannot verify at render time.
     private var todayLine: String {
-        let weekday = Date().formatted(.dateTime.weekday(.wide))
+        let weekday = Self.weekdayText()
         guard model.cachedCount > 0 else { return weekday }
         return "\(weekday) · \(model.cachedCount.formatted()) series cached"
+    }
+
+    /// The weekday, formatted once a day instead of once per `body`.
+    ///
+    /// `header` re-evaluates on every cached-count change and on every scroll
+    /// frame that touches this view, and `Date().formatted(.dateTime…)` builds
+    /// a format style and consults the calendar each time. The answer only
+    /// changes at midnight, so it is cached against the day it was made for.
+    ///
+    /// A `static` slot rather than `@State`: only one Discover screen is ever
+    /// on screen at a time, so one shared slot is what `@State` would have
+    /// given here anyway — the same reasoning as
+    /// `MixView.pendingFilterBlend`.
+    @MainActor
+    private static var cachedWeekday: (day: Date, text: String)?
+
+    @MainActor
+    private static func weekdayText(now: Date = Date()) -> String {
+        let day = Calendar.current.startOfDay(for: now)
+        if let cached = cachedWeekday, cached.day == day { return cached.text }
+        let text = now.formatted(.dateTime.weekday(.wide))
+        cachedWeekday = (day, text)
+        return text
     }
 
     @ViewBuilder

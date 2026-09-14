@@ -75,7 +75,10 @@ struct CharacterRow: View {
                         .padding(.horizontal, Metrics.gutter)
 
                     ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: Metrics.gapCovers) {
+                        // Lazy: an eager stack started a portrait fetch for
+                        // all twenty of a cast in the first frame, none of
+                        // which is cancelled on a pop (item 58).
+                        LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
                             ForEach(characters) { character in
                                 cell(character)
                                     .arrives()
@@ -127,20 +130,16 @@ struct CharacterRow: View {
 
     private func portraitCell(_ character: SeriesCharacter) -> some View {
         VStack(spacing: 7) {
-            AsyncImage(url: character.imageURL) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Palette.imagePlaceholder
-            }
-            // Top-aligned, because these portraits are taller than they are
-            // wide and the face is at the top of them. Centring the crop —
-            // which is what a plain fill does — trades the head for the torso.
-            .frame(width: Self.portrait, height: Self.portrait, alignment: .top)
-            .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                    .strokeBorder(Palette.border, lineWidth: 0.5)
-            )
+            // `PortraitImage`, not `AsyncImage`: a portrait that scrolled
+            // out mid-load used to stay a grey square until the sheet was
+            // dismissed — the documented reason `CoverStore` exists, and the
+            // bug already fixed once for covers (item 121).
+            PortraitImage(url: character.imageURL, size: Self.portrait)
+                .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                        .strokeBorder(Palette.border, lineWidth: 0.5)
+                )
 
             Text(character.name)
                 .typeGridMeta()

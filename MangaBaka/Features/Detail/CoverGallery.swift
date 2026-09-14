@@ -17,6 +17,7 @@ struct CoverGallery: View {
         self.series = series
         self.frontCover = frontCover
         self.images = images
+        self.pages = [(nil, frontCover)] + images.map { ($0.caption, $0.image) }
         _selection = State(initialValue: startAt)
         _scrolledIndex = State(initialValue: startAt)
         _progress = State(initialValue: Double(startAt))
@@ -29,9 +30,14 @@ struct CoverGallery: View {
     /// Modelled as a caption plus a `Cover` rather than as `[SeriesImage]`
     /// because the first entry is not one — it comes from the series itself and
     /// has no volume, language or id of its own.
-    private var pages: [(caption: String?, cover: Cover)] {
-        [(nil, frontCover)] + images.map { ($0.caption, $0.image) }
-    }
+    ///
+    /// Built in `init`, not computed. It was a computed property read inside
+    /// `ForEach(Array(pages.enumerated()))` and again by `backdrop`, and
+    /// `backdrop` re-runs on every `progress` frame of a drag — so the whole
+    /// array was rebuilt and re-enumerated continuously through a swipe
+    /// (item 120). Both inputs are `let`s taken in `init`, so there is
+    /// nothing for it to be later.
+    private let pages: [(caption: String?, cover: Cover)]
 
     /// Fractional page position, so the background can follow the drag rather
     /// than snap when the page changes.

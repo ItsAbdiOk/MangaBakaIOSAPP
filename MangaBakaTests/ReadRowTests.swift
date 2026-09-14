@@ -48,7 +48,11 @@ struct ReadRowTests {
         let links = [
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100020"),
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100079"),
-            link("Crunchyroll", url: "https://crunchyroll.com/x"),
+            // `/manga/...`, not `/x`: `ReadingPlatforms` scopes crunchyroll.com
+            // to its comics path, so the old fixture URL was rejected by the
+            // allowlist and this test read as a dedupe collapsing two
+            // platforms into one. See `ReadingPlatformsScopedHostsTests`.
+            link("Crunchyroll", url: "https://crunchyroll.com/manga/one-piece"),
             link("MANGA Plus", url: "https://mangaplus.shueisha.co.jp/titles/100140")
         ]
         let readable = SeriesLink.readable(links, in: "en")

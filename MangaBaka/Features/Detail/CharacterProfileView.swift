@@ -276,14 +276,10 @@ private struct CharacterProfileContent: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(profile.voiceActors) { actor in
                     HStack(spacing: 10) {
-                        AsyncImage(url: actor.portraitURL) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Palette.imagePlaceholder
-                        }
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                        .accessibilityHidden(true)
+                        // `PortraitImage`, not `AsyncImage` — see item 121
+                        // and `PortraitImage`'s own doc comment.
+                        PortraitImage(url: actor.portraitURL, size: 36)
+                            .clipShape(Circle())
 
                         Text(actor.name)
                             .typeSmallMeta()
@@ -497,34 +493,19 @@ private struct CharacterProfileContent: View {
 /// anywhere but next to the one image that uses it.
 private struct CharacterProfileHeader: View {
     let profile: CharacterProfile
-    /// Flips once the portrait's `AsyncImage` phase reports `.success` — see
-    /// `appearsSoftly(when:)` below.
-    @State private var isPortraitReady = false
-
     var body: some View {
         VStack(spacing: 10) {
-            // The placeholder tone sits underneath, unaffected by
-            // `appearsSoftly` — that only governs the image layer above it,
-            // so the loading cue itself doesn't fade out with nothing to
-            // replace it, the same layering `DetailBackdrop` uses for its
-            // own ambient-to-image handover.
-            ZStack {
-                Palette.imagePlaceholder
-                AsyncImage(url: profile.imageURL) { phase in
-                    if case let .success(image) = phase {
-                        image.resizable().scaledToFill()
-                            .onAppear { isPortraitReady = true }
-                    }
-                }
-                .appearsSoftly(when: isPortraitReady)
-            }
-            .frame(width: 132, height: 132)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
-                    .strokeBorder(Palette.border, lineWidth: 0.5)
-            )
-            .copyableArtwork(profile.imageURL, noun: "portrait")
+            // `PortraitImage` keeps the placeholder-under-image layering this
+            // block had, and adds what `AsyncImage` could not: the decoded
+            // image survives the sheet being scrolled, and a failed load is
+            // retried rather than remembered (item 121).
+            PortraitImage(url: profile.imageURL, size: 132)
+                .clipShape(RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                        .strokeBorder(Palette.border, lineWidth: 0.5)
+                )
+                .copyableArtwork(profile.imageURL, noun: "portrait")
 
             VStack(spacing: 4) {
                 Text(profile.fullName)

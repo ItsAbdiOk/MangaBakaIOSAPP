@@ -121,7 +121,10 @@ struct SpotlightWiringTests {
     @Test("A failed library walk leaves the Spotlight index untouched")
     func skipsReindexOnFailure() throws {
         let source = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
-        let guardLine = try #require(source.range(of: "guard walk.failure == nil else { return }"))
+        // Item 12 put a `needsAccount` branch inside the guard (the widget
+        // must stop showing the previous account's library), so it spans
+        // several lines now.
+        let guardLine = try #require(source.range(of: "guard walk.failure == nil else {"))
         let load = try #require(source.range(of: "let walk = await librarySnapshot.load()"))
         let reindex = try #require(source.range(of: "await spotlight.reindex(walk.entries)"))
         #expect(load.upperBound < guardLine.lowerBound)
@@ -133,6 +136,6 @@ struct SpotlightWiringTests {
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(root.contains(".onContinueUserActivity(CSSearchableItemActionType)"))
         let session = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
-        #expect(session.contains("selection = .library\n        shelfPath = [series]"))
+        #expect(SourceTree.containsRun(session, "selection = .library shelfPath = [series]"))
     }
 }

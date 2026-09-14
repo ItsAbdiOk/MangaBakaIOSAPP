@@ -42,6 +42,14 @@ struct FilterPanel: View {
     /// Runs the one request "Show results" stands for. Never fired by a chip
     /// or a picker on its own — see `canShow(query:)`'s doc comment.
     let onShowResults: () -> Void
+    /// What the count debounce sleeps against. Injected so a test can move
+    /// time rather than sleep through it (item 129). A defaulted stored
+    /// property, so every existing call site is unchanged.
+    ///
+    /// Spelled with its module because this one does not: `MangaBaka` has its
+    /// own `Clock` protocol (`Core/Persistence/Clock.swift`, a source of
+    /// "now" for cache expiry), and an unqualified `Clock` resolves to that.
+    var clock: any _Concurrency.Clock<Duration> = ContinuousClock()
 
     @State private var isPickingTags = false
     @State private var isPickingGenres = false
@@ -334,8 +342,11 @@ extension FilterPanel {
             resultCount = nil
             return
         }
+        // Copied out rather than read through `self` inside the task: this is
+        // a struct, and the closure should capture the clock, not the view.
+        let clock = clock
         countTask = Task {
-            try? await Task.sleep(for: Self.countDebounce)
+            try? await clock.sleep(for: Self.countDebounce)
             guard !Task.isCancelled else { return }
             let total = await counter(query)
             guard !Task.isCancelled else { return }

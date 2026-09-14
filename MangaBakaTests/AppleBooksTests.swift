@@ -262,7 +262,7 @@ struct AppleBooksClientTests {
     """#.utf8)
 
     @Test("Asks the store with the series title, the ebook filters and the country")
-    func request() async {
+    func request() async throws {
         URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
         defer { URLProtocolStub.reset() }
         let client = makeClient(clock: TestClock())
@@ -270,8 +270,8 @@ struct AppleBooksClientTests {
         let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
         let volumes = await client.volumes(for: series, country: "GB")
 
-        #expect(volumes?.map(\.number) == [1])
-        #expect(volumes?.first?.formattedPrice == "£6.99")
+        #expect(try volumes.get().map(\.number) == [1])
+        #expect(try volumes.get().first?.formattedPrice == "£6.99")
         let url = URLProtocolStub.requests.first?.url?.absoluteString ?? ""
         #expect(url.hasPrefix("https://itunes.apple.com/search?"))
         for expected in ["term=Solo%20Leveling", "media=ebook", "entity=ebook", "country=GB", "limit=200"] {
@@ -306,7 +306,7 @@ struct AppleBooksClientTests {
         let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
 
         let volumes = await client.volumes(for: series, country: "gb")
-        #expect(volumes?.count == 200, "one odd date must not sink the other 199 rows")
+        #expect(try volumes.get().count == 200, "one odd date must not sink the other 199 rows")
     }
 
     @Test("A second look inside a week costs no request; after a week it does")
@@ -328,18 +328,29 @@ struct AppleBooksClientTests {
 
     /// Nil, not empty: "the store could not be asked" must not be shown as
     /// "no volumes", and must not be cached as it either.
-    @Test("A failure is nil and is not remembered")
-    func failure() async {
+    ///
+    /// Since item 60 the failure also says *which* failure: `volumes` returns
+    /// `Result<[AppleBooksVolume], APIError>` rather than an optional, so
+    /// `VolumesSection` can render a reason and a retry instead of one bare
+    /// line of text. Expected failure before that change: `first` was `nil`
+    /// and there was nothing to assert about a `.server(500)` at all.
+    @Test("A failure names its reason, is not an empty shelf, and is not remembered")
+    func failure() async throws {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 500)) }
         defer { URLProtocolStub.reset() }
         let client = makeClient(clock: TestClock())
         let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
 
         let first = await client.volumes(for: series, country: "gb")
-        #expect(first == nil)
+        if case let .failure(error) = first {
+            #expect(error == .server(status: 500, message: "", party: .appleBooks))
+        } else {
+            Issue.record("a 500 must not read as an empty shelf")
+        }
+
         URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
         let second = await client.volumes(for: series, country: "gb")
-        #expect(second?.count == 1)
+        #expect(try second.get().count == 1)
     }
 
     /// Gap 72: the cache file already carried `storedAt` and every read threw
@@ -371,7 +382,7 @@ struct AppleBooksClientTests {
     /// Expected failure before the fix: the second call below also returns
     /// nil, because the first 403 armed a 60s backoff that suppressed it.
     @Test("A 403 does not back off the way a 429 does")
-    func forbiddenDoesNotBackOff() async {
+    func forbiddenDoesNotBackOff() async throws {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 403)) }
         defer { URLProtocolStub.reset() }
         let clock = TestClock()
@@ -379,13 +390,13 @@ struct AppleBooksClientTests {
         let series = SeriesFactory.make(id: 3397, title: "Solo Leveling", authors: ["Chu-Gong"])
 
         let first = await client.volumes(for: series, country: "gb")
-        #expect(first == nil)
+        #expect(first.failureError != nil)
 
         URLProtocolStub.setHandler { _ in .respond(.init(body: answer)) }
         // No time advance at all: if the 403 had armed a backoff the way a
-        // 429 does, this would still be inside its 60s window and answer nil.
+        // 429 does, this would still be inside its 60s window and fail.
         let second = await client.volumes(for: series, country: "gb")
-        #expect(second?.count == 1, "a 403 must not suppress the very next request")
+        #expect(try second.get().count == 1, "a 403 must not suppress the very next request")
     }
 
     /// Gap 28: `try? await Task.sleep` swallowed cancellation and fell
@@ -466,17 +477,29 @@ struct AppleVolumesRowTests {
     @Test("Nothing at home, so the Japanese edition, labelled")
     func japaneseFallback() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
-        #expect(source.contains("if answer?.isEmpty == true, country.lowercased() != \"jp\""))
+        // `(try? answer.get())?.isEmpty`, not `answer?.isEmpty`, since item
+        // 60 made `volumes` return a `Result` — the rule is unchanged: an
+        // empty home store, never a failed one, is what falls back.
+        #expect(
+            source.contains("if (try? answer.get())?.isEmpty == true, country.lowercased() != \"jp\"")
+        )
         #expect(source.contains("answer = await appleBooks.japaneseVolumes(for: shown)"))
         let row = try SourceTree.read("MangaBaka/Features/Detail/AppleVolumesRow.swift")
         #expect(row.contains("if edition == nil, let price = volume.formattedPrice"))
     }
 
-    @Test("A store that could not be reached is said, not silent")
+    /// Item 60 replaced the `Bool` this used to pin. `appleUnreachable` said
+    /// only "something went wrong" and `VolumesSection` rendered it as one
+    /// bare sentence with no retry; `appleFailure: APIError?` carries the
+    /// reason, and the section renders the same `InlineFailure` every other
+    /// section on the page has had since gap 10.
+    @Test("A store that could not be reached says which failure, and offers a retry")
     func failureIsSaid() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Store.swift")
-        #expect(source.contains("appleUnreachable = answer == nil"))
-        #expect(source.contains("note: appleUnreachable ? \"Apple Books couldn't be reached\" : nil"))
+        #expect(source.contains("case let .failure(error):"))
+        #expect(source.contains("appleFailure = error"))
+        #expect(source.contains("failure: appleFailure,"))
+        #expect(source.contains("retry: { await loadAppleVolumes() },"))
     }
 
     @Test("The store's shelf replaces MangaBaka's editions, never joins them")

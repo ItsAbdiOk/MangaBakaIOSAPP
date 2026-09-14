@@ -83,15 +83,22 @@ actor ShelfStore {
         }
     }
 
-    /// Every reaction's timestamp, saved or skipped, unsorted.
+    /// How many reactions fall in `[from, to)`.
     ///
-    /// For `StackModel.todayProgress`, which buckets these by calendar day —
-    /// no new store for "today's count", since `addedAt` (this device's own
-    /// clock at the moment of the swipe, see `record` above) already carries
-    /// exactly the fact a daily count needs.
-    func reactionTimestamps() throws -> [Date] {
+    /// Counted in SQL rather than by fetching every timestamp the reader has
+    /// ever produced and filtering in Swift (work-list 80). That read was
+    /// unbounded and grew with every swipe, and it ran on every switch back
+    /// to the Stack tab — before the tab had decided whether it needed
+    /// anything at all. The window is passed in because "today" is the
+    /// device's local calendar day, which is `StackModel`'s to define; see
+    /// `StackModel.countToday`, still the pure rule the tests hold.
+    func reactionCount(from: Date, to: Date) throws -> Int {
         try database.writer.read { db in
-            try Date.fetchAll(db, sql: "SELECT addedAt FROM shelfEntry")
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM shelfEntry WHERE addedAt >= ? AND addedAt < ?",
+                arguments: [from, to]
+            ) ?? 0
         }
     }
 

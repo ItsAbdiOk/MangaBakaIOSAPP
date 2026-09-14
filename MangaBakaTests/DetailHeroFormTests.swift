@@ -71,13 +71,24 @@ struct DetailHeroFormTests {
 /// The measurement must not be able to grow the column it measures.
 @Suite("The hero measures the full column off-screen", .enabled(if: SourceTree.isAvailable))
 struct DetailHeroMeasurementTests {
+    /// The three measurers moved out of the `.background` closure into a
+    /// `measurers` property, which mounts them only while their answer for the
+    /// current series, width and type size is not already known. The old pin
+    /// spelled the closure's literal contents and broke on that; it is now
+    /// stated as the rule it was standing for — the measurers are a
+    /// background, and every one of them is hidden.
     @Test("The full column is a hidden background, so its height never lays out")
     func measurerIsBackground() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
-        let measurer = ".background {\n                column(.full, fill: false)\n"
-        #expect(source.contains(measurer))
-        #expect(source.contains("column(.byline, fill: false)\n                    .hidden()"))
-        #expect(source.contains("column(.chapters, fill: false)\n                    .hidden()"))
+        #expect(SourceTree.containsRun(source, ".background { measurers }"))
+        #expect(SourceTree.containsRun(source, "column(.full, fill: false) .hidden()"))
+        #expect(SourceTree.containsRun(source, "column(.byline, fill: false) .hidden()"))
+        #expect(SourceTree.containsRun(source, "column(.chapters, fill: false) .hidden()"))
+        // The measurers are mounted behind a key, so a settled hero stops
+        // re-measuring. The key has to carry everything that changes the
+        // answer, or a swipe to the next series would keep the old heights.
+        #expect(source.contains("MeasureKey(seriesID: series.id, width: columnWidth, typeSize: typeSize)"))
+        #expect(SourceTree.containsRun(source, "if columnWidth > 0, measuredFor != key {"))
         // And the visible column is stretched to the cover, never the measurer.
         #expect(source.contains(".frame(minHeight: coverHeight, alignment: .top)"))
         #expect(source.contains("onGeometryChange(for: CGFloat.self)"))
@@ -90,6 +101,6 @@ struct DetailHeroMeasurementTests {
         #expect(source.contains("isExpanded: form.isExpanded"))
         #expect(source.contains("if form.hasByline, let byline"))
         let block = try SourceTree.read("MangaBaka/Features/Detail/DetailScheduleBlock.swift")
-        #expect(block.contains("if isExpanded {\n                Text(ScheduleRow.cadenceLine(estimate))"))
+        #expect(SourceTree.containsRun(block, "if isExpanded { Text(ScheduleRow.cadenceLine(estimate))"))
     }
 }

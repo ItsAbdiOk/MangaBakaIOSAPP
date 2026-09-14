@@ -241,25 +241,6 @@ final class AccessibilityAuditTests: XCTestCase {
         try audit(app, screen: "Library search results")
     }
 
-    /// A shelf, opened from the Library — if anything still opens one.
-    ///
-    /// `ShelfDetailView` exists, is tested, and has a navigation destination
-    /// waiting for it in `RootView`. Nothing presents it: the cards that used
-    /// to, `LibraryView.shelfCards` and `searchResults`, had no callers and
-    /// were removed on 2026-09-11 as dead code. The Library shows a filter row
-    /// and a flat list instead, which is a reasonable replacement for shelves
-    /// — but it means a whole screen is unreachable, and whether to wire it
-    /// back up or delete it is Abdi's call, not one to make at 2am.
-    ///
-    /// Skipped with that reason rather than deleted, so the question stays
-    /// visible in the test output until it is answered.
-    func testShelfDetailPassesTheAudit() throws {
-        throw XCTSkip("""
-        ShelfDetailView is currently unreachable: nothing in LibraryView \
-        presents a shelf card. See docs/unknowns-2026-09-11.md.
-        """)
-    }
-
     /// A stack card held mid-drag, with its SKIP or SAVE badge showing.
     ///
     /// The badges are at `opacity(0)` at rest, which is why a static audit of

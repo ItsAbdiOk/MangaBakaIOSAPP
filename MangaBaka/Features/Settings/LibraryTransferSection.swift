@@ -49,25 +49,33 @@ final class LibraryTransferModel {
         self.loadExisting = loadExisting
     }
 
+    /// The two export payloads, encoded once when the entries are loaded.
+    ///
+    /// Item 105: `jsonExportItem()` and `csvExportItem()` were called from
+    /// inside `body`, so both re-encoded all 939 entries on every render of
+    /// the Settings screen — a JSON encode and a CSV build per toast, per
+    /// scroll, per anything. They change exactly when `entries` does.
+    private(set) var jsonFile: LibraryExportJSONFile?
+    private(set) var csvFile: LibraryExportCSVFile?
+
+    /// Whether the export payloads are ready to share.
+    var isExportReady: Bool { jsonFile != nil }
+
     func loadEntriesIfNeeded() async {
         guard entries.isEmpty else { return }
         entries = await loadExisting()
+        encodeExports()
     }
 
-    func jsonExportItem() -> LibraryExportJSONFile? {
-        guard !entries.isEmpty else { return nil }
-        return LibraryExportJSONFile(
-            data: LibraryExport.json(entries),
-            filename: "\(LibraryExport.filenameStem()).json"
-        )
-    }
-
-    func csvExportItem() -> LibraryExportCSVFile? {
-        guard !entries.isEmpty else { return nil }
-        return LibraryExportCSVFile(
-            data: LibraryExport.csv(entries),
-            filename: "\(LibraryExport.filenameStem()).csv"
-        )
+    private func encodeExports() {
+        guard !entries.isEmpty else {
+            jsonFile = nil
+            csvFile = nil
+            return
+        }
+        let stem = LibraryExport.filenameStem()
+        jsonFile = LibraryExportJSONFile(data: LibraryExport.json(entries), filename: "\(stem).json")
+        csvFile = LibraryExportCSVFile(data: LibraryExport.csv(entries), filename: "\(stem).csv")
     }
 
     func handlePicked(_ result: Result<URL, any Error>) async {
@@ -77,7 +85,14 @@ final class LibraryTransferModel {
         let didAccess = url.startAccessingSecurityScopedResource()
         defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
 
-        guard let data = try? Data(contentsOf: url) else {
+        // Off the main actor: a MyAnimeList XML export is megabytes, and
+        // reading it here hitched the sheet that is still on screen (item
+        // 105). The security-scoped access above is held for the duration by
+        // the `defer`, so the detached read is inside it.
+        let data = await Task.detached(priority: .userInitiated) {
+            try? Data(contentsOf: url)
+        }.value
+        guard let data else {
             parseFailureMessage = "Couldn't read that file."
             return
         }
@@ -96,8 +111,19 @@ final class LibraryTransferModel {
         }
     }
 
-    private static func count(_ parsed: [ImportedEntry], against existing: [LibraryEntry]) -> PreviewCounts {
-        let existingBySeries = Dictionary(uniqueKeysWithValues: existing.map { ($0.seriesId, $0) })
+    /// `nonisolated static` so the preview arithmetic can be tested without
+    /// a Settings screen or a main-actor hop — see work-list 17's test.
+    nonisolated static func count(
+        _ parsed: [ImportedEntry], against existing: [LibraryEntry]
+    ) -> PreviewCounts {
+        // `uniquingKeysWith:`, not `uniqueKeysWithValues:` (item 17): the
+        // library walk appends pages with no dedupe of its own, and a series
+        // that moves between pages while the walk is running arrives twice —
+        // which trapped here, in Settings, on the reader's own library.
+        // First wins, matching the walk's own rule.
+        let existingBySeries = Dictionary(
+            existing.map { ($0.seriesId, $0) }, uniquingKeysWith: { first, _ in first }
+        )
         var counts = PreviewCounts()
         for entry in parsed {
             guard let seriesId = entry.seriesId else {
@@ -127,6 +153,7 @@ final class LibraryTransferModel {
         // The cached list is now behind whatever was just written; the next
         // export or import in this session should see the real thing.
         entries = []
+        encodeExports()
         return report
     }
 }
@@ -137,37 +164,26 @@ struct LibraryTransferSection: View {
     @State private var model: LibraryTransferModel
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
 
-    /// `library`/`loadExisting` default to a standalone `LibraryService` and
-    /// an unshared, uncached `LibrarySnapshot` walk — a working but wasteful
-    /// stand-in (a second full walk of the library alongside whatever
-    /// `AppServices.librarySnapshot` already did for this session).
-    /// `AppServices` already owns a `LibraryService` and that shared,
-    /// caching snapshot; wiring those in instead needs `SettingsView` to
-    /// accept and thread `library`/`librarySnapshot` through, which is out
-    /// of scope here — see the report for the exact call.
-    init(
-        library: any LibraryProviding = LibraryTransferSection.defaultLibrary,
-        loadExisting: (() async -> [LibraryEntry])? = nil
-    ) {
-        let resolvedLoad = loadExisting ?? { await LibrarySnapshot(library: library).all() }
-        _model = State(initialValue: LibraryTransferModel(library: library, loadExisting: resolvedLoad))
+    /// Which export the share sheet is currently up for, if either.
+    @State private var sharing: Export?
+
+    /// `Identifiable` so `.sheet(item:)` can carry it; the payload itself
+    /// lives on the model, encoded once.
+    enum Export: String, Identifiable {
+        case json, csv
+        var id: String { rawValue }
     }
 
-    static var defaultLibrary: LibraryService {
-        LibraryService(client: APIClient(
-            baseURL: Self.defaultBaseURL,
-            tokenProvider: ResolvingTokenProvider(infoDictionary: Bundle.main.infoDictionary)
-        ))
-    }
-
-    /// Mirrors `AppServices.makeClient`'s own fallback: a hard-coded literal
-    /// known to parse at compile time, unwrapped honestly rather than with
-    /// `!` (`AppServices`' own helper for this is `private` to that file).
-    private static var defaultBaseURL: URL {
-        guard let url = URL(string: "https://api.mangabaka.org") else {
-            preconditionFailure("Hard-coded base URL literal failed to parse.")
-        }
-        return url
+    /// Both of these come from `AppServices` now, through `SettingsView`
+    /// (item 20).
+    ///
+    /// They used to default to a standalone `LibraryService` and an
+    /// unshared, uncached `LibrarySnapshot`, walked from `.task` on every
+    /// appearance — ~13 requests and ~25 MB for an export nobody had tapped,
+    /// on a screen that looks like a settings page. No defaults now, so the
+    /// wasteful stand-in cannot come back by omission.
+    init(library: any LibraryProviding, loadExisting: @escaping () async -> [LibraryEntry]) {
+        _model = State(initialValue: LibraryTransferModel(library: library, loadExisting: loadExisting))
     }
 
     var body: some View {
@@ -187,7 +203,9 @@ struct LibraryTransferSection: View {
                 }
             }
         }
-        .task { await model.loadEntriesIfNeeded() }
+        // No `.task { await model.loadEntriesIfNeeded() }` here (item 20):
+        // the export rows load on tap, and the import path loads inside
+        // `handlePicked` where it is genuinely needed to count the preview.
         .fileImporter(
             isPresented: $model.isPickingFile,
             allowedContentTypes: [.json, .commaSeparatedText, .xml],
@@ -196,38 +214,38 @@ struct LibraryTransferSection: View {
         .sheet(isPresented: $model.isShowingPreview) {
             LibraryImportPreviewSheet(model: model, toasts: toasts)
         }
+        .sheet(item: $sharing) { export in
+            LibraryExportShareSheet(model: model, export: export)
+        }
     }
 
     private var caption: String {
         "A copy of your library you keep yourself — export it as a file, or bring one back in."
     }
 
-    private var exportRow: some View {
-        SettingsRow(title: "Export as JSON", caption: nil) {
-            if let item = model.jsonExportItem() {
-                ShareLink(item: item, preview: SharePreview(item.filename)) {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(Palette.accent)
-                }
-                .accessibilityLabel("Export library as JSON")
-            } else {
-                ProgressView().tint(Palette.textTertiary)
-            }
-        }
-    }
+    private var exportRow: some View { exportRow(.json, title: "Export as JSON", name: "JSON") }
 
-    private var csvExportRow: some View {
-        SettingsRow(title: "Export as CSV", caption: nil) {
-            if let item = model.csvExportItem() {
-                ShareLink(item: item, preview: SharePreview(item.filename)) {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(Palette.accent)
-                }
-                .accessibilityLabel("Export library as CSV")
-            } else {
-                ProgressView().tint(Palette.textTertiary)
+    private var csvExportRow: some View { exportRow(.csv, title: "Export as CSV", name: "CSV") }
+
+    /// A tap is what fetches the library, not an appearance (item 20). The
+    /// share sheet opens once the entries are in hand; until then the row
+    /// shows the spinner the two `ShareLink`s used to show while a walk
+    /// nobody asked for ran behind them.
+    private func exportRow(_ export: Export, title: String, name: String) -> some View {
+        Button {
+            Task {
+                await model.loadEntriesIfNeeded()
+                guard model.isExportReady else { return }
+                sharing = export
+            }
+        } label: {
+            SettingsRow(title: title, caption: nil) {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(Palette.accent)
             }
         }
+        .buttonStyle(.press)
+        .accessibilityLabel("Export library as \(name)")
     }
 
     private var importRow: some View {
@@ -334,5 +352,47 @@ private struct LibraryImportPreviewSheet: View {
             return "Imported with \(report.failures) failure\(report.failures == 1 ? "" : "s")"
         }
         return "Imported \(report.added) new, updated \(report.updated)"
+    }
+}
+
+/// The share sheet an export row opens, holding the `ShareLink` that used to
+/// sit in the row itself.
+///
+/// A `ShareLink` needs its payload at the moment it is *built*, which is why
+/// the row version forced a whole library walk on appearance (item 20). Here
+/// the payload already exists by the time this view is presented.
+private struct LibraryExportShareSheet: View {
+    let model: LibraryTransferModel
+    let export: LibraryTransferSection.Export
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            switch export {
+            case .json:
+                if let file = model.jsonFile {
+                    link(item: file, filename: file.filename)
+                }
+            case .csv:
+                if let file = model.csvFile {
+                    link(item: file, filename: file.filename)
+                }
+            }
+            Button("Done") { dismiss() }
+                .buttonStyle(.press)
+        }
+        .padding(Metrics.gutter)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .background(Palette.ground)
+        .presentationDetents([.height(200)])
+    }
+
+    private func link(item: some Transferable, filename: String) -> some View {
+        ShareLink(item: item, preview: SharePreview(filename)) {
+            Label("Share \(filename)", systemImage: "square.and.arrow.up")
+                .typeCTA()
+                .foregroundStyle(Palette.accent)
+        }
     }
 }

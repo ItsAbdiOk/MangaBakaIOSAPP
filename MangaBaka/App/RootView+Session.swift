@@ -24,22 +24,12 @@ extension RootView {
                             onOpenSchedule: { showsSchedule = true },
                             onOpenTaste: { showsTaste = true },
                             onOpenWrapped: { showsWrapped = true },
-                            onOpenShelf: { state in
-                                openShelf = session.library.shelves.first { $0.state == state }
-                            },
                             onOpenSettings: { showsSettings = true },
                             onOpenStack: { selection = .stack },
                             onSave: saveLibraryChange,
                             continuations: continuations
                         )
                             .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
-                            .navigationDestination(item: $openShelf) { shelf in
-                                ShelfDetailView(
-                                    shelf: shelf,
-                                    path: $shelfPath,
-                                    onSave: saveLibraryChange
-                                )
-                            }
                             .navigationDestination(isPresented: $showsWrapped) {
                                 WrappedView(
                                     entries: session.library.entries,
@@ -51,8 +41,20 @@ extension RootView {
                                     // year's staleness shifts a lift by about
                                     // 5% — enough to move a tag sitting on the
                                     // 2.0 gate, not enough to invent one.
-                                    catalogueSize: session.pulse.pulse.map { Int($0.activeSeriesCount) }
+                                    // `Int(wholeOrClamped:)`, not `Int(_:)`
+                                    // (item 9): `activeSeriesCount` is a
+                                    // server `Double`, and `Int(.nan)` traps.
+                                    catalogueSize: session.pulse.pulse
+                                        .map { Int(wholeOrClamped: $0.activeSeriesCount) }
                                         ?? ReadingWrapped.catalogueSizeOn20260911,
+                                    // Item 6: both of these took the default
+                                    // `isComplete: true` "until the shell
+                                    // passes the real value", and the shell
+                                    // never did — so the "Built from the N
+                                    // that loaded" bar was unreachable and
+                                    // half the recompute trigger was dead.
+                                    isComplete: session.library.isComplete,
+                                    libraryRevision: session.library.revision,
                                     path: $shelfPath
                                 )
                             }
@@ -62,16 +64,25 @@ extension RootView {
                                 // of one, and none of them from an endpoint.
                                 ReadingInsightsView(
                                     entries: session.library.entries,
+                                    isComplete: session.library.isComplete,
+                                    libraryRevision: session.library.revision,
                                     path: $shelfPath
                                 )
                             }
                             .navigationDestination(isPresented: $showsSchedule) {
                                 ScheduleView(
                                     model: ScheduleModel(
-                                service: schedule,
-                                calendar: calendar,
-                                snapshot: librarySnapshot
-                            ),
+                                        service: schedule,
+                                        calendar: calendar,
+                                        snapshot: librarySnapshot,
+                                        // So the widget's "due this week" is
+                                        // built from real publisher dates
+                                        // where a feed is cached, not from
+                                        // MangaUpdates estimates alone — the
+                                        // same order Siri speaks them in.
+                                        feeds: releaseFeeds,
+                                        repository: repository
+                                    ),
                                     path: $shelfPath
                                 )
                             }
@@ -79,6 +90,15 @@ extension RootView {
                                 SettingsView(
                                     validate: validateStoredToken,
                                     content: content,
+                                    // Item 20: Settings used to build a
+                                    // private, database-less `LibrarySnapshot`
+                                    // and walk the whole library on
+                                    // appearance — ~13 requests and ~25 MB for
+                                    // an export nobody had tapped. The shared
+                                    // snapshot has already walked once this
+                                    // session and answers from cache.
+                                    library: library,
+                                    loadExisting: { await librarySnapshot.all() },
                                     formats: formats,
                                     blockedTags: blockedTags,
                                     catalogue: catalogue,
@@ -112,7 +132,17 @@ extension RootView {
     /// three ways to change account, and no two agreeing.
     func forgetPreviousAccount() async {
         await library.forgetProfile()
-        await taste.forgetEverything()
+        // Item 43: this was `try? await ledger?.clear()` inside
+        // `forgetEverything`, so a failed clear left the previous account's
+        // taste ledger on disk and nothing said so — the one cache whose
+        // survival is about the wrong person.
+        if await !taste.forgetEverything() {
+            toasts.show(
+                "Couldn't clear what the app learned from the previous account. "
+                    + "Signing in again and removing the token will retry it.",
+                kind: .failure
+            )
+        }
         await librarySnapshot.invalidate()
         // Gap 89: the previous account's shelves stayed on screen — in
         // `session.library.entries` — until relaunch, because nothing here
@@ -123,13 +153,20 @@ extension RootView {
         // The taste ranker built from the previous account's library keeps
         // weighting the stack toward tags that were never this account's
         // until the next relaunch rebuilds it, otherwise.
-        stackModel?.ranker = nil
+        stackModel.ranker = nil
         // The reader's own id, used to keep series they already track out of a
         // blend. Left behind, it excludes somebody else's library from their
         // recommendations — and because it is only ever written at launch,
         // signing in mid-session never enabled the exclusion at all until the
         // next relaunch.
-        await repository.updateLibraryExclusion(userID: nil)
+        //
+        // Item 1: this passed `nil` and *nothing* ever set the new account's
+        // id, so every blend until relaunch recommended series the reader
+        // already tracks — the bug the paragraph above describes, in the line
+        // written to fix it. `forgetProfile()` above has already dropped the
+        // cached id, so this asks the client for whoever is signed in now;
+        // nil when that is nobody, which is the ordinary signed-out case.
+        await repository.updateLibraryExclusion(userID: await library.profileID())
         // Pending notifications name series from the previous account's
         // library. Without this, "<title> has finished" arrives on the lock
         // screen for an account the reader has signed out of.
@@ -138,6 +175,15 @@ extension RootView {
         // Same reason as the reminders: the index names the previous
         // account's library.
         await spotlight.clear()
+        // Item 12: sign-out forgot the library, the ranker, the reminders and
+        // Spotlight and left `widget-snapshot.json` alone, so the previous
+        // account's "Pick back up · Ch. 88 of 120" stayed on the Home Screen
+        // — with deep links that still opened.
+        WidgetSnapshot.clear()
+        // The `v2-naver-*` files hold data obtained from an endpoint this app
+        // no longer calls (Q8, 2026-09-14), so serving them would be keeping
+        // the fruit of it. A no-op after the first run.
+        AppServices.purgeLegacyNaverCache()
     }
 
     /// The work a launch does once the first screen is on the way.
@@ -151,9 +197,19 @@ extension RootView {
         // because `startSession` itself only ever runs once per launch — see
         // `RootView.body`'s `.task { await startSession() }`.
         if databaseWasReset {
+            // Item 78: the old wording called the lost file "your saved stack
+            // and library cache", which understated it — that file also holds
+            // the recently-viewed history and the taste ledger, and two doc
+            // comments in it still called all of that "disposable cache
+            // data". It is also no longer shown for a database that merely
+            // could not be opened (`.unopened`), where nothing was lost at
+            // all. `AppDatabase.onDiskResettingIfCorrupt` now attempts a
+            // salvage of the saves and the history, which is why this says
+            // "where they could be read" rather than promising either way.
             toasts.show(
-                "A local file couldn't be read, so your saved stack and library cache were reset. "
-                    + "Anything in your MangaBaka account is unaffected.",
+                "A local file was damaged and had to be replaced. Your saves and recently-viewed "
+                    + "were copied over where they could be read, and your library will reload. "
+                    + "Nothing in your MangaBaka account is affected.",
                 kind: .failure
             )
         }
@@ -178,7 +234,21 @@ extension RootView {
         // away) is checked first so a failed walk leaves yesterday's index
         // standing, the same rule `reschedule` already applies to reminders.
         let walk = await librarySnapshot.load()
-        guard walk.failure == nil else { return }
+        guard walk.failure == nil else {
+            // Item 12: a walk that fails because there is no account is not a
+            // transient failure — the library the widget is still showing
+            // belongs to a reader who is no longer signed in. Everything else
+            // (offline, a 500) leaves the last good snapshot standing, the
+            // same rule the Spotlight index follows two lines down.
+            if walk.failure?.needsAccount == true { WidgetSnapshot.write(pickBackUp: []) }
+            return
+        }
+        // Item 7: `session.library.entries` was filled only by `LibraryView`'s
+        // own `.task`, so Discover's "Pick back up" row and its chapters-read
+        // figure were empty on every cold launch until the Library tab was
+        // visited — although the walk above had already happened. This returns
+        // the snapshot that walk just cached, so it costs no request.
+        await session.library.load()
         await spotlight.reindex(walk.entries)
         let lastOpened = (try? await history.lastOpenedDates()) ?? [:]
         WidgetSnapshot.write(
@@ -241,9 +311,12 @@ extension RootView {
 
     /// Notifies about whatever is newly true: a confirmed release, or a
     /// series the reader is reading or paused on finishing or ending a
-    /// season. Called when the switch moves and when the app comes back to
-    /// the foreground — see `NotificationPolicy` for the two conditions and
-    /// `ReleaseReminders` for why nothing here rebuilds a calendar anymore.
+    /// season. Called at launch, when the switch moves, and when the app
+    /// comes back from the background — `RootView.foregroundChanged(to:)`,
+    /// added for item 11, which is the handler this comment promised for a
+    /// batch before one existed. See `NotificationPolicy` for the two
+    /// conditions and `ReleaseReminders` for why nothing here rebuilds a
+    /// calendar anymore.
     func refreshReminders() async {
         guard reminders.isEnabled else {
             await reminders.reschedule(announced: [])
@@ -258,18 +331,22 @@ extension RootView {
         // `lastSeenSeriesID` stays current for whenever this list does notify.
         await publisherFollows.check(using: repository)
         // Whatever a prior series-page visit already cached — never a fetch:
-        // `cachedExtras` reads the six-hour detail cache and nothing else, so
-        // this call site still costs zero requests. A series with nothing
-        // cached (never opened this run) simply supplies no links, and
-        // `cachedFeeds` reports nothing for it, the same as before this batch.
-        // Read one entry at a time, ahead of `cachedFeeds`, because that
-        // method's own `links` closure is synchronous — it is a pure
-        // lookup over providers' caches, not a place to await anything.
-        var cachedLinks: [Int: [SeriesLink]] = [:]
-        for entry in walk.entries {
-            cachedLinks[entry.seriesId] = await repository.cachedExtras(for: entry.seriesId)?.links ?? []
+        // this reads the six-hour detail cache and nothing else, so the call
+        // site still costs zero requests. A series with nothing cached (never
+        // opened this run) simply supplies no links, and `cachedFeeds`
+        // reports nothing for it. Read ahead of `cachedFeeds` because that
+        // method's own `links` closure is synchronous — it is a pure lookup
+        // over providers' caches, not a place to await anything.
+        //
+        // Item 64: this was `await repository.cachedExtras(for:)` once per
+        // entry — 939 actor hops on the launch path, each a SQLite read and a
+        // full `SeriesExtras` decode, for a cache that only holds series
+        // opened in the last six hours (so ~939 misses). One hop now, one
+        // `WHERE seriesId IN (…)`, returning only the links. Signposted so
+        // the before/after is a number rather than an argument.
+        let linksByID = await Signposts.measure("Reminder links") {
+            await repository.cachedExtrasLinks(for: walk.entries.map(\.seriesId))
         }
-        let linksByID = cachedLinks
         let feeds = await releaseFeeds.cachedFeeds(for: walk.entries) { linksByID[$0] ?? [] }
         await reminders.reschedule(
             announced: announced,
@@ -304,23 +381,7 @@ extension RootView {
             await session.library.reload()
         }
         toasts.show("Saved")
-        openShelf = session.library.shelves.first { $0.state == openShelf?.state }
         return nil
-    }
-}
-
-extension RootView {
-    /// One place for the search model's construction: the offline catalogue
-    /// and the three preference closures it answers from when the network
-    /// cannot. Out of `RootView` itself, which sits at the body-length cap.
-    func makeSearchModel() -> SearchModel {
-        SearchModel(
-            repository: repository,
-            offline: offlineCatalogue,
-            allowedRatings: { content.preferences.queryValues },
-            allowedFormats: { formats.preferences.queryValues },
-            blockedTagIDs: { blockedTags.blocked.ids }
-        )
     }
 }
 
@@ -345,7 +406,7 @@ extension RootView {
             appleBooks: appleBooks,
             googleBooks: googleBooks,
             releaseFeeds: releaseFeeds,
-            mangaUpdatesCategories: mangaUpdatesCategories,
+            mangaUpdatesCategories: mangaUpdates,
             openLibrary: openLibraryCovers,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
@@ -367,7 +428,7 @@ extension RootView {
                 // `applyBrowse`, which since 2026-09-13 adds to the query
                 // (UX#11): a tag from a series page replaces the last search,
                 // which may be an hour old and about something else.
-                searchModel?.openTag(tag)
+                searchModel.openTag(tag)
                 selection = .search
             },
             onOpenSchedule: {
@@ -388,17 +449,31 @@ extension RootView {
     func detail(_ series: Series, path: Binding<[Series]>, neighbours: [Series] = []) -> some View {
         // The row that pushed this series recorded its siblings on the zoom
         // route; a push from anywhere else (a link, Siri, a related row that
-        // did not record) pages nowhere. Only trusted when the series is
-        // actually in the list — a stale row from an earlier tap is not this
-        // page's row.
+        // did not record) pages nowhere.
+        //
+        // The membership check is not the guarantee this comment used to
+        // claim (item 122). It rejects a stale row that does not contain this
+        // series, but a related-series tap for a series that *is* in the
+        // originating row passes it and wraps the new page in the wrong list.
+        // The fix is at the push sites, which clear `neighbours` beside each
+        // `source =`; this is the second half of it, not the whole guard.
         let siblings = neighbours.isEmpty && zoomRoute.neighbours.contains(where: { $0.id == series.id })
             ? zoomRoute.neighbours
             : neighbours
         return Group {
             if siblings.count > 1 {
-                SeriesPager(items: siblings, selected: .constant(series)) { neighbour in
-                    detailPage(neighbour, path: path)
-                }
+                // `onSettle`, not the old `selected: .constant(series)`
+                // binding (item 123): that wrote into a constant, so every
+                // swipe was silently dropped and only the pushed series was
+                // ever recorded. Nothing broke, which was the problem.
+                SeriesPager(
+                    items: siblings,
+                    selected: series,
+                    onSettle: { current in
+                        Task { await session.recentlyViewed.record(current) }
+                    },
+                    content: { neighbour in detailPage(neighbour, path: path) }
+                )
             } else {
                 detailPage(series, path: path)
             }
@@ -407,12 +482,11 @@ extension RootView {
         // rather than inside the detail view so every route into it — a feed,
         // the stack, search, a related-series row — is remembered the same way.
         //
-        // Records only the series the push named, not whichever one the
-        // reader has since swiped to inside the pager — `SeriesPager` holds
-        // its own current selection internally (see its `selected` binding
-        // above, a fixed `.constant` here since nothing outside the pager
-        // needs to read it yet). Recording every page swiped past is a
-        // reasonable next step but not one this task asked for.
+        // This records the series the push named. A neighbour the reader
+        // swipes to inside the pager is recorded by the `onSettle` above,
+        // which fires once per page that actually settles on a different
+        // series and never for the one the pager opened on — so a swipe is
+        // remembered exactly once, and never twice.
         .task { await session.recentlyViewed.record(series) }
         // The publisher page, pushed on whichever stack this page is in. A
         // series it lists pushes back onto the same path.

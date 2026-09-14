@@ -29,10 +29,7 @@ struct BlendDNAView: View {
                 .padding(.horizontal, 2)
 
             FlowLayout(spacing: 7) {
-                ForEach(dna.strands) { strand in
-                    strandChip(strand)
-                }
-                ForEach(excludedStrands) { strand in
+                ForEach(chips) { strand in
                     strandChip(strand)
                 }
             }
@@ -41,10 +38,7 @@ struct BlendDNAView: View {
             // ordered; `matchedGeometryEffect` on each chip (below) plus this
             // spring is what turns that into chips sliding to new positions
             // rather than the whole row cutting to a new one.
-            .animation(
-                Motion.reduced(Motion.settle),
-                value: (dna.strands.map(\.tagId) + excludedStrands.map(\.tagId))
-            )
+            .animation(Motion.reduced(Motion.settle), value: chips.map(\.tagId))
 
             changeSummary
                 .padding(.top, 16)
@@ -60,6 +54,26 @@ struct BlendDNAView: View {
             .padding(.top, 12)
             .padding(.horizontal, 2)
         }
+    }
+
+    /// The chips to draw, with no `tagId` appearing twice.
+    ///
+    /// The two lists overlap in both directions, and both overlaps used to
+    /// reach `ForEach`. Switching a strand off adds it to `excluded`
+    /// synchronously while the API's last answer still lists it, so for the
+    /// 350 ms debounce plus the request — and permanently if the re-blend
+    /// failed — one `tagId` appeared twice; switching one back on has the
+    /// mirror problem, since it stays in `excludedStrands` until a blend
+    /// returns it. Two chips then shared one `ForEach` id and one
+    /// `matchedGeometryEffect` id, which is undefined for both (item 46).
+    ///
+    /// The live copy wins where both exist; `excludedStrands` fills in the
+    /// ones the API is no longer returning, which is the only reason it is
+    /// kept at all.
+    nonisolated var chips: [BlendDNA.Strand] {
+        let live = dna.strands.filter { !excluded.contains($0.tagId) }
+        let liveIDs = Set(live.map(\.tagId))
+        return live + excludedStrands.filter { !liveIDs.contains($0.tagId) }
     }
 
     /// Sized by weight, because the whole point is that some strands matter

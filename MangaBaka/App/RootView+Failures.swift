@@ -10,12 +10,14 @@ extension RootView {
     /// then unconditionally toast "Added to the mix" — so a tap landing
     /// before the Mix tab's own `.task` had built `mixModel` (reachable any
     /// time before that first runs) confirmed an addition that never
-    /// happened, to a model that was never touched.
+    /// happened, to a model that was never touched. A `guard let` was the
+    /// fix, and it toasted a failure the reader could do nothing about.
+    ///
+    /// Item 61 removed the window instead: `mixModel` is built in
+    /// `RootView.init`, so it exists before the first body pass and there is
+    /// no nil case left to guard. The confirmation is honest again because
+    /// the addition always happens, not because it is checked.
     func useAsSeedTapped(_ series: Series) {
-        guard let mixModel else {
-            toasts.show("Couldn't add that to the mix right now", kind: .failure)
-            return
-        }
         mixModel.addSeed(series)
         selection = .mix
         toasts.show("Added to the mix")

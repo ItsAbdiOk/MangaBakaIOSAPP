@@ -6,7 +6,8 @@ struct DueThisWeekProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (SeriesWidgetEntry) -> Void) {
         let done = Completion(call: completion)
-        Task { done.call(await makeEntry()) }
+        let isPreview = context.isPreview
+        Task { done.call(await makeEntry(isPreview: isPreview)) }
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SeriesWidgetEntry>) -> Void) {
@@ -16,8 +17,8 @@ struct DueThisWeekProvider: TimelineProvider {
         }
     }
 
-    private func makeEntry() async -> SeriesWidgetEntry {
-        await SeriesWidgetEntryBuilder.makeEntry { $0.dueThisWeek }
+    private func makeEntry(isPreview: Bool = false) async -> SeriesWidgetEntry {
+        await SeriesWidgetEntryBuilder.makeEntry(items: { $0.dueThisWeek }, isPreview: isPreview)
     }
 }
 

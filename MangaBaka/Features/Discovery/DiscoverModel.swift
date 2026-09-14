@@ -83,11 +83,23 @@ final class DiscoverModel {
     /// (gap 47).
     private var loadGeneration = 0
 
+    /// Whether a load has already finished for this screen.
+    ///
+    /// `DiscoverView`'s `.task` carries no id, so SwiftUI runs it again on
+    /// every tab reselect and on every pop back from a series page. Each of
+    /// those re-ran `loadRows`, which resets all four rows to page 1 — so a
+    /// reader who had scrolled Trending to page 3 lost it by opening a series
+    /// and coming back, and four requests went out for content already on
+    /// screen, two of them from the 30/min family. Pull-to-refresh passes
+    /// `forceRefresh` and stays the explicit way to ask again (item 19).
+    private var hasLoadedOnce = false
+
     init(repository: any SeriesRepositoryProtocol) {
         self.repository = repository
     }
 
     func load(forceRefresh: Bool = false) async {
+        guard forceRefresh || !hasLoadedOnce else { return }
         await Signposts.measure("Discover load") {
             await loadRows(forceRefresh: forceRefresh)
         }
@@ -107,11 +119,34 @@ final class DiscoverModel {
                 }
             }
             var firstFailure: APIError?
+            /// Rows whose answer was a cancellation. They kept what they had
+            /// (nothing, on a first load), so this load did not finish for
+            /// them and `hasLoadedOnce` must not claim it did.
+            var cancelledRows = 0
             for await (index, result) in group {
                 // A newer `loadRows` has started since this one did — its
                 // results win, and this one's are dropped rather than
                 // clobbering them out of order.
                 guard generation == loadGeneration else { continue }
+                // Navigating away cancels the `.task` that started this, and
+                // the repository answers the dead request with
+                // `.staleAfter(.cancelled)`. Written straight into the row, it
+                // drew a "Cancelled" failure card on all four rows of a screen
+                // the reader had already left — and the next appearance asked
+                // for all four again (C2, item 3). The row keeps what it had;
+                // `hasLoadedOnce` stays false below, so coming back re-asks.
+                if case .staleAfter(.cancelled) = result.origin {
+                    cancelledRows += 1
+                    continue
+                }
+                // A cache answer for a row that already has content says
+                // nothing the row does not already know, and rewriting it
+                // would throw away the pages the reader scrolled to (item 19).
+                if result.origin == .cache, !rows[index].series.isEmpty {
+                    rows[index].isLoading = false
+                    rows[index].failure = nil
+                    continue
+                }
                 rows[index].series = result.series
                 rows[index].isLoading = false
                 // A reload replaces the row, so paging starts over with it.
@@ -135,7 +170,17 @@ final class DiscoverModel {
                 }
             }
             guard generation == loadGeneration else { return }
+            // A cancelled load has no verdict to give: the rows above kept
+            // what they had, and a screen-wide `failure` set from a
+            // cancellation would outlive the navigation that caused it.
+            guard !Task.isCancelled else { return }
             failure = firstFailure
+            // Only a load where every row actually answered counts as the
+            // load that happened. Setting this after a cancelled one made
+            // `load()` early-return on the next appearance, so the reader
+            // came back to four empty rows and nothing ever asked again —
+            // the exact opposite of what the skip above was for (item 3).
+            if cancelledRows == 0 { hasLoadedOnce = true }
         }
     }
 
@@ -168,13 +213,20 @@ final class DiscoverModel {
         return failure
     }
 
+    /// Built once rather than per read. `staleDetail` is read from a view
+    /// body, and a `RelativeDateTimeFormatter` carries a locale and a
+    /// calendar it has to set up each time it is allocated.
+    private static let ageFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+
     /// "Last updated 19 hours ago · Too many requests, briefly".
     var staleDetail: String? {
         guard let staleFailure else { return nil }
         guard let staleSince else { return staleFailure.headline }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        let age = formatter.localizedString(for: staleSince, relativeTo: Date())
+        let age = Self.ageFormatter.localizedString(for: staleSince, relativeTo: Date())
         return "Last updated \(age) · \(staleFailure.headline)"
     }
 

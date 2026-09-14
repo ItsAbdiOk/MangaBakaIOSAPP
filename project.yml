@@ -139,8 +139,21 @@ targets:
     platform: iOS
     sources:
       - path: MangaBakaTests
+      # The widget extension's own decoder, compiled into this test target so
+      # `WidgetSnapshotTests` can decode the app's bytes with the type the
+      # widget really uses. Until 2026-09-14 that test round-tripped
+      # `WidgetSnapshot` through `WidgetSnapshot`, so renaming a field on one
+      # side only still passed — and `WidgetSnapshotData`'s list properties
+      # default to `[]`, so the widget would have decoded cleanly and drawn
+      # "Open MangaBaka to load" forever. One file, not the whole target: the
+      # rest of `MangaBakaWidgets` is WidgetKit views this bundle cannot host.
+      - path: MangaBakaWidgets/WidgetSnapshotData.swift
     dependencies:
       - target: MangaBaka
+      # `DetailCacheDiscardTests` drops a table out from under the repository
+      # to make a discard fail the way a full disk makes it fail, which needs
+      # GRDB's own symbols in the test module rather than only the app's.
+      - package: GRDB
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.tests

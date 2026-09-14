@@ -89,6 +89,26 @@ struct LibraryChange: Equatable, Sendable {
 
     var isEmpty: Bool { body.isEmpty }
 
+    /// This change with `later`'s set fields on top of it.
+    ///
+    /// Field by field rather than wholesale: two edits during one library
+    /// walk (rate it, then note it) are two `LibraryChange`s each carrying
+    /// only what it touched, and taking the second entire would discard the
+    /// rating. `LibrarySnapshot` stashes these while the walk is in flight
+    /// (work-list 15). The `??` on the double optionals is correct: a
+    /// set-but-nil field is `.some(nil)`, which is not nil, so an explicit
+    /// "clear it" still wins over an earlier value.
+    func merging(_ later: LibraryChange) -> LibraryChange {
+        LibraryChange(
+            state: later.state ?? state,
+            progressChapter: later.progressChapter ?? progressChapter,
+            progressVolume: later.progressVolume ?? progressVolume,
+            rating: later.rating ?? rating,
+            note: later.note ?? note,
+            isPrivate: later.isPrivate ?? isPrivate
+        )
+    }
+
     /// A set-but-nil field becomes an explicit JSON null, which is how the API
     /// is told to clear it. Omitting the key would leave the old value in place.
     private static func value(_ wrapped: (some Sendable)?) -> any Sendable {
@@ -137,7 +157,7 @@ actor LibraryService: LibraryProviding {
     private var contentRatings: [String]
     /// Formats to request, or empty for no filter. Mirrors the repository, so
     /// "no novels" means no novels here too rather than only in feeds.
-    private var formats: [String] = []
+    private var formats: [String]
     /// Cached because it is needed on nearly every blend and never changes for
     /// a given token.
     private var cachedProfileID: String?
@@ -145,9 +165,20 @@ actor LibraryService: LibraryProviding {
     /// setting rebuilds it rather than reusing a stale answer.
     private var cachedHiddenTags: (ratings: [String], ids: Set<Int>)?
 
-    init(client: APIClient, contentRatings: [String] = ["safe", "suggestive"]) {
+    /// The stored filters are init parameters rather than post-construction
+    /// setters: `updateFormats` applied after construction leaves a window in
+    /// which a request started by the same launch goes out unfiltered, and
+    /// "no novels" silently meant "novels, this once" (Lane A's ask,
+    /// work-list round 2). `formats` follows `contentRatings`, matching
+    /// `SeriesRepository.init`'s order.
+    init(
+        client: APIClient,
+        contentRatings: [String] = ["safe", "suggestive"],
+        formats: [String] = []
+    ) {
         self.client = client
         self.contentRatings = contentRatings
+        self.formats = formats
     }
 
     func updateContentRatings(_ ratings: [String]) {
@@ -198,11 +229,25 @@ actor LibraryService: LibraryProviding {
     /// them as one told a signed-in reader with 937 series that they had no
     /// account whenever they opened Library on a bad connection.
     func libraryPage(page: Int = 1, limit: Int = 50) async throws(APIError) -> [LibraryEntry] {
-        try await client.get(
+        // Lossy, like every other array decode (work-list 68): one entry the
+        // model disagrees with used to fail the whole page *and* end the walk
+        // that was paging through it, so a single bad row could cost a reader
+        // their entire library screen. The drop count goes to `NetworkLedger`
+        // beside the request counts rather than to a log nobody reads.
+        try await client.getLossy(
             "/v1/my/library",
             query: [
                 URLQueryItem(name: "page", value: String(page)),
-                URLQueryItem(name: "limit", value: String(limit))
+                URLQueryItem(name: "limit", value: String(limit)),
+                // A fixed order, so the walk cannot see the same entry twice.
+                // The schema's default is `sort_by=default`, which is
+                // undocumented and free to move when something is written
+                // mid-walk — which is how a repeated id reached
+                // `Dictionary(uniqueKeysWithValues:)` (work-list 17).
+                // `created_at_desc` is in the endpoint's own `sort_by` enum
+                // (docs/schemas/mangabaka_openapi.json, /v1/my/library) and is
+                // the order the walk already assumed it was getting.
+                URLQueryItem(name: "sort_by", value: "created_at_desc")
             ]
         )
     }

@@ -11,7 +11,6 @@ struct LibraryView: View {
     let onOpenSchedule: () -> Void
     let onOpenTaste: () -> Void
     let onOpenWrapped: () -> Void
-    private let onOpenShelf: (LibraryEntry.State) -> Void
     private let onOpenSettings: () -> Void
     private let onOpenStack: () -> Void
     /// Saves an edit made from a row; returns a message when it failed.
@@ -29,7 +28,6 @@ struct LibraryView: View {
         onOpenSchedule: @escaping () -> Void,
         onOpenTaste: @escaping () -> Void,
         onOpenWrapped: @escaping () -> Void,
-        onOpenShelf: @escaping (LibraryEntry.State) -> Void,
         onOpenSettings: @escaping () -> Void,
         onOpenStack: @escaping () -> Void,
         onSave: @escaping (Int, LibraryChange) async -> String? = { _, _ in nil },
@@ -41,7 +39,6 @@ struct LibraryView: View {
         self.onOpenSchedule = onOpenSchedule
         self.onOpenTaste = onOpenTaste
         self.onOpenWrapped = onOpenWrapped
-        self.onOpenShelf = onOpenShelf
         self.onOpenSettings = onOpenSettings
         self.onOpenStack = onOpenStack
         self.onSave = onSave
@@ -98,30 +95,12 @@ struct LibraryView: View {
                         partialLoad
                     }
 
-                    // Decision 2: a partially loaded library still renders,
-                    // but the two controls that act on the whole thing —
-                    // this button and (see `LibraryControl`, a sibling file)
-                    // the add/remove toggle — stay hidden until the walk
-                    // finishes. Offering "Open the shelf" against a floor
-                    // count is how a shelf opened mid-walk read as smaller
-                    // than it was.
-                    if let state = model.filter, model.isComplete {
-                        Button { onOpenShelf(state) } label: {
-                            HStack(spacing: 4) {
-                                Text("Open the \(state.title) shelf")
-                                    .typeInstruction()
-                                    .foregroundStyle(Palette.accent)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(Palette.accent)
-                            }
-                            .frame(minHeight: Metrics.headerPill)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.press)
-                        .padding(.horizontal, Metrics.gutter)
-                        .accessibilityHint("Opens this shelf on its own page, with more filters")
-                    }
+                    // The "Open the <state> shelf" button stood here until
+                    // `ShelfDetailView` was deleted (review Q6). Everything it
+                    // offered — the filter, the search field, the sort — the
+                    // list on this screen already does, against the same rows;
+                    // the second screen was a parallel implementation of them
+                    // that nothing else could keep in step.
 
                     // Kept above the list even though the board does not draw
                     // them: they are the only route to the schedule and the
@@ -240,7 +219,12 @@ extension LibraryView {
     /// with no end, over 1,100 rows that had, in fact, finished arriving.
     @ViewBuilder
     private var partialLoad: some View {
-        if model.isLoading {
+        // `isWalking`, not `isLoading` (work-list 4). `isLoading` goes false
+        // the moment the first page is drawn, so from page 2 to the last page
+        // of a perfectly healthy walk this fell through to the page-cap
+        // branch below and told the reader "Showing the first 100" — the one
+        // message that means the opposite of what was happening.
+        if model.isWalking {
             HStack(spacing: 10) {
                 ProgressView().tint(Palette.accent)
                 VStack(alignment: .leading, spacing: 2) {

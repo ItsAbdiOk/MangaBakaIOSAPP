@@ -109,6 +109,37 @@ actor CharacterService {
         self.clock = clock
     }
 
+    private struct CacheKey: Hashable {
+        let aniListID: Int?
+        let shikimoriID: Int?
+        let limit: Int
+    }
+
+    /// **A guess: 24 hours.** A series' cast is about as static as anything
+    /// this app fetches — a new character appears when a new arc does — so
+    /// the life is set by how long a stale cast is tolerable rather than by
+    /// how often it changes.
+    static let castCacheLife: TimeInterval = 24 * 60 * 60
+
+    /// In memory only, and deliberately so: this is the one third-party answer
+    /// on the series page that had no cache at all, so every reopen and every
+    /// pager swipe cost AniList and Shikimori one request each. It is also the
+    /// one place a third party could see the reader's browsing path in full,
+    /// twice over — the cache is a privacy measure as much as a politeness
+    /// one. Not on disk, because a cast is cheap to rebuild and a file is one
+    /// more thing sign-out has to remember to clear.
+    private var cache: [CacheKey: (cast: CharacterCast, storedAt: Date)] = [:]
+
+    /// **A guess: 30.** AniList is asked for 20 and every unmatched Shikimori
+    /// character used to be appended after them with no ceiling — Solo
+    /// Leveling's Shikimori cast is 95, so one row could reach 40+ portrait
+    /// fetches. Abdi asked for the union (2026-09-13) and confirmed the cap
+    /// (2026-09-14, Q5): 20 from AniList plus a bounded tail keeps the "if
+    /// it's on Shikimori but AniList doesn't have that character, make sure
+    /// you put it" promise for the characters a reader will actually scroll
+    /// to, without a whole second cast's worth of image requests behind it.
+    static let mergedCastLimit = 30
+
     /// The union of both sources' casts.
     ///
     /// - Parameters:
@@ -118,6 +149,11 @@ actor CharacterService {
     /// Both sources are asked concurrently — one being slow or throttled must
     /// not delay the other, since neither is a fallback for the other anymore.
     func characters(aniListID: Int?, shikimoriID: Int?, limit: Int = 20) async -> CharacterCast {
+        let key = CacheKey(aniListID: aniListID, shikimoriID: shikimoriID, limit: limit)
+        if let hit = cache[key], clock.now.timeIntervalSince(hit.storedAt) < Self.castCacheLife {
+            return hit.cast
+        }
+
         async let aniListAsk = fetchAniList(aniListID: aniListID, limit: limit)
         async let shikimoriAsk = fetchShikimori(shikimoriID: shikimoriID, limit: limit)
         let (aniListCast, aniListOutcome) = await aniListAsk
@@ -127,6 +163,7 @@ actor CharacterService {
         for character in shikimoriCast where !merged.contains(where: {
             CharacterNameMatch.matches($0.name, character.name)
         }) {
+            guard merged.count < Self.mergedCastLimit else { break }
             merged.append(character)
         }
 
@@ -139,7 +176,12 @@ actor CharacterService {
             }
         }()
 
-        return CharacterCast(characters: merged, aniList: aniListOutcome, shikimori: shikimoriOutcome)
+        let cast = CharacterCast(characters: merged, aniList: aniListOutcome, shikimori: shikimoriOutcome)
+        // Never cache an answer where every source that was asked failed —
+        // that would turn one 403 into a day of empty casts, which is the
+        // outage memory's job and its job alone (15 minutes, not 24 hours).
+        if !cast.failed { cache[key] = (cast, clock.now) }
+        return cast
     }
 
     /// AniList's half of the union: skipped (`.notAsked`) with no id, remembered
@@ -186,36 +228,29 @@ actor CharacterService {
         }
     }
 
-    /// Lets a caller try AniList again before the memory expires.
+    /// Lets a caller try AniList again before the memory expires. Drops the
+    /// cast cache too: a caller asking for a retry wants live answers, and a
+    /// cached union built while one source was down is exactly what they are
+    /// trying to get past. Also the account-change hook — a cast is not
+    /// personal, but nothing about the previous session should outlive it.
     func clearOutageMemory() {
         aniListDownUntil = nil
         aniListDownReason = nil
+        cache.removeAll()
     }
 
-    /// Checks AniList once, at app launch, so the first series page opened
-    /// does not pay AniList's own timeout before falling back to Shikimori.
-    ///
-    /// Abdi: "we can check if anilist is down at the start of the app and
-    /// have shikimori take over if its not responding." Fire-and-forget from
-    /// the caller's side — see `AppServices`/`RootView` wiring — so a slow or
-    /// hanging AniList never delays the first screen drawing.
-    ///
-    /// Same rule as `characters(aniListID:shikimoriID:limit:)`: only a
-    /// refusal AniList itself sent counts as an outage. A transport failure
-    /// here says the network was unavailable at launch, not that AniList is
-    /// down — priming the outage memory from that would hide a working
-    /// AniList behind a phone that was still connecting to Wi-Fi.
-    func primeAniListHealth() async {
-        guard !aniListIsDown else { return }
-        do {
-            try await aniList.healthCheck()
-        } catch {
-            if case let .server(status, _, _) = error, Self.isAniListOutage(status: status) {
-                aniListDownUntil = clock.now.addingTimeInterval(Self.outageMemory)
-                aniListDownReason = error
-            }
-        }
-    }
+    /// **`primeAniListHealth` was deleted 2026-09-14, on Abdi's call (Q4).**
+    /// It POSTed to `graphql.anilist.co` on every cold launch, from every
+    /// reader, including those who never open a series page — for an outage
+    /// memory `fetchAniList` sets itself on the first real 403. Its stated
+    /// purpose was keeping the first page from paying AniList's timeout
+    /// "before falling back to Shikimori", and that stopped applying when the
+    /// two sources became concurrent rather than sequential: nothing falls
+    /// back anymore, and the check was holding one of AniList's 0.7 s spacing
+    /// slots exactly when the first real cast request wanted it. `App
+    /// Store submission (Q9: yes) is the other reason — an unprompted
+    /// third-party request at launch is a line in the privacy manifest that
+    /// buys nothing. `isAniListOutage` and the memory itself stay.
 
     /// Whether a `.server` failure is AniList's edge refusing us, versus
     /// AniList answering normally with nothing useful for this one series.

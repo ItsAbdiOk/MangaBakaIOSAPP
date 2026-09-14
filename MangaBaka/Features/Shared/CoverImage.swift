@@ -78,6 +78,26 @@ struct CoverImage: View {
         .task(id: url) {
             await load()
         }
+        // Scrolled off screen: give the decoded bitmap back.
+        //
+        // `LazyVStack` keeps every row it has created, and each row's `loaded`
+        // held its own full-size `UIImage` for the life of the screen —
+        // measured at ~70 MB of row state for 513 library rows, on top of
+        // `CoverStore`'s 96 MB cache holding the same pixels (review item 33,
+        // 2026-09-14). Two copies of every cover the reader has passed, and
+        // only one of them under a cost limit the system can evict.
+        //
+        // Nothing re-fades on the way back: `.task` re-runs on reappear, and
+        // `load()`'s first act is the synchronous `CoverStore.cached(url)`,
+        // which returns the still-cached image and sets `isReady` in the same
+        // pass — the instant path `shouldFade(loadDuration:)` exists to
+        // describe. A fade would only appear if the cache had also evicted the
+        // cover, which is the case where the placeholder was genuinely on
+        // screen first and a fade is correct.
+        .onDisappear {
+            loaded = nil
+            isReady = false
+        }
     }
 
     @ViewBuilder
@@ -111,7 +131,7 @@ struct CoverImage: View {
         guard cached == nil else {
             // Already in memory: appearing at once is correct here, not a
             // shortcut. A fade on a cache hit while scrolling reads as
-            // flicker, not polish — see `shouldFade(loadDuration:)`.
+            // flicker, not polish — see `arrival(wasCached:loadDuration:)`.
             isReady = true
             onLoaded?()
             return
@@ -122,7 +142,9 @@ struct CoverImage: View {
         loaded = image
         onLoaded?()
 
-        guard Self.shouldFade(loadDuration: Date().timeIntervalSince(start)) else {
+        guard Self.arrival(
+            wasCached: false, loadDuration: Date().timeIntervalSince(start)
+        ) == .fading else {
             isReady = true
             return
         }
@@ -151,6 +173,26 @@ struct CoverImage: View {
     nonisolated static func shouldFade(loadDuration: TimeInterval) -> Bool {
         loadDuration >= cacheHitThreshold
     }
+
+    /// How a cover should appear.
+    enum Arrival: Equatable {
+        /// Repaint in this frame, no cross-fade.
+        case instant
+        /// The placeholder was genuinely on screen first; cross-fade over it.
+        case fading
+    }
+
+    /// The whole decision in one place, including the case
+    /// `shouldFade(loadDuration:)` on its own could not express: a row that
+    /// was released on disappear and is now back, whose pixels are still in
+    /// `CoverStore`. That row must repaint instantly however long the
+    /// original download took — it is the returning-row path the
+    /// `.onDisappear` release in `body` depends on, and a fade there would be
+    /// the visible flicker that release is not allowed to cause.
+    nonisolated static func arrival(wasCached: Bool, loadDuration: TimeInterval) -> Arrival {
+        guard !wasCached else { return .instant }
+        return shouldFade(loadDuration: loadDuration) ? .fading : .instant
+    }
 }
 
 /// The frame every cover shares: size, corner and shadow. No gloss here — the
@@ -175,6 +217,19 @@ private struct CoverFrame: ViewModifier {
         .frame(width: width, height: height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        // UNMEASURED. The 2026-09-14 review flagged this as an offscreen
+        // render per cover — sixty covers in a Discover row would then be
+        // sixty offscreen passes per frame — but it did not measure it, and
+        // neither has anyone since, so the shadow stays as drawn rather than
+        // being "optimised" against a guess. Core Animation's own overlay
+        // settles it: Instruments → Core Animation → "Color
+        // Offscreen-Rendered", scrolling one Discover row of sixty covers on
+        // a device, with the control being the same fling with this line
+        // commented out. If it does show yellow, the fix is a second
+        // `RoundedRectangle` drawn in `.background` with `.compositingGroup()`
+        // — a shadow cast by an opaque shape needs no offscreen pass — or
+        // dropping `y: 8` so the shadow is symmetric. Do not change it before
+        // that reading exists.
         .shadow(color: .black.opacity(0.5), radius: 10, y: 8)
     }
 }

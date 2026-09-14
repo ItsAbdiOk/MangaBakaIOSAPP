@@ -34,8 +34,15 @@ enum CharacterNameMatch {
     ///    normalise to the single token "jinwoo" regardless of which source
     ///    chose to spell it with a hyphen.
     /// 2. The same surname (this string's last token) and the same
-    ///    first-name initial — catches an abbreviated first name against a
-    ///    full one, when both sources happen to order the name the same way.
+    ///    first-name initial, **and at least one of the two first names is
+    ///    actually an abbreviation** (one or two letters). That last clause
+    ///    was added 2026-09-14: without it the rule merged siblings — "Jinwoo
+    ///    Sung" with "Jinah Sung", "Itachi Uchiha" with "Izumi Uchiha" — and
+    ///    a merge here is a *drop*, since the unmatched side is never appended
+    ///    to the union. This file's own header rejects that trade explicitly:
+    ///    tolerate a duplicate, never lose a character. The trailing "." of
+    ///    "J." is removed by `normalizedTokens`, so token length is the only
+    ///    surviving signal that a name was abbreviated.
     /// 3. A single-token name (a nickname or shorthand — "Beru") equals any
     ///    token of the other ("Beru (Ant King)").
     /// 4. Both sides have a native-script name and those match, even when the
@@ -55,7 +62,9 @@ enum CharacterNameMatch {
         if tokensA.sorted() == tokensB.sorted() { return true }
 
         if let lastA = tokensA.last, let lastB = tokensB.last, lastA == lastB,
-           let firstA = tokensA.first?.first, let firstB = tokensB.first?.first, firstA == firstB {
+           let firstA = tokensA.first, let firstB = tokensB.first,
+           firstA.first == firstB.first,
+           min(firstA.count, firstB.count) <= Self.abbreviatedFirstNameLength {
             return true
         }
 
@@ -70,6 +79,13 @@ enum CharacterNameMatch {
 
         return false
     }
+
+    /// How short a first name has to be before it counts as an initial.
+    ///
+    /// **A guess: two.** One covers "J"; two covers "Jr"-style and a
+    /// two-letter transliteration that a source may have truncated. Three
+    /// would start swallowing real given names ("Ken", "Rin").
+    static let abbreviatedFirstNameLength = 2
 
     /// Lowercase, diacritic-folded tokens with punctuation stripped.
     ///

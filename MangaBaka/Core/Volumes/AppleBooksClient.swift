@@ -20,7 +20,7 @@ actor AppleBooksClient {
 
     init(
         baseURL: URL = URL(string: "https://itunes.apple.com/search").unsafeStoreFallback,
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("applebooks", isDirectory: true)
@@ -31,22 +31,35 @@ actor AppleBooksClient {
         self.cacheDirectory = cacheDirectory
     }
 
-    /// The series' volumes in one store, or nil when the store could not be
-    /// asked. Empty means asked and none: a series with no English ebook.
+    /// The series' volumes in one store.
+    ///
+    /// `.success([])` means asked and none — a series with no English ebook —
+    /// and is a different answer from `.failure`, which is the whole point of
+    /// the `Result`. This returned `[AppleBooksVolume]?` until 2026-09-14, and
+    /// the reason it changed is what `VolumesSection` could draw from a bare
+    /// nil: offline, a 429, a 5xx and a decode failure all arrived as the same
+    /// `appleUnreachable: Bool` and came out as one unexplained line of text
+    /// with no retry. The reason was thrown away here, at the source, so no
+    /// amount of work on the view could recover it.
+    ///
     /// - Parameter language: the reader's language; a volume whose blurb is
     ///   confidently in another is not theirs, whatever store it is sold in.
     func volumes(
         for series: Series, country: String, language: String? = nil
-    ) async -> [AppleBooksVolume]? {
-        guard let query = series.displayTitle, !query.isEmpty else { return [] }
+    ) async -> Result<[AppleBooksVolume], APIError> {
+        guard let query = series.displayTitle, !query.isEmpty else { return .success([]) }
         // Versioned: a match rule that tightens must not be outlived by a
         // week of cached answers made under the looser one. v5: the
         // tagged-vs-untagged and bracket-before-marker rules changed again
         // (T1/F3/T4, 2026-09-13).
         let key = "v5-\(series.id)-\(country.lowercased())-\(language ?? "any")"
-        if let cached = readCache(key) { return cached.volumes }
+        if let cached = readCache(key) { return .success(cached.volumes) }
 
-        guard let results = await search(query, country: country) else { return nil }
+        let results: [AppleBooksResult]
+        switch await search(query, country: country) {
+        case let .success(found): results = found
+        case let .failure(error): return .failure(error)
+        }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
         let isNovel = series.type?.lowercased().contains("novel") ?? false
         let creators = (series.authors ?? []) + (series.artists ?? [])
@@ -54,7 +67,7 @@ actor AppleBooksClient {
             in: results, titles: titles, creators: creators, isNovel: isNovel, language: language
         )
         writeCache(key, matched)
-        return matched
+        return .success(matched)
     }
 
     /// The Japanese edition, from the Japanese store, when the reader's own
@@ -62,25 +75,31 @@ actor AppleBooksClient {
     /// ebook. No creator check — the store credits "尾田栄一郎" and MangaBaka
     /// says "Eiichirou Oda" — but the blurb must be Japanese and the name
     /// must be the title with a bare number, the way that store writes it.
-    func japaneseVolumes(for series: Series) async -> [AppleBooksVolume]? {
-        guard let query = series.displayTitle, !query.isEmpty else { return [] }
+    func japaneseVolumes(for series: Series) async -> Result<[AppleBooksVolume], APIError> {
+        guard let query = series.displayTitle, !query.isEmpty else { return .success([]) }
         let key = "v5-\(series.id)-jp-ja-bare"
-        if let cached = readCache(key) { return cached.volumes }
+        if let cached = readCache(key) { return .success(cached.volumes) }
 
-        guard let results = await search(query, country: "jp") else { return nil }
+        let results: [AppleBooksResult]
+        switch await search(query, country: "jp") {
+        case let .success(found): results = found
+        case let .failure(error): return .failure(error)
+        }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
         let matched = AppleBooksMatch.volumes(
             in: results, titles: titles, isNovel: false, language: "ja", numbering: .bare
         )
         writeCache(key, matched)
-        return matched
+        return .success(matched)
     }
 
     private struct Envelope: Decodable {
         let results: [AppleBooksResult]
     }
 
-    private func search(_ term: String, country: String) async -> [AppleBooksResult]? {
+    private func search(
+        _ term: String, country: String
+    ) async -> Result<[AppleBooksResult], APIError> {
         let wait = spacing.claim(now: clock.now)
         if wait > 0 {
             try? await Task.sleep(for: .seconds(wait))
@@ -90,7 +109,7 @@ actor AppleBooksClient {
             // into the `guard` above: the slot is claimed either way, so a
             // cancelled wait must still not spend the request that slot paid
             // for.
-            guard !Task.isCancelled else { return nil }
+            guard !Task.isCancelled else { return .failure(.cancelled) }
         }
 
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
@@ -103,14 +122,29 @@ actor AppleBooksClient {
             // 60 results; a long-running series needs the room.
             URLQueryItem(name: "limit", value: "200")
         ]
-        guard let url = components?.url else { return nil }
+        guard let url = components?.url else {
+            return .failure(.transport(underlying: "Could not build the search URL.", party: .appleBooks))
+        }
 
-        guard let (data, response) = try? await session.data(from: url),
-              let http = response as? HTTPURLResponse
-        else { return nil }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch let error {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                return .failure(.cancelled)
+            }
+            if (error as? URLError)?.code == .notConnectedToInternet { return .failure(.offline) }
+            return .failure(.transport(underlying: error.localizedDescription, party: .appleBooks))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            return .failure(.transport(underlying: "Not an HTTP response.", party: .appleBooks))
+        }
         if http.statusCode == 429 {
-            spacing.backOff(until: clock.now.addingTimeInterval(60))
-            return nil
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
+            return .failure(.rateLimited(retryAfter: retryAfter ?? 60, party: .appleBooks))
         }
         // Gap 73: 403 used to get the same 60s backoff as 429, on the theory
         // that Apple answers an over-limit client with 403 as often as with
@@ -119,13 +153,19 @@ actor AppleBooksClient {
         // client having asked too much — and backing every future request off
         // for a minute over that would stall `japaneseVolumes` (a different
         // country) for a reason that has nothing to do with it. No backoff
-        // here; still nil, same as any other unusable answer.
-        guard (200..<300).contains(http.statusCode) else { return nil }
+        // here.
+        guard (200..<300).contains(http.statusCode) else {
+            return .failure(.server(status: http.statusCode, message: "", party: .appleBooks))
+        }
         // No `.dateDecodingStrategy` needed: `releaseDate` decodes as a
         // plain `String` now (T9) — a strict `.iso8601` `Date` here used to
         // fail the whole 200-row envelope over one row with a fractional
         // second or a missing zone, for a field nothing reads.
-        return try? JSONDecoder().decode(Envelope.self, from: data).results
+        do {
+            return .success(try JSONDecoder().decode(Envelope.self, from: data).results)
+        } catch let error {
+            return .failure(.decoding(underlying: error.localizedDescription, party: .appleBooks))
+        }
     }
 
     // MARK: - Cache

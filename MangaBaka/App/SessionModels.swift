@@ -33,14 +33,22 @@ final class SessionModels {
         client: APIClient,
         allowedRatings: @escaping () -> [String],
         allowedFormats: @escaping () -> [String] = { [] },
-        blockedTags: @escaping () -> [Int] = { [] }
+        blockedTags: @escaping () -> [Int] = { [] },
+        /// Whether the reader has a MangaBaka credential at all, so the
+        /// Library screen can say "no account" rather than walk, get a 401
+        /// and show the generic failure (item 86 / Q7). Defaulted so the
+        /// test doubles that have no Keychain keep their behaviour; the app
+        /// passes the real check from `AppServices`.
+        hasCredentials: @escaping () -> Bool = { true }
     ) {
         recentlyViewed = RecentlyViewedModel(
             history: history, allowedRatings: allowedRatings,
             allowedFormats: allowedFormats, blockedTags: blockedTags
         )
         counts = LensCounts(repository: repository)
-        library = LibraryModel(library: libraryService, snapshot: snapshot)
+        library = LibraryModel(
+            library: libraryService, snapshot: snapshot, hasCredentials: hasCredentials
+        )
         pulse = CommunityPulseService(client: client)
     }
 }

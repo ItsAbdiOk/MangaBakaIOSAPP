@@ -12,9 +12,33 @@ enum CoverLoader {
     /// will never be shown.
     static let maxCovers = 4
 
+    /// Three times the 32x44 frame `SeriesWidgetView` draws into — enough for
+    /// a 3x screen and nothing more.
+    ///
+    /// The decode used to be whatever the CDN sent. A widget extension has a
+    /// memory ceiling in the low tens of MB, and four cover images at
+    /// 1,200x1,800 are roughly 8 MB each once decoded: enough to be killed
+    /// mid-`getTimeline`, which shows up to the reader as a widget that simply
+    /// stops updating. `preparingThumbnail` decodes at the size actually
+    /// needed.
+    static let thumbnailSize = CGSize(width: 96, height: 132)
+
+    /// **A guess: 10 seconds.** Shorter than the app's own 20, because this
+    /// runs inside `getTimeline`: a hung CDN on `URLSession.shared`'s 60 s
+    /// default turned the hourly reload into a no-op that also spent one of
+    /// WidgetKit's rationed reloads. No cookies and no cache for the same
+    /// reasons `ThirdPartySession` gives in the app target.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        return URLSession(configuration: configuration)
+    }()
+
     static func covers(
         for items: [WidgetSnapshotData.Item],
-        session: URLSession = .shared
+        session: URLSession = CoverLoader.session
     ) async -> [Int: UIImage] {
         await withTaskGroup(of: (Int, UIImage?).self) { group in
             for item in items.prefix(maxCovers) {
@@ -23,7 +47,8 @@ enum CoverLoader {
                     guard let (data, _) = try? await session.data(from: url) else {
                         return (item.seriesID, nil)
                     }
-                    return (item.seriesID, UIImage(data: data))
+                    let full = UIImage(data: data)
+                    return (item.seriesID, await full?.byPreparingThumbnail(ofSize: thumbnailSize) ?? full)
                 }
             }
             var result: [Int: UIImage] = [:]

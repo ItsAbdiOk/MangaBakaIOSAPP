@@ -31,7 +31,7 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
     private var spacing = RequestSpacing(minimumInterval: GigaViewerFeedClient.minimumInterval)
 
     init(
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("gigaviewer", isDirectory: true)
@@ -142,8 +142,12 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
             return (nil, .transport(underlying: "GigaViewer sent a non-HTTP response.", party: .gigaViewer))
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             return (nil, .rateLimited(retryAfter: retryAfter, party: .gigaViewer))
         }
         guard (200..<300).contains(http.statusCode) else {

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Colours from the BakaManga design spec.
 ///
@@ -8,7 +9,10 @@ import SwiftUI
 enum Palette {
     // MARK: Grounds
 
-    /// Every screen's background.
+    /// Every screen's background. A deliberate departure: `systemBackground`
+    /// dark is `#000000` and `secondarySystemBackground` is `#1C1C1E`; the
+    /// spec's ground is the near-black between them, and the contrast figures
+    /// recorded for the text tokens are all measured against this value.
     static let ground = Color(hex: 0x08080B)
     /// Cover and image placeholder, shown behind art while it loads.
     static let imagePlaceholder = Color(hex: 0x131318)
@@ -23,21 +27,36 @@ enum Palette {
     static let surfaceChip = Color.white.opacity(0.06)
     /// Search field.
     static let surfaceField = Color.white.opacity(0.09)
-    /// Active tab pill.
-    static let surfaceActive = Color.white.opacity(0.13)
 
     // MARK: Text
     //
     // The spec collapses the drifted values to exactly four levels. Anything
     // between them is a mistake, not a nuance.
 
+    // Where a spec value is bit-for-bit a system semantic colour, the system
+    // one is used: the app pins `.preferredColorScheme(.dark)` at the root and
+    // in every sheet, so the dark resolution is the only one that ever
+    // renders, and taking the semantic token costs the mockup nothing while
+    // gaining Increase Contrast, Smart Invert and Differentiate Without
+    // Colour — all of which a hard-coded hex silently ignores. The three
+    // deliberate departures are recorded on the lines below, with how far
+    // each is from the system colour it resembles (measured against the iOS
+    // 26.5 dark resolutions, 2026-09-14).
+
     static let textPrimary = Color.white.opacity(0.96)
     /// Detail hero title only.
     static let textEmphasis = Color.white.opacity(0.98)
     static let textBody = Color(hex: 0xEBEBF5).opacity(0.75)
-    static let textSecondary = Color(hex: 0xEBEBF5).opacity(0.60)
+    /// `#EBEBF5` @ 0.60 — `secondaryLabel`'s dark resolution exactly, so this
+    /// is the system token rather than a copy of its numbers.
+    static let textSecondary = Color(.secondaryLabel)
+    /// A deliberate departure: `tertiaryLabel` dark is `#EBEBF5` @ 0.30 and
+    /// this is 0.45. The spec's four text levels are spaced more evenly than
+    /// Apple's three, and at 0.30 the tertiary level drops under 3:1 against
+    /// the app's near-black ground.
     static let textTertiary = Color(hex: 0xEBEBF5).opacity(0.45)
-    /// Provenance and attribution footnotes.
+    /// Provenance and attribution footnotes. A deliberate departure:
+    /// `quaternaryLabel` dark is `#EBEBF5` @ 0.18 and this is 0.32.
     static let textQuaternary = Color(hex: 0xEBEBF5).opacity(0.32)
 
     // MARK: Accent
@@ -64,8 +83,11 @@ enum Palette {
 
     /// A switch that is off. iOS's own off-track grey rather than the app's
     /// chip fill, because the drawn switch is meant to be indistinguishable
-    /// from a real one and this is the colour a real one uses.
-    static let switchOff = Color(hex: 0x2C2C2E)
+    /// from a real one and this is the colour a real one uses — so it is
+    /// `systemGray5` itself, whose dark resolution is the `#2C2C2E` this used
+    /// to spell out. A drawn control that tracks the real one through
+    /// Increase Contrast is the whole point of drawing it to system metrics.
+    static let switchOff = Color(.systemGray5)
 
     /// Paused, in the library's own colour set.
     ///

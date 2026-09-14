@@ -67,7 +67,12 @@ struct CommunityPulse: Codable, Equatable, Sendable {
         // arithmetic on screen adds up.
         let current = now.rounded()
         let previous = then.rounded()
-        let difference = Int(current - previous)
+        // `Int(current - previous)` traps the same way `Int(current)` does —
+        // both operands are decoded `Double`s off the wire (see the struct
+        // comment) and the subtraction is just as capable of landing outside
+        // Int's range. `Int(wholeOrClamped:)` is the guard already applied to
+        // `current` two lines down; this is the same guard on the difference.
+        let difference = Int(wholeOrClamped: current - previous)
         return Figure(
             id: id,
             value: Int(wholeOrClamped: current).formatted(),

@@ -13,6 +13,12 @@ struct MangaBakaApp: App {
     private let services = Signposts.measure("Services") { AppServices() }
 
     init() {
+        // Before anything asks for an image, and deliberately outside the
+        // "Services" signpost above (item 107): replacing `URLCache.shared`
+        // opens the replacement's 256 MB disk index synchronously, so
+        // measuring it as part of building the app's own objects made that
+        // interval about the system's SQLite rather than about this code.
+        AppServices.enlargeImageCache()
         // The intents' only way in; see IntentBridge.
         IntentBridge.shared.services = services
     }
@@ -34,7 +40,7 @@ struct MangaBakaApp: App {
                 releaseFeeds: services.releaseFeeds,
                 embeddingIndex: services.embeddingIndex,
                 offlineCatalogue: services.offlineCatalogue,
-                mangaUpdatesCategories: services.mangaUpdatesCategories,
+                mangaUpdates: services.mangaUpdates,
                 publisherFollows: services.publisherFollows,
                 openLibraryCovers: services.openLibraryCovers,
                 taste: services.taste,

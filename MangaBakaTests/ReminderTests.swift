@@ -14,49 +14,15 @@ import UserNotifications
 @Suite("Release reminders")
 @MainActor
 struct ReminderTests {
-    private func defaults() throws -> UserDefaults {
-        try #require(UserDefaults(suiteName: "reminders.tests.\(UUID().uuidString)"))
-    }
-
-    /// - Parameter from: the reference "now" the date is relative to. Real
-    ///   `Date()` for tests with no injected clock; a `TestClock`'s `now` for
-    ///   tests that also move time deliberately — otherwise a work "dated
-    ///   today" against the real calendar could sit years away from a fixed
-    ///   `TestClock`'s epoch, and every date-gated assertion would fail for
-    ///   the wrong reason.
-    private func work(
-        _ id: String, series: Int, daysFromNow: Int, from now: Date = Date()
-    ) throws -> UpcomingWork {
-        let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
-        let iso = DateFormatter()
-        iso.locale = Locale(identifier: "en_US_POSIX")
-        iso.timeZone = TimeZone(secondsFromGMT: 0)
-        iso.dateFormat = "yyyy-MM-dd"
-        return try JSONDecoder.snakeCased.decode(UpcomingWork.self, from: Data("""
-        {"id": "\(id)", "series_id": \(series), "release_date": "\(iso.string(from: date))",
-         "sequence_string": "3", "collections": [{"title": "A Series"}]}
-        """.utf8))
-    }
-
-    private func entry(
-        id: Int, state: LibraryEntry.State = .reading, status: String? = "completed"
-    ) -> LibraryEntry {
-        LibraryEntry(
-            id: id, seriesId: id, state: state, progressChapter: 10,
-            progressVolume: nil, rating: nil, note: nil, startDate: nil,
-            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
-            readLink: nil,
-            series: SeriesFactory.make(id: id, title: "S\(id)", status: status)
-        )
-    }
-
     @Test("Nothing is scheduled until the reader asks")
     func offByDefault() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         #expect(!reminders.isEnabled)
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
         #expect(centre.added.isEmpty, "a notification nobody asked for is the worst kind")
     }
 
@@ -93,10 +59,14 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         await reminders.enable()
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
         #expect(centre.added.map(\.id) == ["release-work-a"])
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
         #expect(centre.added.map(\.id) == ["release-work-a"], "the same confirmed release is not repeated")
     }
 
@@ -111,7 +81,10 @@ struct ReminderTests {
         )
         #expect(centre.added.isEmpty)
 
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)], isComplete: false)
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)],
+            isComplete: false
+        )
         #expect(centre.added.isEmpty)
     }
 
@@ -143,7 +116,7 @@ struct ReminderTests {
         await reminders.enable()
 
         let works = try (1...4).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
-        await reminders.reschedule(announced: works)
+        await reminders.reschedule(announced: works, library: (1...4).map { reading($0) })
 
         #expect(centre.added.count == 4, "all four are scheduled, just not all for today")
         let today = centre.added.filter { $0.date <= clock.now }
@@ -153,6 +126,127 @@ struct ReminderTests {
         let calendar = Calendar.current
         #expect(calendar.component(.hour, from: try #require(deferred.first?.date)) == 9)
         #expect(!calendar.isDate(try #require(deferred.first?.date), inSameDayAs: clock.now))
+    }
+
+    /// **Item 10 — the cap is the point of this whole feature.** `sentToday`
+    /// was a local starting at zero on every pass, so the daily allowance was
+    /// per-call, not per-day: a launch refresh plus one Settings toggle sent
+    /// six, and a relaunch bought three more. The persisted `fired` ledger is
+    /// now what the count is derived from, so it survives both.
+    ///
+    /// Expected failure before the fix: `centre.added.filter { today }.count`
+    /// is 6, not 3 — three from the first pass and three more from the second,
+    /// because nothing carried the first pass's count into the second.
+    @Test("Three a day is three a day across repeated passes in one session")
+    func dailyCapHoldsAcrossPasses() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let store = try defaults()
+        let reminders = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
+        await reminders.enable()
+
+        // Six distinct series, all confirmed today, asked about in two passes
+        // an hour apart — the shape of "the app launched, then the reader
+        // toggled the switch".
+        let first = try (1...3).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
+        await reminders.reschedule(announced: first, library: (1...3).map { reading($0) })
+        clock.advance(by: 60 * 60)
+        let second = try (4...6).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
+        await reminders.reschedule(announced: second, library: (4...6).map { reading($0) })
+
+        let sentToday = centre.added.filter { Calendar.current.isDate($0.date, inSameDayAs: clock.now) }
+        #expect(sentToday.count == ReleaseReminders.dailyLimit, "the cap is per day, not per call")
+        #expect(centre.added.count == 6, "the other three are deferred, not dropped")
+    }
+
+    /// The same guarantee across a relaunch: a second `ReleaseReminders` over
+    /// the same `UserDefaults` is what a cold launch actually looks like.
+    ///
+    /// Expected failure before the fix: `sentToday.count` is 6.
+    @Test("Three a day is three a day across a relaunch")
+    func dailyCapHoldsAcrossRelaunch() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let store = try defaults()
+        let first = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
+        await first.enable()
+        await first.reschedule(
+            announced: try (1...3).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) },
+            library: (1...3).map { reading($0) }
+        )
+
+        let relaunched = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
+        #expect(relaunched.isEnabled, "control: the switch survived the relaunch")
+        await relaunched.reschedule(
+            announced: try (4...6).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) },
+            library: (4...6).map { reading($0) }
+        )
+
+        let sentToday = centre.added.filter { Calendar.current.isDate($0.date, inSameDayAs: clock.now) }
+        #expect(sentToday.count == ReleaseReminders.dailyLimit)
+    }
+
+    /// Overflow used to be re-dated to tomorrow 09:00 unconditionally, with
+    /// nothing counting that day either — so seven candidates put four on one
+    /// morning, which is the lock screen reading as spam that the cap exists
+    /// to prevent.
+    ///
+    /// Expected failure before the fix: every one of the four deferred
+    /// requests carries the same date, so `Set(deferred.map(\.date)).count`
+    /// is 1 rather than 2.
+    @Test("Overflow walks forward day by day; no day exceeds the cap")
+    func overflowRespectsTheCapOnLaterDaysToo() async throws {
+        let clock = TestClock()
+        let centre = FakeCentre()
+        let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
+        await reminders.enable()
+
+        let works = try (1...7).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
+        await reminders.reschedule(announced: works, library: (1...7).map { reading($0) })
+
+        let calendar = Calendar.current
+        var perDay: [Date: Int] = [:]
+        for request in centre.added {
+            perDay[calendar.startOfDay(for: request.date), default: 0] += 1
+        }
+        #expect(centre.added.count == 7)
+        #expect(perDay.values.allSatisfy { $0 <= ReleaseReminders.dailyLimit },
+                "three today, three tomorrow, one the day after")
+        #expect(perDay.count == 3)
+    }
+
+    /// Gap 35. `effectiveEnabled` consults `systemStatus`, which is
+    /// `.notDetermined` until something calls `refreshStatus()` — and its only
+    /// caller was the Settings section's `.task`. A reader who revoked
+    /// permission in iOS Settings therefore had every `add` dropped by iOS
+    /// while `fired` recorded the ids as sent, so re-granting would never
+    /// bring the missed ones back.
+    ///
+    /// Expected failure before the fix: `centre.added` is non-empty on the
+    /// first pass (the request is made and silently dropped by iOS), and the
+    /// second pass then adds nothing because `fired` already has the id.
+    @Test("A permission revoked in iOS Settings is noticed before anything is recorded as sent")
+    func revokedPermissionIsSeenBeforeScheduling() async throws {
+        let centre = FakeCentre()
+        let store = try defaults()
+        let reminders = ReleaseReminders(defaults: store, centre: centre)
+        await reminders.enable()
+        #expect(reminders.effectiveEnabled, "control: it is on and allowed")
+
+        // The reader turns notifications off in iOS Settings. Nothing tells
+        // the app; the next status read is the only way to find out.
+        centre.grants = false
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
+        #expect(centre.added.isEmpty, "nothing is scheduled, and nothing is recorded as fired")
+
+        // Re-granted: the release the reader never heard about still arrives.
+        centre.grants = true
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
+        #expect(centre.added.map(\.id) == ["release-work-a"])
     }
 
     @Test("Two events for the same series within 24 hours: only the first is sent")
@@ -213,11 +307,62 @@ struct ReminderTests {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         await reminders.enable()
-        await reminders.reschedule(announced: [try work("a", series: 1, daysFromNow: 0)])
+        await reminders.reschedule(
+            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
+        )
 
         await reminders.disable()
         #expect(!reminders.isEnabled)
         #expect(centre.removeAllCount >= 1)
+    }
+
+}
+
+/// Fixtures and the fake notification centre, in an extension so the suite
+/// body itself stays inside SwiftLint's 250-line limit.
+extension ReminderTests {
+    private func defaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "reminders.tests.\(UUID().uuidString)"))
+    }
+
+    /// - Parameter from: the reference "now" the date is relative to. Real
+    ///   `Date()` for tests with no injected clock; a `TestClock`'s `now` for
+    ///   tests that also move time deliberately — otherwise a work "dated
+    ///   today" against the real calendar could sit years away from a fixed
+    ///   `TestClock`'s epoch, and every date-gated assertion would fail for
+    ///   the wrong reason.
+    private func work(
+        _ id: String, series: Int, daysFromNow: Int, from now: Date = Date()
+    ) throws -> UpcomingWork {
+        let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
+        let iso = DateFormatter()
+        iso.locale = Locale(identifier: "en_US_POSIX")
+        iso.timeZone = TimeZone(secondsFromGMT: 0)
+        iso.dateFormat = "yyyy-MM-dd"
+        return try JSONDecoder.snakeCased.decode(UpcomingWork.self, from: Data("""
+        {"id": "\(id)", "series_id": \(series), "release_date": "\(iso.string(from: date))",
+         "sequence_string": "3", "collections": [{"title": "A Series"}]}
+        """.utf8))
+    }
+
+    private func entry(
+        id: Int, state: LibraryEntry.State = .reading, status: String? = "completed"
+    ) -> LibraryEntry {
+        LibraryEntry(
+            id: id, seriesId: id, state: state, progressChapter: 10,
+            progressVolume: nil, rating: nil, note: nil, startDate: nil,
+            finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil,
+            readLink: nil,
+            series: SeriesFactory.make(id: id, title: "S\(id)", status: status)
+        )
+    }
+
+    /// A library entry in a state the reader is actually waiting on. Since
+    /// item 34 (Abdi's Q1, 2026-09-14) conditions 1a/1b consult library state,
+    /// so an `announced:` work with no matching entry notifies nothing — every
+    /// test here that expects a release to fire has to say who is reading it.
+    private func reading(_ id: Int) -> LibraryEntry {
+        entry(id: id, state: .reading, status: "releasing")
     }
 
     private final class FakeCentre: NotificationScheduling, @unchecked Sendable {

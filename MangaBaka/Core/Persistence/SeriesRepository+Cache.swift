@@ -32,6 +32,44 @@ extension SeriesRepository {
         }
     }
 
+    /// The `links` of every cached series page among `ids`, in one read.
+    ///
+    /// `refreshReminders` used to await `cachedExtras(for:)` once per library
+    /// entry — 939 actor hops on the launch path, each its own SQLite read and
+    /// a whole `SeriesExtras` decode, for a six-hour cache that on a cold
+    /// launch holds almost none of them. One hop and one `WHERE seriesId IN
+    /// (…)` here, decoding only the one key the caller wants.
+    ///
+    /// A series with nothing cached, or a row past the six hours, is absent
+    /// from the result — the same answer a nil `cachedExtras` gave.
+    func cachedExtrasLinks(for ids: [Int]) async -> [Int: [SeriesLink]] {
+        guard !ids.isEmpty else { return [:] }
+        // `await`: in an async context GRDB's asynchronous `read` is the one
+        // that binds, and it is the right one — the synchronous overload
+        // would block this actor's thread on SQLite.
+        let rows = (try? await database.writer.read { db in
+            try CachedDetail.filter(ids.contains(Column("seriesId"))).fetchAll(db)
+        }) ?? []
+        let now = clock.now
+        var links: [Int: [SeriesLink]] = [:]
+        for row in rows {
+            // Same freshness rule as `readDetailCache`, including the
+            // backwards-clock case, so the two cannot drift apart.
+            let age = now.timeIntervalSince(row.cachedAt)
+            guard age >= 0, age < Self.detailFreshness else { continue }
+            guard let decoded = try? JSONDecoder().decode(CachedLinks.self, from: row.payload)
+            else { continue }
+            links[row.seriesId] = decoded.links
+        }
+        return links
+    }
+
+    /// Just the `links` key of an encoded `SeriesExtras`, so reading the links
+    /// of a whole library does not decode a whole library of series pages.
+    private struct CachedLinks: Decodable {
+        var links: [SeriesLink] = []
+    }
+
     func writeDetailCache(_ extras: SeriesExtras, for seriesId: Int) throws {
         let payload = try JSONEncoder().encode(extras)
         try database.writer.write { db in
@@ -75,16 +113,36 @@ extension SeriesRepository {
     /// Applies a filter change and discards exactly what it invalidated.
     ///
     /// One path, so a fifth filter cannot be added with a fourth policy.
+    ///
+    /// There used to be a second condition here: a `shouldDiscard(key)` that
+    /// swallowed the *first* application of each filter, because the
+    /// repository was built before the preference stores were read and every
+    /// launch therefore "changed" all three from empty, discarding the whole
+    /// feed cache before the first screen drew. The stores are now built
+    /// first and their values passed to `init`, so the starting state is
+    /// already the state the cache was written under and there is no first
+    /// application to special-case. Dropping the guard also fixes what it
+    /// cost: a feed fetched under the defaults in the window before the
+    /// stored values landed was cached for up to 24 h and *not* discarded
+    /// when they did (item 62).
+    ///
+    /// - Returns: false if any half of the discard failed, so a caller can
+    ///   tell the reader their filter has not taken effect everywhere yet.
+    @discardableResult
     func apply(
         _ key: String,
         changed: Bool,
         invalidating scope: CacheScope
-    ) {
-        let discards = shouldDiscard(key)
-        guard changed, discards else { return }
-        if scope.contains(.feeds) { discardCachedFeeds() }
+    ) -> Bool {
+        guard changed else { return true }
+        var discarded = true
+        if scope.contains(.feeds) { discarded = discardCachedFeeds() && discarded }
         if scope.contains(.images) { cachedImages.removeAll() }
-        if scope.contains(.detail) { try? discardDetailCache() }
+        if scope.contains(.detail) { discarded = discardDetailCache() && discarded }
+        if !discarded {
+            Self.cacheLogger.error("\(key, privacy: .public) changed but its cache discard failed")
+        }
+        return discarded
     }
 
     /// The exclusion id the cached feeds on disk were written under.
@@ -132,14 +190,26 @@ extension SeriesRepository {
         }
     }
 
-    func discardDetailCache() throws {
-        try database.writer.write { db in
-            try db.execute(sql: "DELETE FROM seriesDetail")
+    /// - Returns: whether the discard actually happened.
+    ///
+    /// Its feeds sibling above grew this shape for gap 74; this one kept
+    /// `throws` and its only caller spent `try?` on it, which is the same bug
+    /// in the same file: a rating change whose detail discard failed kept
+    /// showing, for six hours, the tags the rating was set to hide — the
+    /// exact failure the `CacheScope` doc above was written for — with
+    /// nothing logged (item 32).
+    @discardableResult
+    func discardDetailCache() -> Bool {
+        do {
+            try database.writer.write { db in
+                try db.execute(sql: "DELETE FROM seriesDetail")
+            }
+            return true
+        } catch {
+            let description = String(describing: error)
+            Self.cacheLogger.error("discardDetailCache failed: \(description, privacy: .public)")
+            return false
         }
-    }
-
-    func readCache(_ feed: FeedKind, requireFresh: Bool) throws -> [Series] {
-        try readCacheWithDate(feed, requireFresh: requireFresh).series
     }
 
     /// What is on disk for one feed: its rows, when they were written, and
@@ -248,13 +318,18 @@ extension SeriesRepository {
     func fetchConditionalFeed(
         _ feed: FeedKind,
         query: [URLQueryItem],
-        ifModifiedSince: String?
+        ifModifiedSince: String?,
+        priority: RequestPriority = .userInitiated
     ) async throws(APIError) -> APIClient.Conditional<[Series]> {
         guard feed.isRecommendationShaped else {
-            return try await client.get(feed.path, query: query, ifModifiedSince: ifModifiedSince)
+            return try await client.getLossyConditional(
+                feed.path, query: query, priority: priority,
+                ifModifiedSince: ifModifiedSince, as: Series.self
+            )
         }
-        let wrapped: APIClient.Conditional<[Recommendation]> = try await client.get(
-            feed.path, query: query, ifModifiedSince: ifModifiedSince
+        let wrapped: APIClient.Conditional<[Recommendation]> = try await client.getLossyConditional(
+            feed.path, query: query, priority: priority,
+            ifModifiedSince: ifModifiedSince, as: Recommendation.self
         )
         switch wrapped {
         case .notModified:
@@ -297,8 +372,16 @@ extension SeriesRepository {
         try db.execute(sql: "DELETE FROM series WHERE id NOT IN (SELECT seriesId FROM feedEntry)")
     }
 
-    /// The detail cache keeps the newest rows only. A series page is about
-    /// 300 KB, and nothing else bounds the table.
+    /// The detail cache keeps the newest rows only; nothing else bounds the
+    /// table.
+    ///
+    /// The "about 300 KB a page" this was sized against carried no
+    /// derivation. MEASURED 2026-09-14 against the real simulator file: the
+    /// median encoded `seriesDetail` payload is 204 KB, so 200 rows is about
+    /// 40 MB, not the 60 MB the old figure implied. The limit is left at 200
+    /// — the correction makes it cheaper than believed, not more expensive,
+    /// so there is nothing to act on; the number is recorded so the next
+    /// person sizing this starts from a measurement.
     static let detailRowLimit = 200
 
     static func trimDetail(_ db: Database) throws {

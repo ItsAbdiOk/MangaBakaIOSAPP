@@ -15,10 +15,40 @@ import SwiftUI
 /// plain `SeriesDetailView` with zero behaviour change.
 struct SeriesPager<Content: View>: View {
     let items: [Series]
-    @Binding var selected: Series
-    @ViewBuilder let content: (Series) -> Content
+    /// Called once per page that settles on a different series. Not called
+    /// for the page the pager opened on: that one the caller already knows
+    /// about, having pushed it.
+    ///
+    /// This replaces a `@Binding var selected: Series` whose one call site
+    /// passed `.constant(series)` — so `selected = match` wrote into a
+    /// constant and every settle was silently dropped, and `recentlyViewed`
+    /// only ever recorded the series that was pushed, never one swiped to.
+    /// Nothing broke, which is the problem: the binding invited the next
+    /// caller to rely on a write that goes nowhere (item 123).
+    let onSettle: ((Series) -> Void)?
+    let content: (Series) -> Content
 
+    /// Seeded in `init`, not in `onAppear`. Assigning it after the first
+    /// layout meant `items[0]`'s `SeriesDetailView.task` fired its nine-request
+    /// `loadCore` at `userInitiated` for a series the reader never opened, and
+    /// the jump to the real one animated through every page between — worst
+    /// case a 60-item publisher row opened at its 40th card (item 56).
     @State private var position: Series.ID?
+
+    /// - Parameter selected: the series the push named. Where the pager
+    ///   opens, and nothing more — it is not stored, because nothing after the
+    ///   first layout needs it.
+    init(
+        items: [Series],
+        selected: Series,
+        onSettle: ((Series) -> Void)? = nil,
+        @ViewBuilder content: @escaping (Series) -> Content
+    ) {
+        self.items = items
+        self.onSettle = onSettle
+        self.content = content
+        _position = State(initialValue: selected.id)
+    }
     /// Bumped once per page that actually settles on a new series, so
     /// `.haptic(_:onEach:)` fires once per swipe rather than once per frame
     /// of the scroll settling into place.
@@ -65,12 +95,13 @@ struct SeriesPager<Content: View>: View {
                     .onEnded { _ in isPagingDisabled = false }
             )
         }
-        .onAppear { position = selected.id }
-        .onChange(of: position) { _, newValue in
-            guard let newValue,
-                  let match = items.first(where: { $0.id == newValue }),
-                  match.id != selected.id else { return }
-            selected = match
+        // No `onAppear` seed: `init` does it, before the first page's own
+        // `.task` can run (item 56). The animation below is kept for the
+        // swipes that follow.
+        .onChange(of: position) { oldValue, newValue in
+            guard let newValue, oldValue != newValue,
+                  let match = items.first(where: { $0.id == newValue }) else { return }
+            onSettle?(match)
             settledCount += 1
         }
         .haptic(Haptics.selection, onEach: settledCount)

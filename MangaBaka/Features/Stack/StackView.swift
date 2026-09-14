@@ -32,6 +32,15 @@ struct StackView: View {
     /// The series flying toward the saved counter, and how far into that
     /// flight it is. Non-nil only for the ~duration of `Motion.celebrate`
     /// after a save commits; see `beginSaveFlight`.
+    /// Whether a reaction is mid-flight.
+    ///
+    /// Work-list 83: nothing rejected a second reaction while the first was
+    /// animating, and `StackModel.removeFirst` runs before the first `await`,
+    /// so a double-tap on "+" — or a tap landing during a drag's release —
+    /// saved a card the reader never saw and POSTed it as `plan_to_read`.
+    /// One guard in `react`, which all three triggers go through, plus the
+    /// two controls disabling themselves so it is visible rather than silent.
+    @State private var isReacting = false
     @State private var flightSeries: Series?
     @State private var flightArrived = false
     /// True for one `Motion.settle` beat after a new card becomes current,
@@ -93,6 +102,13 @@ struct StackView: View {
         .scrollIndicators(.hidden)
         .background(Palette.ground)
         .task { await model.loadIfNeeded() }
+        // Work-list 88: `StackModel.isVisible` was read by the request-
+        // priority split and written by nobody, so every refill went out as
+        // `.userInitiated` — including the ones this app starts on its own
+        // while the reader is on Discover, competing for the search window a
+        // foreground search needs.
+        .onAppear { model.isVisible = true }
+        .onDisappear { model.isVisible = false }
         // The queue advanced: whatever offset the thrown card had belongs to
         // the card that has gone, not the one now on top. The new card on
         // top rises and un-rotates from the deck instead, per `cardArriving`
@@ -317,6 +333,12 @@ extension StackView {
                 // A vertical swipe never moved the card, so there is nothing to
                 // settle and nothing to commit.
                 guard drag != .zero else { return }
+                // A release landing while a reaction is still in flight is
+                // the same double-commit as a double-tap (work-list 83).
+                guard !isReacting else {
+                    drag = .zero
+                    return
+                }
                 guard abs(dx) > commitThreshold else {
                     Motion.run(.spring(response: 0.36, dampingFraction: 0.78)) { drag = .zero }
                     settles += 1
@@ -351,6 +373,9 @@ extension StackView {
     /// missed by one of them. Said after the save has landed, because only
     /// then does the model know whether it reached the library.
     private func react(_ kind: ShelfEntry.Kind) async {
+        guard !isReacting else { return }
+        isReacting = true
+        defer { isReacting = false }
         if kind == .saved {
             saves += 1
             // Captured before `model.react` advances the queue: by the time
@@ -383,6 +408,11 @@ extension StackView {
         Motion.run(Motion.celebrate) { flightArrived = true }
         Task {
             try? await Task.sleep(for: .milliseconds(550))
+            // Only this flight's own ending clears it (work-list 83). The
+            // clear used to be unconditional, so a second save starting
+            // inside the 550 ms window had the first one's timer pop the real
+            // card back to full opacity underneath it.
+            guard flightSeries?.id == series.id else { return }
             flightSeries = nil
             flightArrived = false
         }
@@ -405,6 +435,7 @@ extension StackView {
             StackCircleAction(symbol: "xmark", size: Metrics.actionSkip, label: "Skip", bounces: skips) {
                 Task { await react(.skipped) }
             }
+            .disabled(isReacting)
 
             Button { if let current = model.current { open(current) } } label: {
                 Text("Details")
@@ -428,6 +459,7 @@ extension StackView {
                     .shadow(color: .black.opacity(0.5), radius: 13, y: 10)
             }
             .buttonStyle(.press)
+            .disabled(isReacting)
             .accessibilityLabel("Save")
         }
         .padding(.top, 14)

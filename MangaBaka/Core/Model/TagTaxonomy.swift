@@ -32,6 +32,25 @@ enum TagTaxonomy {
     /// sheet open.
     static func bundled() -> [Tag] { loadResult.tags }
 
+    /// Forces the lazy `loadResult` to run now, on whichever thread calls
+    /// this, instead of on whichever caller happens to ask first.
+    ///
+    /// Two of `bundled()`'s four callers are views — `TagPickerSheet.swift:364`
+    /// and `BlockedTagsSection.swift:207` — so if the picker opens before
+    /// anything else has touched `TagTaxonomy`, the file read and 2,686-row
+    /// decode run synchronously on the main thread. GUESS 10–30 ms
+    /// (unmeasured; `measure { }` over `load()` would settle it) — not
+    /// dropped-frame territory by itself, but free to avoid entirely by
+    /// calling this from a background task before the picker can open.
+    /// `nonisolated` so a background caller — and a test — can call it from
+    /// any isolation without hopping actors first.
+    ///
+    /// Wire it in from `OfflineCatalogue`'s background setup with one line:
+    /// `TagTaxonomy.warm()` (belongs to another lane; not called from here).
+    nonisolated static func warm() {
+        _ = loadResult
+    }
+
     /// Whether the bundled resource was missing, unreadable, or failed to
     /// decode — distinguishing a packaging bug from a taxonomy that
     /// genuinely has nothing in it, which `bundled()` alone cannot: both

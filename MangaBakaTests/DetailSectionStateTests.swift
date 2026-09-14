@@ -136,22 +136,25 @@ struct DetailScheduleBlockStateTests {
 }
 
 /// Gap 21: a series with none of MangaBaka's own volumes and a store that
-/// could not be reached used to show nothing at all — the note was dropped
+/// could not be reached used to show nothing at all — the reason was dropped
 /// along with the empty shelf it was meant to explain.
-@Suite("The volumes section shows a note even with nothing to shelve")
+///
+/// The parameter is an `APIError?` rather than the `String?` note it was until
+/// item 60; the rule it decides is unchanged.
+@Suite("The volumes section shows a reason even with nothing to shelve")
 struct VolumesSectionShowsTests {
-    @Test("A note alone is enough to show the section")
-    func noteAloneShows() {
-        #expect(VolumesSection.shows(volumes: [], note: "Apple Books couldn't be reached"))
+    @Test("A failure alone is enough to show the section")
+    func failureAloneShows() {
+        #expect(VolumesSection.shows(volumes: [], failure: .offline))
     }
 
-    @Test("Nothing to shelve and no note: hidden")
+    @Test("Nothing to shelve and no failure: hidden")
     func nothingHides() {
-        #expect(!VolumesSection.shows(volumes: [], note: nil))
+        #expect(!VolumesSection.shows(volumes: [], failure: nil))
     }
 
     @Test("Checking the store shows the section even before anything is known")
     func checkingShows() {
-        #expect(VolumesSection.shows(volumes: [], note: nil, isCheckingStore: true))
+        #expect(VolumesSection.shows(volumes: [], failure: nil, isCheckingStore: true))
     }
 }

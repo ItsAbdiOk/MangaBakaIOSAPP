@@ -81,6 +81,20 @@ struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
     /// reason this uses explicit coding keys rather than the automatic
     /// snake_case conversion.
     let series: Series?
+    /// The `state` string exactly as it arrived, before the enum coerced an
+    /// unrecognised value to `.considering`.
+    ///
+    /// Work-list 90: `State.init(from:)` deliberately degrades an unknown
+    /// state rather than failing the row (see its comment), which is right for
+    /// the screen and wrong for a backup — `LibraryExport` wrote the coerced
+    /// value, so a file exported from a build that did not yet know a state
+    /// said `considering`, and restoring it into an empty account wrote
+    /// `considering`. Round-tripping into the *same* account was safe only
+    /// because `changeSet` compares two equally-coerced values.
+    ///
+    /// Defaulted to the enum's own raw value, so every construction site that
+    /// does not care — tests, `asSeries`, `applying` — reads as it did before.
+    var rawState: String = ""
 
     // The decoder applies convertFromSnakeCase before matching, so every
     // snake_case key is already camelCase by the time it gets here and needs no
@@ -103,7 +117,45 @@ struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
         case isPrivate
         case readLink
         case series = "Series"
+        /// Written to the disk cache only; the wire has no such key and
+        /// `init(from:)` falls back to `state` for it.
+        case rawState
     }
+}
+
+extension LibraryEntry {
+    /// Hand-written for one field: `rawState` has to come from the *same*
+    /// JSON value `state` does, which no synthesized conformance can express.
+    /// In an extension, and delegating to the memberwise initialiser, so that
+    /// initialiser is still synthesized — this type is built field by field in
+    /// a great many places.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(Int.self, forKey: .id),
+            seriesId: try container.decode(Int.self, forKey: .seriesId),
+            state: try container.decode(State.self, forKey: .state),
+            progressChapter: try container.decodeIfPresent(Double.self, forKey: .progressChapter),
+            progressVolume: try container.decodeIfPresent(Double.self, forKey: .progressVolume),
+            rating: try container.decodeIfPresent(Double.self, forKey: .rating),
+            note: try container.decodeIfPresent(String.self, forKey: .note),
+            startDate: try container.decodeIfPresent(Date.self, forKey: .startDate),
+            finishDate: try container.decodeIfPresent(Date.self, forKey: .finishDate),
+            numberOfRereads: try container.decodeIfPresent(Int.self, forKey: .numberOfRereads),
+            priority: try container.decodeIfPresent(Int.self, forKey: .priority),
+            isPrivate: try container.decodeIfPresent(Bool.self, forKey: .isPrivate),
+            readLink: try container.decodeIfPresent(String.self, forKey: .readLink),
+            series: try container.decodeIfPresent(Series.self, forKey: .series),
+            // The disk cache round-trips its own key; the wire has only
+            // `state`, whose string is exactly what this is for.
+            rawState: try container.decodeIfPresent(String.self, forKey: .rawState)
+                ?? container.decode(String.self, forKey: .state)
+        )
+    }
+
+    /// The raw state if one was recorded, and the enum's own spelling
+    /// otherwise — which is what every entry this app builds itself has.
+    var exportedState: String { rawState.isEmpty ? state.rawValue : rawState }
 }
 
 extension LibraryEntry {
@@ -134,7 +186,10 @@ extension LibraryEntry {
             priority: priority,
             isPrivate: change.isPrivate ?? isPrivate,
             readLink: readLink,
-            series: series
+            series: series,
+            // A change carries an enum, so a patched row's raw state is that
+            // enum's spelling; only an untouched row keeps the server's.
+            rawState: change.state.map(\.rawValue) ?? rawState
         )
     }
 }

@@ -41,15 +41,20 @@ enum SeriesWebLink {
     /// Registered in project.yml as CFBundleURLTypes.
     static let appScheme = "mangabaka"
 
+    /// Series ids are positive. `mangabaka://series/-5` and `/0` used to
+    /// come back as `-5` and `0`, which cost a request and an error toast
+    /// for a link that could never have been valid; the number is rejected
+    /// here rather than at each of the three entry points that open one.
     static func seriesID(from url: URL) -> Int? {
         if url.scheme?.lowercased() == appScheme {
             guard url.host()?.lowercased() == "series" else { return nil }
-            return url.pathComponents.filter { $0 != "/" }.lazy.compactMap { Int($0) }.first
+            return url.pathComponents.filter { $0 != "/" }
+                .lazy.compactMap { Int($0) }.first { $0 > 0 }
         }
         guard url.host()?.lowercased() == host || url.host()?.lowercased() == "www.\(host)"
         else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.first != "pages" else { return nil }
-        return parts.lazy.compactMap { Int($0) }.first
+        return parts.lazy.compactMap { Int($0) }.first { $0 > 0 }
     }
 }

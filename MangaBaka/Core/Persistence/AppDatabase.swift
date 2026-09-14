@@ -4,9 +4,17 @@ import GRDB
 /// The on-device cache.
 ///
 /// This is a file on the user's own device, not a server. Nothing here leaves
-/// the phone, and the developer has no access to it. Its only job is to avoid
+/// the phone, and the developer has no access to it. Its main job is to avoid
 /// re-downloading what the app already has, and to let previously-seen content
 /// render offline.
+///
+/// **Not all of it is disposable.** `shelfEntry` (the reader's saves and
+/// skips), `viewedEntry` (their history) and `tagAffinity`/`tasteContribution`
+/// (the taste ledger those two feed) exist nowhere else — there is no account
+/// they sync to. Losing this file loses them. Two comments in here used to
+/// call the whole thing "disposable cache data", and
+/// `onDiskResettingIfCorrupt` renamed it aside on any failure at all on the
+/// strength of that; see its doc comment.
 ///
 /// Series are stored as an encoded JSON blob rather than as columns, so that
 /// adding a field to `Series` needs no schema migration — the cache is derived
@@ -40,8 +48,11 @@ struct AppDatabase: Sendable {
         let url = directory.appendingPathComponent(name)
 
         var configuration = Configuration()
-        // The cache is derived data: if the file is ever corrupt, losing it
-        // costs a re-download, not user data.
+        // WAL so a read does not block the writer. (This comment used to say
+        // "the cache is derived data: if the file is ever corrupt, losing it
+        // costs a re-download, not user data" — untrue, and it was the stated
+        // justification for renaming the file aside on any failure. The shelf
+        // and the history live here and are not derived from anything.)
         configuration.prepareDatabase { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
         }
@@ -55,15 +66,48 @@ struct AppDatabase: Sendable {
 
     /// What opening the on-disk database actually did.
     struct OpenResult: Sendable {
+        /// The three answers, which used to be two.
+        ///
+        /// `wasReset: Bool` collapsed "the file was corrupt and has been
+        /// replaced" with "the file could not be opened and this is an
+        /// in-memory stand-in" (`AppServices.swift:181` reported `true` for
+        /// the latter). They need different words in front of a reader: the
+        /// first has genuinely lost what was in the file, the second has lost
+        /// nothing — the file is sitting there intact and the next launch may
+        /// well open it.
+        enum Outcome: Sendable, Equatable {
+            /// The file on disk opened and migrated.
+            case opened
+            /// The file was corrupt, was renamed aside, and this is a new one.
+            case reset
+            /// No on-disk database could be opened at all; whatever is here
+            /// remembers nothing between launches. The file, if there is one,
+            /// has been left alone.
+            case unopened
+        }
+
         let database: AppDatabase
-        /// True when the file that was already there could not be opened or
-        /// migrated and was renamed aside so a fresh one could take its
-        /// place. `AppServices.makeDatabase` uses this to show a one-shot
-        /// toast — gap 3: without it, a corrupt file fell back to an
-        /// in-memory database *silently*, on every single launch, which read
-        /// to the reader as "the app forgets my stack every day" with no
-        /// explanation and no way to notice why.
-        let wasReset: Bool
+        let outcome: Outcome
+
+        /// True only for `.reset`. `AppServices.makeDatabase` uses this to
+        /// show a one-shot toast — gap 3: without it, a corrupt file fell
+        /// back to an in-memory database *silently*, on every single launch,
+        /// which read to the reader as "the app forgets my stack every day"
+        /// with no explanation and no way to notice why.
+        ///
+        /// Kept while the shell moves to `outcome`; it is the narrower of the
+        /// two old meanings, so a caller that has not moved yet stops
+        /// claiming a reset for the in-memory case rather than starting to.
+        var wasReset: Bool { outcome == .reset }
+
+        init(database: AppDatabase, outcome: Outcome) {
+            self.database = database
+            self.outcome = outcome
+        }
+
+        init(database: AppDatabase, wasReset: Bool) {
+            self.init(database: database, outcome: wasReset ? .reset : .opened)
+        }
     }
 
     /// Opens the on-disk database, recovering from a file that exists but
@@ -73,21 +117,33 @@ struct AppDatabase: Sendable {
     /// an in-memory database (which remembers nothing between launches) with
     /// no attempt to recover the on-disk path at all.
     ///
-    /// The bad file is renamed, not deleted. It is disposable cache data —
-    /// see the type's own doc comment — so nothing is lost that the app
-    /// cannot rebuild, but renaming rather than deleting still leaves the
-    /// actual bytes on disk for on-device diagnosis, which a `DELETE` would
-    /// throw away permanently for no benefit over a rename.
+    /// The bad file is renamed, not deleted. Renaming rather than deleting
+    /// leaves the actual bytes on disk for on-device diagnosis, which a
+    /// `DELETE` would throw away permanently for no benefit over a rename.
     ///
-    /// Returns `nil` only when even a fresh file at the same path cannot be
-    /// opened — a directory that cannot be created, say — at which point the
-    /// caller's own in-memory fallback is what runs.
+    /// **Only actual corruption renames.** This used to rename for *any*
+    /// throw out of `onDisk`, and the file holds `shelfEntry`, `viewedEntry`
+    /// and `tagAffinity` — the reader's own saves, their history and the
+    /// taste ledger, none of which the app can rebuild from the network. So
+    /// a disk-full `ALTER TABLE` in a migration, a `SQLITE_BUSY` left by the
+    /// previous process, or a bug in a future migration destroyed the shelf
+    /// permanently and told the reader it "was reset". Every one of those is
+    /// transient or fixable and none of them means the bytes are bad. Only
+    /// `SQLITE_CORRUPT` and `SQLITE_NOTADB` do, and only those rename; any
+    /// other failure returns nil with the file untouched, so the next launch
+    /// can open it.
+    ///
+    /// Returns `nil` when the file was left alone, or when even a fresh file
+    /// at the same path cannot be opened — at which point the caller's own
+    /// in-memory fallback is what runs.
     static func onDiskResettingIfCorrupt(
         named name: String = "mangabaka.sqlite",
         now: () -> Date = Date.init
     ) -> OpenResult? {
-        if let opened = try? onDisk(named: name) {
-            return OpenResult(database: opened, wasReset: false)
+        do {
+            return OpenResult(database: try onDisk(named: name), outcome: .opened)
+        } catch let error {
+            guard isCorruption(error) else { return nil }
         }
 
         guard let directory = try? FileManager.default.url(
@@ -98,7 +154,7 @@ struct AppDatabase: Sendable {
 
         // Nothing to rename means the failure was not "an existing file is
         // corrupt" — a fresh attempt at the same path would fail identically,
-        // so this is not a case `wasReset` should claim to have fixed.
+        // so this is not a case `.reset` should claim to have fixed.
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
 
         // Colons are not valid in a filename on APFS; ISO 8601's own
@@ -116,7 +172,72 @@ struct AppDatabase: Sendable {
         }
 
         guard let fresh = try? onDisk(named: name) else { return nil }
-        return OpenResult(database: fresh, wasReset: true)
+        salvage(into: fresh, from: renamed)
+        pruneCorruptFiles(in: directory, named: name, keeping: renamed)
+        return OpenResult(database: fresh, outcome: .reset)
+    }
+
+    /// Whether the file itself is bad, as against the environment around it.
+    ///
+    /// `SQLITE_CORRUPT` is "the bytes do not form a database any more";
+    /// `SQLITE_NOTADB` is "these bytes were never one". Everything else —
+    /// `SQLITE_FULL`, `SQLITE_BUSY`, `SQLITE_IOERR`, `SQLITE_CANTOPEN`, a
+    /// migration throwing something that is not a `DatabaseError` at all —
+    /// says nothing about the contents and must not cost the reader their
+    /// shelf.
+    private static func isCorruption(_ error: any Error) -> Bool {
+        guard let database = error as? DatabaseError else { return false }
+        return [.SQLITE_CORRUPT, .SQLITE_NOTADB].contains(database.resultCode)
+    }
+
+    /// The classification above, reachable from a test. Provoking a real
+    /// `SQLITE_FULL` from an open needs a full disk; the decision this makes
+    /// is the whole of the fix and is worth asserting directly.
+    nonisolated static func isCorruptionForTesting(_ error: any Error) -> Bool {
+        isCorruption(error)
+    }
+
+    /// Copies the two irreplaceable tables out of the file being abandoned.
+    ///
+    /// The shelf is the reader's own saves and skips and the viewed list is
+    /// their history; neither can be refetched, and both live in a file whose
+    /// own doc comment calls it disposable. A corrupt database often still
+    /// reads in part, so this is worth attempting — and worth attempting with
+    /// `try?`, because failing to salvage from a file that is by definition
+    /// broken is the expected case, not an error to propagate.
+    ///
+    /// `INSERT OR IGNORE`: the fresh database is empty, so there is nothing
+    /// to conflict with today, but a future caller that salvages into a
+    /// populated file should keep what is already there.
+    /// `writeWithoutTransaction` because SQLite refuses `ATTACH` inside one
+    /// ("cannot ATTACH database within transaction"); each `INSERT` is then
+    /// its own implicit transaction, which is what a best-effort salvage
+    /// wants anyway — one unreadable table does not lose the other.
+    private static func salvage(into fresh: AppDatabase, from file: URL) {
+        try? fresh.writer.writeWithoutTransaction { db in
+            try db.execute(sql: "ATTACH DATABASE ? AS salvage", arguments: [file.path])
+            defer { try? db.execute(sql: "DETACH DATABASE salvage") }
+            for table in ["shelfEntry", "viewedEntry"] {
+                try? db.execute(
+                    sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"
+                )
+            }
+        }
+    }
+
+    /// Keeps only the newest `.corrupt-*` file.
+    ///
+    /// They were never deleted, so a device that hits this repeatedly
+    /// accumulated a full copy of the database per launch, forever, in
+    /// Application Support — which is backed up. One is enough for diagnosis.
+    private static func pruneCorruptFiles(in directory: URL, named name: String, keeping: URL) {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil
+        )) ?? []
+        for file in contents
+        where file.lastPathComponent.hasPrefix("\(name).corrupt-") && file != keeping {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     /// **Downgrade note.** `DatabaseMigrator` only ever moves forward: it has
@@ -131,7 +252,12 @@ struct AppDatabase: Sendable {
     /// flagged here rather than fixed because building for a downgrade this
     /// project has never shipped would be solving a problem that does not
     /// exist yet.
-    private static var migrator: DatabaseMigrator {
+    /// Internal rather than private so a test can migrate a database up to a
+    /// named version and assert what the next one does to it. There is no
+    /// other way to write a migration test that fails before the migration
+    /// exists, and a migration nothing tests is how `v9_tasteContribution`
+    /// shipped without its backfill.
+    static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("v1_cache") { db in
@@ -318,6 +444,43 @@ struct AppDatabase: Sendable {
             try db.alter(table: "feedMetadata") { table in
                 table.add(column: "lastModified", .text)
             }
+        }
+
+        migrator.registerMigration("v11_recountTaste") { db in
+            // v9 created `tasteContribution` and nothing ever backfilled it.
+            // MEASURED 2026-09-14 on the real simulator file: 945
+            // `tasteSource` rows and 0 contributions — so every series
+            // already in the library at the time of that migration still
+            // contributes tag weight that removing it cannot take back, and
+            // always would have, because `absorb` skips a series `tasteSource`
+            // already names. The retraction v9 was written for has therefore
+            // never worked for anybody who had a library before it shipped.
+            //
+            // The ledger is derived entirely from the library, so the cheapest
+            // correct backfill is to forget it and let the next `absorb`
+            // recount — which now writes a contribution per tag. Nothing the
+            // reader typed lives in these three tables.
+            try db.execute(sql: "DELETE FROM tasteSource")
+            try db.execute(sql: "DELETE FROM tagAffinity")
+            try db.execute(sql: "DELETE FROM tasteSeen")
+        }
+
+        migrator.registerMigration("v12_shelfOrderIndex") { db in
+            // `ShelfStore` reads `ORDER BY addedAt DESC LIMIT 60`. The v2
+            // index is `(kind, addedAt)`, whose leading column that query does
+            // not constrain, so SQLite cannot walk it in order and sorts the
+            // whole table instead — `EXPLAIN QUERY PLAN` says USE TEMP B-TREE
+            // FOR ORDER BY. An index on `addedAt` alone serves it; the
+            // composite stays, because the by-kind reads still use it.
+            try db.create(
+                index: "shelfEntry_on_addedAt", on: "shelfEntry", columns: ["addedAt"]
+            )
+            // `feedEntry`'s primary key is (feedKey, position), so `feedKey`
+            // is already the leading column of an index SQLite maintains for
+            // free. `feedEntry_on_feedKey` is a second B-tree over the same
+            // column, written on every feed cache write and read by nothing
+            // the primary key could not answer.
+            try db.execute(sql: "DROP INDEX IF EXISTS feedEntry_on_feedKey")
         }
 
         return migrator

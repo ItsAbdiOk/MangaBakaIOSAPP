@@ -59,10 +59,25 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// - Parameter excludedTags: tag ids to keep out, sent as `tag_not`. There
     ///   is no weight parameter on this endpoint, so steering is include or
     ///   exclude and nothing in between.
+    /// - Parameter tagIDs: tag ids to require, sent as `tag`. Ids and not
+    ///   names, and separate from `filters.tags` for that reason — see the
+    ///   measurement in the implementation.
     func mix(
         seeds: [Int],
         filters: SearchQuery,
         excludedTags: [Int]
+    ) async -> MixResult
+    /// The same blend with tag ids required. Separate from the call above
+    /// rather than a defaulted parameter on it, because a default argument
+    /// does not satisfy a protocol requirement in Swift and every existing
+    /// stub implements the three-parameter form; the default implementation
+    /// below forwards to it, so a stub that does not care about tags needs no
+    /// change.
+    func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int],
+        tagIDs: [Int]
     ) async -> MixResult
 
     /// Everything the detail screen shows beyond the series itself. Fetched
@@ -83,6 +98,13 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// cached — the caller simply has no links to check for that series,
     /// the same as if it had none.
     func cachedExtras(for seriesId: Int) async -> SeriesExtras?
+    /// The cached `links` for many series at once, in one hop.
+    ///
+    /// Same cache and same freshness as `cachedExtras(for:)`, asked once for
+    /// a whole list instead of once per id — `refreshReminders` runs this
+    /// over the entire library on the launch path, where one hop per entry
+    /// was 939 of them. Ids with nothing cached are absent from the result.
+    func cachedExtrasLinks(for ids: [Int]) async -> [Int: [SeriesLink]]
     /// One series by id, for a deep link, Siri or Spotlight — a single read,
     /// not the six `extras` legs. Nil when it cannot be fetched.
     func series(id: Int) async -> Series?
@@ -343,7 +365,13 @@ enum FeedKind: Sendable, Hashable {
         // whole point of the row is that it is new.
         case .newReleases: 1_800
         // A surprise queue that returned the same series on every visit would
-        // not be a surprise. Never served from cache.
+        // not be a surprise. Never served from cache *while the network
+        // answers* — a freshness of 0 means no cache hit is ever fresh, but
+        // `feed`'s catch still falls back to the stale rows so an offline
+        // reader sees the last queue rather than an empty screen. The comment
+        // used to say only "never cached", which reads as a rule the fallback
+        // breaks, and the next person to notice the discrepancy would
+        // "fix" the fallback and take offline surprise away.
         case .surprise: 0
         }
     }
@@ -441,6 +469,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     init(
         client: APIClient, database: AppDatabase, clock: any Clock = SystemClock(),
         contentRatings: [String]? = ["safe", "suggestive"], formats: [String] = [],
+        blockedTags: [Int] = [],
         defaults: UserDefaults = .standard
     ) {
         self.client = client
@@ -449,6 +478,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         self.defaults = defaults
         self.contentRatings = contentRatings
         self.formats = formats
+        self.blockedTags = blockedTags
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -465,13 +495,18 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     }
 
     func feed(_ feed: FeedKind, forceRefresh: Bool, priority: RequestPriority) async -> FeedResult {
-        if !forceRefresh, let fresh = try? readCache(feed, requireFresh: true), !fresh.isEmpty {
-            return FeedResult(series: fresh, origin: .cache)
-        }
-
         // Whatever is already on disk for this feed, stale or not — read once
         // up front so a 304 can serve it and a genuine failure can fall back
         // to it, without a second database round trip for either.
+        //
+        // **Read once, not twice.** This used to ask `readCache(requireFresh:
+        // true)` first and then read the whole thing again for the stale
+        // fallback, so every cache miss cost two transactions, two `IN (…)`
+        // fetches and up to a hundred `Series` decodes inside the actor,
+        // serialising every other repository call behind them. `.surprise`
+        // has freshness 0, so it missed every single time. Freshness is a
+        // comparison against `cachedAt`, which this read already returns;
+        // there is nothing the second read knew that this one does not.
         //
         // `lastModified` is what makes the request below conditional.
         // MEASURED 2026-09-13 against api.mangabaka.org: feed responses carry
@@ -482,6 +517,23 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // the request below unconditional, i.e. today's behaviour exactly.
         let existing = (try? readCacheWithDate(feed, requireFresh: false)) ?? CachedFeed()
 
+        if !forceRefresh, let cachedAt = existing.cachedAt {
+            // A negative age means the device clock moved backwards; treat
+            // that as stale rather than trusting it. Same rule as
+            // `readCacheWithDate`'s own `requireFresh`, which this replaces.
+            let age = clock.now.timeIntervalSince(cachedAt)
+            // Row count is deliberately not part of this. The old guard was
+            // `!fresh.isEmpty`, so a feed the API legitimately answered as
+            // empty — an obscure series' 24-hour `similar` row, a heavily
+            // filtered Discover row — fired a fresh request on every single
+            // visit inside its own freshness window, and three of those rows
+            // are search-backed against the 30-per-minute family. An empty
+            // answer written an hour ago is an answer.
+            if age >= 0, age < feed.freshness {
+                return FeedResult(series: existing.series, origin: .cache)
+            }
+        }
+
         do {
             var query = [URLQueryItem(name: "limit", value: String(feed.limit))]
             query.append(contentsOf: feed.extraQuery)
@@ -491,17 +543,19 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // filter catches up.
             query.append(contentsOf: filterQuery())
 
-            // `fetchConditionalFeed` (+Cache.swift) always asks at
-            // `.userInitiated` — fine for `.similar`/`.readersAlsoLike`/`.mix`
-            // (`isRecommendationShaped`), none of which hit `/series/search`
-            // (`FeedKind.path`) and so are never search-budgeted. The ones
-            // that are — `.trending`, `.newReleases`, `.surprise` — go through
-            // `client.get` directly so a background deal can wait its turn.
-            let conditional: APIClient.Conditional<[Series]> = try await feed.isRecommendationShaped
-                ? fetchConditionalFeed(feed, query: query, ifModifiedSince: existing.lastModified)
-                : client.get(
-                    feed.path, query: query, ifModifiedSince: existing.lastModified, priority: priority
-                )
+            // `fetchConditionalFeed` (+Cache.swift) takes the priority now,
+            // so both shapes go through it. It used to always ask at
+            // `.userInitiated`, which was fine for
+            // `.similar`/`.readersAlsoLike`/`.mix` (`isRecommendationShaped`)
+            // — none of which hit `/series/search` (`FeedKind.path`), so none
+            // are search-budgeted — but meant the ones that are (`.trending`,
+            // `.newReleases`, `.surprise`) had to bypass it and call
+            // `client.get` directly to let a background deal wait its turn.
+            // Two call sites for one request, only one of which item 68's
+            // lenient decode would otherwise have reached.
+            let conditional = try await fetchConditionalFeed(
+                feed, query: query, ifModifiedSince: existing.lastModified, priority: priority
+            )
 
             switch conditional {
             case .notModified:
@@ -532,70 +586,17 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
-    func mix(seeds: [Int], filters: SearchQuery, excludedTags: [Int] = []) async -> MixResult {
-        guard !seeds.isEmpty else { return .empty }
-        // `random_seed` only means something beside `sort_by=random`, which is
-        // dropped here too; mix would otherwise receive a seed for nothing.
-        var items = filters.queryItems.filter { !["q", "sort_by", "random_seed"].contains($0.name) }
-        // Repeated keys; the comma form is rejected with HTTP 400. See
-        // FeedKind.extraQuery for the verification.
-        items.append(contentsOf: seeds.map { URLQueryItem(name: "series", value: String($0)) })
-        items.append(URLQueryItem(name: "strict", value: "false"))
-        items.append(contentsOf: blendExclusionQuery)
-        // `blocked_tag`, not `tag_not` — see `filterQuery`'s doc comment.
-        items.append(contentsOf: filterQuery(overridingTypes: filters.types, blockedTagParam: "blocked_tag"))
-        // Excluded strands. Proven live: excluding the top tag drops it out of
-        // the DNA, promotes everything below it, and changes most of the
-        // results — so the DNA doubles as feedback for the edit just made.
-        items.append(contentsOf: excludedTags.map {
-            URLQueryItem(name: "tag_not", value: String($0))
-        })
-
-        do {
-            let envelope: MixEnvelope = try await client.getRoot("/v1/series/mix", query: items)
-            return MixResult(
-                recommendations: (envelope.data ?? [])
-                    .filter { $0.series.isDiscoverable && allowsFormat($0.series) },
-                dna: BlendDNA(
-                    strands: envelope.dna ?? [],
-                    seedCount: envelope.seedCount ?? seeds.count
-                )
-            )
-        } catch {
-            // The request itself failed — a rate limit, an outage — which is
-            // not the same thing as "nothing matched". `.empty` used to stand
-            // for both, and the screen told a throttled reader "Nothing
-            // matched. Try loosening the filters." (gap 11).
-            return MixResult(failure: error)
-        }
-    }
-
-    /// `mix` answers with `data` alongside `dna` and `seed_count` at the top
-    /// level, so it needs its own envelope rather than the shared one.
-    private struct MixEnvelope: Decodable {
-        let data: [Recommendation]?
-        let dna: [BlendDNA.Strand]?
-        let seedCount: Int?
-    }
-
-    /// Which filters have been handed their stored value since launch.
-    ///
-    /// **This is the difference between a cache and no cache.** The repository
-    /// is built before the preference stores are read, so it starts with no
-    /// ratings, no formats and no blocked tags. The app then applies the stored
-    /// values — and every one of them differed from the empty starting state,
-    /// so every launch discarded the entire feed cache before the first screen
-    /// drew. Offline support was documented, tested, and silently dead.
-    ///
-    /// A first application is not a change. The cache on disk was written under
-    /// exactly these values, because they are the values it was written under
-    /// last time the app ran. Only a genuine change discards.
-    private var applied: Set<String> = []
-
-    func shouldDiscard(_ key: String) -> Bool {
-        defer { applied.insert(key) }
-        return applied.contains(key)
-    }
+    // `applied` / `shouldDiscard` used to live here: a set of which filters
+    // had been handed their stored value since launch, so that the first
+    // application of each did not count as a change. It existed because the
+    // repository was built before the preference stores were read and started
+    // with no ratings, no formats and no blocked tags — so every launch
+    // "changed" all three and discarded the whole feed cache before the first
+    // screen drew, which made offline support documented, tested and silently
+    // dead. The stores are now read first and their values passed to `init`,
+    // so the repository never holds the empty state at all and there is
+    // nothing to suppress. See `apply` in +Cache for what the guard cost
+    // while it was there (item 62).
 
     func updateContentRatings(_ ratings: [String]) async {
         let changed = ratings != contentRatings
@@ -622,8 +623,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// The reader's own MangaBaka id, used to keep series they already track
     /// out of a blend.
     ///
-    /// **This one cannot use `applied`, and finding out why took a test.**
-    /// The `applied` mechanism assumes a first application is not a change,
+    /// **This one could never have used `applied`, and finding out why took a
+    /// test.** That mechanism (now deleted, item 62) assumed a first
+    /// application is not a change,
     /// because the cache on disk was written under exactly the values the app
     /// is about to be handed. True for ratings, formats and blocked tags,
     /// which are read from the same `UserDefaults` the cache was written
@@ -662,7 +664,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
 
     /// Applies only to blends. Search and discovery are browsing surfaces where
     /// finding something already on your shelf is useful, not noise.
-    private var blendExclusionQuery: [URLQueryItem] {
+    ///
+    /// Internal rather than private so the blend half can reach it — see
+    /// SeriesRepository+Mix.swift; the split is the lint's doing.
+    var blendExclusionQuery: [URLQueryItem] {
         guard let libraryExclusionUserID else { return [] }
         return [URLQueryItem(name: "exclude_user_library", value: libraryExclusionUserID)]
     }
@@ -752,7 +757,9 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // series' own primary cover, drawn from elsewhere) for a throttled
         // reader exactly as it would for one whose series really has one
         // (gap 32).
-        guard let all: [SeriesImage] = try? await client.get("/v1/series/\(seriesId)/images") else {
+        guard let all: [SeriesImage] = try? await client.getLossy(
+            "/v1/series/\(seriesId)/images"
+        ) else {
             return nil
         }
         let presentable = all.presentable(allowedRatings: contentRatings)
@@ -808,7 +815,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// other five requests each time.
     func relationships(for seriesId: Int) async -> [SeriesRelationship]? {
         if let cached = cachedRelationships[seriesId] { return cached }
-        guard let fetched: [SeriesRelationship] = try? await client.get(
+        guard let fetched: [SeriesRelationship] = try? await client.getLossy(
             "/v1/series/\(seriesId)/relationships"
         ) else { return nil }
         cachedRelationships[seriesId] = fetched
@@ -842,18 +849,18 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // detail screen should not wait for them in series.
         async let links: Result<[SeriesLink], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesLink] in
-            try await client.get("/v1/series/\(seriesId)/links")
+            try await client.getLossy("/v1/series/\(seriesId)/links")
         }
         async let news: Result<[NewsItem], APIError> = Self.attempt {
             () async throws(APIError) -> [NewsItem] in
-            try await client.get(
+            try await client.getLossy(
                 "/v1/series/\(seriesId)/news",
                 query: [URLQueryItem(name: "limit", value: "6")]
             )
         }
         async let related: Result<[SeriesRelationship], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesRelationship] in
-            try await client.get("/v1/series/\(seriesId)/relationships")
+            try await client.getLossy("/v1/series/\(seriesId)/relationships")
         }
         // The only source of tags and year — see SeriesExtras.
         async let full: Result<Series, APIError> = Self.attempt {
@@ -862,7 +869,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
         async let editions: Result<[SeriesEdition], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesEdition] in
-            try await client.get("/v1/series/\(seriesId)/collections")
+            try await client.getLossy("/v1/series/\(seriesId)/collections")
         }
         // Published volumes: dates, prices, page counts, ISBNs and per-volume
         // cover art. A sixth concurrent read rather than a lazy one, because
@@ -870,7 +877,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // appears after the page has settled reads as a second page load.
         async let works: Result<[SeriesWork], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesWork] in
-            try await client.get("/v1/series/\(seriesId)/works")
+            try await client.getLossy("/v1/series/\(seriesId)/works")
         }
 
         let results = await (links, news, related, full, editions, works)
@@ -905,6 +912,16 @@ actor SeriesRepository: SeriesRepositoryProtocol {
 }
 
 extension SeriesRepositoryProtocol {
+    /// A repository that does not distinguish tag ids blends without them.
+    func mix(
+        seeds: [Int],
+        filters: SearchQuery,
+        excludedTags: [Int],
+        tagIDs: [Int]
+    ) async -> MixResult {
+        await mix(seeds: seeds, filters: filters, excludedTags: excludedTags)
+    }
+
     /// Stubs and any repository without a cheaper path fall back to the
     /// full record `extras` fetches.
     func series(id: Int) async -> Series? { await extras(for: id).full }
@@ -913,6 +930,17 @@ extension SeriesRepositoryProtocol {
     /// cheaper path than `extras(for:)` should not be made to pay for a
     /// network fetch just to answer "is anything cached".
     func cachedExtras(for seriesId: Int) async -> SeriesExtras? { nil }
+
+    /// One `cachedExtras` per id, for any repository without the batched read.
+    /// The real one overrides this with a single query; a stub answering nil
+    /// costs nothing either way.
+    func cachedExtrasLinks(for ids: [Int]) async -> [Int: [SeriesLink]] {
+        var links: [Int: [SeriesLink]] = [:]
+        for id in ids {
+            if let cached = await cachedExtras(for: id) { links[id] = cached.links }
+        }
+        return links
+    }
 
     // The four `RequestPriority` default overloads live in
     // SeriesRepository+Priority.swift — this file was already at the lint's

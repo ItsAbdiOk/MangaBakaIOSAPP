@@ -50,6 +50,9 @@ actor LibrarySnapshot {
     private let clock: any Clock
     private var cached: Result?
     private var inFlight: Task<Result, Never>?
+    /// Bumped by `invalidate()`. A walk that finishes after the invalidation
+    /// that discarded it must not commit; see `load()`.
+    private var walkGeneration = 0
 
     init(
         library: any LibraryProviding,
@@ -90,30 +93,26 @@ actor LibrarySnapshot {
         }
 
         let task = Task<Result, Never> { [library, onPage] in
-            var result = Result()
-            for page in 1...Self.pageCap {
-                do throws(APIError) {
-                    let batch = try await library.libraryPage(
-                        page: page, limit: Self.pageSize
-                    )
-                    if batch.isEmpty { break }
-                    result.entries.append(contentsOf: batch)
-                    // The screen draws what has arrived rather than waiting
-                    // for all thirteen pages.
-                    onPage?(result.entries)
-                    if batch.count < Self.pageSize { break }
-                    // Ran out of pages before running out of library.
-                    if page == Self.pageCap { result.isComplete = false }
-                } catch {
-                    result.failure = error
-                    result.isComplete = false
-                    break
-                }
-            }
-            return result
+            await Self.walk(library: library, onPage: onPage)
         }
         inFlight = task
-        let result = await task.value
+        let myWalk = walkGeneration
+        var result = await task.value
+        // Only the walk that is still the current one may commit. Work-list
+        // 16: this continuation used to cache, write to disk and nil `onPage`
+        // unconditionally, so an `invalidate()` during a sign-out — which
+        // cancels the task and clears the table — was followed moments later
+        // by the discarded walk writing the *previous* account's library back
+        // to memory and disk, and stealing the new walk's page observer.
+        // `Task` is a struct, so this is a counter rather than an identity
+        // comparison on `inFlight`.
+        guard walkGeneration == myWalk else { return result }
+        // Work-list 15: an edit saved while the walk was in flight had no
+        // cached row to patch, so `apply` recorded it here instead; it is
+        // replayed onto the finished walk before anything is cached, or the
+        // pre-edit row is what sits on disk for the next six hours.
+        result.entries = replayPending(onto: result.entries)
+        pendingChanges.removeAll()
         // A walk that failed is not cached: the next caller should try again
         // rather than inherit a bad connection for the rest of the session.
         if result.failure == nil {
@@ -127,6 +126,68 @@ actor LibrarySnapshot {
         onPage = nil
         return result
     }
+
+    /// The paging loop itself, lifted out of `load()` so each has one job —
+    /// and so `load()` stays under the cyclomatic limit.
+    ///
+    /// `nonisolated static` because it touches nothing of the actor's: it gets
+    /// the provider and the page handler and hands back a `Result`.
+    nonisolated private static func walk(
+        library: any LibraryProviding,
+        onPage: (@Sendable ([LibraryEntry]) -> Void)?
+    ) async -> Result {
+        var result = Result()
+        // Deduped by series id, first page wins. The walk used to append
+        // blindly, so an entry written while it was in flight could move
+        // across the page boundary and arrive twice — and both
+        // `LibraryImport` and `LibraryTransferSection` build a
+        // `Dictionary(uniqueKeysWithValues:)` over this, which traps on a
+        // repeated key (work-list 17). `libraryPage` now also pins the order
+        // with `sort_by=created_at_desc`; this is the belt to that pair of
+        // braces, because the order is the server's to change.
+        var seen = Set<Int>()
+        for page in 1...pageCap {
+            // A walk the account change already discarded must stop fetching,
+            // not just stop being cached (work-list 16).
+            if Task.isCancelled { break }
+            do throws(APIError) {
+                let batch = try await library.libraryPage(page: page, limit: pageSize)
+                if batch.isEmpty { break }
+                result.entries += batch.filter { seen.insert($0.seriesId).inserted }
+                // The screen draws what has arrived rather than waiting for
+                // all thirteen pages.
+                onPage?(result.entries)
+                if batch.count < pageSize { break }
+                // Ran out of pages before running out of library.
+                if page == pageCap { result.isComplete = false }
+            } catch {
+                result.failure = error
+                result.isComplete = false
+                break
+            }
+        }
+        return result
+    }
+
+    /// Edits that landed while the walk was still in flight, newest per
+    /// series. Applied to the walk's own rows before they are cached; see
+    /// `apply(seriesId:change:)`.
+    private var pendingChanges: [Int: LibraryChange] = [:]
+
+    private func replayPending(onto entries: [LibraryEntry]) -> [LibraryEntry] {
+        guard !pendingChanges.isEmpty else { return entries }
+        return entries.map { entry in
+            guard let change = pendingChanges[entry.seriesId] else { return entry }
+            return entry.applying(change)
+        }
+    }
+
+    /// The cached walk, or nil when nothing is cached.
+    ///
+    /// Read-only, and the one way a test can tell "nothing cached" from
+    /// "cached and empty" — `all()` would start a walk to answer that, which
+    /// is exactly the thing under test in `discardedWalkDoesNotCommit`.
+    var cachedResult: Result? { cached }
 
     /// Everything, for callers that do not care why it stopped.
     func all() async -> [LibraryEntry] { await load().entries }
@@ -181,7 +242,12 @@ actor LibrarySnapshot {
             try db.execute(sql: "DELETE FROM libraryEntry")
             for entry in result.entries {
                 guard let payload = try? encoder.encode(entry) else { continue }
-                try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).save(db)
+                // `insert`, not `save`: the table was emptied one statement
+                // ago, so GRDB's `save` spends an UPDATE that matches nothing
+                // before every INSERT — ~1,900 statements for 945 rows, once
+                // per walk (work-list 92). The dedupe in `load()` is what
+                // makes this safe: `insert` would throw on a repeated id.
+                try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).insert(db)
             }
             try LibraryMetadata(
                 cachedAt: clock.now, isComplete: result.isComplete
@@ -203,6 +269,15 @@ actor LibrarySnapshot {
     /// `invalidate()` and a real reload in that case; there is no local row
     /// here to patch.
     func apply(seriesId: Int, change: LibraryChange) {
+        // Work-list 15: an edit saved during the walk had nothing cached to
+        // patch, so it was dropped here — and the walk then cached the
+        // pre-edit row for six hours, which is how a rating set on the
+        // Library screen reappeared as its old value on the next launch.
+        // Stashed and replayed onto the walk's own rows in `load()`.
+        if cached == nil, inFlight != nil {
+            pendingChanges[seriesId] = pendingChanges[seriesId]?.merging(change) ?? change
+            return
+        }
         guard var result = cached,
               let index = result.entries.firstIndex(where: { $0.seriesId == seriesId })
         else { return }
@@ -240,5 +315,9 @@ actor LibrarySnapshot {
         cached = nil
         inFlight?.cancel()
         inFlight = nil
+        // A walk still in flight belongs to the account being forgotten, and
+        // so do any edits stashed against it (work-list 15/16).
+        walkGeneration += 1
+        pendingChanges.removeAll()
     }
 }

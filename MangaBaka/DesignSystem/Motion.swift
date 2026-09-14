@@ -18,21 +18,47 @@ import UIKit
 /// call sites are in models and closures; threading it through them all would
 /// mean fifteen chances to forget. This is the same flag the environment
 /// value is derived from.
+///
+/// Four modifiers — `NumericTransition` and `ArrivalTransition` below,
+/// `AppearsSoftlyModifier` and the `SettingsRow` toggle — do read
+/// `@Environment(\.accessibilityReduceMotion)` instead, because inside a
+/// `ViewModifier` the environment is free and updates the view when the
+/// setting changes mid-session, which this static does not. That is two
+/// mechanisms for one value and the 2026-09-14 review was right to call it
+/// out; consolidating on the environment means finding a home for the ~10
+/// non-`View` call sites first, so it is recorded here rather than done.
 @MainActor
 enum Motion {
-    /// `nonisolated` so the new presets and pure helpers below (`stagger`,
-    /// `arrival`) can default to it without forcing themselves onto the main
-    /// actor: `UIAccessibility.isReduceMotionEnabled` is documented safe to
-    /// read from any thread, unlike most `UIAccessibility` state.
+    /// `nonisolated` so the pure helpers below (`reduced`, `arrival`) and
+    /// `DetailBackdrop.parallaxOffset` can default to it without themselves
+    /// becoming `@MainActor` — a default-argument expression has to match its
+    /// function's isolation, so marking this `@MainActor` would cascade
+    /// through all of them and through `MotionModifiers`'
+    /// `glideTransitionConfig`. It is still only ever read on the main actor;
+    /// see below.
     nonisolated static var isReduced: Bool {
-        // The compiler marks the UIKit flag main-actor; UIKit documents it
-        // as readable anywhere. `assumeIsolated` would trap off the main
-        // thread — and a Swift Testing test evaluating a default argument
-        // is exactly that — so hop only when not already there.
-        if Thread.isMainThread {
-            return MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
-        }
-        return DispatchQueue.main.sync { UIAccessibility.isReduceMotionEnabled }
+        // The compiler marks the UIKit flag main-actor (`NS_SWIFT_UI_ACTOR`
+        // on `UIAccessibilityIsReduceMotionEnabled`, checked against the
+        // iOS 26.5 SDK header on 2026-09-14), so reading it needs the hop
+        // even though UIKit documents the value itself as thread-safe.
+        //
+        // There used to be a `DispatchQueue.main.sync` fallback here for the
+        // off-main case, justified by "a Swift Testing test evaluating a
+        // default argument". That path is dead, checked both ways on
+        // 2026-09-14: every production read is from a view body, a
+        // `ViewModifier`, a `@State` initialiser or a `scrollTransition`
+        // closure, all of which SwiftUI runs on the main actor; and the only
+        // test that reaches the default rather than passing `isReduced:`
+        // explicitly is `MotionTests.swift`'s `MotionSystemFlagTests`, whose
+        // suite is `@MainActor`. A blocking hop from a cooperative-pool
+        // thread is worth losing on its own account — it is the classic way
+        // to deadlock the thread pool — and keeping it meant this value had
+        // two behaviours, one of which nothing exercised.
+        //
+        // `assumeIsolated` traps rather than deadlocks if a future caller
+        // does read this off the main actor, which is the failure mode you
+        // want: loud, at the call site, in the first run.
+        MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
     }
 
     /// The four springs everything in this app animates with. Response and

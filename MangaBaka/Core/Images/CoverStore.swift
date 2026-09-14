@@ -27,6 +27,14 @@ final class CoverStore {
 
     /// Bytes, not entries: cover art varies enormously in size and a count
     /// limit would hold either far too much or far too little.
+    ///
+    /// 96 MB ≈ 300 decoded covers at 320 KB each (a 256×384 pt cover at
+    /// @3x is 768×1152 px, four bytes a pixel ≈ 3.4 MB decoded — so 320 KB
+    /// is the *cost* the store charges, which is the encoded size, not the
+    /// decoded one). **The 300-cover target is a guess**: it was chosen as
+    /// "a long Discover scroll plus a series page", never measured against
+    /// an eviction rate. What would settle it is the hit rate on a real
+    /// scroll; until then do not treat it as derived.
     private let cache: NSCache<NSURL, UIImage> = {
         let cache = NSCache<NSURL, UIImage>()
         cache.totalCostLimit = 96 * 1024 * 1024

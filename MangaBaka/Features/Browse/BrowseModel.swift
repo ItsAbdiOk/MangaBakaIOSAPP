@@ -79,7 +79,13 @@ final class BrowseModel {
     }
 
     func load() async {
-        guard tags.isEmpty else { return }
+        // Either half being empty is reason to ask again. Guarding on `tags`
+        // alone meant a genres-only failure — one of the two requests failing
+        // while the other answered — left the genre row empty for the rest of
+        // the session, because `tags` was full and nothing would ever try
+        // again. `CatalogueService` dedupes in-flight asks and does not cache
+        // a failure, so the retry costs one request (item 53).
+        guard tags.isEmpty || genres.isEmpty else { return }
         isLoading = true
         defer { isLoading = false }
         let fetchedGenres = await catalogue.genres()

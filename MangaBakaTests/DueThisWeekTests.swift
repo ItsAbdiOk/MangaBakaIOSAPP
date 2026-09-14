@@ -78,7 +78,32 @@ struct DueThisWeekTests {
 private struct StubFeedProvider: ReleaseFeedProvider {
     let source: ReleaseSource
     let answer: FeedAnswer
-    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer { answer }
+    /// Counts what a live client would have had to fetch. Since Abdi's Q12
+    /// answer `feedDueWorks` reads only `cachedFeed`, so this staying at zero
+    /// is the assertion the Siri path now rests on.
+    let fetches: Counter?
+
+    init(source: ReleaseSource, answer: FeedAnswer, fetches: Counter? = nil) {
+        self.source = source
+        self.answer = answer
+        self.fetches = fetches
+    }
+
+    func feed(for series: Series, links: [SeriesLink]) async -> FeedAnswer {
+        fetches?.bump()
+        return answer
+    }
+
+    /// The same feed, served the way a warmed on-disk cache would serve it.
+    func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? { answer.feed }
+}
+
+/// A thread-safe tally, because `StubFeedProvider` has to be `Sendable`.
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func bump() { lock.lock(); value += 1; lock.unlock() }
+    var calls: Int { lock.lock(); defer { lock.unlock() }; return value }
 }
 
 /// A repository whose `cachedExtras` answers from a fixed table, so
@@ -174,8 +199,17 @@ struct DueThisWeekFeedTests {
         #expect(results.isEmpty)
     }
 
-    @Test("Never asks more than the fetch cap")
-    func respectsCap() async {
+    /// Item 110 / Abdi's Q12. One Siri question used to fire up to eight
+    /// `report(for:links:)` calls, each serialising behind its client's 3.5 s
+    /// spacing with a placeholder lookup in front of most Webtoons links — up
+    /// to 56 seconds, by which time Siri has given up with a generic error
+    /// while the requests carry on spending the publishers' budget. The answer
+    /// is now built from cache alone.
+    ///
+    /// Expected failure before the fix: `fetches.count` is 8 (the old
+    /// `maxFeedFetches`), not 0.
+    @Test("Answering Siri makes no release-feed request at all")
+    func neverFetches() async {
         let repo = StubExtrasRepository()
         let works = (1...20).map { id -> ScheduledWork in
             repo.extrasByID[id] = SeriesExtras(links: [webtoonsLink()])
@@ -183,12 +217,17 @@ struct DueThisWeekFeedTests {
                 series: SeriesFactory.make(id: id, title: "S\(id)"), cadence: nil, reason: nil
             )
         }
+        let fetches = Counter()
         let feeds = ReleaseFeedService(providers: [
-            StubFeedProvider(source: .webtoons, answer: .answered(rhythmFeed(lastReleaseDaysAgo: 5)))
+            StubFeedProvider(
+                source: .webtoons, answer: .answered(rhythmFeed(lastReleaseDaysAgo: 5)),
+                fetches: fetches
+            )
         ])
 
         let results = await DueThisWeekIntent.feedDueWorks(for: works, feeds: feeds, repository: repo)
-        #expect(results.count <= DueThisWeekIntent.maxFeedFetches)
+        #expect(fetches.calls == 0, "cache only — every one of these would have been a network call")
+        #expect(results.count == 20, "control: every series still gets its real date from the cache")
     }
 
     @Test("Feed-sourced and estimated say which they are when both are due; feed-sourced named first")
@@ -240,6 +279,6 @@ struct IntentWiringTests {
         #expect(app.contains("IntentBridge.shared.services = services"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
         #expect(root.contains(".task(id: bridge.pendingSeriesID)"))
-        #expect(root.contains("bridge.pendingSeriesID = nil\n                await openSeries(id: id)"))
+        #expect(SourceTree.containsRun(root, "bridge.pendingSeriesID = nil await openSeries(id: id)"))
     }
 }

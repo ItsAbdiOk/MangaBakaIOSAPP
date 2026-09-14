@@ -59,11 +59,18 @@ struct Cadence: Equatable, Sendable, Codable {
     /// Everything below is clock-derived, so it is computed on read rather than
     /// stored. An estimate measured an hour ago must not still claim the
     /// lateness it had then.
-    func state(asOf now: Date, calendar: Calendar = .current) -> State {
+    /// - Parameter calendar: UTC by default, not the device's. `due` is
+    ///   derived from MangaUpdates release dates, which are UTC midnights;
+    ///   `Calendar.current.startOfDay` moves each of those to the previous
+    ///   local day anywhere west of UTC, so "last release", "due" and "late"
+    ///   were all one day early for every reader in the Americas. See
+    ///   `Calendar.utc`. `CadenceTests` already pins GMT, which is why it
+    ///   agreed with the bug rather than catching it.
+    func state(asOf now: Date, calendar: Calendar = .utc) -> State {
         overdueDays(asOf: now, calendar: calendar) > 0 ? .late : .due
     }
 
-    func overdueDays(asOf now: Date, calendar: Calendar = .current) -> Int {
+    func overdueDays(asOf now: Date, calendar: Calendar = .utc) -> Int {
         calendar.dateComponents([.day], from: calendar.startOfDay(for: due),
                                 to: calendar.startOfDay(for: now)).day ?? 0
     }
@@ -97,9 +104,12 @@ struct Cadence: Equatable, Sendable, Codable {
     /// - Parameter dates: release dates in any order; duplicates are expected
     ///   and removed, because a series can ship several chapters the same day
     ///   and that is one release event, not several.
+    /// - Parameter calendar: UTC by default — `dates` come from
+    ///   MangaUpdates' `release_date`, parsed as UTC midnight. See
+    ///   `Calendar.utc` and `overdueDays` above.
     static func estimate(
         from dates: [Date],
-        calendar: Calendar = .current
+        calendar: Calendar = .utc
     ) -> Cadence? {
         // Distinct days, newest first.
         let days = Set(dates.map { calendar.startOfDay(for: $0) })

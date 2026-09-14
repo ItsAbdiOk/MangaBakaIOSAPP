@@ -1,7 +1,7 @@
 import Foundation
 
-/// Holds requests back after the API says we are over its limit, and — for
-/// search — before it ever has the chance to.
+/// Holds requests back after the API says we are over its limit, and before
+/// it ever has the chance to.
 ///
 /// MangaBaka rate limits per IP — 30 requests a minute for search, 180
 /// otherwise — and that budget is shared with everyone behind the same address:
@@ -9,10 +9,13 @@ import Foundation
 /// only waste this app's quota, it keeps other people's requests failing too.
 ///
 /// So a 429 is remembered and the client refuses locally until the window
-/// passes, rather than discovering the same refusal over and over. Search
-/// additionally gets a local sliding-window count, enforced *before* the 30th
-/// request of the minute is even sent — a client that already knows its own
-/// budget should not have to spend a real request to be told it is over.
+/// passes, rather than discovering the same refusal over and over. Each
+/// family additionally gets a local sliding-window count, enforced *before*
+/// the 30th (or 181st) request of the minute is even sent — a client that
+/// already knows its own budget should not have to spend a real request to be
+/// told it is over. Until item 31 only search had that window; the 180/min
+/// general limit was published here in this very comment and enforced by
+/// nothing, so the launch path found it by earning a 429.
 ///
 /// **Two independent budgets, not one.** 2026-09-13: a single 429 earned by
 /// search used to back off *every* path — fixed once already for the local
@@ -27,17 +30,55 @@ import Foundation
 /// reader is elsewhere — was free to spend the search window down to zero
 /// before the reader ever typed anything, so "Too many requests, briefly"
 /// could greet a reader who had done nothing but open the series page.
-/// `RequestPriority.background` is now capped at `searchLimit - reserve`
-/// slots and waits for room instead of either failing or competing for the
-/// last few slots against a search the reader is looking at right now.
+/// `RequestPriority.background` is now capped at `family.limit -
+/// family.reserve` slots, in whichever family it belongs to, and waits for
+/// room instead of either failing or competing for the last few slots against
+/// a request the reader is looking at right now.
 actor RateLimitGate {
     /// Which of MangaBaka's two published limits a path counts against. A
     /// 429 or a local budget check applies to one, never both — the two are
     /// enforced independently by the server itself (30/min search, 180/min
     /// everything else), so this app's own memory of them has to match.
-    enum Family: Sendable, Hashable {
+    enum Family: Sendable, Hashable, CaseIterable {
         case search
         case general
+
+        /// Requests a minute MangaBaka publishes for this family. These two
+        /// numbers are the API's, not a guess: 30/min for search, 180/min for
+        /// everything else. Both are per IP, so the budget is shared with
+        /// everyone behind the same address.
+        var limit: Int {
+            switch self {
+            case .search: 30
+            case .general: 180
+            }
+        }
+
+        /// Slots held back from `.background` so a request the reader is
+        /// looking at never has to queue behind invisible work.
+        ///
+        /// **Both are a guess.** Nothing measures what split keeps a
+        /// foreground request from ever waiting; `NetworkLedger` is where the
+        /// evidence would come from once it shows how the two kinds of
+        /// traffic actually interleave. Search's 10 is the figure that has
+        /// been in place since 2026-09-13. General's 60 is this change's own
+        /// guess, chosen as the same one-third proportion — the launch path
+        /// alone (the Spotlight reindex, reminder links, publisher-follow
+        /// checks) can put dozens of general requests in flight while the
+        /// reader is opening a series page, which is exactly the collision
+        /// the reserve exists for.
+        var reserve: Int {
+            switch self {
+            case .search: 10
+            case .general: 60
+            }
+        }
+
+        /// The window both limits are expressed over.
+        var window: TimeInterval { 60 }
+
+        /// Who a refusal in this family is attributed to, for the screen.
+        var party: APIError.Party { self == .search ? .mangaBakaSearch : .mangaBaka }
     }
 
     /// Any path this substring appears in is subject to the search family. A
@@ -54,17 +95,24 @@ actor RateLimitGate {
     private var blockedUntil: [Family: Date] = [:]
     private var consecutiveRateLimits: [Family: Int] = [:]
 
-    /// Timestamps of the search requests let through in roughly the last
-    /// `searchWindow`. Pruned to that window on every check, so this never
-    /// grows past `searchLimit` entries.
-    private var searchTimestamps: [Date] = []
+    /// Timestamps of the requests let through in roughly the last window,
+    /// per family. Pruned to that window on every check, so neither list ever
+    /// grows past its family's limit.
+    ///
+    /// **The general window is new (item 31).** Until this change only search
+    /// had a local sliding window; the 180/min general limit was published,
+    /// documented in this file's own doc comment, and enforced by nothing —
+    /// the app discovered it by earning a 429, which is exactly the "spend a
+    /// real request to be told you are over" the search window exists to
+    /// avoid, and it is shared with everyone behind the same IP.
+    private var timestamps: [Family: [Date]] = [:]
 
-    /// FIFO ticket queue for `.background` requests waiting on room in the
-    /// search window. A `userInitiated` request never enters this queue — it
-    /// is checked against the full window directly, which is what lets it
-    /// "go out next" ahead of anything background already waiting (build
-    /// note: "a simple FIFO where user-initiated jumps the queue").
-    private var backgroundQueue: [UUID] = []
+    /// FIFO ticket queue for `.background` requests waiting on room, per
+    /// family. A `userInitiated` request never enters this queue — it is
+    /// checked against the full window directly, which is what lets it "go
+    /// out next" ahead of anything background already waiting (build note:
+    /// "a simple FIFO where user-initiated jumps the queue").
+    private var backgroundQueue: [Family: [UUID]] = [:]
 
     /// The clock is injected — the same `Clock` protocol `SeriesRepository`
     /// and friends use for cache-expiry tests — so both the 429 backoff and
@@ -95,16 +143,15 @@ actor RateLimitGate {
     /// minute) has no business being blocked by. See gap 8: a single 429 on
     /// search used to close Discover, detail and the library because they all
     /// shared one refusal clock.
-    static let searchLimit = 30
-    static let searchWindow: TimeInterval = 60
+    ///
+    /// Kept as names because tests and comments across the project use them.
+    /// The values live on `Family` now, so there is one place to change.
+    static let searchLimit = Family.search.limit
+    static let searchWindow: TimeInterval = Family.search.window
 
-    /// GUESS, labelled per the brief: nothing measures what split keeps a
-    /// foreground search from ever queuing. 10 leaves background work up to
-    /// 20 of the 30 slots — enough to make real progress on lens counts and
-    /// follow checks — while guaranteeing at least 10 are always free the
-    /// instant the reader actually searches. Revisit once `NetworkLedger`
-    /// shows how the two kinds of traffic actually interleave in practice.
-    static let reserve = 10
+    /// See `Family.reserve`, which this now reads from — the number is a
+    /// guess and is labelled as one there.
+    static let reserve = Family.search.reserve
 
     /// How long a `.background` waiter sleeps between checks for a free slot,
     /// rather than being woken exactly when one frees. GUESS: precise
@@ -127,26 +174,79 @@ actor RateLimitGate {
     /// see `recordRateLimit` — since that means the server itself has
     /// refused, and waiting out a real 429 without limit would just be a
     /// slower way of hammering it.
-    func reserveSlot(for path: String, priority: RequestPriority) async throws(APIError) {
+    /// - Returns: the timestamp just appended to `searchTimestamps` for a
+    ///   search-family reservation, so a caller that turns out not to have
+    ///   needed the slot — a URLCache hit that never touched the network, or
+    ///   an attempt that never left the device at all — can hand it back to
+    ///   `refund(path:reservedAt:)` precisely, rather than guessing which
+    ///   entry was its own among requests running concurrently. `nil` for a
+    ///   general-family path, which never reserves anything to begin with.
+    @discardableResult
+    func reserveSlot(for path: String, priority: RequestPriority) async throws(APIError) -> Date? {
         let family = Self.family(for: path)
         try throwIfBlocked(family)
 
-        guard family == .search else { return }
-
         if priority == .userInitiated {
-            pruneSearchWindow()
-            guard searchTimestamps.count >= Self.searchLimit else {
-                searchTimestamps.append(clock.now)
-                return
+            prune(family)
+            var held = timestamps[family] ?? []
+            guard held.count >= family.limit else {
+                let reservedAt = clock.now
+                held.append(reservedAt)
+                timestamps[family] = held
+                return reservedAt
             }
+            // The oldest request in the window is the one whose expiry frees
+            // the next slot, so that is when this family reopens.
             throw APIError.rateLimited(
-                until: searchTimestamps[0].addingTimeInterval(Self.searchWindow),
-                party: .mangaBakaSearch
+                until: held[0].addingTimeInterval(family.window),
+                party: family.party
             )
         }
 
-        try await waitForBackgroundSlot()
+        return try await waitForBackgroundSlot(family)
     }
+
+    /// Hands back a search-window slot `reserveSlot` reserved on this
+    /// caller's behalf, because it turned out to need none of the server's
+    /// real budget:
+    ///
+    /// - a URLCache hit answered the request without a network round trip
+    ///   (wire review #30) — `reserveSlot` and the ledger both ran before
+    ///   `APIClient.perform` could know that, so both a search slot and a
+    ///   ledger row were spent on a request MangaBaka never saw; or
+    /// - the attempt never left the device at all: `.offline` or
+    ///   `.cancelled` (wire review #13, folded into #30's fix since both are
+    ///   "the slot was reserved for nothing"). `recordSuccess`'s own comment
+    ///   already draws this line for *failed* requests that did reach the
+    ///   server — those still count, because the local budget tracks
+    ///   MangaBaka's own request count, not this app's error rate. An
+    ///   attempt that never reached MangaBaka is not one of its requests at
+    ///   all, so it should never have counted against MangaBaka's window in
+    ///   the first place.
+    ///
+    /// Removes exactly the timestamp `reservedAt` names, not merely "the
+    /// last one" — concurrent search requests can interleave between
+    /// `reserveSlot` and the refund of an earlier one, and removing the
+    /// wrong entry would refund someone else's slot instead of this
+    /// caller's own.
+    func refund(path: String, reservedAt: Date?) {
+        let family = Self.family(for: path)
+        guard let reservedAt, var held = timestamps[family],
+              let index = held.firstIndex(of: reservedAt)
+        else { return }
+        held.remove(at: index)
+        timestamps[family] = held
+    }
+
+    /// Test-only: the number of search-window timestamps currently held.
+    /// Exposed so a test can prove `refund` actually removes the slot it
+    /// names, rather than inferring it indirectly by nearly exhausting a
+    /// 30-slot window.
+    var searchTimestampCountForTesting: Int { (timestamps[.search] ?? []).count }
+
+    /// Test-only: the same count for either family, so the general window
+    /// item 31 added can be asserted the same way the search one is.
+    func timestampCountForTesting(_ family: Family) -> Int { (timestamps[family] ?? []).count }
 
     /// The 429-backoff half of `reserveSlot`, split out only so `reserveSlot`
     /// itself stays a single, readable sequence of "is this refused, is there room,
@@ -157,12 +257,12 @@ actor RateLimitGate {
             blockedUntil[family] = nil
             return
         }
-        throw APIError.rateLimited(until: until, party: family == .search ? .mangaBakaSearch : .mangaBaka)
+        throw APIError.rateLimited(until: until, party: family.party)
     }
 
-    private func pruneSearchWindow() {
-        let cutoff = clock.now.addingTimeInterval(-Self.searchWindow)
-        searchTimestamps.removeAll { $0 <= cutoff }
+    private func prune(_ family: Family) {
+        let cutoff = clock.now.addingTimeInterval(-family.window)
+        timestamps[family]?.removeAll { $0 <= cutoff }
     }
 
     /// Waits in `backgroundQueue`'s arrival order for one of the
@@ -171,20 +271,23 @@ actor RateLimitGate {
     /// Honours cancellation: a caller whose `Task` is cancelled while
     /// waiting — the reader left the screen this background work was for —
     /// throws `.cancelled` and never sends.
-    private func waitForBackgroundSlot() async throws(APIError) {
+    private func waitForBackgroundSlot(_ family: Family) async throws(APIError) -> Date {
         let ticket = UUID()
-        backgroundQueue.append(ticket)
-        defer { backgroundQueue.removeAll { $0 == ticket } }
+        backgroundQueue[family, default: []].append(ticket)
+        defer { backgroundQueue[family]?.removeAll { $0 == ticket } }
 
         while true {
             if Task.isCancelled { throw APIError.cancelled }
-            // A 429 earned by someone else's request (search is per-IP, not
-            // per-request) while this one was waiting must still stop it.
-            try throwIfBlocked(.search)
-            pruneSearchWindow()
-            if backgroundQueue.first == ticket, searchTimestamps.count < Self.searchLimit - Self.reserve {
-                searchTimestamps.append(clock.now)
-                return
+            // A 429 earned by someone else's request (the limits are per-IP,
+            // not per-request) while this one was waiting must still stop it.
+            try throwIfBlocked(family)
+            prune(family)
+            let held = timestamps[family] ?? []
+            if backgroundQueue[family]?.first == ticket,
+               held.count < family.limit - family.reserve {
+                let reservedAt = clock.now
+                timestamps[family] = held + [reservedAt]
+                return reservedAt
             }
             do {
                 try await Task.sleep(for: Self.backgroundPollInterval)

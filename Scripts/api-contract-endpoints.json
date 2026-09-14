@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "Fixture -> live endpoint, for Scripts/check-api-contract.py.",
+    "Every entry's URL is the one the fixture's own provenance comment in",
+    "MangaBakaTests records, quoted exactly. Public endpoints only: an",
+    "authenticated one would put a personal access token in a cron job, and",
+    "/v1/my/* responses are personal data that must not land in docs/.",
+    "Add an entry whenever a dated fixture is captured; a fixture with no",
+    "entry here is a fixture nothing will ever notice going stale."
+  ],
+  "endpoints": [
+    {
+      "fixture": "MangaBakaTests/Fixtures/rising.json",
+      "url": "https://api.mangabaka.org/v2/series/discover/rising?limit=3",
+      "captured": "the original contract check, pre-2026-09-08"
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/genres-2026-09-13.json",
+      "url": "https://api.mangabaka.org/v1/genres",
+      "captured": "2026-09-13 22:33 UTC (CatalogueTests:17-22). The endpoint rejects every query argument with a 400, so there is no limit to pass."
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/tags-search-2026-09-13.json",
+      "url": "https://api.mangabaka.org/v1/tags?q=isekai&limit=5",
+      "captured": "2026-09-13 22:33 UTC (CatalogueTests:131-135)"
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/publishers-search-2026-09-13.json",
+      "url": "https://api.mangabaka.org/v1/publishers/search?q=Kodansha&limit=5",
+      "captured": "2026-09-13 22:33 UTC (CatalogueTests:200-205)"
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/tags-page1.json",
+      "url": "https://api.mangabaka.org/v1/tags?limit=500",
+      "captured": "2026-09-13 (CatalogueTests:55-60). The fixture is a 24-row slice of that page, so expect 'new fields' notices rather than a match on counts — this check compares shape, not length."
+    }
+  ]
+}

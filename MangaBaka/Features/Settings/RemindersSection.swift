@@ -106,10 +106,18 @@ struct RemindersSection: View {
     /// something that has just come out, confirmed; (2) a series they're
     /// reading or have paused has either completed or finished the end of a
     /// season. Those are the only conditions." No prediction, no nudge.
+    ///
+    /// Q2 (2026-09-14): no background refresh, so the app only learns a
+    /// publisher's feed has moved when that series' page is opened. The old
+    /// wording — "a confirmed release the day it's out" — promised a
+    /// timeliness nothing in the app delivers: a feed refreshed on Tuesday's
+    /// page visit is what Thursday's notification is built from. This says
+    /// what actually happens instead of what would be nice.
     private var caption: String {
         """
-        A confirmed release the day it's out, and word when a series you're \
-        reading or have paused has completed or ended a season. Nothing else.
+        A confirmed release, once the app has seen it — which is next time you \
+        open that series. Plus word when a series you're reading or have \
+        paused has completed or ended a season. Nothing else.
         """
     }
 

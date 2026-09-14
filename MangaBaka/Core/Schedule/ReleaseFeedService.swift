@@ -134,6 +134,34 @@ struct ReleaseFeedService: Sendable {
         return result
     }
 
+    /// `report(for:links:)` over whatever is already cached, with no network
+    /// call and no spacing claim.
+    ///
+    /// Abdi, 2026-09-14 (Q12): Siri answers from cache only. One "what's due
+    /// this week" used to fire up to eight `report(for:links:)` calls, and
+    /// every Webtoons candidate serialises behind one 3.5 s actor with a
+    /// placeholder lookup first — so eight placeholder-linked series is
+    /// sixteen slots and up to 56 seconds. Siri gives up with a generic error
+    /// long before that, and the requests still complete, having spent the
+    /// publishers' budget on an answer nobody heard. A first ask on a cold
+    /// cache now falls back to the MangaUpdates estimate, which is what the
+    /// widget shows anyway.
+    ///
+    /// The `gap` is deliberately `.none`: it needs Naver's original feed
+    /// beside the translation, and the whole point here is to ask nobody.
+    func cachedReport(for series: Series, links: [SeriesLink]) async -> ReleaseReport {
+        for provider in providers {
+            guard let feed = await provider.cachedFeed(for: series, links: links) else { continue }
+            let summary = ReleaseSummary.summarise(feed, knownChapterCount: series.totalChapters)
+            guard !summary.isEmpty else { continue }
+            return ReleaseReport(
+                summary: summary, source: feed.source, sourceName: feed.sourceName,
+                gap: .none, failures: []
+            )
+        }
+        return .empty
+    }
+
     /// Only computed when there is a translated edition distinct from the
     /// original to compare against — a Korean-only reader already sees the
     /// original as `summary` and has nothing to compare it to.

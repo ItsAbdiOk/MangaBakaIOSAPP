@@ -17,15 +17,12 @@ fi
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
 echo "Checking for committed credentials..."
-if [ -f Configs/Secrets.xcconfig ]; then
-    echo "error: Configs/Secrets.xcconfig is present in the repository." >&2
-    exit 1
-fi
-if grep -rEl '"mb-[A-Za-z0-9]{16,}"' MangaBaka --include='*.swift' 2>/dev/null; then
-    echo "error: a token-shaped literal is present in shipping code." >&2
-    exit 1
-fi
-echo "  no credentials committed."
+# One script, shared with .githooks/pre-push. This used to be a second,
+# narrower copy of the same check — Swift files only — while the hook also
+# scanned every tracked file. The all-tracked-files half is the one that
+# matters (a real token was once pasted into Configs/Secrets.example.xcconfig,
+# which is tracked and is not Swift) and CI was the side missing it.
+sh Scripts/check-credentials.sh
 
 # Installing the linter is infrastructure; finding a violation is a real gate.
 # They are not the same failure, so they do not get the same outcome: a brew

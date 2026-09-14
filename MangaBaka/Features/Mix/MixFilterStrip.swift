@@ -49,6 +49,14 @@ extension MixView {
             }
         }
         .padding(.horizontal, Metrics.gutter)
+        // One place, not one per control. The type and tag chips called
+        // `requestBlend` themselves and the rating segments and the tag picker
+        // sheet did not — both write `model.filters` and neither re-blended,
+        // so the grid showed 6.1-rated series under a control reading 8+, and
+        // a tag picked in the sheet came back selected over results that had
+        // never required it (item 45). Debounced in `requestBlend`, so a run
+        // of taps is still one request.
+        .onChange(of: model.filters) { requestBlend() }
     }
 
     /// Tags to require in the blend. The mockup's AND/OR mode is gone — see
@@ -64,13 +72,20 @@ extension MixView {
     var tagFilter: some View {
         if !model.dna.isEmpty || !model.filters.tags.isEmpty || catalogue != nil {
             VStack(alignment: .leading, spacing: 10) {
-                // The ALL/ANY toggle that used to sit here is gone: measured
-                // 2026-09-13, `/v1/series/mix` with `tag=Isekai&tag=Regression`
-                // returns the same 50 ids with and without `tag_mode=or`, and
-                // `SearchQuery` now always sends `tag_mode=and` regardless of
-                // what this model's `tagMode` holds (see its doc comment).
-                // A control whose two states send the same request is not a
-                // control. `TagPickerSheet.pickedTagMode` made the same call.
+                // The ALL/ANY toggle that used to sit here is gone, and the
+                // measurement it was removed on has been re-taken. The
+                // 2026-09-13 reading compared `tag=Isekai&tag=Regression`
+                // with and without `tag_mode=or` — but `/v1/series/mix`
+                // ignores a tag *name* outright, so that pair of requests was
+                // the same unfiltered blend twice and measured nothing about
+                // `tag_mode`. Re-measured 2026-09-14 with ids, which the
+                // endpoint does honour: `tag=94&tag=1180` answers the same
+                // ids with `tag_mode=or`, with `=and`, and with neither. The
+                // conclusion stands on the new reading — a control whose two
+                // states send the same request is not a control — and
+                // `SearchQuery` sends `tag_mode=and` regardless of what
+                // `tagMode` holds in any case (see its doc comment).
+                // `TagPickerSheet.pickedTagMode` made the same call.
                 Eyebrow(text: "Require tags")
 
                 // Drawn from the blend's own DNA, so every chip is a tag this
@@ -142,9 +157,17 @@ extension MixView {
     private static var pendingFilterBlend: Task<Void, Never>?
 
     func requestBlend() {
+        // A filter tap before any seed is picked is not an attempt to blend.
+        // Without this it reached `MixModel.run()`, which refuses a seedless
+        // request and sets "Add at least one series to blend from." — a
+        // scolding for tapping a filter, under a Blend button that already
+        // teaches the rule by being disabled.
+        guard !model.seeds.isEmpty else { return }
         Self.pendingFilterBlend?.cancel()
-        Self.pendingFilterBlend = Task {
-            try? await Task.sleep(for: MixModel.strandDebounce)
+        // The model's clock, not the global one, so a test moving time moves
+        // this debounce with the strand debounce it shares a number with.
+        Self.pendingFilterBlend = Task { [clock = model.clock] in
+            try? await clock.sleep(for: MixModel.strandDebounce)
             guard !Task.isCancelled else { return }
             await model.run()
         }
@@ -156,11 +179,8 @@ extension MixView {
         } else {
             model.filters.tags.append(name)
         }
-        // Two or more tags need a rule for combining them; one does not.
-        if model.filters.tags.count > 1, model.filters.tagMode == nil {
-            model.filters.tagMode = "and"
-        }
-        requestBlend()
+        // No `tagMode` write: `SearchQuery` sends `tag_mode=and` whatever the
+        // field holds, so this was a write nobody read.
     }
 
     func toggleType(_ type: String) {
@@ -169,7 +189,6 @@ extension MixView {
         } else {
             model.filters.types.append(type)
         }
-        requestBlend()
     }
 
     func chip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

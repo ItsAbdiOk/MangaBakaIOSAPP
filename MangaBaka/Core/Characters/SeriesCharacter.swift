@@ -113,8 +113,13 @@ actor ShikimoriClient {
     /// nothing and a ban would cost the feature entirely.
     static let minimumInterval: TimeInterval = 0.25
 
-    /// Required by their terms: an unidentified client is refused.
-    static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
+    /// Required by their terms: an unidentified client is refused. The
+    /// string itself is `AppUserAgent.value` — it was written out in full
+    /// here and in two other files before that existed. `ThirdPartySession`
+    /// sends it for every client; the explicit `setValue` below stays because
+    /// this is one of the two hosts that answers 403 without it, and a caller
+    /// that substitutes its own session would otherwise lose it silently.
+    static let userAgent = AppUserAgent.value
 
     private let baseURL: URL
     private let session: URLSession
@@ -129,7 +134,7 @@ actor ShikimoriClient {
         // portrait, plus accepting cookies from a third party's edge for no
         // reason — pointing at the real host directly avoids both.
         baseURL: URL = URL(string: "https://shikimori.io").unsafeCharacterFallback,
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock()
     ) {
         self.baseURL = baseURL
@@ -162,8 +167,12 @@ actor ShikimoriClient {
             throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.", party: .shikimori)
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .shikimori)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -267,8 +276,12 @@ extension ShikimoriClient {
             throw APIError.transport(underlying: "Shikimori sent a non-HTTP response.", party: .shikimori)
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .shikimori)
         }
         guard (200..<300).contains(http.statusCode) else {

@@ -76,19 +76,33 @@ struct ScheduleServiceTests {
             )
         }
         // Two series, three seconds apart by the MangaUpdates spacing rule: a
-        // build that is still running when the reader comes back.
+        // build that is still running when the reader comes back. The wait
+        // itself is real wall-clock time regardless of the clock passed here
+        // (`MangaUpdatesClient.waitForSlot` sleeps with `Task.sleep`, not
+        // through the injected `Clock`) — a `TestClock` only keeps the spacing
+        // *arithmetic* from drifting by whatever real time this test itself
+        // takes to run, the same reason `MangaUpdatesSpacingTests:42` injects
+        // one. It does not, and cannot, make this test fast or deterministic;
+        // see docs/reviews/full/SUMMARY.md item 134 for the seam that would.
         let service = ReleaseScheduleService(
             library: LibrarySnapshot(library: OneEntryLibrary(entries: entries)),
             mangaUpdates: MangaUpdatesClient(
                 baseURL: URL(string: "https://mu.example.invalid/v1").unsafeTestURL,
-                session: URLProtocolStub.makeSession()
+                session: URLProtocolStub.makeSession(),
+                clock: TestClock()
             ),
             database: try AppDatabase.inMemory()
         )
         let model = ScheduleModel(service: service)
-        // No wait needed: measure() awaits service.build() to completion and
-        // then calls followBuild() synchronously, so isFollowingBuild is
-        // already set the moment measure() returns.
+        // No wait needed here, but not because `build()` runs to completion —
+        // it does not: `ReleaseScheduleService.build(refresh:)` is synchronous,
+        // sets `progress.isRunning = true` before returning, and spawns the
+        // actual three-series walk on a detached `Task` that keeps running
+        // long after this call returns. `measure()`'s `await` is only the
+        // actor hop into that synchronous call. `followBuild()` then runs
+        // synchronously right after, so `isFollowingBuild` (`pollTask != nil`)
+        // is set the moment `measure()` returns — corrected 2026-09-14, see
+        // docs/reviews/full/SUMMARY.md item 134.
         await model.measure()
         #expect(model.isFollowingBuild)
 

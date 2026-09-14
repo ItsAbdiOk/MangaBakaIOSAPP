@@ -169,7 +169,42 @@ final class ReleaseReminders {
         libraryFailure: APIError? = nil,
         isComplete: Bool = true
     ) async {
+        // Serialised against any pass still in flight. Every counter this
+        // method paces by — `fired`, `seriesLastNotified` — is read from
+        // `UserDefaults` at the top and written back at the bottom, with an
+        // `await` per notification in between; two overlapping passes (a
+        // launch refresh and a Settings toggle, which is exactly how the cap
+        // was first found to leak) both read the same pre-pass counts and
+        // the second write wins, so the day's allowance is spent twice.
+        let previous = rescheduleTask
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.performReschedule(
+                announced: announced, library: library, feeds: feeds,
+                libraryFailure: libraryFailure, isComplete: isComplete
+            )
+        }
+        rescheduleTask = task
+        await task.value
+    }
+
+    private var rescheduleTask: Task<Void, Never>?
+
+    private func performReschedule(
+        announced: [UpcomingWork],
+        library: [LibraryEntry],
+        feeds: [Int: ReleaseFeed],
+        libraryFailure: APIError?,
+        isComplete: Bool
+    ) async {
         guard libraryFailure == nil, isComplete else { return }
+        // Gap 35: `effectiveEnabled` reads `systemStatus`, which is
+        // `.notDetermined` until something calls `refreshStatus()` — and the
+        // only caller was the Settings section's `.task`. A reader who
+        // revoked permission in iOS Settings therefore had every `add`
+        // silently dropped by iOS while `fired` recorded the id as sent, so
+        // they would never be told even after re-granting.
+        await refreshStatus()
         guard effectiveEnabled else { return }
 
         let now = now()
@@ -245,17 +280,24 @@ extension ReleaseReminders {
         seriesLastNotified: [Int: Date],
         calendar: Calendar = .current
     ) -> [NotificationPolicy.PlannedNotification] {
-        let tomorrowNine: Date = {
-            var components = calendar.dateComponents([.year, .month, .day], from: now)
-            components.day = (components.day ?? 0) + 1
-            components.hour = 9
-            components.minute = 0
-            return calendar.date(from: components) ?? now.addingTimeInterval(60 * 60 * 24)
-        }()
+        let today = calendar.startOfDay(for: now)
+
+        // How many notifications each day is already spoken for, seeded from
+        // `fired` — which is persisted, and whose values are the dates the
+        // notifications were *scheduled* for, including ones this guard
+        // pushed into the future. Before 2026-09-14 this was a plain
+        // `sentToday = 0` local to the pass, so the cap reset on every call:
+        // a launch refresh plus one Settings toggle sent six in a day, and a
+        // relaunch bought three more. Overflow was also all re-dated to the
+        // same tomorrow-09:00 with nothing counting that day either, so
+        // seven candidates put four on one morning.
+        var allocated: [Date: Int] = [:]
+        for date in fired.values where date >= today {
+            allocated[calendar.startOfDay(for: date), default: 0] += 1
+        }
 
         var results: [NotificationPolicy.PlannedNotification] = []
         var seriesSeenThisPass: [Int: Date] = seriesLastNotified
-        var sentToday = 0
 
         for candidate in candidates.sorted(by: { $0.date < $1.date }) {
             guard fired[candidate.id] == nil else { continue }
@@ -263,22 +305,51 @@ extension ReleaseReminders {
                now.timeIntervalSince(last) < ReleaseReminders.sameSeriesCooldown {
                 continue
             }
+            guard let placed = place(
+                candidate, from: today, allocated: &allocated, calendar: calendar
+            ) else { continue }
 
-            if sentToday < ReleaseReminders.dailyLimit {
-                results.append(candidate)
-                sentToday += 1
-            } else {
-                // The 4th+ of the day waits for tomorrow morning rather than
-                // being dropped — a confirmed release or a finished series is
-                // still worth saying, just not today.
-                results.append(NotificationPolicy.PlannedNotification(
-                    id: candidate.id, seriesID: candidate.seriesID,
-                    title: candidate.title, body: candidate.body, date: tomorrowNine
-                ))
-            }
+            results.append(placed)
             if let seriesID = candidate.seriesID { seriesSeenThisPass[seriesID] = now }
         }
         return results
+    }
+
+    /// **A guess: fourteen days.** How far forward the overflow walk will go
+    /// looking for a day with a free slot. A fact still unsaid a fortnight
+    /// later is a backlog, not news; past this the candidate is simply not
+    /// scheduled on this pass — and deliberately *not* recorded in `fired`,
+    /// so a later pass with room can still place it.
+    nonisolated static let maxDeferralDays = 14
+
+    /// Places one candidate on the first day at or after both today and its
+    /// own date that has fewer than `dailyLimit` notifications spoken for,
+    /// charging that day's budget. Something due today keeps its own time
+    /// (`ReminderRequest.triggerDate` decides when it actually fires); a
+    /// candidate pushed to a later day is re-dated to 09:00, the same hour
+    /// that rule lands on.
+    nonisolated private static func place(
+        _ candidate: NotificationPolicy.PlannedNotification,
+        from today: Date,
+        allocated: inout [Date: Int],
+        calendar: Calendar
+    ) -> NotificationPolicy.PlannedNotification? {
+        let earliest = max(today, calendar.startOfDay(for: candidate.date))
+        for offset in 0...maxDeferralDays {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: earliest) else { continue }
+            guard (allocated[day] ?? 0) < ReleaseReminders.dailyLimit else { continue }
+            allocated[day, default: 0] += 1
+            guard day > calendar.startOfDay(for: candidate.date) else { return candidate }
+            var morning = calendar.dateComponents([.year, .month, .day], from: day)
+            morning.hour = 9
+            morning.minute = 0
+            guard let date = calendar.date(from: morning) else { return candidate }
+            return NotificationPolicy.PlannedNotification(
+                id: candidate.id, seriesID: candidate.seriesID,
+                title: candidate.title, body: candidate.body, date: date
+            )
+        }
+        return nil
     }
 
     private static let firedKey = "reminders.fired"

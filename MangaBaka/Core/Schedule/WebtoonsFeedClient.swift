@@ -21,7 +21,7 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     private var spacing = RequestSpacing(minimumInterval: WebtoonsFeedClient.minimumInterval)
 
     init(
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("webtoons", isDirectory: true)
@@ -128,8 +128,12 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
             return .failed(error, isRateLimit: false)
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             return .failed(.rateLimited(retryAfter: retryAfter, party: .webtoons), isRateLimit: true)
         }
         // A wrong genre or slug in the path answers 500, not 404, and that is
@@ -174,8 +178,19 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
             guard !Task.isCancelled else { return [] }
         }
         // URLSession follows redirects itself, so the landing page's URL is
-        // what comes back on the response — the body is discarded.
-        guard let (_, response) = try? await session.data(from: lookup),
+        // what comes back on the response — the body is never read.
+        //
+        // HEAD, not GET (2026-09-14). 84% of the Webtoons links in a real
+        // library are placeholders, so most first opens ran this; a GET
+        // downloads a full `no-store` HTML listing page purely to look at
+        // `response.url`. Measured from a Mac and confirmed from a phone
+        // (U18): HEAD answers `301` with `content-length: 0` and the same
+        // `location`, so `response.url` after the redirect is identical.
+        // It is also what Webtoons sees in its logs for a made-up
+        // `/en/x/y/` path we never intended to read.
+        var request = URLRequest(url: lookup)
+        request.httpMethod = "HEAD"
+        guard let (_, response) = try? await session.data(for: request),
               let resolved = response.url,
               let landed = WebtoonsFeedParser.feedURL(fromResolved: resolved)
         else { return [] }

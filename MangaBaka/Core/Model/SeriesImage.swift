@@ -26,7 +26,26 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
     let image: Cover
 
     var id: String {
-        imageID.map(String.init) ?? image.raw?.absoluteString ?? "\(index ?? "")-\(language ?? "")"
+        // `index`/`language` alone collide: two "other" images (no volume
+        // index) in the same language, both missing `id` and `raw`, produced
+        // the same fallback string and `ForEach` misbehaved on the duplicate
+        // (wire review finding 118, 2026-09-14). `indexNumeric` and `type`
+        // are the two remaining fields that can tell such rows apart —
+        // `indexNumeric` for two same-language volumes recorded with
+        // different index text ("1" vs "1.0"), `type` for a volume cover
+        // versus an "other" one at the same index — so both join the key.
+        // Still not provably unique (two truly identical rows would still
+        // collide), but no better field remains to add.
+        if let imageID { return String(imageID) }
+        if let raw = image.raw { return raw.absoluteString }
+        // Split into locals rather than one interpolated `??` chain: the
+        // chain made the type checker give up outright ("failed to produce
+        // diagnostic"), 2026-09-14.
+        // `String(describing:)`, not `String.init`: `indexNumeric` is a
+        // `Double?` and the bare initialiser is ambiguous across the
+        // numeric overloads.
+        let numeric = indexNumeric.map { String(describing: $0) } ?? ""
+        return "\(index ?? "")-\(language ?? "")-\(numeric)-\(type ?? "")"
     }
 
     enum CodingKeys: String, CodingKey {

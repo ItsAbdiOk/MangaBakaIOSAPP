@@ -152,7 +152,12 @@ struct RateLimitGateTests {
     func searchSlidingWindowRefusesTheThirtyFirst() async {
         let (gate, clock) = makeGate()
         for _ in 0..<RateLimitGate.searchLimit {
-            try? await gate.reserveSlot(for: "/v1/series/search", priority: .userInitiated)
+            // An assertion, not a `try?`: these thirty must all succeed, or the
+            // 31st below is refused for the wrong reason and the test still
+            // passes green.
+            await #expect(throws: Never.self) {
+                try await gate.reserveSlot(for: "/v1/series/search", priority: .userInitiated)
+            }
         }
         do {
             try await gate.reserveSlot(for: "/v1/series/search", priority: .userInitiated)
@@ -263,7 +268,8 @@ struct RequestPriorityBudgetTests {
 
         let flag = CompletionFlag()
         let waiter = Task {
-            try? await gate.reserveSlot(for: "/v1/series/search", priority: .background)
+            // `_ =`: the gate now answers with the deadline it waited for.
+            _ = try? await gate.reserveSlot(for: "/v1/series/search", priority: .background)
             flag.markDone()
         }
         defer { waiter.cancel() }
@@ -317,7 +323,7 @@ struct RequestPriorityBudgetTests {
         waiter.cancel()
 
         do {
-            try await waiter.value
+            _ = try await waiter.value
             Issue.record("A cancelled wait must not resolve as success")
         } catch let error as APIError {
             #expect(error == .cancelled)

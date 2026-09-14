@@ -63,7 +63,6 @@ struct GigaViewerFeedParsingTests {
         // string accident.
         #expect(!first.episodeTitle.contains("page1.jpg"))
         #expect(!first.seriesTitle.contains("page1.jpg"))
-        #expect(!items.isEmpty)
     }
 
     @Test("第N話 numbers, including the sub-episode and circled-digit shapes")

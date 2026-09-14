@@ -40,13 +40,16 @@ struct SeriesWidgetView: View {
     }
 
     private func row(_ item: WidgetSnapshotData.Item) -> some View {
+        // Composed now, from `item.due`, not read out of a string the app
+        // baked — see `SeriesWidgetEntryBuilder.subtitle(for:)`.
+        let subtitle = SeriesWidgetEntryBuilder.subtitle(for: item)
         let content = HStack(alignment: .center, spacing: 8) {
             cover(for: item)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text(item.subtitle)
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -54,7 +57,7 @@ struct SeriesWidgetView: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title). \(item.subtitle)")
+        .accessibilityLabel("\(item.title). \(subtitle)")
 
         // Each row is its own tap target when there is a real deep link to
         // open — `widgetURL` alone only covers the whole widget once, which

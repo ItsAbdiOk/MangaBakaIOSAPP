@@ -59,9 +59,39 @@ final class MixModel {
     let repository: any SeriesRepositoryProtocol
     private let shelf: ShelfStore
 
-    init(repository: any SeriesRepositoryProtocol, shelf: ShelfStore) {
+    /// What the strand debounce sleeps against. Injected so a test can move
+    /// time rather than sleep through 350 ms of it (item 129).
+    ///
+    /// Spelled with its module because this one does not: `MangaBaka` has its
+    /// own `Clock` protocol (`Core/Persistence/Clock.swift`, a source of
+    /// "now" for cache expiry), and an unqualified `Clock` resolves to that.
+    nonisolated let clock: any _Concurrency.Clock<Duration>
+
+    /// Tag name → tag id, for the names `filters.tags` holds.
+    ///
+    /// `/v1/series/mix` ignores a tag *name* outright — measured 2026-09-14:
+    /// `tag=Isekai` returns the unfiltered blend, `tag=94` filters — so
+    /// "Require tags" lit a chip up and changed nothing. Every answer's DNA
+    /// carries both halves (`BlendDNA.Strand.tagId`) and the picker hands
+    /// back whole `Tag`s, so both are recorded here and `run()` sends ids.
+    /// A name with no id known is simply not sent, rather than sent as a
+    /// name the API will ignore (item 18).
+    private(set) var tagIDsByName: [String: Int] = [:]
+
+    init(
+        repository: any SeriesRepositoryProtocol,
+        shelf: ShelfStore,
+        clock: any _Concurrency.Clock<Duration> = ContinuousClock()
+    ) {
         self.repository = repository
         self.shelf = shelf
+        self.clock = clock
+    }
+
+    /// Remembers a tag's id against its name, so a tag picked before any
+    /// blend has run still reaches the wire as an id.
+    func noteTagID(_ tag: Tag) {
+        tagIDsByName[tag.name] = tag.id
     }
 
     func addSeed(_ series: Series) {
@@ -78,8 +108,14 @@ final class MixModel {
 
     /// A head start for someone who has already used the Stack: their saved
     /// series make honest seeds, since they are things this reader chose.
+    /// Capped: the row shows six, a non-lazy `HStack` draws every one it is
+    /// given, and a reader with 300 saves paid 300 payload decodes on the
+    /// `ShelfStore` actor, 300 view bodies, 300 arrival springs and 300 cover
+    /// requests in one frame — on every appearance of the Mix screen. 24 is a
+    /// guess: four screens' worth of scrolling for a row nobody is meant to
+    /// scroll far (item 52).
     func suggestedSeeds() async -> [Series] {
-        (try? await shelf.entries(.saved).series) ?? []
+        Array(((try? await shelf.entries(.saved).series) ?? []).prefix(24))
     }
 
     func run() async {
@@ -98,7 +134,8 @@ final class MixModel {
         let blended = await repository.mix(
             seeds: seeds.map(\.id),
             filters: filters,
-            excludedTags: Array(excludedTags)
+            excludedTags: Array(excludedTags),
+            tagIDs: filters.tags.compactMap { tagIDsByName[$0] }
         )
         guard mine == generation else { return }
         defer { isRunning = false }
@@ -109,12 +146,26 @@ final class MixModel {
             // on screen rather than being wiped and replaced with a sentence
             // that blames the reader's filters for a request that never
             // reached the server.
+            // A blend superseded by a later edit dies with `.cancelled`, and
+            // the replacement is still asleep in its debounce when it does —
+            // so the generation guard above passes and this used to draw a
+            // "Cancelled" `FailureState` with a Retry button for 350 ms
+            // between two taps on the same chip (C2, item 47).
+            if case .cancelled = error { return }
             failure = error
             return
         }
         failure = nil
         results = blended.recommendations
         dna = blended.dna
+        // Every strand carries its own id; recording them is what lets
+        // "Require tags" send ids rather than names (item 18).
+        for strand in blended.dna.strands {
+            tagIDsByName[strand.name] = strand.tagId
+        }
+        // A strand switched back on stays in `excludedStrands`, drawn as
+        // included, until a blend actually returns it — see `toggleStrand`.
+        excludedStrands.removeAll { !excludedTags.contains($0.tagId) }
         // Only meaningful against a previous blend; the first run has nothing
         // to compare with and shows no movement rather than fake movement.
         moves = previous.isEmpty ? [] : BlendDNA.moves(from: previous, to: blended.dna)
@@ -128,7 +179,11 @@ final class MixModel {
     func toggleStrand(_ tagId: Int) async {
         if excludedTags.contains(tagId) {
             excludedTags.remove(tagId)
-            excludedStrands.removeAll { $0.tagId == tagId }
+            // Deliberately still in `excludedStrands`: the API has not
+            // returned it yet, so dropping it here made the chip vanish for
+            // the debounce plus the request, and permanently if the re-blend
+            // failed. `run()` clears it once a blend brings it back, and
+            // `BlendDNAView` draws it as included meanwhile (item 46).
         } else {
             // Captured before the blend re-runs, because afterwards the API no
             // longer returns it and there would be nothing left to remember.
@@ -145,8 +200,8 @@ final class MixModel {
     /// answered last, not the one for the strands actually switched off.
     private func blendAfterEdits() async {
         pendingBlend?.cancel()
-        let task = Task {
-            try? await Task.sleep(for: Self.strandDebounce)
+        let task = Task { [clock] in
+            try? await clock.sleep(for: Self.strandDebounce)
             guard !Task.isCancelled else { return }
             await run()
         }

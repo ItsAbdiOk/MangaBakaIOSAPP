@@ -62,8 +62,14 @@ enum TitleSettings {
     static func set(_ preference: TitlePreference) {
         lock.lock()
         cached = preference
+        // Read under the same lock `resetForTesting` writes it under. In
+        // production `store` never changes after launch, so this was benign;
+        // it is a real race only in a test that calls `resetForTesting` with
+        // a fresh `UserDefaults` concurrently with `set` — the read used to
+        // happen after `unlock()`, so it could observe either store.
+        let target = store
         lock.unlock()
-        store.set(preference.rawValue, forKey: key)
+        target.set(preference.rawValue, forKey: key)
     }
 
     /// For tests, which must not inherit whatever the last one set — nor

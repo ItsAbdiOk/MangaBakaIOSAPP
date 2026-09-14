@@ -99,14 +99,6 @@ final class SearchModel {
         didSet { answered = nil }
     }
 
-    /// Compatibility for a caller not yet reading `failure` directly —
-    /// `SeedPickerSheet.swift` (owned by the Mix batch, gap 44) still reads
-    /// `search.message` for its empty-state copy. Kept as a thin derivation
-    /// rather than dropped outright so that file keeps compiling unchanged
-    /// while its own fix lands separately; delete once that caller reads
-    /// `failure` itself.
-    var message: String? { failure?.userFacingMessage }
-
     private let repository: any SeriesRepositoryProtocol
     private let offline: OfflineCatalogue
     /// The reader's content-rating preference, read fresh on every offline
@@ -122,6 +114,16 @@ final class SearchModel {
     private let allowedFormats: @MainActor () -> [String]
     private let blockedTagIDs: @MainActor () -> [Int]
     private var debounceTask: Task<Void, Never>?
+    /// What the debounce sleeps against. Injected so a test can move time
+    /// rather than sleep through it — 25 tests spent 13.5 s of real
+    /// `Task.sleep` waiting on debounces, and two of them waited less than
+    /// the debounce they were racing, so a 150–220 ms stall failed them
+    /// (item 129).
+    ///
+    /// Spelled with its module because this one does not: `MangaBaka` has its
+    /// own `Clock` protocol (`Core/Persistence/Clock.swift`, a source of
+    /// "now" for cache expiry), and an unqualified `Clock` resolves to that.
+    nonisolated let clock: any _Concurrency.Clock<Duration>
     /// The text `apply(_:)` just set, so the field's own change observer can
     /// tell that edit from a keystroke. See `queryDidChange`. Stored as ""
     /// rather than nil for a text-less apply: a lens with no text applied
@@ -135,14 +137,22 @@ final class SearchModel {
         offline: OfflineCatalogue = OfflineCatalogue(),
         allowedRatings: @escaping @MainActor () -> [String] = { ["safe", "suggestive"] },
         allowedFormats: @escaping @MainActor () -> [String] = { [] },
-        blockedTagIDs: @escaping @MainActor () -> [Int] = { [] }
+        blockedTagIDs: @escaping @MainActor () -> [Int] = { [] },
+        clock: any _Concurrency.Clock<Duration> = ContinuousClock()
     ) {
         self.repository = repository
         self.offline = offline
         self.allowedRatings = allowedRatings
         self.allowedFormats = allowedFormats
         self.blockedTagIDs = blockedTagIDs
+        self.clock = clock
     }
+
+    /// How long typing settles before a request goes out. Named rather than a
+    /// literal so a test can read the same number the model sleeps for, and
+    /// so the debounce's lower bound is testable at all (item 129). 300 ms
+    /// arrived undated and underived; still a guess, not re-guessed here.
+    static let queryDebounce: Duration = .milliseconds(300)
 
     /// Called on every edit to `query` from the view. Cancels whatever debounce
     /// or in-flight search is pending and starts a fresh 300ms wait, so only
@@ -184,9 +194,16 @@ final class SearchModel {
             return
         }
         hasAsked = true
+        scheduleDebouncedSearch()
+    }
+
+    /// The one debounce. Every caller that wants "search once the edits stop"
+    /// goes through here, so a scope tap and a keystroke are spaced the same
+    /// way rather than one of them going straight to the wire (item 51).
+    private func scheduleDebouncedSearch() {
         isPending = true
-        debounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+        debounceTask = Task { [weak self, clock] in
+            try? await clock.sleep(for: Self.queryDebounce)
             guard !Task.isCancelled else { return }
             await self?.search()
         }
@@ -209,10 +226,17 @@ final class SearchModel {
     /// grid must answer the query as it now stands, not the one the token
     /// was part of. Nothing asked yet (a token dropped, a scope picked, on
     /// the idle panel) stays nothing asked — the panel is not an ask (UX#1).
+    ///
+    /// Debounced, not immediate. A scope tap used to go straight to
+    /// `search()`, so All → Manga → Manhwa → Manhua in two seconds was three
+    /// `/v2/series/search` requests from a 30/min window shared with
+    /// strangers, two of whose answers were downloaded and thrown away. The
+    /// scope bar reads the query back rather than the results, so nothing on
+    /// screen waits on the request (item 51).
     func filtersDidChange() {
         guard hasAsked else { return }
         cancelPendingDebounce()
-        Task { await search() }
+        scheduleDebouncedSearch()
     }
 
     /// Back to the idle panel: nothing asked, nothing shown, nothing owed.
@@ -260,6 +284,13 @@ final class SearchModel {
     /// business, not this method's.
     func search() async {
         isPending = false
+        // Text too short to ask with is not a licence to ask without it.
+        // `query.isEmpty` is false the moment any filter is set, so Return on
+        // a one-character field with Type=Manhwa omitted `q` entirely and
+        // answered 21,596 manhwa under a field showing "a" and a heading
+        // reading "21,596 results". `RecentSearches` already refuses the same
+        // term; the two rules now agree (item 49).
+        if let text = query.text, !text.isEmpty, query.askedText == nil { return }
         guard !query.isEmpty else {
             resetToIdle()
             return

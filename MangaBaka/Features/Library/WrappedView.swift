@@ -21,6 +21,9 @@ struct WrappedView: View {
     /// behaving exactly as before until the shell (batch 6) passes the real
     /// value from `LibraryModel.isComplete`.
     var isComplete = true
+    /// See `ReadingInsightsView.libraryRevision` — work-list 85.
+    var libraryRevision = 0
+
     @Binding var path: [Series]
 
     @State private var facts = Facts()
@@ -30,7 +33,7 @@ struct WrappedView: View {
     /// year yet", only cards that each independently declined to render.
     @State private var hasComputed = false
 
-    private var revision: String { "\(entries.count)-\(isComplete)" }
+    private var revision: String { "\(entries.count)-\(isComplete)-\(libraryRevision)" }
 
     /// Whether any card below the header would actually draw anything.
     private var hasAnythingToShow: Bool {

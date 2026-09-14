@@ -34,12 +34,26 @@ final class TagSearch {
     /// word is one request rather than seven.
     static let debounce: Duration = .milliseconds(250)
 
-    init(catalogue: CatalogueService) {
+    /// What the debounce sleeps against. Injected so a test can move time
+    /// rather than sleep through it: `TagSearchTests` waited 100 ms of real
+    /// time on this 250 ms debounce, so a 150 ms stall failed it (item 129).
+    ///
+    /// Spelled with its module because this one does not: `MangaBaka` has its
+    /// own `Clock` protocol (`Core/Persistence/Clock.swift`, a source of
+    /// "now" for cache expiry), and an unqualified `Clock` resolves to that.
+    nonisolated let clock: any _Concurrency.Clock<Duration>
+
+    init(catalogue: CatalogueService, clock: any _Concurrency.Clock<Duration> = ContinuousClock()) {
         self.search = { await catalogue.searchTags($0) }
+        self.clock = clock
     }
 
-    init(search: @escaping (String) async -> [Tag]?) {
+    init(
+        search: @escaping (String) async -> [Tag]?,
+        clock: any _Concurrency.Clock<Duration> = ContinuousClock()
+    ) {
         self.search = search
+        self.clock = clock
     }
 
     /// What to show for the current query. Empty query means the popular list.
@@ -59,8 +73,8 @@ final class TagSearch {
         results = Self.localMatches(in: loaded, for: trimmed)
         isSearching = true
 
-        task = Task { [weak self] in
-            try? await Task.sleep(for: Self.debounce)
+        task = Task { [weak self, clock] in
+            try? await clock.sleep(for: Self.debounce)
             guard !Task.isCancelled, let self else { return }
             let remote = await search(trimmed)
             guard !Task.isCancelled else { return }

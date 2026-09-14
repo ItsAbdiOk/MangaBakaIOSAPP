@@ -336,17 +336,8 @@ struct ReleaseTokenTests {
 
 }
 
-/// The shelf screen has filters the list does not, and for a while nothing
-/// in the app opened it: `onOpenShelf` was passed in and never called.
-@Suite("The shelf screen is reachable", .enabled(if: SourceTree.isAvailable))
-struct ShelfReachabilityTests {
-    @Test("A picked state offers to open its shelf")
-    func shelfIsReachable() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Library/LibraryView.swift")
-        // Offered only once the walk is complete: a shelf opened against a
-        // partial library would show a floor, not the shelf.
-        let offer = "if let state = model.filter, model.isComplete {\n"
-            + "                        Button { onOpenShelf(state) }"
-        #expect(source.contains(offer))
-    }
-}
+// `ShelfReachabilityTests` used to live here, pinning the button that opened
+// `ShelfDetailView`. The screen was unreachable for its whole life — nothing
+// presented the two views that presented it — and was deleted on 2026-09-14
+// (review question Q6). The test went with the screen: a reachability test
+// for a screen that no longer exists asserts nothing.

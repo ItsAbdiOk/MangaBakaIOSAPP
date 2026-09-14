@@ -313,6 +313,9 @@ struct LibraryTransferWiringTests {
     @Test("Settings carries the library transfer section")
     func settingsShowsIt() throws {
         let source = try SourceTree.read("MangaBaka/Features/Settings/SettingsView.swift")
-        #expect(source.contains("LibraryTransferSection()"))
+        // Work-list 20: the section takes the session's shared library and a
+        // cached read of it now, rather than defaulting to a private walk of
+        // its own — so the pin is on the wired call, not the bare one.
+        #expect(source.contains("LibraryTransferSection(library: library, loadExisting: loadExisting)"))
     }
 }

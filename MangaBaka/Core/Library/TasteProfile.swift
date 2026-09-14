@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// The tags this reader actually likes, from their own library.
 ///
@@ -130,9 +131,13 @@ actor TasteProfile {
         guard let ledger, let snapshot, !series.richTags.isEmpty else { return }
         let entries = await snapshot.all()
         guard let entry = entries.first(where: { $0.seriesId == series.id }) else { return }
-        try? await ledger.absorb(series, as: entry.state)
-        // The cached answer was computed before this series was counted.
-        cachedIDs = nil
+        // Only drop the cache when something actually moved. `absorb`
+        // returns false for a series already counted in this state, which is
+        // what a reopen of a series page is — and dropping `cachedIDs` there
+        // cost a full re-absorb of the library on the next
+        // `favouredTagIDs()`, on the page's own critical path.
+        let changed = (try? await ledger.absorb(series, as: entry.state)) ?? false
+        if changed { cachedIDs = nil }
     }
 
     /// What the ledger actually knows, for a screen that has to say so.
@@ -159,10 +164,35 @@ actor TasteProfile {
     /// alone are not enough: the ledger is on disk and survives a relaunch, so
     /// without this a new reader inherits the last one's taste and every
     /// recommendation is quietly about somebody else's library.
-    func forgetEverything() async {
-        try? await ledger?.clear()
+    ///
+    /// - Returns: false when the on-disk clear failed. This was a bare
+    ///   `try? await ledger?.clear()` and nothing said so — the same gap-74
+    ///   shape as `discardCachedFeeds`, on the one cache whose survival is
+    ///   about the wrong person. `forgetPreviousAccount` shows its existing
+    ///   failure toast on false. The in-memory caches are dropped either way:
+    ///   a failed disk clear is no reason to keep serving the old profile
+    ///   from RAM as well.
+    @discardableResult
+    func forgetEverything() async -> Bool {
+        var cleared = true
+        if let ledger {
+            do {
+                try await ledger.clear()
+            } catch let error {
+                let description = String(describing: error)
+                Self.logger.error("Taste ledger clear failed: \(description, privacy: .public)")
+                cleared = false
+            }
+        }
         invalidate()
+        return cleared
     }
+
+    /// Matches `SeriesRepository+Cache`'s own logger: a clear that silently
+    /// failed is the thing gap 74 was about, and a log is the minimum.
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "taste"
+    )
 
     /// Forgets the profile, so a change to the library is reflected.
     func invalidate() {

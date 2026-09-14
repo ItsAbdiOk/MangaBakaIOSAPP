@@ -73,10 +73,15 @@ struct MixView: View {
         }
         .sheet(isPresented: $isPickingTags) {
             if let catalogue {
+                // No `mode:`. `SearchQuery` sends `tag_mode=and` whatever the
+                // field holds (see its doc comment), so writing it here was a
+                // write nobody read. `onPick` is the half that matters: the
+                // picker knows each tag's id, and `/v1/series/mix` only
+                // filters on ids (item 18).
                 TagPickerSheet(
                     catalogue: catalogue,
                     selected: $model.filters.tags,
-                    mode: $model.filters.tagMode
+                    onPick: { model.noteTagID($0) }
                 )
             }
         }
@@ -175,7 +180,12 @@ struct MixView: View {
                 SectionHeader(title: "From your shelf")
                     .arrives(index: 0)
                 ScrollView(.horizontal) {
-                    HStack(spacing: Metrics.gapCovers) {
+                    // Lazy: a non-lazy `HStack` builds every seed's body,
+                    // arrival spring and cover request in one frame, for a row
+                    // that shows six (item 52). `MixModel.suggestedSeeds` caps
+                    // the list too — both halves, because either alone still
+                    // leaves the other paying.
+                    LazyHStack(spacing: Metrics.gapCovers) {
                         ForEach(suggestedSeeds) { series in
                             Button {
                                 model.addSeed(series)

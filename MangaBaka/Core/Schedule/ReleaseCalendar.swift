@@ -26,6 +26,16 @@ actor ReleaseCalendar {
 
     private var cached: [UpcomingWork]?
     private var cachedAt: Date?
+
+    /// How long an announced list is reused before it is fetched again.
+    ///
+    /// **A guess: six hours**, matching `LibrarySnapshot`'s own freshness
+    /// window so the two halves of the Schedule screen do not age at
+    /// different rates. `cached` had no expiry at all: once set, `upcoming()`
+    /// returned it for the life of the process, so a phone left open for days
+    /// kept testing "is this due this week" against the window fetched at
+    /// launch, and a foreground refresh re-tested today against a stale list.
+    static let freshness: TimeInterval = 6 * 3600
     private let clock: any Clock
 
     /// The most recent `upcoming()` failure, or nil once an ask succeeds.
@@ -50,7 +60,7 @@ actor ReleaseCalendar {
     /// quiet week, and `AnnouncedSection` read that as "nothing announced"
     /// (gap 97's other half).
     func upcoming() async -> Fetched<[UpcomingWork]> {
-        if let cached, let cachedAt {
+        if let cached, let cachedAt, clock.now.timeIntervalSince(cachedAt) < Self.freshness {
             return .loaded(cached, fetchedAt: cachedAt, isPartial: false)
         }
 

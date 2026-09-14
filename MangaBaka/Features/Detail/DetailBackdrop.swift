@@ -23,13 +23,18 @@ struct DetailBackdrop: View {
     /// How tall the wash is. Beyond the hero it is solid ground anyway, and
     /// blurring a full-page image costs more the taller it is.
     var height: CGFloat = 420
-    /// How far the page has scrolled, for the few points of parallax below —
+    /// The page's scroll position, for the few points of parallax below —
     /// see `parallaxOffset`. Passed in rather than read here: this view sits
     /// in `.background` on the ScrollView itself (see the type doc comment),
     /// outside the scrolled content, where `.parallax()` from
     /// `MotionModifiers` — built on `.scrollTransition`, which only ever
     /// fires for a view inside the scrolled content — cannot reach it.
-    var scrollOffset: CGFloat = 0
+    ///
+    /// A `ScrollTracker` rather than a plain `CGFloat` so the per-frame write
+    /// invalidates this view and nothing else (item 54). Nil where there is
+    /// no parallax to do — `CoverGallery` draws two of these as a static
+    /// wash behind its pager.
+    var tracker: ScrollTracker?
 
     @Environment(\.displayScale) private var displayScale
     /// Flips once the AsyncImage phase reports `.success` — see
@@ -98,7 +103,11 @@ struct DetailBackdrop: View {
             // 2:3 and adds a shadow, both wrong for a full-bleed wash, and its
             // placeholder would paint a grey rectangle behind the hero on a
             // slow connection rather than nothing.
-            let url = cover.url(forHeight: proxy.size.height, scale: displayScale)
+            // The wash's own height, not the ScrollView's: `height` caps it
+            // (see the property), so asking the CDN for a full-page image
+            // downloads and blurs artwork nobody sees.
+            let washHeight = min(height, proxy.size.height)
+            let url = cover.url(forHeight: washHeight, scale: displayScale)
             ZStack {
                 // The ambient tint, always in place under the image layer —
                 // it is what a reader sees for however long the network
@@ -123,7 +132,13 @@ struct DetailBackdrop: View {
                 }
                 .appearsSoftly(when: isImageReady)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            // `height` applied at last. It was declared, documented
+            // ("blurring a full-page image costs more the taller it is") and
+            // never read, so a 72pt Gaussian ran over the whole scroll view
+            // on a 1.6x-scaled layer, every frame (item 55). Top-aligned:
+            // below the hero the page is solid ground anyway, which
+            // `SeriesDetailView` paints behind this.
+            .frame(width: proxy.size.width, height: washHeight, alignment: .top)
             .scaleEffect(Self.scale)
             .blur(radius: Self.blurRadius, opaque: false)
             .saturation(Self.saturation)
@@ -141,7 +156,13 @@ struct DetailBackdrop: View {
                 )
             }
             .clipped()
-            .offset(y: Self.parallaxOffset(scrollOffset: scrollOffset))
+            // Flattened before the parallax moves it, so a scroll frame
+            // offsets one finished bitmap instead of re-running the blur,
+            // the saturation and the gradient (item 55). It is also what
+            // makes `CoverGallery`'s cross-fade of two of these blend two
+            // rendered layers rather than two live blur pipelines.
+            .compositingGroup()
+            .offset(y: Self.parallaxOffset(scrollOffset: tracker?.offset ?? 0))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)

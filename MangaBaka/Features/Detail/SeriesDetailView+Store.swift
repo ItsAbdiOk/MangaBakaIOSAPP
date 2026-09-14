@@ -17,7 +17,12 @@ extension SeriesDetailView {
             VolumesSection(
                 volumes: extras.volumes,
                 seriesCover: shown.cover,
-                note: appleUnreachable ? "Apple Books couldn't be reached" : nil,
+                // The reason and a retry, not one bare line of text: this
+                // was the only section on the page outside the failure kit,
+                // so offline, a 429, a 5xx and a decode failure all read the
+                // same and none of them could be retried (item 60).
+                failure: appleFailure,
+                retry: { await loadAppleVolumes() },
                 // gap 22: while the store is still being asked, the section
                 // shows a skeleton instead of MangaBaka's own shelf — showing
                 // that first and swapping it for the store's the moment it
@@ -55,12 +60,23 @@ extension SeriesDetailView {
         // Nothing in the reader's store: the Japanese edition, for the covers
         // and the count. Not for buying — Apple Books purchases are locked to
         // the account's store, so the row says so and shows no price.
-        if answer?.isEmpty == true, country.lowercased() != "jp" {
+        if (try? answer.get())?.isEmpty == true, country.lowercased() != "jp" {
             answer = await appleBooks.japaneseVolumes(for: shown)
-            if answer?.isEmpty == false { appleEdition = .japanese }
+            if (try? answer.get())?.isEmpty == false { appleEdition = .japanese }
         }
-        appleUnreachable = answer == nil
-        appleVolumes = answer ?? []
+        // Read after the fallback, and off the fallback's own answer. It used
+        // to be `appleUnreachable = answer == nil` computed over an `answer`
+        // the Japanese ask had already overwritten, so a reader's store that
+        // answered `[]` was blamed for being unreachable and the reader
+        // retried a request that would answer `[]` again (item 59).
+        switch answer {
+        case let .success(volumes):
+            appleFailure = nil
+            appleVolumes = volumes
+        case let .failure(error):
+            appleFailure = error
+            appleVolumes = []
+        }
 
         // Google only fills gaps, so it is only asked when there are gaps —
         // a series Apple carries end to end costs no Google request at all.
@@ -94,12 +110,60 @@ extension SeriesDetailView {
     /// storefront, not matched against MangaBaka's own ISBNs, and asking for
     /// covers on someone else's numbering scheme is a coincidence away from
     /// showing the wrong volume's art.
+    ///
+    /// Answers are committed one at a time, in volume order, and the pass is
+    /// capped. It used to be an unbounded serial loop in dictionary order
+    /// that assigned `openLibraryCovers` only after the last answer, so a
+    /// 40-volume series with no publisher art shimmered every spine for two
+    /// minutes (40 x the 3 s spacing), showed nothing found, and committed
+    /// nothing at all when the reader popped the page. It also made the
+    /// "Detail complete" signpost measure Open Library's politeness delay
+    /// rather than the page (item 57).
     func loadOpenLibraryCovers() async {
-        guard let openLibrary, appleEdition == nil else { openLibraryStatus = .answered; return }
+        guard let openLibrary, appleEdition == nil else {
+            openLibraryStatus.pass = .answered
+            return
+        }
 
+        let isbnsByNumber = coverlessISBNs()
+        // Nothing to ask about is an answer too: the placeholder may say so.
+        guard !isbnsByNumber.isEmpty else {
+            openLibraryStatus.pass = .answered
+            return
+        }
+
+        // Volume order, not dictionary order: a reader watching the shelf
+        // fill in sees volume 1 answer first, which is where they are looking.
+        let numbers = isbnsByNumber.keys.sorted()
+        let asked = numbers.prefix(Self.openLibraryPassLimit)
+        var progress = OpenLibraryProgress(pass: .loading)
+        for number in asked { progress.byNumber[number] = .loading }
+        // The tail is never asked, so it is never `.answered` either — a
+        // spine that says "No cover from the publisher" on the strength of a
+        // request nobody made is the caption this state exists to prevent.
+        for number in numbers.dropFirst(Self.openLibraryPassLimit) {
+            progress.byNumber[number] = .notAsked
+        }
+        openLibraryStatus = progress
+
+        for number in asked {
+            guard !Task.isCancelled else { return }
+            guard let isbn = isbnsByNumber[number] else { continue }
+            let url = await openLibrary.coverURL(isbn: isbn)
+            guard !Task.isCancelled else { return }
+            // Committed per answer, not per pass: every cover found is on
+            // screen the moment it is known, and a pop keeps what has landed.
+            if let url { openLibraryCovers[number] = url }
+            openLibraryStatus.byNumber[number] = .answered
+        }
+        openLibraryStatus.pass = .answered
+    }
+
+    /// Every volume still missing artwork, keyed by number: MangaBaka's own
+    /// volumes with none, plus shelf spines the stores sent no art for.
+    private func coverlessISBNs() -> [Int: String] {
         var isbnsByNumber = VolumesSection.isbnsNeedingCovers(extras.volumes)
-        let shelfGaps = VolumeShelf.numbersNeedingCovers(shelf)
-        for number in shelfGaps where isbnsByNumber[number] == nil {
+        for number in VolumeShelf.numbersNeedingCovers(shelf) where isbnsByNumber[number] == nil {
             // Apple and Google carry no ISBN of their own (S1) — the only
             // way to ask Open Library about a shelf gap is to borrow the
             // ISBN MangaBaka's own volume of the same number carries.
@@ -109,21 +173,17 @@ extension SeriesDetailView {
             else { continue }
             isbnsByNumber[number] = isbn
         }
-        // Nothing to ask about is an answer too: the placeholder may say so.
-        guard !isbnsByNumber.isEmpty else { openLibraryStatus = .answered; return }
-
-        openLibraryStatus = .loading
-        var found: [Int: URL] = [:]
-        for (number, isbn) in isbnsByNumber {
-            guard !Task.isCancelled else { return }
-            if let url = await openLibrary.coverURL(isbn: isbn) {
-                found[number] = url
-            }
-        }
-        guard !Task.isCancelled else { return }
-        openLibraryCovers = found
-        openLibraryStatus = .answered
+        return isbnsByNumber
     }
+
+    /// How many coverless volumes one page open will ask Open Library about.
+    ///
+    /// A GUESS. Open Library is spaced at one request every 3 s
+    /// (`OpenLibraryCovers.minimumInterval`), so twelve is 36 seconds of
+    /// background asking — about the length of a page a reader actually
+    /// reads — where a 115-volume series uncapped was five and a half
+    /// minutes of requests for a shelf nobody is still looking at.
+    static let openLibraryPassLimit = 12
 
     /// "Similar by description": ids ranked by `EmbeddingIndex`, resolved to
     /// enough of a `Series` for a cover card — a title, no more.
@@ -136,13 +196,6 @@ extension SeriesDetailView {
     /// the network — a card whose id has no title (should not happen, since
     /// both files are exports of the same 19k series, but not proven here)
     /// is simply dropped rather than shown with an empty label.
-    ///
-    /// **Requires `func titles(for ids: [Int]) -> [Int: String]` on
-    /// `OfflineCatalogue`** (`MangaBaka/Core/Offline/OfflineCatalogue.swift`)
-    /// — that actor landed this round with `matches(_:...)` and `count(_:...)`
-    /// (both `SearchQuery`-shaped) but no lookup by id; this needs a small
-    /// addition, e.g. `entries.filter { ids.contains($0.id) }` over its
-    /// private `entries`, mapped to `[$0.id: $0.t]`.
     func loadSimilarByDescription() async {
         guard let neighbours = await embeddingIndex.neighbours(of: series.id),
               !neighbours.isEmpty

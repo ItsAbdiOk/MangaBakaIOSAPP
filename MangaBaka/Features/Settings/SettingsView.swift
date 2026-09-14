@@ -43,6 +43,11 @@ struct SettingsView: View {
     /// writes first, then calls this.
     let validate: () async -> TokenCheck
     let content: ContentPreferencesStore
+    /// The reader's real library, and a read of it that costs nothing
+    /// because the session already walked it (item 20). Threaded through to
+    /// `LibraryTransferSection`, which used to build its own.
+    let library: any LibraryProviding
+    let loadExisting: () async -> [LibraryEntry]
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
     let catalogue: CatalogueService
@@ -76,6 +81,8 @@ struct SettingsView: View {
     init(
         validate: @escaping () async -> TokenCheck,
         content: ContentPreferencesStore,
+        library: any LibraryProviding,
+        loadExisting: @escaping () async -> [LibraryEntry],
         formats: FormatPreferencesStore,
         blockedTags: BlockedTagsStore,
         catalogue: CatalogueService,
@@ -92,6 +99,8 @@ struct SettingsView: View {
     ) {
         self.validate = validate
         self.content = content
+        self.library = library
+        self.loadExisting = loadExisting
         self.formats = formats
         self.blockedTags = blockedTags
         self.catalogue = catalogue
@@ -105,7 +114,13 @@ struct SettingsView: View {
         self._titleRevision = titleRevision
         self.store = store
         self.defaults = defaults
-        self._storedTokenExists = State(initialValue: store.read() != nil)
+        // Item 104: this was `State(initialValue: store.read() != nil)`, a
+        // `SecItemCopyMatching` (~1 ms of IPC) that ran on every `RootView`
+        // body pass while Settings was pushed — the `navigationDestination`
+        // closure rebuilds the view each time even though `@State` keeps the
+        // first value, so the Keychain was asked and the answer thrown away.
+        // Read once, in the `.task` below, before its own guard.
+        self._storedTokenExists = State(initialValue: false)
     }
 
     var body: some View {
@@ -131,7 +146,8 @@ struct SettingsView: View {
                 )
                 .arrives(index: 5)
                 HistorySection(history: history).arrives(index: 6)
-                LibraryTransferSection().arrives(index: 7)
+                LibraryTransferSection(library: library, loadExisting: loadExisting)
+                    .arrives(index: 7)
                 DataUseSection(taste: taste).arrives(index: 8)
                 TranslationSection().arrives(index: 9)
                 AttributionSection().arrives(index: 10)
@@ -165,6 +181,9 @@ struct SettingsView: View {
             Text(optInWarning)
         }
         .task {
+            // Before the guard: this is the one read of the Keychain (item
+            // 104), and the guard below is what it decides.
+            storedTokenExists = store.read() != nil
             guard storedTokenExists, case .idle = status else { return }
             // Gap 121: a check less than an hour old is trusted rather than
             // repeated on every appearance of this screen — each push
@@ -196,6 +215,18 @@ struct SettingsView: View {
         defaults.set(Date().timeIntervalSince1970, forKey: Self.lastCheckedAtKey)
     }
 
+    /// Forgets the last check, both halves of it.
+    ///
+    /// Item 103: "Remove token" and a rejection each cleared
+    /// `lastCheckedAtKey` and left `lastCheckedNameKey` behind, so the
+    /// previous account's display name survived the one operation whose own
+    /// comment says the list exists to be complete. Two keys are written
+    /// together, so they are removed together — in one place, not two.
+    private func forgetCheck() {
+        defaults.removeObject(forKey: Self.lastCheckedNameKey)
+        defaults.removeObject(forKey: Self.lastCheckedAtKey)
+    }
+
     private var accountSection: some View {
         SettingsSection(title: "Account", caption: nil) {
             AccountCard(
@@ -209,7 +240,7 @@ struct SettingsView: View {
                     storedTokenExists = false
                     entry = ""
                     status = .idle
-                    defaults.removeObject(forKey: Self.lastCheckedAtKey)
+                    forgetCheck()
                     // The third way to change account, and the one that called
                     // none of this. Removing a token and entering a different
                     // one left the previous person's taste ledger, profile id
@@ -345,7 +376,7 @@ struct SettingsView: View {
             rememberCheck(name: name)
         case .rejected:
             status = .failed("That token was not accepted by MangaBaka.")
-            defaults.removeObject(forKey: Self.lastCheckedAtKey)
+            forgetCheck()
         case let .unknown(reason):
             // Not a verdict on the token. Saying so matters twice over: the
             // reader is not told their token is bad when it is not, and `save`

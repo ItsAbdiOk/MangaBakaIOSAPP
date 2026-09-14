@@ -14,16 +14,16 @@ struct SeriesDetailView: View {
     let characters: CharacterService?
     let taste: TasteProfile?
     /// Nearest-neighbour search over the bundled sentence embeddings, for
-    /// "Similar by description". Defaults to a fresh instance so this screen
-    /// works with zero injection; AppServices should hold one instance and
-    /// share it across every series page instead (wiring line in report) —
-    /// each `EmbeddingIndex()` here loads the same 7.3 MB file separately.
-    var embeddingIndex: EmbeddingIndex = EmbeddingIndex()
+    /// "Similar by description". Not defaulted: `EmbeddingIndex()` loads a
+    /// 7.3 MB file, and a defaulted parameter meant a caller that forgot it
+    /// silently loaded a second copy per series page. `AppServices` holds the
+    /// one instance and every page is handed it.
+    var embeddingIndex: EmbeddingIndex
     /// Resolves an embedding neighbour's id to a title — see
-    /// `loadSimilarByDescription()`. Owned by another agent this round
-    /// (`Core/Offline/OfflineCatalogue.swift`); same sharing note as
-    /// `embeddingIndex` above.
-    var offlineCatalogue: OfflineCatalogue = OfflineCatalogue()
+    /// `loadSimilarByDescription()`. Not defaulted for the same reason as
+    /// `embeddingIndex`: it, too, is a file-backed actor there should be one
+    /// of.
+    var offlineCatalogue: OfflineCatalogue
     /// The volumes on Apple Books. Optional like the others: a page without
     /// it shows MangaBaka's own editions instead.
     var appleBooks: AppleBooksClient?
@@ -39,9 +39,12 @@ struct SeriesDetailView: View {
     /// Cover gap-filler by ISBN, asked only for volumes no store has art for.
     var openLibrary: OpenLibraryCovers?
     @State var openLibraryCovers: [Int: URL] = [:]
-    /// Whether Open Library has been asked yet, so a missing cover can say
-    /// "no cover from the publisher" only once both sources have answered.
-    @State var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
+    /// Where the Open Library gap-fill pass stands — overall, and per volume
+    /// number for the ones whose own answer has already landed. Per volume
+    /// since item 57: the pass commits a cover the moment it finds one
+    /// rather than at the end, so a spine must be able to say "asked and
+    /// nobody has one" while its neighbours are still out.
+    @State var openLibraryStatus = OpenLibraryProgress()
     @State var categories: [MangaUpdatesCategories.Category] = []
     @State var isCategoriesLoading = false
     @State var categoriesFailure: APIError?
@@ -77,9 +80,12 @@ struct SeriesDetailView: View {
     @State var appleVolumes: [AppleBooksVolume] = []
     /// Only the numbers Apple is missing; see `VolumeShelf.merge`.
     @State var googleVolumes: [GoogleBooksVolume] = []
-    /// The store was asked and did not answer — distinct from "asked, and it
-    /// has none", which shows MangaBaka's editions with no note.
-    @State var appleUnreachable = false
+    /// Why the store could not be asked, when that is what happened —
+    /// distinct from "asked, and it has none", which shows MangaBaka's
+    /// editions with no note. An `APIError`, not a `Bool` (item 60): offline,
+    /// a 429, a 5xx and a decode failure all used to collapse into one bare
+    /// line of text with no reason and no retry.
+    @State var appleFailure: APIError?
     /// True while a store is still being asked for volumes — see
     /// `VolumesSection.isCheckingStore`.
     @State var isLoadingVolumes = false
@@ -95,7 +101,7 @@ struct SeriesDetailView: View {
     /// genuinely has none. `SeriesRepositoryProtocol.images(for:)` already
     /// draws this line (nil vs. `[]`); this just keeps it past `loadCore`
     /// instead of collapsing both into `covers = []` (gap 32/16).
-    @State private var coversFailure: APIError?
+    @State var coversFailure: APIError?
     @State private var openCoversAt: GalleryStart?
     /// The gallery's images, captured the moment it opens rather than read
     /// live from `otherCovers` — gap 67: Apple's volumes can still be landing
@@ -117,11 +123,28 @@ struct SeriesDetailView: View {
     @State var isCadenceLoading = false
     @State private var isLoading = true
     /// How far the page has scrolled, fed to `DetailBackdrop` for its
-    /// parallax — see `DetailBackdrop.parallaxOffset`. Tracked here, not in
-    /// the backdrop itself, because the backdrop sits in `.background` on
-    /// this `ScrollView`, outside the content whose geometry
-    /// `onScrollGeometryChange` reports.
-    @State private var scrollOffset: CGFloat = 0
+    /// parallax and to `DetailBarTitle` for its crossfade. A reference type,
+    /// not `@State var scrollOffset: CGFloat` — see `ScrollTracker`, which
+    /// records why (item 54: every scroll frame rebuilt this whole body).
+    /// Tracked here, not in the backdrop, because the backdrop sits in
+    /// `.background` on this `ScrollView`, outside the content whose
+    /// geometry `onScrollGeometryChange` reports.
+    @State private var scroll = ScrollTracker()
+
+    /// The series with `extras.full`'s gaps already filled in, computed once
+    /// when `extras` lands rather than per read of `shown`. `shown` is read
+    /// eleven times in one pass of `body` and `Series.filling` copies the
+    /// whole struct each time (item 54). Nil until `loadCore` has answered,
+    /// and reset at the top of every load so a page whose `series` changed
+    /// never shows the previous one's filled-in fields.
+    @State private var filled: Series?
+    /// The parsed synopsis, cached because `Self.prose` runs a Markdown
+    /// parse over the whole description — see item 54. Recomputed when the
+    /// description changes, not per body pass.
+    @State private var synopsis: AttributedString?
+    /// `TagGrouping.groups` over up to 146 tags, computed when `extras` or
+    /// the taste profile changes rather than per body pass (item 54).
+    @State private var tagGroups: [TagGroup] = []
 
     /// Where a section sits in the page's arrival choreography — see
     /// `sectionIndex(for:)`. The mockup's own order (the comment on `body`),
@@ -143,10 +166,16 @@ struct SeriesDetailView: View {
     /// either onward feed, answered from a stale cache or not at all. A
     /// section-level `InlineFailure` says which piece is missing; this says
     /// the page as a whole may be out of date (gap 10, worst afternoon #2).
+    /// `coversFailure` is defaulted so the three existing legs read
+    /// unchanged. It is the fourth: `/images` failing used to be recorded and
+    /// never read anywhere, so a throttled reader saw a series with no fan,
+    /// pixel-identical to one that genuinely has no covers (item 25).
     nonisolated static func pageFailure(
-        extras: SeriesExtras, similarOrigin: FeedResult.Origin, alsoOrigin: FeedResult.Origin
+        extras: SeriesExtras, similarOrigin: FeedResult.Origin, alsoOrigin: FeedResult.Origin,
+        coversFailure: APIError? = nil
     ) -> APIError? {
         if let failure = extras.failure { return failure }
+        if let coversFailure { return coversFailure }
         for origin in [similarOrigin, alsoOrigin] {
             if case let .staleAfter(error) = origin { return error }
         }
@@ -156,7 +185,10 @@ struct SeriesDetailView: View {
     @State var similarOrigin: FeedResult.Origin = .network
     @State var alsoOrigin: FeedResult.Origin = .network
     private var pageFailure: APIError? {
-        Self.pageFailure(extras: extras, similarOrigin: similarOrigin, alsoOrigin: alsoOrigin)
+        Self.pageFailure(
+            extras: extras, similarOrigin: similarOrigin, alsoOrigin: alsoOrigin,
+            coversFailure: coversFailure
+        )
     }
 
     /// The series as this screen shows it: the copy the reader arrived with,
@@ -168,9 +200,7 @@ struct SeriesDetailView: View {
     /// swipe stack had no synopsis, no length and no next-chapter estimate —
     /// while the same series opened from Search had all three. The reader is
     /// looking at one series; it should not matter which door they came in by.
-    var shown: Series {
-        extras.full.map { series.filling(gapsFrom: $0) } ?? series
-    }
+    var shown: Series { filled ?? series }
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -202,7 +232,14 @@ struct SeriesDetailView: View {
                     StaleBar(
                         headline: pageFailure.headline,
                         detail: pageFailure.userFacingMessage,
-                        retry: { await load() }
+                        // `loadCore`, not `load()`: every leg this bar can
+                        // name is a MangaBaka-side one, and `load()` would
+                        // re-pay cast, cadence, Apple, Google, Open Library,
+                        // the release feeds and the categories — up to nine
+                        // third-party requests, several behind 3 s spacers —
+                        // for a failure none of them caused (item 26). The
+                        // sections' own `InlineFailure`s retry their own.
+                        retry: { await loadCore() }
                     )
                 }
                 actions
@@ -212,8 +249,8 @@ struct SeriesDetailView: View {
                 ReadRow(links: extras.links)
                 DetailStatsStrip(series: shown, year: extras.year, season: cadence?.season)
                     .arrives(index: Self.sectionIndex(for: .stats))
-                if let description = shown.description, !description.isEmpty {
-                    DetailSynopsis(text: Self.prose(from: description))
+                if let synopsis {
+                    DetailSynopsis(text: synopsis)
                         .arrives(index: Self.sectionIndex(for: .synopsis))
                 }
                 CharacterRow(
@@ -266,15 +303,17 @@ struct SeriesDetailView: View {
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top
         } action: { _, travelled in
-            scrollOffset = travelled
+            scroll.update(travelled: travelled)
         }
         .background(alignment: .top) {
-            DetailBackdrop(cover: shown.cover, scrollOffset: scrollOffset)
+            DetailBackdrop(cover: shown.cover, tracker: scroll)
                 .background(Palette.ground)
                 .ignoresSafeArea()
         }
         .scrollEdgeEffectStyle(.hard, for: .top)
-        .detailBarTitle(shown.displayTitle ?? "Series", shareURL: SeriesWebLink.url(for: shown))
+        .detailBarTitle(
+            shown.displayTitle ?? "Series", shareURL: SeriesWebLink.url(for: shown), tracker: scroll
+        )
         .fullScreenCover(item: $openCoversAt) { start in
             CoverGallery(
                 series: shown,
@@ -341,28 +380,28 @@ extension SeriesDetailView {
     @ViewBuilder
     private var seedAction: some View {
         if onUseAsSeed != nil {
-                Button { onUseAsSeed?(shown) } label: {
-                    Text("Use as seed")
-                        .typeChip()
-                        .lineLimit(1)
-                        .padding(.horizontal, 16)
-                        // minHeight, not height: at accessibility text sizes a
-                        // fixed 52pt button clips its own label.
-                        .frame(minHeight: Metrics.ctaPrimary)
-                        .foregroundStyle(Palette.textPrimary)
-                        .background(
-                            Palette.surfaceChip,
-                            in: RoundedRectangle(
-                                cornerRadius: Metrics.radiusCard, style: .continuous
-                            )
+            Button { onUseAsSeed?(shown) } label: {
+                Text("Use as seed")
+                    .typeChip()
+                    .lineLimit(1)
+                    .padding(.horizontal, 16)
+                    // minHeight, not height: at accessibility text sizes a
+                    // fixed 52pt button clips its own label.
+                    .frame(minHeight: Metrics.ctaPrimary)
+                    .foregroundStyle(Palette.textPrimary)
+                    .background(
+                        Palette.surfaceChip,
+                        in: RoundedRectangle(
+                            cornerRadius: Metrics.radiusCard, style: .continuous
                         )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
-                                .strokeBorder(Palette.border, lineWidth: 0.5)
-                        )
-                }
-                .buttonStyle(.press)
-                .accessibilityHint("Adds this series to the Mix and opens it")
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
+                            .strokeBorder(Palette.border, lineWidth: 0.5)
+                    )
+            }
+            .buttonStyle(.press)
+            .accessibilityHint("Adds this series to the Mix and opens it")
         }
     }
 
@@ -434,8 +473,13 @@ extension SeriesDetailView {
         await Signposts.measure("Detail complete") { await loadOnward() }
     }
 
-    private func loadCore() async {
+    func loadCore() async {
         isLoading = true
+        // Reset before the first await, not after: a `series` that changed
+        // under this view (the pager, a deep link) must never render the
+        // previous series' filled-in fields while its own answer is out.
+        filled = nil
+        refreshDerived()
         async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
         async let extrasResult = repository.extras(for: series.id)
@@ -463,7 +507,26 @@ extension SeriesDetailView {
         coversFailure = imagesAnswer == nil
             ? .transport(underlying: "images(for:) returned nil", party: .mangaBaka)
             : nil
+        filled = extras.full.map { series.filling(gapsFrom: $0) }
+        refreshDerived()
         isLoading = false
+    }
+
+    /// The three values `body` used to recompute on every pass: the filled-in
+    /// series' parsed synopsis and its grouped tags. Called when the inputs
+    /// change — `extras` landing, the taste profile answering — rather than
+    /// per frame (item 54).
+    private func refreshDerived() {
+        if let description = shown.description, !description.isEmpty {
+            synopsis = Self.prose(from: description)
+        } else {
+            synopsis = nil
+        }
+        tagGroups = extras.richTags.isEmpty
+            ? []
+            : TagGrouping.groups(
+                from: extras.richTags, allowedRatings: contentRatings, favouredIDs: favouredTagIDs
+            )
     }
 
     private func loadOnward() async {
@@ -491,11 +554,10 @@ extension SeriesDetailView {
     private var tagSection: some View {
         if !extras.richTags.isEmpty {
             DetailTagSections(
-                groups: TagGrouping.groups(
-                    from: extras.richTags,
-                    allowedRatings: contentRatings,
-                    favouredIDs: favouredTagIDs
-                ),
+                // `tagGroups`, not a live `TagGrouping.groups` call: grouping
+                // 146 tags is not a per-body-pass cost (item 54). Kept in
+                // step by `refreshDerived()`.
+                groups: tagGroups,
                 favouredIDs: favouredTagIDs
             ) { tag in
                 onOpenTag?(tag.name)
@@ -521,6 +583,7 @@ extension SeriesDetailView {
             await taste?.note(shown.withTags(extras.richTags))
         }
         favouredTagIDs = await taste?.favouredTagIDs() ?? []
+        refreshDerived()
     }
 
 }

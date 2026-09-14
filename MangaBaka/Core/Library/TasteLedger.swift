@@ -179,19 +179,29 @@ actor TasteLedger {
     /// available here is rejected. Every other payload in the app definitely
     /// does carry them — verified on `/v1/series/search` and `/v1/series/{id}`
     /// — so this is the path that cannot silently produce nothing.
-    func absorb(_ series: Series, as state: LibraryEntry.State) throws {
+    /// - Returns: whether any affinity actually moved. False for the common
+    ///   case — a series already counted in the same state, which is what
+    ///   every reopen of a series page is. `TasteProfile.note` uses this to
+    ///   decide whether to drop its cached ids: dropping them
+    ///   unconditionally meant the next `favouredTagIDs()` re-absorbed all
+    ///   ~939 library entries (939 selects, 939 upserts and a `NOT IN` scan)
+    ///   on every single series page open, with the page's tag ordering
+    ///   waiting on it.
+    @discardableResult
+    func absorb(_ series: Series, as state: LibraryEntry.State) throws -> Bool {
         let tags = series.richTags
-        try database.writer.write { db in
+        return try database.writer.write { db in
             try TasteSeen(seriesId: series.id).save(db)
-            guard !tags.isEmpty else { return }
+            guard !tags.isEmpty else { return false }
             let previous = try TasteSource.fetchOne(db, key: series.id)
-            if previous?.state == state.rawValue { return }
+            if previous?.state == state.rawValue { return false }
             try Self.retract(seriesId: series.id, in: db)
             try Self.contribute(tags, seriesId: series.id, multiplier: Self.weight(state), to: db)
             try TasteSource(
                 seriesId: series.id, countedAt: clock.now, state: state.rawValue
             ).save(db)
             try Self.prune(db)
+            return true
         }
     }
 

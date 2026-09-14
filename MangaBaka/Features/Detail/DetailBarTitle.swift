@@ -17,6 +17,11 @@ struct DetailBarTitle: ViewModifier {
     let title: String
     /// The page's link for the share sheet; nothing shown when nil.
     var shareURL: URL?
+    /// The page's one scroll observer — see `ScrollTracker`. This modifier
+    /// used to mount a second `onScrollGeometryChange` of its own and
+    /// recompute the same number the backdrop was already being told
+    /// (item 54); now it reads the crossfade the tracker keeps.
+    let tracker: ScrollTracker
     /// How far the hero has to travel before its own title is gone. Measured
     /// against the hero on an iPhone 16 Pro rather than picked: the title sits
     /// beside the cover, and the bar's copy should arrive as it leaves.
@@ -26,7 +31,7 @@ struct DetailBarTitle: ViewModifier {
     /// out. A continuous value, not a flip: the bar's copy fades in over the
     /// last `crossfadeSpan` points of the hero's travel, so the handover
     /// reads as one title moving rather than two cutting.
-    @State private var crossfade: CGFloat = 0
+    private var crossfade: CGFloat { tracker.crossfade }
 
     /// How many points of travel the fade takes. A guess: long enough to
     /// read as a fade at scroll speed, short enough that the bar copy is
@@ -41,26 +46,8 @@ struct DetailBarTitle: ViewModifier {
 
     private var heroTitleIsHidden: Bool { crossfade >= 1 }
 
-    /// A named method rather than a closure body: Xcode Cloud's Swift 6.3.3
-    /// crashed in the SIL verifier ("OwnershipModelEliminator") on the
-    /// inline version of this under whole-module optimisation — build 69,
-    /// 2026-09-13 — while the local toolchain compiled it. Same behaviour.
-    private func updateCrossfade(travelled: CGFloat) {
-        let progress = Self.crossfadeProgress(travelled: travelled)
-        guard progress != crossfade else { return }
-        let animation = Motion.reduced(Motion.glide)
-        withAnimation(animation) {
-            crossfade = progress
-        }
-    }
-
     func body(content: Content) -> some View {
         content
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
-            } action: { _, travelled in
-                updateCrossfade(travelled: travelled)
-            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,7 +82,9 @@ struct DetailBarTitle: ViewModifier {
 }
 
 extension View {
-    func detailBarTitle(_ title: String, shareURL: URL? = nil) -> some View {
-        modifier(DetailBarTitle(title: title, shareURL: shareURL))
+    func detailBarTitle(
+        _ title: String, shareURL: URL? = nil, tracker: ScrollTracker
+    ) -> some View {
+        modifier(DetailBarTitle(title: title, shareURL: shareURL, tracker: tracker))
     }
 }

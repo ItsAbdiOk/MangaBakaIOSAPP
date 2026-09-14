@@ -11,7 +11,7 @@ struct ScaledFont: ViewModifier {
     @ScaledMetric private var size: CGFloat
     private let weight: Font.Weight
     private let tracking: CGFloat
-    private let lineSpacing: CGFloat?
+    private let lineHeight: CGFloat?
 
     init(
         size: CGFloat,
@@ -23,19 +23,46 @@ struct ScaledFont: ViewModifier {
         _size = ScaledMetric(wrappedValue: size, relativeTo: textStyle)
         self.weight = weight
         self.tracking = tracking
-        // SwiftUI spaces lines rather than setting a line box, so convert the
-        // spec's multiplier into the extra space between lines.
-        self.lineSpacing = lineHeight.map { ($0 - 1.2) * size }
+        self.lineHeight = lineHeight
     }
 
+    /// SwiftUI spaces lines rather than setting a line box, so the spec's
+    /// multiplier becomes the extra space between them.
+    ///
+    /// Computed from the *scaled* size, not the one passed to `init`. It was
+    /// resolved in `init` against the unscaled literal, so a paragraph set at
+    /// a 1.55 multiplier kept the leading of a 14pt line while the glyphs grew
+    /// to 30 — the lines closed up exactly where a reader who enlarged the
+    /// text needed them furthest apart. `@ScaledMetric` is not resolved at
+    /// `init` time anyway, so the old expression was reading the raw literal
+    /// by construction.
+    private var lineSpacing: CGFloat? {
+        Self.lineSpacing(lineHeight: lineHeight, size: size)
+    }
+
+    /// Pure, so the scaling rule above has a test that asserts a number
+    /// rather than the file containing a word.
+    nonisolated static func lineSpacing(lineHeight: CGFloat?, size: CGFloat) -> CGFloat? {
+        lineHeight.map { ($0 - 1.2) * size }
+    }
+
+    // `@ViewBuilder`, not `AnyView`. Every `Text` in the app wears this
+    // modifier, and boxing each one erased its structural identity, so SwiftUI
+    // had to re-diff the whole subtree under it rather than matching views
+    // position by position. The branch is decided by `lineHeight`, which is
+    // fixed per ramp entry, so the `_ConditionalContent` never flips sides for
+    // a given call site — every style's multiplier is either above 1.2 or
+    // below it at every text size.
+    @ViewBuilder
     func body(content: Content) -> some View {
         let styled = content
             .font(.system(size: size, weight: weight))
             .tracking(tracking)
         if let lineSpacing, lineSpacing > 0 {
-            return AnyView(styled.lineSpacing(lineSpacing))
+            styled.lineSpacing(lineSpacing)
+        } else {
+            styled
         }
-        return AnyView(styled)
     }
 }
 

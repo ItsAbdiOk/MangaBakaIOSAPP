@@ -23,6 +23,16 @@ actor NetworkLedger {
         var totalSeconds: Double = 0
         var slowestSeconds: Double = 0
         var failures = 0
+        /// Rows the decoder threw away because they did not match the model.
+        ///
+        /// Lives here rather than in a log line because the question it
+        /// answers — "is the app quietly showing nineteen of twenty?" — is
+        /// the same shape as the request counts beside it, and a log line is
+        /// only read by whoever is already looking. Two sections have been
+        /// emptied in production by one bad row (`SeriesWork`,
+        /// `PublisherRecord`); after `LossyArray` they will instead be short
+        /// by one, which is better and also harder to notice.
+        var droppedRows = 0
 
         var averageSeconds: Double { requests > 0 ? totalSeconds / Double(requests) : 0 }
     }
@@ -39,6 +49,16 @@ actor NetworkLedger {
         entry.totalSeconds += seconds
         entry.slowestSeconds = max(entry.slowestSeconds, seconds)
         if failed { entry.failures += 1 }
+        byPath[key] = entry
+    }
+
+    /// Counts rows a lenient array decode dropped. No request is implied —
+    /// this is called after one whose count is already recorded.
+    func recordDropped(path: String, count: Int) {
+        guard count > 0 else { return }
+        let key = Self.shape(path)
+        var entry = byPath[key] ?? Entry()
+        entry.droppedRows += count
         byPath[key] = entry
     }
 

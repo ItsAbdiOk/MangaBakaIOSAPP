@@ -73,10 +73,10 @@ actor CatalogueService {
 
         let task = Task<Fetched<[Tag]>, Never> { [client] in
             do throws(APIError) {
-                let (fetched, pagination) = try await client.getWithPagination(
+                let (fetched, pagination) = try await client.getLossyWithPagination(
                     "/v1/tags",
                     query: [URLQueryItem(name: "limit", value: String(limit))],
-                    as: [Tag].self
+                    as: Tag.self
                 )
                 // Merged tags point at a survivor and should never be shown
                 // or linked to. Ordered by how many series carry them,
@@ -127,7 +127,7 @@ actor CatalogueService {
     func searchTags(_ text: String, limit: Int = 60) async -> [Tag]? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
-        let results: [Tag]? = try? await client.get(
+        let results: [Tag]? = try? await client.getLossy(
             "/v1/tags",
             query: [
                 URLQueryItem(name: "q", value: trimmed),
@@ -203,7 +203,9 @@ actor CatalogueService {
     }
 
     func searchPublishers(_ text: String, limit: Int = 30) async -> [PublisherRecord]? {
-        try? await client.get(
+        // Lenient: one malformed publisher row used to empty the whole
+        // result set, which is how this surface failed in production once.
+        try? await client.getLossy(
             "/v1/publishers/search",
             query: [
                 URLQueryItem(name: "q", value: text),

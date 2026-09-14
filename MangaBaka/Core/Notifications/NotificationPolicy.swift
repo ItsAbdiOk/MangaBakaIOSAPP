@@ -34,11 +34,22 @@ enum NotificationPolicy {
         let date: Date
     }
 
-    /// Series states worth condition (2) — completed or season-ended. Reading
-    /// and paused only: `.dropped` and `.planToRead` are states the reader
-    /// already chose to stop caring about, and telling them a dropped series
-    /// finished is not news, it is a series they walked away from.
-    private static let trackedForCompletion: Set<LibraryEntry.State> = [.reading, .paused]
+    /// The states a reader is actually waiting on something in.
+    ///
+    /// Abdi, 2026-09-14 (Q1): notify for `reading`, `rereading` and `paused`
+    /// only. `.dropped` and `.completed` are series they walked away from or
+    /// finished, and `.planToRead` is discovery, not a reminder — "Vol. 12 ·
+    /// out now" for a book they have not started is exactly the notification
+    /// fatigue this whole file exists to prevent.
+    ///
+    /// Conditions 1a and 1b did not consult this until 2026-09-14 — they
+    /// filtered by date alone, against this type's own "something they are
+    /// waiting for" — so a dropped series' next print volume notified.
+    static let notifiableStates: Set<LibraryEntry.State> = [.reading, .rereading, .paused]
+
+    /// Condition (2) has always used the same set; the name is kept so the
+    /// two conditions are visibly asking the same question.
+    private static let trackedForCompletion: Set<LibraryEntry.State> = notifiableStates
 
     /// - Parameters:
     ///   - announced: `UpcomingWork`s with a real, publisher-stated date —
@@ -51,10 +62,19 @@ enum NotificationPolicy {
     ///     series, so this is only ever what was already fetched for some
     ///     other reason (a detail-screen visit). Empty is a legitimate
     ///     answer, not a failure: it just means conditions 1b/2b/2c never
-    ///     fire until something else has warmed the cache. See
-    ///     `RootView+Session.refreshReminders`, which currently passes `[:]`
-    ///     — there is nowhere in that call path with a feed already in hand,
-    ///     and this batch does not add a network call to make one.
+    ///     fire until something else has warmed the cache.
+    ///     `RootView+Session.refreshReminders` passes the cached feeds it
+    ///     already has (it passed a literal `[:]` when this comment was first
+    ///     written, which stopped being true and the comment did not).
+    ///
+    ///     **No background refresh** — Abdi, 2026-09-14 (Q2). A
+    ///     `BGAppRefreshTask` over 55 series at `WebtoonsFeedClient`'s 3.5 s
+    ///     spacing is ~3 minutes of a background slot and would contact three
+    ///     publishers the app otherwise touches only when the reader opens
+    ///     that page, which is a promise `WebtoonsFeedClient.swift:5-8` makes
+    ///     in as many words. The consequence is accepted and must be said
+    ///     honestly on screen instead: 1b reports the newest episode as of the
+    ///     last time the reader opened that series, not as of today.
     ///   - library: the reader's current library, for state and status.
     ///   - previousStatus: each series' status the last time this ran, by
     ///     series id — nil for a series never checked before. **A series
@@ -81,8 +101,14 @@ enum NotificationPolicy {
         lastKnownEpisode: [Int: Int] = [:],
         lastKnownSeason: [Int: Int] = [:]
     ) -> [PlannedNotification] {
-        confirmedReleases(announced: announced, now: now)
-            + confirmedEpisodes(feeds: feeds, library: library, lastKnownEpisode: lastKnownEpisode, now: now)
+        let notifiable = Set(
+            library.filter { notifiableStates.contains($0.state) }.map(\.seriesId)
+        )
+        return confirmedReleases(announced: announced, now: now, notifiable: notifiable)
+            + confirmedEpisodes(
+                feeds: feeds, library: library, lastKnownEpisode: lastKnownEpisode,
+                now: now, notifiable: notifiable
+            )
             + completions(
                 library: library, feeds: feeds, now: now,
                 previousStatus: previousStatus, lastKnownSeason: lastKnownSeason
@@ -91,9 +117,16 @@ enum NotificationPolicy {
 
     /// (1a) A publisher-stated date, out today or earlier. Never a cadence
     /// guess — see the deleted `predicted` branch this replaces.
-    private static func confirmedReleases(announced: [UpcomingWork], now: Date) -> [PlannedNotification] {
+    /// - Parameter notifiable: series ids the reader is reading, rereading or
+    ///   has paused. A release for anything else is not a reminder — see
+    ///   `notifiableStates`. A work with no `seriesId` at all cannot be
+    ///   checked and is dropped rather than guessed at.
+    private static func confirmedReleases(
+        announced: [UpcomingWork], now: Date, notifiable: Set<Int>
+    ) -> [PlannedNotification] {
         let today = Calendar.current.startOfDay(for: now)
         return announced.compactMap { work -> PlannedNotification? in
+            guard let seriesId = work.seriesId, notifiable.contains(seriesId) else { return nil }
             guard let date = work.localDay(), date <= today else { return nil }
             let title = work.title ?? "A release you are waiting for"
             return PlannedNotification(
@@ -111,9 +144,11 @@ enum NotificationPolicy {
     /// (1b) A feed entry newer than the last one this app knew about for that
     /// series.
     private static func confirmedEpisodes(
-        feeds: [Int: ReleaseFeed], library: [LibraryEntry], lastKnownEpisode: [Int: Int], now: Date
+        feeds: [Int: ReleaseFeed], library: [LibraryEntry], lastKnownEpisode: [Int: Int], now: Date,
+        notifiable: Set<Int>
     ) -> [PlannedNotification] {
         feeds.compactMap { seriesID, feed -> PlannedNotification? in
+            guard notifiable.contains(seriesID) else { return nil }
             guard let episode = feed.latestEpisodeNumber else { return nil }
             guard let previous = lastKnownEpisode[seriesID] else { return nil } // first-seen: baseline only
             guard episode > previous else { return nil }
@@ -165,21 +200,17 @@ enum NotificationPolicy {
                 ))
             }
 
-            // (2c) Naver's own completion flag, the first time it is seen.
-            // Unlike 2a/2b, "first seen" fires rather than only recording a
-            // baseline: Naver's `finished` is a fact stated once and never
-            // retracted, and there is no earlier "not finished" reading of
-            // it for this app to have missed — `TranslationGap`'s own
-            // handling of this flag makes the same call.
-            if feed.finished == true {
-                planned.append(PlannedNotification(
-                    id: "original-finished-\(seriesID)",
-                    seriesID: seriesID,
-                    title: title,
-                    body: "\(title) has finished",
-                    date: now
-                ))
-            }
+            // (2c) DELETED 2026-09-14, Abdi's call (Q3). It fired "<title> has
+            // finished" from a feed's flag for the *Korean original*, on first
+            // sight, with no baseline and worded identically to 2a's catalogue
+            // completion — so a webtoon that ended in 2019 notified the day its
+            // feed was first cached, and could say it two days running when
+            // 2a's cooldown dropped 2c's first attempt. Whether it fired at all
+            // depended on which provider's cache file happened to be on disk.
+            // The catalogue status in 2a already covers the reader's ask, and
+            // `TranslationGap.originalComplete` says the useful version of this
+            // on the page — "the translation will catch up and stop" — rather
+            // than "it has finished".
         }
         return planned
     }

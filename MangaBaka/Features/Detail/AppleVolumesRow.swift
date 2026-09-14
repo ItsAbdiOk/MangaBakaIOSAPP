@@ -26,11 +26,12 @@ struct AppleVolumesRow: View {
     /// own, keyed by volume number — see
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`.
     var openLibraryCovers: [Int: URL] = [:]
-    /// Whether the `OpenLibraryCovers` gap-fill pass has been asked at all,
-    /// still out, or done for this shelf — see `VolumesSection`'s own
-    /// `openLibraryStatus` doc, which explains why this is one flag for the
-    /// whole row rather than per spine. Drives `MissingVolumeCover.caption`.
-    var openLibraryStatus: MissingVolumeCover.SourceState = .notAsked
+    /// Where the `OpenLibraryCovers` gap-fill pass stands, per volume number
+    /// and overall — see `OpenLibraryProgress`. Per spine since item 57: the
+    /// pass commits each answer as it lands and stops after a cap, so one
+    /// flag for the whole row would either hold every found cover back or
+    /// claim an answer for a spine nobody asked about.
+    var openLibraryStatus = OpenLibraryProgress()
 
     enum Edition {
         /// From the Japanese store, because the reader's has nothing. Covers
@@ -154,7 +155,8 @@ struct AppleVolumesRow: View {
                 // `.answered`: this row only ever renders once Apple has
                 // already answered with volumes — that's what makes `shelf`
                 // non-empty in the first place.
-                apple: .answered, openLibrary: openLibraryStatus, numberLabel: "\(volume.number)"
+                apple: .answered, openLibrary: openLibraryStatus.state(for: volume.number),
+                numberLabel: "\(volume.number)"
             )
         }
     }
@@ -193,7 +195,9 @@ struct AppleVolumesRow: View {
                 // on-screen caption does — see `VolumesSection`'s matching
                 // accessibility label.
                 resolvedCover(volume) == nil
-                    ? MissingVolumeCover.accessibilityText(apple: .answered, openLibrary: openLibraryStatus)
+                    ? MissingVolumeCover.accessibilityText(
+                        apple: .answered, openLibrary: openLibraryStatus.state(for: volume.number)
+                      )
                     : nil,
                 edition == nil ? volume.formattedPrice : nil
             ].compactMap { $0 }.joined(separator: ", ")

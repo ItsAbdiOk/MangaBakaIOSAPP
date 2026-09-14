@@ -31,6 +31,13 @@ final class ToastCentre {
     // for both kinds is how a failed write buzzed the same as one that landed.
     private(set) var kind: Kind = .success
     private var dismissal: Task<Void, Never>?
+    /// How many toasts have been shown. The trigger for the haptic and for the
+    /// capsule's identity, because `message` is not one: two saves in a row
+    /// both say "Saved", so keying on the string meant the second one gave no
+    /// haptic and did not animate — SwiftUI saw no change. Only `show()`
+    /// increments it, and only past the protection guard below, so a
+    /// suppressed toast buzzes nothing.
+    private(set) var revision = 0
     /// When the current toast should stop protecting itself from replacement.
     /// Only set for `.failure` — a `.success` toast has never needed this,
     /// because nothing before now ever asked to keep it up over an
@@ -64,6 +71,7 @@ final class ToastCentre {
         }
 
         dismissal?.cancel()
+        revision += 1
         self.message = message
         self.kind = kind
         let resolvedDuration = duration ?? (kind == .failure ? Self.failureDuration : .seconds(2))
@@ -132,8 +140,16 @@ struct ToastOverlay: ViewModifier {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 11)
                     .frame(maxWidth: 300)
+                    // No `.clipShape(Capsule())` here. `Glass.floating`
+                    // already shapes the surface, and clipping to the capsule
+                    // also clipped away the 17pt shadow that helper draws — so
+                    // the shadow was rendered offscreen on every toast frame
+                    // and never seen. Not a frame-time measurement: the clip
+                    // provably discards the shadow, and the app's three other
+                    // `Glass.floating` call sites (`WhatsNew`, `StackView`,
+                    // `StackSections`) have no clip after it, so this is now
+                    // the shadow the mockup's floating surfaces all have.
                     .background { Glass.floating(Capsule()) }
-                    .clipShape(Capsule())
                     // The swipe-down needs hit testing on (the old
                     // `.allowsHitTesting(false)` went with it), so the hit
                     // region is pinned to the capsule here — before the
@@ -160,22 +176,30 @@ struct ToastOverlay: ViewModifier {
                     .offset(y: max(0, dragOffset))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .accessibilityAddTraits(.isStaticText)
+                    // Outermost, so the whole capsule — not just the `Text`
+                    // inside it — gets a new identity per toast and the
+                    // transition above actually plays for a second "Saved".
+                    // Keyed on the string it was a no-op: SwiftUI saw the same
+                    // view with the same value and animated nothing.
+                    .id(centre.revision)
             }
         }
         // Settles in — content arriving — and leaves with the quicker,
         // answering-a-gesture spring: a toast that lingered on the way out
         // as long as it did on the way in read as reluctant to go.
         .animation(centre.message != nil ? Motion.reduced(Motion.settle) : Motion.reduced(Motion.snappy),
-                   value: centre.message)
+                   value: centre.message != nil)
         // A toast is the confirmation that an action worked, or the warning
         // that it didn't — it appears near the bottom of a screen the reader
         // may not be looking at, so the tap gets an answer even when the
         // text does not. The two kinds do not share one feel.
-        .sensoryFeedback(Haptics.success, trigger: centre.message) { _, new in
-            new != nil && centre.kind == .success
+        // Keyed on `revision`, not on the message: two "Saved"s in a row are
+        // two confirmations and want two haptics, and the string is identical.
+        .sensoryFeedback(Haptics.success, trigger: centre.revision) { old, new in
+            new > old && centre.kind == .success
         }
-        .sensoryFeedback(Haptics.warning, trigger: centre.message) { _, new in
-            new != nil && centre.kind == .failure
+        .sensoryFeedback(Haptics.warning, trigger: centre.revision) { old, new in
+            new > old && centre.kind == .failure
         }
     }
 }

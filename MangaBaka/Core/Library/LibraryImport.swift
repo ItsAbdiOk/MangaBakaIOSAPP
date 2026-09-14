@@ -381,7 +381,14 @@ extension LibraryImport {
         progress: LibraryImportProgress? = nil
     ) async -> ImportReport {
         var report = ImportReport()
-        let existingBySeries = Dictionary(uniqueKeysWithValues: existing.map { ($0.seriesId, $0) })
+        // `uniquingKeysWith`, not `uniqueKeysWithValues` (work-list 17): the
+        // latter traps on a repeated key, and `existing` is whatever the
+        // library walk produced. The walk dedupes now, but a trap inside an
+        // import is the worst place to rely on a caller's invariant, and
+        // first-wins matches the walk's own rule.
+        let existingBySeries = Dictionary(
+            existing.map { ($0.seriesId, $0) }, uniquingKeysWith: { first, _ in first }
+        )
         progress?.begin(total: entries.count)
 
         for (index, entry) in entries.enumerated() {

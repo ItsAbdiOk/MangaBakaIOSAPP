@@ -56,8 +56,20 @@ final class LensCounts {
     private var running: Task<Void, Never>?
     private let repository: any SeriesRepositoryProtocol
 
-    init(repository: any SeriesRepositoryProtocol) {
+    /// What the spacing between counts sleeps against. Injected so a test can
+    /// move time rather than sleep through six real 250 ms pauses (item 129).
+    ///
+    /// Spelled with its module because this one does not: `MangaBaka` has its
+    /// own `Clock` protocol (`Core/Persistence/Clock.swift`, a source of
+    /// "now" for cache expiry), and an unqualified `Clock` resolves to that.
+    nonisolated let clock: any _Concurrency.Clock<Duration>
+
+    init(
+        repository: any SeriesRepositoryProtocol,
+        clock: any _Concurrency.Clock<Duration> = ContinuousClock()
+    ) {
         self.repository = repository
+        self.clock = clock
     }
 
     /// Fetches counts for lenses not yet counted this session, queueing
@@ -81,7 +93,7 @@ final class LensCounts {
         // cancel found every lens already queued and started nothing.
         guard running == nil, !queued.isEmpty else { return }
 
-        running = Task { [repository] in
+        running = Task { [repository, clock] in
             // `defer` rather than resetting `running` only after the loop
             // exits normally: the 429-stop below is a new early `return`, and
             // without this it would leave `running` pointing at a finished
@@ -111,7 +123,7 @@ final class LensCounts {
                 }
                 counts[lens.id] = total
                 asked.insert(lens.id)
-                try? await Task.sleep(for: Self.spacing)
+                try? await clock.sleep(for: Self.spacing)
             }
         }
     }

@@ -1,17 +1,31 @@
 import Foundation
 
-extension ReadingWrapped {
-    /// `finish_date`/`start_date` are calendar days, sent as
-    /// `YYYY-MM-DDT00:00:00.000Z` (`docs/schemas/mangabaka_openapi.json:29915-29927`).
-    /// Reading their year/month/day in the device's own calendar moves a
-    /// 1 January finish into the previous year west of UTC — the same trap
-    /// `UpcomingWork.localDay` already works around for release dates. A UTC
-    /// calendar reads the date the API actually meant.
-    static var utcCalendar: Calendar {
+extension Calendar {
+    /// A Gregorian calendar fixed to UTC.
+    ///
+    /// Every date this app receives that is a *calendar day* rather than an
+    /// instant arrives as UTC midnight: `finish_date`/`start_date` as
+    /// `YYYY-MM-DDT00:00:00.000Z` (`docs/schemas/mangabaka_openapi.json:29915-29927`),
+    /// and MangaUpdates' `release_date` as a bare `yyyy-MM-dd` this app parses
+    /// with a UTC formatter (`MangaUpdatesClient.Release.formatter`). Reading
+    /// any of those through `Calendar.current` west of UTC moves every one of
+    /// them to the previous local day — a 1 January finish lands in the year
+    /// before, and a 5 September release reads as 4 September for every reader
+    /// in the Americas, on every row, every time.
+    ///
+    /// Lived on `ReadingWrapped` as `utcCalendar` until 2026-09-14, where only
+    /// the year-in-review could reach it; `Cadence` needed exactly the same
+    /// thing and had `.current`.
+    static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
         return calendar
-    }
+    }()
+}
+
+extension ReadingWrapped {
+    /// See `Calendar.utc`, which this now names.
+    static var utcCalendar: Calendar { .utc }
 
     // MARK: - The year itself
 
@@ -103,15 +117,17 @@ extension ReadingWrapped {
         var perDay: Int { max(1, Int((Double(chapters) / Double(max(days, 1))).rounded())) }
     }
 
-    /// The longest a person could plausibly spend reading in one day.
-    ///
-    /// **A guess, and the point of it is to catch logging rather than to
-    /// model a reader.** Sixteen hours is already an extraordinary day; it is
-    /// set high on purpose so that a genuine binge survives and only an
-    /// impossible one is rejected.
-    static let plausibleHoursPerDay: Double = 16
+    // `plausibleHoursPerDay: Double = 16` used to live here, for the
+    // multi-day branch of `isPlausible`. Deleted 2026-09-14 (item 42): it is
+    // the reason the two ceilings disagreed by 5-6x. Sixteen hours at
+    // `ReadingTime`'s calibrated ~2.8 minutes a chapter for manga is ~343
+    // chapters a day, against 60 for a same-day span — so an import stamped
+    // start=yesterday finish=today walked through at 80 chapters, and 600
+    // over two days passed at 300 a day. Its own comment (kept below, it
+    // records a real measurement) explains the same-day figure; there is now
+    // one figure for both.
 
-    /// The same-day ceiling, in chapters rather than hours.
+    /// The reading ceiling, in chapters a day, for any span.
     ///
     /// **A guess, restated by R8.** This used to be an hours figure
     /// (`hoursPerDay <= 8`) built on `ReadingInsights.minutesPerChapter`'s old,
@@ -124,7 +140,10 @@ extension ReadingWrapped {
     /// instead, which the rate correction does not move: a genuine 40-chapter
     /// manhwa afternoon still survives, a stamped 80-chapter import still does
     /// not.
-    static let plausibleChaptersInOneDay = 60
+    /// **One ceiling for every span, since 2026-09-14** — see the deleted
+    /// `plausibleHoursPerDay` above for what having two of them cost. No test
+    /// sat at either boundary, which is why the disagreement survived.
+    static let plausibleChaptersPerDay = 60
 
     /// Fewer chapters than this is not a sprint worth naming. **A guess**:
     /// enough that a one-shot or a short series finished in a sitting does
@@ -169,13 +188,13 @@ extension ReadingWrapped {
     }
 
     /// Whether a sprint could have been read rather than merely recorded.
+    ///
+    /// A sprint and an import are told apart by nothing but size, whatever
+    /// span they claim — so both are judged the same way, by chapters a day.
+    /// `Sprint.perDay` already floors the span at one day, so a same-day
+    /// sprint is simply the case where `perDay == chapters`.
     static func isPlausible(_ sprint: Sprint) -> Bool {
-        // A one-day sprint and an import are told apart by nothing but size,
-        // so it is judged by chapter count — see `plausibleChaptersInOneDay`.
-        if sprint.isSameDay { return sprint.chapters <= plausibleChaptersInOneDay }
-        let minutes = ReadingInsights.minutesPerChapter(sprint.entry.series?.type)
-        let hoursPerDay = Double(sprint.perDay) * minutes / 60
-        return hoursPerDay <= plausibleHoursPerDay
+        sprint.perDay <= plausibleChaptersPerDay
     }
 
     /// The series the reader has been part-way through the longest.

@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
-"""Compare a live MangaBaka response against a recorded golden fixture.
+"""Compare live MangaBaka responses against the recorded golden fixtures.
 
 The fixtures under MangaBakaTests/Fixtures are frozen snapshots. If MangaBaka
 changes its response shape, every unit test still passes while the real app
-breaks. This script is the thing that notices.
+breaks. This script is the thing that notices — it is the one tool aimed
+squarely at the failure that has cost this project the most.
+
+Which fixtures it checks lives in Scripts/api-contract-endpoints.json, one
+entry per dated fixture, so adding a fixture and adding it to the check are
+one habit rather than two. Until 2026-09-14 this script knew about exactly one
+endpoint and had no caller at all.
+
+Usage:
+    Scripts/check-api-contract.py              # every endpoint in the manifest
+    Scripts/check-api-contract.py rising.json  # just the ones whose fixture
+                                               # path contains this substring
 
 Exit codes:
-    0  the live response still contains everything the fixture had
-    1  a field the app relies on has vanished or changed type
-    2  the live response could not be fetched or parsed
+    0  every live response still contains everything its fixture had
+    1  a field the app relies on has vanished
+    2  a response could not be fetched or parsed (an outage, not a break)
 """
 
 from __future__ import annotations
 
 import json
+import pathlib
 import sys
 import urllib.error
 import urllib.request
 
-ENDPOINT = "https://api.mangabaka.org/v2/series/discover/rising?limit=3"
-FIXTURE = "MangaBakaTests/Fixtures/rising.json"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+MANIFEST = ROOT / "Scripts" / "api-contract-endpoints.json"
 
 # MangaBaka returns 403 to requests with no recognisable User-Agent (verified
 # 2026-09-08: urllib's default UA is rejected, curl's is accepted). Identify
@@ -53,18 +65,26 @@ def fetch(url: str) -> dict:
         return json.load(response)
 
 
-def main() -> int:
+def check(entry: dict) -> int:
+    """One fixture against one live endpoint. Returns this entry's exit code."""
+    fixture = ROOT / entry["fixture"]
+    label = entry["fixture"].rsplit("/", 1)[-1]
+
     try:
-        live = fetch(ENDPOINT)
+        live = fetch(entry["url"])
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError,
             json.JSONDecodeError) as error:
         # A MangaBaka outage is not a contract break. Say so plainly and exit
-        # with a distinct code so CI can tell the two apart.
-        print(f"::warning::Could not reach MangaBaka: {error}")
+        # with a distinct code so a caller can tell the two apart.
+        print(f"::warning::{label}: could not reach MangaBaka: {error}")
         return 2
 
-    with open(FIXTURE, encoding="utf-8") as handle:
-        recorded = json.load(handle)
+    try:
+        with open(fixture, encoding="utf-8") as handle:
+            recorded = json.load(handle)
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"::error::{label}: fixture unreadable: {error}")
+        return 1
 
     live_shape = shape(live)
     recorded_shape = shape(recorded)
@@ -80,20 +100,48 @@ def main() -> int:
     added = live_paths - recorded_paths
 
     if added:
-        print("::notice::New fields appeared. Not a failure — Decodable ignores unknown keys.")
+        print(f"::notice::{label}: new fields appeared. Not a failure — "
+              "Decodable ignores unknown keys.")
         for item in sorted(added):
             print(f"  + {item}")
 
     if missing:
-        print("::error::MangaBaka's response no longer contains fields the fixture recorded.")
+        print(f"::error::{label}: the live response no longer contains fields "
+              "the fixture recorded.")
         for item in sorted(missing):
             print(f"  - {item}")
-        print("\nRe-record the fixture and update the models if this change is intended.")
+        print("  Re-record the fixture and update the models if this is intended.")
         return 1
 
-    print(f"Response shape still matches the fixture ({len(recorded_paths)} paths checked).")
+    print(f"  ok  {label}: shape still matches ({len(recorded_paths)} paths).")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    try:
+        with open(MANIFEST, encoding="utf-8") as handle:
+            entries = json.load(handle)["endpoints"]
+    except (OSError, json.JSONDecodeError, KeyError) as error:
+        print(f"::error::cannot read {MANIFEST}: {error}")
+        return 1
+
+    if argv:
+        entries = [e for e in entries if any(a in e["fixture"] for a in argv)]
+        if not entries:
+            print(f"::error::no manifest entry matches {argv}")
+            return 1
+
+    codes = [check(entry) for entry in entries]
+
+    # A real break outranks an outage: if anything is genuinely gone, say 1
+    # even when another endpoint also happened to be unreachable.
+    if 1 in codes:
+        return 1
+    if 2 in codes:
+        return 2
+    print(f"All {len(codes)} endpoints still match their fixtures.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

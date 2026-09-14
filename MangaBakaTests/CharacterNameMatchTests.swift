@@ -48,6 +48,21 @@ struct CharacterNameMatchTests {
         #expect(CharacterNameMatch.matches("J. Sung", "Jin-Woo Sung"))
     }
 
+    /// Item 108. Rule 2 fired on "same surname, same first initial" alone, so
+    /// two siblings merged — and a merge here is a *drop*, because the
+    /// unmatched side is never appended to the union. The file's own header
+    /// rejects exactly that trade: tolerate a duplicate, never lose a
+    /// character. The rule now also requires one side's first name to actually
+    /// be an abbreviation, which `surnameAndInitialMatches` above still is.
+    ///
+    /// Expected failure before the fix: both `#expect`s fail, because
+    /// `matches` returns true for both pairs.
+    @Test("Two full first names sharing an initial and a surname are different people")
+    func siblingsWithSameInitialDoNotMerge() {
+        #expect(!CharacterNameMatch.matches("Jinwoo Sung", "Jinah Sung"))
+        #expect(!CharacterNameMatch.matches("Itachi Uchiha", "Izumi Uchiha"))
+    }
+
     /// Rule 4: native names match even when the romanised ones do not at all.
     @Test("Matching native names match even when the romanised names differ entirely")
     func nativeNamesMatch() {

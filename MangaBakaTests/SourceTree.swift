@@ -30,6 +30,26 @@ enum SourceTree {
         try String(contentsOfFile: "\(root)/\(relativePath)", encoding: .utf8)
     }
 
+    /// `contains`, but with every run of whitespace treated as equal.
+    ///
+    /// Five assertions pinned two adjacent statements as one literal including
+    /// their exact indentation — `"selection = .library\n        shelfPath ="`.
+    /// Those die on a re-indent, on a line moving inside an `if`, on anything
+    /// Xcode's formatter does, and they fail saying "the wiring is gone" when
+    /// the wiring is fine. Splitting them into two independent `contains` would
+    /// lose what they are actually for, which is that the two statements are
+    /// next to each other in that order; normalising the whitespace keeps that
+    /// and drops only the part that was never the claim. Added 2026-09-14.
+    static func containsRun(_ haystack: String, _ needle: String) -> Bool {
+        squashed(haystack).contains(squashed(needle))
+    }
+
+    private static func squashed(_ text: String) -> String {
+        text.replacingOccurrences(
+            of: "[ \t\n\r]+", with: " ", options: .regularExpression
+        )
+    }
+
     /// Every Swift file under a directory, as repository-relative paths.
     ///
     /// For checks that have to look at the whole app rather than one file —

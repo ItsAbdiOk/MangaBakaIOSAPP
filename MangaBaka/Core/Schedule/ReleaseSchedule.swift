@@ -212,7 +212,15 @@ actor ReleaseScheduleService {
                 )
                 continue
             }
-            guard series.mangaUpdatesID != nil else {
+            // Parseable, not merely present. A `source.manga_updates.id` this
+            // app cannot turn into a number is one it can never ask about, so
+            // it is a settled `.notOnMangaUpdates` — the same answer as no id
+            // at all. Before 2026-09-14 only `!= nil` was checked here and in
+            // `run`'s `todo` filter, while `measureOne` bailed on the parse:
+            // the build counted the series done, this snapshot counted it
+            // pending, and every later build re-walked it. "Reading 54 of 55
+            // … 1 still to do", for the life of the account.
+            guard series.mangaUpdatesID.flatMap(MangaUpdatesID.number(from:)) != nil else {
                 snapshot.undated.append(
                     ScheduledWork(series: series, cadence: nil, reason: .notOnMangaUpdates)
                 )
@@ -273,22 +281,38 @@ actor ReleaseScheduleService {
         // Deterministic on a busy simulator (the pre-push hook's iPhone 17
         // Pro failed 3 of 3), timing-dependent on an idle one.
         progress.isRunning = true
+        buildID += 1
+        let id = buildID
         buildTask = Task { [weak self] in
             guard let self else { return }
             await self.run(refresh: refresh)
-            await self.finishBuild()
+            await self.finishBuild(id: id)
         }
     }
+
+    /// Which build `buildTask` and `progress` currently describe.
+    ///
+    /// `cancelBuild` clears both synchronously *and* the cancelled task's own
+    /// continuation clears them again when it unwinds. A sign-out followed by
+    /// a sign-in runs `cancelBuild()` then `build()`, and the first build's
+    /// late `finishBuild()` then cleared the *second* build's `buildTask` and
+    /// `isRunning` while it was still measuring: the screen stopped following
+    /// it, and `build()`'s `guard buildTask == nil` let a third build start
+    /// alongside it. Each build now says which one it is, and only a match
+    /// clears.
+    private var buildID = 0
+
     /// Stops a build. A full one is fifty-five throttled requests three
     /// seconds apart, and until this existed nothing could stop it — the
     /// loop's cancellation check was unreachable. Signing out calls it: the
     /// series being measured are the previous account's.
     func cancelBuild() {
         buildTask?.cancel()
-        finishBuild()
+        finishBuild(id: buildID)
     }
 
-    private func finishBuild() {
+    private func finishBuild(id: Int) {
+        guard id == buildID else { return }
         buildTask = nil
         progress.isRunning = false
     }
@@ -307,7 +331,9 @@ actor ReleaseScheduleService {
         let todo = entries.filter { entry in
             guard let series = entry.series,
                   !Self.isPaused(status: series.status),
-                  series.mangaUpdatesID != nil
+                  // Matches `worksInScope`'s guard exactly — see its comment
+                  // for the "1 still to do" that a bare `!= nil` here caused.
+                  series.mangaUpdatesID.flatMap(MangaUpdatesID.number(from:)) != nil
             else { return false }
             if refresh { return true }
             guard let row = cached[series.id] else { return true }
@@ -321,6 +347,12 @@ actor ReleaseScheduleService {
             if Task.isCancelled { return }
             guard await measureOne(entry) else { return }
         }
+
+        // Only after a complete pass: `entries` is the full in-scope set here,
+        // so anything else in the table belongs to a series that has left the
+        // library. An early `return` above skips this deliberately — a partial
+        // scope is not evidence about what is out of scope.
+        pruneCache(keeping: Set(entries.compactMap { $0.series?.id }))
     }
 
     /// Measures one series and folds the result into `progress`.
@@ -397,7 +429,7 @@ actor ReleaseScheduleService {
               let number = MangaUpdatesID.number(from: raw)
         else { return .unavailable }
 
-        if let row = (try? readCache())?[series.id], row.failure == nil {
+        if let row = try? readCache(seriesId: series.id), row.failure == nil {
             return row.cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
         }
 
@@ -407,6 +439,20 @@ actor ReleaseScheduleService {
             try? write(seriesId: series.id, cadence: cadence, failure: nil)
             return cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
         } catch {
+            guard error != .cancelled else {
+                // The same guard `measureOne` has three functions up, and it
+                // was missing here: popping the page during MangaUpdates' 3 s
+                // wait wrote a failure row, so the next open paid for a fresh
+                // request it did not need, and `.failed(.cancelled)` reached a
+                // live `DetailScheduleBlock` as an `InlineFailure` reading
+                // "cancelled" — the one thing `APIError.cancelled`'s own doc
+                // comment says must never be put on screen. Returned as
+                // `.failed(.cancelled)` rather than swallowed here so the one
+                // caller that can tell a live page from a dead one —
+                // `SeriesDetailView+Store.loadCadence` — makes that call; what
+                // is fixed here is the *write*, which outlives the page.
+                return .failed(error)
+            }
             // Recorded as a failure rather than a null cadence, so the next
             // open retries instead of treating an outage as an answer.
             try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
@@ -414,6 +460,12 @@ actor ReleaseScheduleService {
         }
     }
 
+}
+
+/// The `cadenceEntry` table. Split into its own extension purely to keep the
+/// actor body inside SwiftLint's 250-line limit — nothing about these reads
+/// and writes is separable from the build above.
+extension ReleaseScheduleService {
     // MARK: - Cache
 
     private struct CacheRow {
@@ -422,28 +474,66 @@ actor ReleaseScheduleService {
         let failure: String?
     }
 
+    /// Every cached row. For the ten-page build and for `snapshot()`, which
+    /// genuinely need the whole table; a single series page must use
+    /// `readCache(seriesId:)` instead — this `SELECT`s and JSON-decodes all
+    /// ~940 rows, and it was doing that once per series page open to find one.
     private func readCache() throws -> [Int: CacheRow] {
         try database.writer.read { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: "SELECT seriesId, payload, fetchedAt, failure FROM cadenceEntry"
             )
-            let decoder = JSONDecoder()
             var out: [Int: CacheRow] = [:]
             for row in rows {
-                let id: Int = row["seriesId"]
-                let payload: Data? = row["payload"]
-                let cadence = payload.flatMap { try? decoder.decode(Cadence.self, from: $0) }
-                var failure: String? = row["failure"]
-                // A payload that no longer decodes — the Cadence shape moved
-                // under a row an older build wrote — is not a settled "too few
-                // releases". Recorded as a failure so the next build retries it.
-                if payload != nil, cadence == nil, failure == nil {
-                    failure = "The stored estimate could not be read."
-                }
-                out[id] = CacheRow(cadence: cadence, fetchedAt: row["fetchedAt"], failure: failure)
+                out[row["seriesId"] as Int] = Self.decodeRow(row)
             }
             return out
+        }
+    }
+
+    /// One cached row, by series id.
+    private func readCache(seriesId: Int) throws -> CacheRow? {
+        try database.writer.read { db in
+            try Row.fetchOne(
+                db,
+                sql: """
+                SELECT seriesId, payload, fetchedAt, failure FROM cadenceEntry WHERE seriesId = ?
+                """,
+                arguments: [seriesId]
+            ).map(Self.decodeRow)
+        }
+    }
+
+    nonisolated private static func decodeRow(_ row: Row) -> CacheRow {
+        let payload: Data? = row["payload"]
+        let cadence = payload.flatMap { try? JSONDecoder().decode(Cadence.self, from: $0) }
+        var failure: String? = row["failure"]
+        // A payload that no longer decodes — the Cadence shape moved
+        // under a row an older build wrote — is not a settled "too few
+        // releases". Recorded as a failure so the next build retries it.
+        if payload != nil, cadence == nil, failure == nil {
+            failure = "The stored estimate could not be read."
+        }
+        return CacheRow(cadence: cadence, fetchedAt: row["fetchedAt"], failure: failure)
+    }
+
+    /// Drops rows for series that have left the library.
+    ///
+    /// Nothing deleted them before, so the table only ever grew: a reader who
+    /// has dropped and re-added series for two years pays for every one of
+    /// them on each whole-table read above. Run at the end of a build, when
+    /// the in-scope set is already known and correct — never from a
+    /// single-series path, which has no idea what the whole scope is and
+    /// would delete everything else.
+    private func pruneCache(keeping inScope: Set<Int>) {
+        guard !inScope.isEmpty else { return }
+        try? database.writer.write { db in
+            let placeholders = Array(repeating: "?", count: inScope.count).joined(separator: ",")
+            try db.execute(
+                sql: "DELETE FROM cadenceEntry WHERE seriesId NOT IN (\(placeholders))",
+                arguments: StatementArguments(Array(inScope))
+            )
         }
     }
 

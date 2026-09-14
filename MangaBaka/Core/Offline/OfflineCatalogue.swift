@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A series as the bundled offline index stores it — the top 20,000 by
 /// popularity, one line each. Single-letter keys because the wire file is
@@ -97,8 +98,36 @@ actor OfflineCatalogue {
 
     private var state: LoadState?
 
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "offlineCatalogue"
+    )
+
+    private enum LoadError: Error {
+        /// The resource is missing from the bundle, or unreadable, or not
+        /// valid gzip, or not valid JSON for `Wire` — collapsed to one case
+        /// because every one of those is the same packaging bug from the
+        /// caller's point of view, and the underlying `Error` is still
+        /// logged in full at the `catch` site.
+        case unreadable
+        /// `Wire.version` was decoded but was not the one shape this reader
+        /// understands. Before this the field was decoded and never
+        /// checked, so a version-2 export would decode to nonsense (wrong
+        /// field meanings) or fail `Wire` decoding and read as "missing",
+        /// either way silently (review F11).
+        case unsupportedVersion(Int)
+    }
+
     private struct LoadState {
+        /// Popularity order (rank 1 first) — the default sort — computed
+        /// once here instead of by every `filteredAndSorted` call. See
+        /// `byScore` and `filteredAndSorted`'s doc for why keeping two
+        /// pre-sorted arrays turns "filter then sort" into "filter" (review
+        /// F15: unsorted, this was an O(n log n) sort over ~15,000 surviving
+        /// rows on every page turn and every filter-panel keystroke).
         let entries: [OfflineIndexEntry]
+        /// The same rows, sorted by rating descending — `Self.sorted`'s old
+        /// `"score_desc"` branch, now computed once instead of per call.
+        let byScore: [OfflineIndexEntry]
         /// "2026-09-13", the export's own `built` field. Empty when decoding
         /// failed, so `builtDate()` can tell "loaded but the field was blank"
         /// from "failed to load" apart — neither is expected to happen with
@@ -233,16 +262,41 @@ actor OfflineCatalogue {
     }
 
     private static func load(resourceName: String, resourceExtension: String, bundle: Bundle) -> LoadState {
-        guard let url = bundle.url(forResource: resourceName, withExtension: resourceExtension),
-              let gzipped = try? Data(contentsOf: url),
-              let raw = try? Gunzip.decompress(gzipped)
-        else {
-            return LoadState(entries: [], built: "")
+        do {
+            guard let url = bundle.url(forResource: resourceName, withExtension: resourceExtension) else {
+                throw LoadError.unreadable
+            }
+            let gzipped = try Data(contentsOf: url)
+            let raw = try Gunzip.decompress(gzipped)
+            let wire = try JSONDecoder().decode(Wire.self, from: raw)
+            guard wire.version == 1 else { throw LoadError.unsupportedVersion(wire.version) }
+            // Popularity ascending (rank 1 first) is the default — the same
+            // "ascending is what a reader means by popularity" rule
+            // `SortOrder.all` documents for the online path. "score_desc"
+            // (by rating) is the only alternative offered offline; the
+            // export carries nothing to answer "trending" or "latest" with,
+            // and "random" would be a different shuffle on every page
+            // rather than a stable order to page through — so exactly these
+            // two orderings are worth precomputing (review F15).
+            return LoadState(
+                entries: wire.series.sorted { ($0.popularity ?? .max) < ($1.popularity ?? .max) },
+                byScore: wire.series.sorted { ($0.rating ?? -1) > ($1.rating ?? -1) },
+                built: wire.built
+            )
+        } catch {
+            // A missing or corrupt bundled resource used to read as "offline
+            // browse has nothing" with nothing in the console — `try?` three
+            // times over, no logger — where `EmbeddingIndex` at least logs
+            // once (review F11). Mirrors that shape.
+            logger.error(
+                """
+                OfflineCatalogue failed to load bundled resource \
+                \(resourceName, privacy: .public).\(resourceExtension, privacy: .public): \
+                \(String(describing: error), privacy: .public)
+                """
+            )
+            return LoadState(entries: [], byScore: [], built: "")
         }
-        guard let wire = try? JSONDecoder().decode(Wire.self, from: raw) else {
-            return LoadState(entries: [], built: "")
-        }
-        return LoadState(entries: wire.series, built: wire.built)
     }
 
     private struct Wire: Decodable {
@@ -260,7 +314,13 @@ actor OfflineCatalogue {
         allowedTypes: [String],
         blockedTags: [Int]
     ) -> [OfflineIndexEntry] {
-        let entries = ensureLoaded().entries
+        let loaded = ensureLoaded()
+        // The pre-sorted array to filter *from* — filtering with `.filter`
+        // preserves the relative order of its input, so picking the
+        // already-sorted-by-`query.sort` array up front turns "filter then
+        // sort" into just "filter" (review F15). Before this, `entries` was
+        // unsorted and every call sorted the survivors from scratch.
+        let entries = query.sort == "score_desc" ? loaded.byScore : loaded.entries
         let ratings = Set(allowedRatings.map { $0.lowercased() })
         // An explicit type chosen in the filter sheet wins over the standing
         // preference — see this method's doc comment.
@@ -284,7 +344,9 @@ actor OfflineCatalogue {
                 && passesGenre(entry, required: requiredGenreIDs)
                 && passesText(entry, needle: text)
         }
-        return Self.sorted(result, by: query.sort)
+        // No `.sorted` here — `entries` was already the right order for
+        // `query.sort` before filtering, and `.filter` preserves it.
+        return result
     }
 
     /// Content rating: a missing field passes, matching
@@ -393,18 +455,4 @@ actor OfflineCatalogue {
         tagName.lowercased().replacingOccurrences(of: " ", with: "_")
     }
 
-    /// Popularity ascending (rank 1 first) by default — the same "ascending is
-    /// what a reader means by popularity" rule `SortOrder.all` documents for
-    /// the online path. Only "score_desc" (by rating) is offered as an
-    /// alternative offline; the export carries nothing to answer "trending"
-    /// or "latest" with, and "random" would be a different shuffle on every
-    /// page rather than a stable order to page through.
-    private static func sorted(_ entries: [OfflineIndexEntry], by sort: String?) -> [OfflineIndexEntry] {
-        switch sort {
-        case "score_desc":
-            return entries.sorted { ($0.rating ?? -1) > ($1.rating ?? -1) }
-        default:
-            return entries.sorted { ($0.popularity ?? .max) < ($1.popularity ?? .max) }
-        }
-    }
 }

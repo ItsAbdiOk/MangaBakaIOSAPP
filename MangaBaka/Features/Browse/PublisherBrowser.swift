@@ -106,6 +106,13 @@ struct PublisherBrowser: View {
             guard !Task.isCancelled else { return }
             isSearching = true
             let found = await catalogue.searchPublishers(text)
+            // The cancellation check above only covered the sleep. A keystroke
+            // landing while the request was in the air cancelled this task but
+            // let its continuation run on: the old answer wrote
+            // `didFail = true, results = []` — "Could not search publishers
+            // just now." flashing between letters — and reset `isSearching`
+            // under the request that had just started (item 48).
+            guard !Task.isCancelled else { return }
             isSearching = false
             hasSearched = true
             // A failure is said, not shown as "no publisher by that name".

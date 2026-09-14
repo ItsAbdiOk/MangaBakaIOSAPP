@@ -98,16 +98,26 @@ final class ScheduleModel {
     /// Named for the library rather than just `snapshot`, because this type
     /// already has one of those and it means something else entirely.
     private let librarySnapshot: LibrarySnapshot?
+    /// The two the widget's "due this week" list needs alongside the
+    /// estimates. Optional so every existing test can build a model without
+    /// them; when either is absent the widget falls back to MangaUpdates
+    /// estimates alone, which is what it did before.
+    private let feeds: ReleaseFeedService?
+    private let repository: (any SeriesRepositoryProtocol)?
     private var pollTask: Task<Void, Never>?
 
     init(
         service: ReleaseScheduleService,
         calendar: ReleaseCalendar? = nil,
-        snapshot: LibrarySnapshot? = nil
+        snapshot: LibrarySnapshot? = nil,
+        feeds: ReleaseFeedService? = nil,
+        repository: (any SeriesRepositoryProtocol)? = nil
     ) {
         self.service = service
         self.calendar = calendar
         librarySnapshot = snapshot
+        self.feeds = feeds
+        self.repository = repository
     }
 
     /// Series with an announced date, so a guess about them can be suppressed.
@@ -354,14 +364,32 @@ final class ScheduleModel {
                 guard let self else { return }
                 if await !self.refreshProgress() {
                     self.pollTask = nil
-                    WidgetSnapshot.write(
-                        dueThisWeek: WidgetSnapshot.dueThisWeekItems(dated: self.snapshot.dated)
-                    )
+                    await self.writeWidgetSnapshot()
                     return
                 }
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// The widget's "due this week", written when a measurement finishes.
+    ///
+    /// `feedWorks:` is passed, not defaulted away: `dueThisWeekItems` sorts
+    /// real publisher dates ahead of MangaUpdates estimates for the same
+    /// window, which is the order `DueThisWeek` speaks them in — so leaving
+    /// it empty here is what made the widget and Siri disagree about what is
+    /// due first. Cache only (`cachedReport`, Q12): nothing here fetches, so
+    /// a series whose feed has never been fetched simply keeps its estimate.
+    private func writeWidgetSnapshot() async {
+        var feedWorks: [DueThisWeek.FeedDueWork] = []
+        if let feeds, let repository {
+            feedWorks = await DueThisWeekIntent.feedDueWorks(
+                for: snapshot.dated, feeds: feeds, repository: repository
+            )
+        }
+        WidgetSnapshot.write(
+            dueThisWeek: WidgetSnapshot.dueThisWeekItems(dated: snapshot.dated, feedWorks: feedWorks)
+        )
     }
 
     /// Returns whether a build is still running.

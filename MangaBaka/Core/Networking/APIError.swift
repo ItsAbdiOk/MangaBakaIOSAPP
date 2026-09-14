@@ -127,7 +127,24 @@ enum APIError: Error, Equatable {
     /// `.rateLimited(until:party:)` directly, since they already have the
     /// deadline rather than a duration to convert.
     static func rateLimited(retryAfter seconds: TimeInterval?, party: Party = .mangaBaka) -> APIError {
-        .rateLimited(until: seconds.map { Date().addingTimeInterval($0) }, party: party)
+        // A third-party `Retry-After` is a hostile or merely broken input —
+        // `Party` exists to distrust it — and `AniListClient`,
+        // `MangaUpdatesClient` and friends all pass this straight from the
+        // wire with no cap of their own. A finite-but-astronomical value
+        // (`1e300`) sails past `isFinite` and turns into a `Date` so far in
+        // the future that `humanDuration` traps computing minutes from it
+        // (`Int((wholeSeconds / 60).rounded())` on ~1e298). Clamping here,
+        // at the one place every caller's seconds become a `Date`, means
+        // every reader of `rateLimitDeadline`/`countdown` downstream can
+        // assume the deadline is sane without re-checking it themselves.
+        // Same ceiling MangaBaka's own 429s are held to — see
+        // `RateLimitGate.maxHonouredRetryAfter` — for the same reason: no
+        // plausible real backoff needs longer, and no bad value should be
+        // able to strand the app past it. (wire review #2/#8, 2026-09-14)
+        let clamped = seconds.flatMap {
+            $0.isFinite ? min(max($0, 0), RateLimitGate.maxHonouredRetryAfter) : nil
+        }
+        return .rateLimited(until: clamped.map { Date().addingTimeInterval($0) }, party: party)
     }
 
     /// The deadline a countdown should tick against, or nil for anything
@@ -161,10 +178,17 @@ enum APIError: Error, Equatable {
     private static func humanDuration(_ seconds: TimeInterval) -> String {
         let wholeSeconds = seconds.rounded()
         if wholeSeconds < 60 {
-            let rounded = max(Int(wholeSeconds), 1)
+            // `rateLimited(retryAfter:party:)` clamps every seconds value
+            // that becomes a `Date` before this ever runs, so `wholeSeconds`
+            // should already be small — but `countdown` recomputes from
+            // `until.timeIntervalSinceNow` live, and `Int(_:)` on a plain
+            // `Double` still traps outside ±9.2e18. `Int(wholeOrClamped:)`
+            // is the same belt-and-braces the clamp above already is (wire
+            // review #2/#8, 2026-09-14).
+            let rounded = max(Int(wholeOrClamped: wholeSeconds), 1)
             return "\(rounded) second\(rounded == 1 ? "" : "s")"
         }
-        let minutes = max(Int((wholeSeconds / 60).rounded()), 1)
+        let minutes = max(Int(wholeOrClamped: (wholeSeconds / 60).rounded()), 1)
         return "\(minutes) minute\(minutes == 1 ? "" : "s")"
     }
 

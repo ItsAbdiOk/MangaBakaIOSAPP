@@ -11,11 +11,94 @@ import Testing
 struct WidgetSnapshotTests {
     private let now = Date(timeIntervalSince1970: 1_789_000_000) // a Wednesday, 2026-09-09
 
-    // MARK: - Round trip
+    // MARK: - The cross-target contract
 
-    @Test("A snapshot round-trips through the same JSON shape the widget decodes")
-    func roundTrips() throws {
-        let snapshot = WidgetSnapshot(
+    /// The app writes `WidgetSnapshot`; the extension reads `WidgetSnapshotData`,
+    /// a separate `Codable` in a target this bundle does not link. Until
+    /// 2026-09-14 this test encoded and decoded `WidgetSnapshot` on both sides,
+    /// which proved nothing about the pair: renaming `dueThisWeek` on one side
+    /// only would have passed here, both targets would have built, and — because
+    /// `WidgetSnapshotData`'s two lists default to `[]` — the extension would have
+    /// decoded the file happily and drawn "Open MangaBaka to load" forever.
+    /// `WidgetSnapshotData.swift` is now compiled into this target (`project.yml`)
+    /// so the decode below crosses the seam it is named for.
+    @Test("The app's bytes decode into the type the widget extension actually uses")
+    func appBytesDecodeAsWidgetData() throws {
+        let snapshot = Self.sampleSnapshot(now: now)
+
+        let data = try Self.appEncoder.encode(snapshot)
+        let widgetSide = try Self.widgetDecoder.decode(WidgetSnapshotData.self, from: data)
+
+        // Values, not just "it decoded". A renamed field on the app side leaves
+        // the matching list empty rather than throwing, so only comparing
+        // contents can fail on it.
+        #expect(widgetSide.dueThisWeek.map(\.seriesID) == [1])
+        #expect(widgetSide.dueThisWeek.map(\.title) == ["Tower of God"])
+        #expect(widgetSide.dueThisWeek.map(\.subtitle) == ["Due Thursday · Webtoons"])
+        #expect(widgetSide.dueThisWeek.first?.coverURL
+            == URL(string: "https://example.com/cover.jpg"))
+        #expect(widgetSide.pickBackUp.map(\.seriesID) == [2])
+        #expect(widgetSide.pickBackUp.map(\.title) == ["Solo Leveling"])
+        #expect(widgetSide.pickBackUp.map(\.subtitle) == ["Ch. 88 of 200"])
+        #expect(widgetSide.pickBackUp.first?.coverURL == nil)
+        #expect(widgetSide.writtenAt == now)
+    }
+
+    /// The wire names themselves, spelled out once. The decode above catches a
+    /// one-sided rename; this catches a *matched* rename, which is the case
+    /// where a widget already on someone's Home Screen (drawn by the installed
+    /// extension) meets a newly-updated app before the extension is replaced.
+    /// It is also the cheaper failure to read: it names the key that moved.
+    @Test("The JSON keys and the date format are the ones the widget decodes")
+    func encodedKeysAreTheContract() throws {
+        let data = try Self.appEncoder.encode(Self.sampleSnapshot(now: now))
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        #expect(Set(object.keys) == ["dueThisWeek", "pickBackUp", "writtenAt"])
+
+        let items = try #require(object["dueThisWeek"] as? [[String: Any]])
+        #expect(items.count == 1)
+        let firstItem = try #require(items.first)
+        #expect(Set(firstItem.keys) == ["seriesID", "title", "subtitle", "coverURL"])
+
+        // ISO-8601, not the `Double` `JSONEncoder` defaults to. The widget's
+        // decoder is `.iso8601`; a strategy change on the app side alone makes
+        // every read fail and the widget has no way to report it.
+        let writtenAt = try #require(object["writtenAt"] as? String)
+        #expect(writtenAt == ISO8601DateFormatter().string(from: now))
+    }
+
+    /// An item with no cover: `coverURL` is `URL?`, and whether the encoder
+    /// writes `null` or omits the key decides nothing here — `WidgetSnapshotData`
+    /// must cope either way, because the app's encoder settings are not the
+    /// extension's to choose.
+    @Test("A missing cover URL survives the crossing")
+    func nilCoverCrosses() throws {
+        let data = try Self.appEncoder.encode(Self.sampleSnapshot(now: now))
+        let widgetSide = try Self.widgetDecoder.decode(WidgetSnapshotData.self, from: data)
+        #expect(widgetSide.pickBackUp.first?.coverURL == nil)
+    }
+
+    /// Both processes' coders, spelled the way each really spells them:
+    /// `WidgetSnapshot.encoder` (app) and `WidgetSnapshotData.read()` (widget)
+    /// are both private, so these mirror them. If either private property
+    /// changes strategy, `encodedKeysAreTheContract` is what notices.
+    private static var appEncoder: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    private static var widgetDecoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    private static func sampleSnapshot(now: Date) -> WidgetSnapshot {
+        WidgetSnapshot(
             dueThisWeek: [
                 WidgetSnapshot.Item(
                     seriesID: 1, title: "Tower of God", subtitle: "Due Thursday · Webtoons",
@@ -29,15 +112,13 @@ struct WidgetSnapshotTests {
             ],
             writtenAt: now
         )
+    }
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let data = try encoder.encode(snapshot)
-        let decoded = try decoder.decode(WidgetSnapshot.self, from: data)
-
+    @Test("A snapshot round-trips through its own JSON shape")
+    func roundTrips() throws {
+        let snapshot = Self.sampleSnapshot(now: now)
+        let data = try Self.appEncoder.encode(snapshot)
+        let decoded = try Self.widgetDecoder.decode(WidgetSnapshot.self, from: data)
         #expect(decoded == snapshot)
     }
 

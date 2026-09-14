@@ -19,6 +19,11 @@ struct WidgetSnapshotData: Codable {
         let title: String
         let subtitle: String
         let coverURL: URL?
+        /// The day a `dueThisWeek` row is due; nil for `pickBackUp`.
+        /// Optional, so a snapshot written by a build of the app that predates
+        /// this field still decodes — `decodeIfPresent` is what the synthesized
+        /// decoder uses for an `Optional`, and an old file simply has no key.
+        let due: Date?
         var id: Int { seriesID }
     }
 

@@ -35,7 +35,7 @@ actor AniListClient {
 
     init(
         endpoint: URL = URL(string: "https://graphql.anilist.co").unsafeAniListFallback,
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock()
     ) {
         self.endpoint = endpoint
@@ -128,8 +128,12 @@ actor AniListClient {
             throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .aniList)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -390,8 +394,12 @@ extension AniListClient {
             throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
         }
         if http.statusCode == 429 {
-            let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
-            spacing.backOff(until: clock.now.addingTimeInterval(retryAfter ?? 60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            let retryAfter = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             throw APIError.rateLimited(retryAfter: retryAfter, party: .aniList)
         }
         guard (200..<300).contains(http.statusCode) else {
@@ -508,55 +516,12 @@ extension AniListClient {
         return out
     }
 
-    /// The cheapest real request AniList will answer, asking for `id` alone
-    /// off the same `Media(id:, type:)` shape as `query` and `profileQuery`
-    /// above. Two things were tried and rejected first, both confirmed live
-    /// with curl on 2026-09-12: a bare `Page { pageInfo { total } }` came
-    /// back HTTP 400 ("No field provided"), and `Media(id: 1, ...)` came
-    /// back HTTP 404 ("Not Found.") because id 1 is not a real manga — either
-    /// would report a perfectly healthy AniList as down on every launch. Id
-    /// 30013 is One Piece, real and long-lived, and returns HTTP 200.
-    static let healthCheckQuery = "query { Media(id: 30013, type: MANGA) { id } }"
-
-    /// Whether AniList is answering at all right now.
-    ///
-    /// Throws exactly the way `characters` and `characterProfile` do:
-    /// `.server` for a refusal AniList itself sent, `.transport` for a
-    /// network failure that says nothing about AniList, so the caller can
-    /// apply the same "only a refusal counts as an outage" rule it already
-    /// applies elsewhere.
-    func healthCheck() async throws(APIError) {
-        try await waitForSlot()
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["query": Self.healthCheckQuery])
-
-        let response: URLResponse
-        do {
-            (_, response) = try await session.data(for: request)
-        } catch let error as URLError where URLError.Code.offlineCodes.contains(error.code) {
-            throw APIError.offline
-        } catch {
-            throw APIError.transport(underlying: String(describing: error), party: .aniList)
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError.transport(underlying: "AniList sent a non-HTTP response.", party: .aniList)
-        }
-        // A body-level GraphQL error is not checked here: this call only
-        // asks "is AniList refusing us at the transport level", the same
-        // question a 403 outage answers. A malformed query would be our own
-        // bug, not an outage, and would recur on every launch rather than
-        // clearing itself in fifteen minutes.
-        guard (200..<300).contains(http.statusCode) else {
-            throw APIError.server(
-                status: http.statusCode, message: "AniList returned \(http.statusCode).", party: .aniList
-            )
-        }
-    }
+    // `healthCheckQuery` and `healthCheck()` were deleted 2026-09-14 on
+    // Abdi's call (Q4). Their only caller was `CharacterService
+    // .primeAniListHealth`, a POST to graphql.anilist.co on every cold launch
+    // from every reader — including those who never open a series page — for
+    // an outage memory `fetchAniList` sets itself on the first real 403. See
+    // that deletion's note in `CharacterService` for the full reasoning.
 
     /// "March 4", or "March" alone when AniList sent a month with no day —
     /// which it does, for characters whose birthday is known only

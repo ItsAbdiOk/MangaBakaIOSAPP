@@ -55,9 +55,28 @@ struct SearchField: ViewModifier {
                 // fires; the tokens and the asked state go with it. Guarded
                 // on the text so a dismissal that keeps the text — leaving
                 // for a series page — does not throw the search away.
-                guard !presented, (model.query.text ?? "").isEmpty else { return }
+                //
+                // And on the tokens, because a token-only search has empty
+                // text by definition: a tag opened from a series page, a
+                // Browse pick, a lens with no text. Tapping a cover in one of
+                // those and coming back read as Cancel, and the reader
+                // returned to the idle panel with the token gone (item 50).
+                guard !presented, Self.isCancel(query: model.query) else { return }
                 model.cancelSearch()
             }
+    }
+
+    /// Whether a dismissal was the field's Cancel rather than a push to a
+    /// series page. The platform empties the text on Cancel, which is why the
+    /// text is read at all — but a token-only search has empty text by
+    /// definition (a tag opened from a series page, a Browse pick, a lens
+    /// with no text), so text alone read those as Cancel and the reader came
+    /// back from a cover to the idle panel with the token gone (item 50).
+    ///
+    /// `nonisolated static` and pure so the rule is testable — this project
+    /// has no ViewInspector to drive a real `searchable` field.
+    nonisolated static func isCancel(query: SearchQuery) -> Bool {
+        (query.text ?? "").isEmpty && SearchToken.tokens(for: query).isEmpty
     }
 
     private var text: Binding<String> {

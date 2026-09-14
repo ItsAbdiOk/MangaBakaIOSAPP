@@ -14,7 +14,16 @@ struct NotificationPolicyTests {
         let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
         let iso = DateFormatter()
         iso.locale = Locale(identifier: "en_US_POSIX")
-        iso.timeZone = TimeZone(secondsFromGMT: 0)
+        // `Calendar.current`'s zone, not GMT. `NotificationPolicy.confirmedReleases`
+        // compares `UpcomingWork.localDay(calendar: .current)` against
+        // `Calendar.current.startOfDay(for: now)`, so the fixture day has to be
+        // the *local* day of `now + daysFromNow` or the two disagree by one.
+        // `now` is 2025-09-04T16:53:20Z; formatted in GMT it reads 09-04, but
+        // on a simulator at UTC+7:07 or further east the local day is already
+        // 09-05, which makes `daysFromNow: 1` — the "tomorrow it is not, yet"
+        // case — land on today and fire. Invisible in Europe/London, a flake
+        // for anyone east of there. Fixed 2026-09-14 (review item 133).
+        iso.timeZone = Calendar.current.timeZone
         iso.dateFormat = "yyyy-MM-dd"
         return try JSONDecoder.snakeCased.decode(UpcomingWork.self, from: Data("""
         {"id": "\(id)", "series_id": \(series), "release_date": "\(iso.string(from: date))",
@@ -62,16 +71,73 @@ struct NotificationPolicyTests {
     func announcedDateGating() throws {
         let today = try work("a", series: 1, daysFromNow: 0)
         let tomorrow = try work("b", series: 2, daysFromNow: 1)
+        // Both series must be in a notifiable state now — `library: []` used
+        // to be enough, which was the bug (item 34): 1a filtered by date only.
+        let library = [
+            entry(id: 1, state: .reading, status: "releasing"),
+            entry(id: 2, state: .reading, status: "releasing")
+        ]
 
-        let planned = NotificationPolicy.decide(announced: [today, tomorrow], library: [], now: now)
+        let planned = NotificationPolicy.decide(announced: [today, tomorrow], library: library, now: now)
         #expect(planned.map(\.id) == ["release-work-a"])
     }
 
     @Test("A date already past is confirmed too — it came out and was not caught yet")
     func announcedPastDateStillFires() throws {
         let yesterday = try work("y", series: 1, daysFromNow: -1)
-        let planned = NotificationPolicy.decide(announced: [yesterday], library: [], now: now)
+        let library = [entry(id: 1, state: .reading, status: "releasing")]
+        let planned = NotificationPolicy.decide(announced: [yesterday], library: library, now: now)
         #expect(planned.map(\.id) == ["release-work-y"])
+    }
+
+    /// Item 34 / Abdi's Q1 answer (2026-09-14). 1a filtered by date alone, so
+    /// the next print volume of a series the reader dropped months ago arrived
+    /// as "Vol. 12 · out now" — against this type's own "something they are
+    /// waiting for".
+    ///
+    /// Expected failure before the fix: `planned.map(\.id)` is
+    /// `["release-work-d", "release-work-p", "release-work-c"]`, so all four
+    /// `#expect`s below fail.
+    @Test("A confirmed release only notifies for reading, rereading and paused")
+    func confirmedReleaseRespectsLibraryState() throws {
+        let library = [
+            entry(id: 1, state: .dropped, status: "releasing"),
+            entry(id: 2, state: .planToRead, status: "releasing"),
+            entry(id: 3, state: .completed, status: "completed"),
+            entry(id: 4, state: .rereading, status: "releasing"),
+            entry(id: 5, state: .paused, status: "releasing")
+        ]
+        let announced = [
+            try work("d", series: 1, daysFromNow: 0),
+            try work("p", series: 2, daysFromNow: 0),
+            try work("c", series: 3, daysFromNow: 0),
+            try work("r", series: 4, daysFromNow: 0),
+            try work("z", series: 5, daysFromNow: 0)
+        ]
+        let planned = NotificationPolicy.decide(announced: announced, library: library, now: now)
+        #expect(planned.map(\.id).sorted() == ["release-work-r", "release-work-z"])
+    }
+
+    /// A series MangaBaka announces a release for that is not in the library
+    /// at all cannot be in a notifiable state, so it says nothing — there is
+    /// no reader intent to infer.
+    @Test("An announced work for a series not in the library notifies nothing")
+    func announcedOutsideTheLibraryIsSilent() throws {
+        let planned = NotificationPolicy.decide(
+            announced: [try work("a", series: 99, daysFromNow: 0)], library: [], now: now
+        )
+        #expect(planned.isEmpty)
+    }
+
+    /// Condition 1b, same rule. Expected failure before the fix: `["release-feed-1-11"]`.
+    @Test("A newer feed episode for a dropped series notifies nothing")
+    func feedEpisodeRespectsLibraryState() {
+        let library = [entry(id: 1, state: .dropped, status: "releasing")]
+        let planned = NotificationPolicy.decide(
+            announced: [], feeds: [1: feed(episode: 11)], library: library, now: now,
+            lastKnownEpisode: [1: 10]
+        )
+        #expect(planned.isEmpty)
     }
 
     // MARK: - Feed-confirmed episodes
@@ -151,14 +217,36 @@ struct NotificationPolicyTests {
         #expect(sameSeasonAgain.isEmpty, "season 2 was already reported")
     }
 
-    @Test("Naver's finished flag notifies the first time it is seen, not only on a flip")
-    func naverFinishedFiresOnFirstSeen() {
+    /// Condition 2c, deleted 2026-09-14 on Abdi's call (Q3). It used to fire
+    /// on first sight of a feed's `finished` flag, with no baseline, worded
+    /// identically to 2a — so a webtoon that ended in 2019 notified the day
+    /// its feed was first cached. This test pinned that behaviour and is now
+    /// inverted; the catalogue status in 2a covers the reader's ask, and
+    /// `TranslationGap.originalComplete` says the useful version on the page.
+    ///
+    /// Expected failure before the deletion: `planned.map(\.id)` is
+    /// `["original-finished-1"]`, not empty.
+    @Test("A feed's finished flag no longer notifies at all")
+    func feedFinishedFlagNeverNotifies() {
         let library = [entry(id: 1, state: .reading, status: "releasing")]
         let finished = feed(episode: 100, finished: true)
         let planned = NotificationPolicy.decide(
             announced: [], feeds: [1: finished], library: library, now: now
         )
-        #expect(planned.map(\.id) == ["original-finished-1"])
+        #expect(planned.isEmpty, "the original's own completion flag is not a notification")
+    }
+
+    /// Control for the test above: the catalogue-status route (2a) still
+    /// works, so an empty result there would mean completions had broken
+    /// outright rather than 2c having been removed.
+    @Test("Control: the catalogue status flip still notifies alongside a finished feed")
+    func catalogueCompletionStillNotifies() {
+        let library = [entry(id: 1, state: .reading, status: "completed")]
+        let planned = NotificationPolicy.decide(
+            announced: [], feeds: [1: feed(episode: 100, finished: true)], library: library,
+            now: now, previousStatus: [1: "releasing"]
+        )
+        #expect(planned.map(\.id) == ["finished-1"])
     }
 
     @Test("Completed and season-ended are ignored outside reading and paused")

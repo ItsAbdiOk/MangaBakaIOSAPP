@@ -130,10 +130,10 @@ struct HapticsVocabularyTests {
 /// and marks a source, or names itself below with the reason it does not.
 @Suite("Every push into a series page grows out of its cover", .enabled(if: SourceTree.isAvailable))
 struct ZoomRouteCoverageTests {
-    /// Pushes without a zoom source, each with its reason.
-    private static let exempt: [String: String] = [
-        "MangaBaka/Features/Library/ShelfDetailView.swift": "unreachable; delete-or-rewire is Abdi's call"
-    ]
+    /// Pushes without a zoom source, each with its reason. Empty since
+    /// `ShelfDetailView` — its only entry, and unreachable — was deleted
+    /// (review Q6). A new exemption needs a reason written beside it.
+    private static let exempt: [String: String] = [:]
     /// Files whose source mark lives in a sibling row view.
     private static let markedElsewhere: [String: String] = [
         "MangaBaka/Features/Schedule/ScheduleView.swift": "MangaBaka/Features/Schedule/ScheduleRow.swift"

@@ -32,6 +32,20 @@ enum ScrollEdge {
         Double(min(1, max(0, travelled / fadeIn)))
     }
 
+    /// The scroll offset, reduced to the only part of it the scrim can see.
+    ///
+    /// `opacity(forTravel:)` is pinned at 1 from `fadeIn` onward and at 0
+    /// below zero, so every sample outside [0, 12] renders identically. Applied
+    /// in the `onScrollGeometryChange` transform rather than in the action, the
+    /// stored value stops changing once the reader is 12pt down — and an
+    /// `onScrollGeometryChange` whose value does not change does not run its
+    /// action. Before this the action ran a `withAnimation` for every scroll
+    /// sample of a 2000pt fling, all but the first few redrawing the same
+    /// fully-opaque scrim.
+    static func travel(forOffset offset: CGFloat) -> CGFloat {
+        min(max(0, offset), fadeIn)
+    }
+
     /// The status bar and Dynamic Island's height on this device.
     @MainActor static var windowTopInset: CGFloat {
         UIApplication.shared.connectedScenes
@@ -43,14 +57,27 @@ enum ScrollEdge {
 }
 
 private struct ScrollEdgeScrim: ViewModifier {
-    /// How far the content has travelled under the edge. Only the first few
-    /// points matter: the scrim is fully in before anything has moved a line.
+    /// How far the content has travelled under the edge, clamped to the range
+    /// that changes anything. Only the first few points matter: the scrim is
+    /// fully in before anything has moved a line.
     @State private var travelled: CGFloat = 0
+    /// The safe-area inset, read on appear rather than per frame. It is a
+    /// property of the window, not of the scroll position, and it was being
+    /// recomputed by walking
+    /// `connectedScenes` → `windows` → `first(where: isKeyWindow)` twice per
+    /// `scrim` evaluation — i.e. twice per scroll tick, on the three busiest
+    /// screens. Re-read on every appear rather than once per process so a
+    /// rotation or a Stage-Manager-style resize between appearances is picked
+    /// up; it cannot change while a scroll is in flight.
+    @State private var topInset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
+            .onAppear { topInset = ScrollEdge.windowTopInset }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
+                ScrollEdge.travel(
+                    forOffset: geometry.contentOffset.y + geometry.contentInsets.top
+                )
             } action: { _, offset in
                 // `Motion.glide` — fully damped, no overshoot — rather than
                 // a bare assignment: the scrim used to snap to each scroll
@@ -71,14 +98,14 @@ private struct ScrollEdgeScrim: ViewModifier {
         // a reader there reports `top == 0` even when it ignores the safe area
         // — measured, and it rendered a 14pt band above the clock instead of a
         // scrim behind it. The window is the only thing here that still knows.
-        let height = ScrollEdge.windowTopInset + Metrics.scrollEdgeFade
+        let height = topInset + Metrics.scrollEdgeFade
         // Solid for the whole safe area, then fading. Even stops would put the
         // half-way point of the fade inside the status bar, which is the part
         // that has to stay legible.
         return LinearGradient(
             stops: [
                 .init(color: Palette.ground, location: 0),
-                .init(color: Palette.ground, location: ScrollEdge.windowTopInset / height),
+                .init(color: Palette.ground, location: topInset / height),
                 .init(color: Palette.ground.opacity(0), location: 1)
             ],
             startPoint: .top,

@@ -12,7 +12,14 @@ import SwiftUI
 struct HistorySection: View {
     let history: HistoryStore
 
-    @State private var held = 0
+    /// How many rows the list holds, or nil when the read itself failed.
+    ///
+    /// Item 102: this was a non-optional `Int` set from
+    /// `(try? await history.count()) ?? 0`, so a disk error rendered as
+    /// "Nothing viewed yet" *and* disabled the button — the reader could not
+    /// clear a list the app could not read, and was told there was nothing
+    /// to clear. Three states, not two.
+    @State private var held: Int?
     @State private var isConfirming = false
     /// From the environment, the same instance `RootView` puts every toast
     /// through — see `.environment(toasts)` at the tab tree's root. Optional
@@ -44,6 +51,9 @@ struct HistorySection: View {
                 .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
             }
             .buttonStyle(.press)
+            // Enabled when the count could not be read: clearing is exactly
+            // what a reader wants to be able to do about a list the app is
+            // having trouble with.
             .disabled(held == 0)
         }
         .task { await refresh() }
@@ -80,7 +90,12 @@ struct HistorySection: View {
     /// nothing in the list the sentence has to explain what the list is FOR,
     /// which the populated one can take for granted.
     private var caption: String {
-        held == 0
+        held == nil
+            ? """
+            The list couldn't be read just now. Clearing still works, and your \
+            library, saves and skips are not affected either way.
+            """
+            : held == 0
             ? """
             Nothing opened yet. The last \(HistoryStore.limit) series you open \
             appear on Discover so you can get back to them, stored on this \
@@ -97,13 +112,14 @@ struct HistorySection: View {
     /// before they erase it rather than after.
     private var label: String {
         switch held {
-        case 0: "Nothing viewed yet"
-        case 1: "Clear 1 series"
-        default: "Clear \(held) series"
+        case nil: "Couldn't read the list"
+        case .some(0): "Nothing viewed yet"
+        case .some(1): "Clear 1 series"
+        case let .some(count): "Clear \(count) series"
         }
     }
 
     private func refresh() async {
-        held = (try? await history.count()) ?? 0
+        held = try? await history.count()
     }
 }

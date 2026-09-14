@@ -23,6 +23,16 @@ struct LibraryEditSheet: View {
     @State private var isPrivate: Bool
     @State private var isSaving = false
     @State private var failure: String?
+    /// Whether the reader actually moved the stars / typed in the note.
+    ///
+    /// Work-list 82: the server stores a rating 0-100 and this sheet rounds it
+    /// to five stars on the way in and compares `stars × 20` on the way out,
+    /// so a rating of 85 was silently rewritten to 80 by a reader who only
+    /// edited the note. The note had the same shape through its trim. The
+    /// same file records fixing exactly this for the chapter field. A field
+    /// the reader did not touch is not in the change set at all.
+    @State private var ratingTouched = false
+    @State private var noteTouched = false
 
     init(entry: LibraryEntry, series: Series, onSave: @escaping (LibraryChange) async -> String?) {
         self.entry = entry
@@ -172,6 +182,7 @@ struct LibraryEditSheet: View {
                         // Tapping the current rating clears it, which is the
                         // only way back to "not rated".
                         rating = rating == step ? 0 : step
+                        ratingTouched = true
                     } label: {
                         Image(systemName: step <= rating ? "star.fill" : "star")
                             .font(.system(size: 22))
@@ -193,6 +204,7 @@ struct LibraryEditSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             Eyebrow(text: "Note")
             TextField("Why you stopped, what to remember", text: $note, axis: .vertical)
+                .onChange(of: note) { noteTouched = true }
                 .lineLimit(2...5)
                 .typeBody()
                 .foregroundStyle(Palette.textPrimary)
@@ -268,7 +280,11 @@ struct LibraryEditSheet: View {
             failure = message
             toasts?.show(message, kind: .failure)
         } else {
-            toasts?.show("Saved")
+            // No "Saved" toast here: the shell posts one at its own write
+            // site (`RootView+Session.saveLibraryChange`), and both firing
+            // meant VoiceOver read "Saved. Saved." on every edit
+            // (work-list 24). The shell's is the one that survives a
+            // dismissed sheet, so this is the copy that goes.
             dismiss()
         }
     }
@@ -376,12 +392,17 @@ extension LibraryEditSheet {
             if newChapter != entry.progressChapter { change.progressChapter = .some(newChapter) }
         }
 
-        let newRating = rating == 0 ? nil : Double(rating * 20)
-        if newRating != entry.rating { change.rating = .some(newRating) }
+        // Only if the stars were actually moved — see `ratingTouched`.
+        if ratingTouched {
+            let newRating = rating == 0 ? nil : Double(rating * 20)
+            if newRating != entry.rating { change.rating = .some(newRating) }
+        }
 
-        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newNote = trimmedNote.isEmpty ? nil : trimmedNote
-        if newNote != entry.note { change.note = .some(newNote) }
+        if noteTouched {
+            let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+            let newNote = trimmedNote.isEmpty ? nil : trimmedNote
+            if newNote != entry.note { change.note = .some(newNote) }
+        }
 
         if isPrivate != (entry.isPrivate ?? false) { change.isPrivate = isPrivate }
         return change

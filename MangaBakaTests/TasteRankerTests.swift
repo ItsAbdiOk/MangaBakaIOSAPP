@@ -120,7 +120,12 @@ struct StackRankingWiringTests {
         let stack = try SourceTree.read("MangaBaka/Features/Stack/StackModel.swift")
         #expect(stack.contains("if let ranker, !ranker.isEmpty, source != .yourProfile {"))
         #expect(stack.contains("fresh = ranker.rank(fresh) { $0 }"))
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
-        #expect(root.contains("stackModel?.ranker = await taste.ranker()"))
+        // Item 61: the tab tree moved to its own file when `RootView.init`
+        // pushed the type past the lint's body cap.
+        let root = try SourceTree.read("MangaBaka/App/RootView+Tabs.swift")
+        // Not `stackModel?` any more: the six session models are non-optional
+        // `@State` built in `RootView.init` (item 61), so this write can no
+        // longer land on a throwaway instance nobody is showing.
+        #expect(root.contains("stackModel.ranker = await taste.ranker()"))
     }
 }

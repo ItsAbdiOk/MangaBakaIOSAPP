@@ -162,7 +162,6 @@ struct TabBarClearanceTests {
         "MangaBaka/Features/Search/SearchView.swift",
         "MangaBaka/Features/Mix/MixView.swift",
         "MangaBaka/Features/Library/LibraryView.swift",
-        "MangaBaka/Features/Library/ShelfDetailView.swift",
         "MangaBaka/Features/Schedule/ScheduleView.swift",
         "MangaBaka/Features/Browse/BrowseView.swift",
         "MangaBaka/Features/Settings/SettingsView.swift",
@@ -360,7 +359,9 @@ struct TabBarSizingTests {
     /// What is worth asserting is that it stays the system's.
     @Test("The tab bar is the system's, not a drawing of one")
     func usesTheSystemTabBar() throws {
-        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        // The tab tree lives in its own file since item 61 gave `RootView` an
+        // explicit initialiser; the assertions are unchanged.
+        let root = try SourceTree.read("MangaBaka/App/RootView+Tabs.swift")
         #expect(root.contains("role: .search"), "search should detach itself, not be drawn apart")
         #expect(root.contains("tabBarMinimizeBehavior"))
         #expect(
@@ -385,23 +386,79 @@ struct NewScreenAccessibilityTests {
 
     /// A cover inside a row that already carries the title would only add a
     /// focus stop that says nothing at all.
+    ///
+    /// Used to grep `LibraryView.swift` for the literal `accessibilityText:
+    /// ""`, which is how a label-less cover looked when this was written.
+    /// `CoverImage` no longer has an empty default (`CoverImage.swift`
+    /// defaults `accessibilityText` to `"Cover art"` now, and every call in
+    /// `LibraryView.swift` was itself split out into `LibraryList.swift` and
+    /// `PickBackUp.swift` along the way) — so the literal never matched
+    /// anything and `empties` was always 0, which is exactly the "0 >= 0"
+    /// case the test's own comment warned about. A label-less cover today is
+    /// a `CoverImage(...)` call that omits `accessibilityText:` entirely; the
+    /// real, current instance of the pattern is the Stack screen's flight
+    /// ghost and its two neighbour covers in `StackView.swift`, both
+    /// decorative duplicates of a cover a sibling element already announces.
     @Test("Covers with no label of their own are hidden, not silent")
     func silentCoversAreHidden() throws {
         var exercised = 0
         for path in [
-            "MangaBaka/Features/Library/ShelfDetailView.swift",
-            "MangaBaka/Features/Library/LibraryView.swift"
+            "MangaBaka/Features/Stack/StackView.swift"
         ] {
             let source = try SourceTree.read(path)
-            // Every empty-labelled cover is followed by a hide.
-            let empties = source.components(separatedBy: "accessibilityText: \"\"").count - 1
-            let hidden = source.components(separatedBy: "accessibilityHidden(true)").count - 1
-            exercised += empties
-            #expect(hidden >= empties, "\(path) leaves a cover focusable with nothing to say")
+            let calls = try Self.coverImageCalls(in: source)
+            let unlabelled = calls.filter { !$0.hasOwnLabel }
+            exercised += unlabelled.count
+            for call in unlabelled {
+                #expect(call.isHiddenAfterward, "\(path) leaves a cover focusable with nothing to say")
+            }
         }
-        // `0 >= 0` passes for a file with no such cover at all — LibraryView
-        // today. The rule has to have met at least one to have been checked.
-        #expect(exercised > 0, "No empty-labelled cover found anywhere; the rule was never exercised")
+        // Passes vacuously for a file with no such cover at all, which is
+        // exactly the blind spot that let this test exercise nothing before.
+        // The rule has to have met at least one real call to have been checked.
+        #expect(exercised > 0, "No label-less cover found anywhere; the rule was never exercised")
+    }
+
+    /// One `CoverImage(...)` call: whether it names its own
+    /// `accessibilityText:`, and whether `.accessibilityHidden(true)` shows up
+    /// before the next `CoverImage(` call (or the end of the source).
+    ///
+    /// Parses balanced parentheses rather than a fixed-width lookahead: the
+    /// modifier chain between a decorative cover and its `.accessibilityHidden`
+    /// can run past a thousand characters (matched-geometry comments, frame
+    /// modifiers spanning several lines), so any fixed window either misses a
+    /// real hide or bleeds into the next cover's own modifiers.
+    private struct CoverImageCall {
+        let hasOwnLabel: Bool
+        let isHiddenAfterward: Bool
+    }
+
+    private static func coverImageCalls(in source: String) throws -> [CoverImageCall] {
+        let marker = "CoverImage("
+        var calls: [(argsEnd: String.Index, hasOwnLabel: Bool)] = []
+        var searchStart = source.startIndex
+        while let markerRange = source.range(of: marker, range: searchStart..<source.endIndex) {
+            var depth = 1
+            var cursor = markerRange.upperBound
+            while depth > 0, cursor < source.endIndex {
+                if source[cursor] == "(" { depth += 1 } else if source[cursor] == ")" { depth -= 1 }
+                cursor = source.index(after: cursor)
+            }
+            let args = source[markerRange.upperBound..<cursor]
+            calls.append((argsEnd: cursor, hasOwnLabel: args.contains("accessibilityText:")))
+            searchStart = cursor
+        }
+        return calls.enumerated().map { index, call in
+            let nextCall = index + 1 < calls.count
+                ? source.range(of: marker, range: call.argsEnd..<source.endIndex)
+                : nil
+            let windowEnd = nextCall?.lowerBound ?? source.endIndex
+            let window = source[call.argsEnd..<windowEnd]
+            return CoverImageCall(
+                hasOwnLabel: call.hasOwnLabel,
+                isHiddenAfterward: window.contains(".accessibilityHidden(true)")
+            )
+        }
     }
 
     /// Smart Invert inverts the UI and leaves photographs alone, if they opt

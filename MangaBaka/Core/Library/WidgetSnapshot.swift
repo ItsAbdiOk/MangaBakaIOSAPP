@@ -19,13 +19,29 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     struct Item: Codable, Sendable, Equatable, Identifiable, Hashable {
         let seriesID: Int
         let title: String
-        /// e.g. "Due Thursday" or "Ch. 88 of 120". Built by whichever `Item`
-        /// factory below produced this row — the widget renders exactly this
-        /// string rather than reformatting a date or a chapter number itself,
-        /// the same reason `SpotlightIndex.description(for:)` is built once
-        /// and handed over as text instead of recomputed per presentation.
+        /// e.g. "Ch. 88 of 120" for a `pickBackUp` row, or the feed's name
+        /// ("Webtoons") for a `dueThisWeek` row that has one — empty for a
+        /// MangaUpdates estimate, which has nothing to name.
+        ///
+        /// No longer carries the weekday: see `due` below, and
+        /// `SeriesWidgetEntryBuilder.subtitle(for:)`, which composes the two.
+        /// A chapter number is still baked here, for the reason
+        /// `SpotlightIndex.description(for:)` bakes its own — it cannot go
+        /// stale, where a date can.
         let subtitle: String
         let coverURL: URL?
+        /// The day this row is actually due, for a `dueThisWeek` row; nil for
+        /// `pickBackUp`, which has no date.
+        ///
+        /// The widget formats the weekday from this rather than reading it out
+        /// of `subtitle`. Until 2026-09-14 the weekday was baked into
+        /// `subtitle` and the `Date` was thrown away, so a snapshot written
+        /// during the last manual schedule build kept saying "Due Thursday"
+        /// into the following week — and the hourly timeline reload made that
+        /// look freshly computed. `var` with a default only so the memberwise
+        /// initialiser stays source-compatible for `pickBackUp` rows; nothing
+        /// mutates it.
+        var due: Date?
 
         var id: Int { seriesID }
     }
@@ -78,11 +94,51 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         clock: any Clock = SystemClock()
     ) {
         guard let containerURL else { return }
-        var snapshot = read() ?? WidgetSnapshot(writtenAt: clock.now)
+        let existing = read()
+        var snapshot = existing ?? WidgetSnapshot(writtenAt: clock.now)
         if let dueThisWeek { snapshot.dueThisWeek = dueThisWeek }
         if let pickBackUp { snapshot.pickBackUp = pickBackUp }
+        // Whether either list actually moved. `writtenAt` is excluded
+        // deliberately, since it always differs.
+        let changed = existing == nil
+            || existing?.dueThisWeek != snapshot.dueThisWeek
+            || existing?.pickBackUp != snapshot.pickBackUp
+
+        // The file is still rewritten either way: `writtenAt` is how the
+        // widget knows whether what it is showing was computed recently
+        // enough to trust (`SeriesWidgetEntryBuilder.makeEntry`), and
+        // withholding the write on a no-op would make an up-to-date snapshot
+        // age into the "Open MangaBaka to refresh" placeholder. A few KB to
+        // the App Group container costs nothing.
         snapshot.writtenAt = clock.now
         guard let data = try? encoder.encode(snapshot) else { return }
+        try? data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
+
+        // The reload is the part that is rationed. WidgetKit documents a
+        // budget of roughly 40-70 reloads per widget per day, and this asked
+        // for one on every launch whether or not either list had moved — so
+        // the one reload that matters (the schedule build that produced a new
+        // date) is the one the system can end up deferring.
+        guard changed else { return }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Empties the snapshot and redraws, for an account change.
+    ///
+    /// Sign-out forgot the library, the ranker, the reminders and the
+    /// Spotlight index and left this file alone, so the previous account's
+    /// "Pick back up · Ch. 88 of 120" stayed on the Home Screen — with working
+    /// deep links into a library the app no longer has. Call it beside
+    /// `spotlight.clear()`.
+    ///
+    /// Writes rather than deletes: a missing file is the fresh-install case
+    /// the widget draws as "Open MangaBaka to load", which is the right thing
+    /// to show, and an empty written snapshot says the same while leaving the
+    /// container in a state `write(...)` can merge into.
+    static func clear(clock: any Clock = SystemClock()) {
+        guard let containerURL else { return }
+        let empty = WidgetSnapshot(dueThisWeek: [], pickBackUp: [], writtenAt: clock.now)
+        guard let data = try? encoder.encode(empty) else { return }
         try? data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
         WidgetCenter.shared.reloadAllTimelines()
     }
@@ -105,11 +161,15 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// estimates for the same window, matching the order `DueThisWeek`
     /// speaks them in so the widget and Siri never disagree about what is
     /// due first.
+    /// - Parameter calendar: UTC, not the device's. A `Cadence.due` is
+    ///   derived from MangaUpdates release dates, which are UTC midnights;
+    ///   `Calendar.current.startOfDay` moves every one of them to the previous
+    ///   local day west of UTC. See `Calendar.utc`.
     static func dueThisWeekItems(
         dated: [ScheduledWork],
         feedWorks: [DueThisWeek.FeedDueWork] = [],
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .utc
     ) -> [Item] {
         let today = calendar.startOfDay(for: now)
         guard let end = calendar.date(byAdding: .day, value: DueThisWeek.window, to: today) else { return [] }
@@ -123,8 +183,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
             items.append((
                 Item(
                     seriesID: work.seriesId, title: work.title,
-                    subtitle: "Due \(weekday(day)) · \(work.sourceName)",
-                    coverURL: nil
+                    subtitle: work.sourceName, coverURL: work.coverURL, due: day
                 ),
                 day
             ))
@@ -142,8 +201,9 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
                 Item(
                     seriesID: work.series.id,
                     title: work.series.displayTitle ?? "Untitled series",
-                    subtitle: "Due \(weekday(day))",
-                    coverURL: work.series.cover.x250 ?? work.series.cover.x350 ?? work.series.cover.raw
+                    subtitle: "",
+                    coverURL: Self.widgetCover(work.series.cover),
+                    due: day
                 ),
                 day
             ))
@@ -185,7 +245,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
                     seriesID: entry.seriesId,
                     title: series.displayTitle ?? "Untitled series",
                     subtitle: subtitle,
-                    coverURL: series.cover.x250 ?? series.cover.x350 ?? series.cover.raw
+                    coverURL: Self.widgetCover(series.cover)
                 )
                 // Never-opened entries sort last: there is no date to rank
                 // them by, and a series the reader has actually let sit is a
@@ -197,9 +257,15 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
             .map(\.0)
     }
 
-    /// Matches `DueThisWeek.when`'s own formatting, so a date the widget and
-    /// Siri both mention reads the same way in both places.
-    private static func weekday(_ day: Date) -> String {
-        day.formatted(.dateTime.weekday(.wide))
+    /// The largest cover a widget row should ever download.
+    ///
+    /// `raw` is deliberately not a fallback. The extension decodes up to four
+    /// of these with `UIImage(data:)` inside `getTimeline`, against a memory
+    /// ceiling in the low tens of MB; four `raw` covers at 1,200x1,800 are
+    /// roughly 8 MB each decoded, which is a jetsam rather than a widget. A
+    /// grey placeholder in a 32x44 slot is a far smaller loss than the whole
+    /// extension being killed — and the timeline it was building with it.
+    private static func widgetCover(_ cover: Cover) -> URL? {
+        cover.x250 ?? cover.x350
     }
 }

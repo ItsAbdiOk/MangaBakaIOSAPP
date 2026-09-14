@@ -29,7 +29,7 @@ actor GoogleBooksClient {
 
     init(
         baseURL: URL = URL(string: "https://www.googleapis.com/books/v1/volumes").unsafeStoreFallback,
-        session: URLSession = .shared,
+        session: URLSession = ThirdPartySession.shared,
         clock: any Clock = SystemClock(),
         cacheDirectory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
             .first?.appendingPathComponent("googlebooks", isDirectory: true)
@@ -83,7 +83,13 @@ actor GoogleBooksClient {
 
         var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
         components?.queryItems = [
-            URLQueryItem(name: "q", value: "intitle:\"\(term)\""),
+            // T11 fixed the comment about this and left the code: a title
+            // that itself contains a `"` closed the phrase early and turned
+            // the rest of it into loose terms, so `Aria the "Masterpiece"`
+            // searched for `intitle:"Aria the "` plus two bare words. The
+            // quote has no meaning inside a Google Books phrase, so it is
+            // dropped rather than escaped.
+            URLQueryItem(name: "q", value: "intitle:\"\(term.replacingOccurrences(of: "\"", with: ""))\""),
             // Google's documented per-request maximum (T11) — there is no
             // larger page to ask for the way Apple's `limit=200` is; a
             // long-running series with mixed editions may need a

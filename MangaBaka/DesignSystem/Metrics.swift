@@ -143,9 +143,23 @@ enum Metrics {
     /// it: with only a few points of padding, the last line of the last row
     /// stays permanently behind the glass and cannot be read.
     ///
-    /// Sized to the system capsule plus the home indicator rather than guessed:
-    /// the bar is about 62pt tall and sits ~22pt from the bottom, and a little
-    /// slack keeps a descender off the glass.
+    /// **A guess, and known to be at least 40pt more than its own stated
+    /// derivation.** The sentence here used to read "sized to the system
+    /// capsule plus the home indicator rather than guessed: the bar is about
+    /// 62pt tall and sits ~22pt from the bottom" — which comes to 84, not 124.
+    /// The remaining 40 was never derived from anything. The number itself
+    /// dates from the hand-drawn tab capsule that `RootView.swift` records as
+    /// gone, replaced by the system `TabView`'s own bar.
+    ///
+    /// Unresolved, and it needs a device or simulator, which is why it is
+    /// written down rather than changed (2026-09-14): the system `TabView`
+    /// already applies its own bottom safe-area inset to the content inside
+    /// it, and sixteen sites in the app add this 124 on top of that. One
+    /// screenshot of Discover scrolled to the very end settles whether the
+    /// last row ends up 124pt clear of the bar instead of flush with it. If it
+    /// is doubled, the fix is to delete the padding from the eight scroll
+    /// views and keep it only on the toast overlay, which floats outside the
+    /// tab bar's safe area and genuinely needs its own offset.
     static let scrollBottomInset: CGFloat = 124
 
     /// How far the top scroll edge fades out below the safe area.
