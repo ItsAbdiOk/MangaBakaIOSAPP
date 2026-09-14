@@ -18,6 +18,8 @@ Usage:
     ./Scripts/asc.py status          latest Xcode Cloud runs and their result
     ./Scripts/asc.py builds          TestFlight builds and processing state
     ./Scripts/asc.py why [RUN_ID]    why a run failed, with the real messages
+    ./Scripts/asc.py notes [BUILD]   write the build's commit subject into its
+                                     TestFlight release notes (default: newest)
 """
 
 from __future__ import annotations
@@ -106,6 +108,26 @@ def get(path: str, **params) -> dict:
     except urllib.error.HTTPError as error:
         body = error.read().decode(errors="replace")[:600]
         sys.exit(f"error: App Store Connect returned {error.code}\n{body}")
+
+
+def send(method: str, path: str, body: dict) -> dict | None:
+    """PATCH or POST a JSON:API document. The only writes this program makes."""
+    request = urllib.request.Request(
+        f"{API}/{path}",
+        method=method,
+        data=json.dumps(body).encode(),
+        headers={
+            "Authorization": f"Bearer {token()}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as error:
+        body_text = error.read().decode(errors="replace")[:600]
+        sys.exit(f"error: App Store Connect returned {error.code}\n{body_text}")
 
 
 def app_id() -> str:
@@ -200,6 +222,85 @@ def cmd_why(run_id: str | None) -> None:
             print(f"    [{ia.get('issueType')}] {message[:300]}")
 
 
+def cmd_notes(wanted: str | None) -> None:
+    """Put the commit subject on the TestFlight card.
+
+    TestFlight shows the marketing version, not the build number, so two builds
+    of 0.1.0 look identical on the phone — which is exactly how build 82 came to
+    look like build 81 on 2026-09-14. The commit subject is the one line that
+    already says what changed, so it becomes the release note.
+
+    The Xcode Cloud run number and the build number are the same value (checked
+    across runs 80-82), which is what lets the commit be found from the build.
+    """
+    builds = get(f"apps/{app_id()}/builds", limit=20).get("data", [])
+    if wanted:
+        build = next((b for b in builds if b["attributes"].get("version") == wanted), None)
+        if build is None:
+            sys.exit(f"error: no build {wanted} among the newest 20.")
+    else:
+        build = max(builds, key=lambda b: b["attributes"].get("uploadedDate") or "", default=None)
+        if build is None:
+            sys.exit("error: no builds uploaded yet.")
+    number = build["attributes"].get("version")
+
+    subject = commit_subject(number)
+    if subject is None:
+        sys.exit(f"error: no Xcode Cloud run numbered {number}, so no commit to quote.")
+
+    localizations = get(f"builds/{build['id']}/betaBuildLocalizations").get("data", [])
+    if not localizations:
+        # A build Apple has not finished processing has no localization to
+        # patch yet; creating one is the same write, with a locale.
+        send("POST", "betaBuildLocalizations", {
+            "data": {
+                "type": "betaBuildLocalizations",
+                "attributes": {"locale": "en-GB", "whatsNew": subject},
+                "relationships": {"build": {"data": {"type": "builds", "id": build["id"]}}},
+            }
+        })
+        print(f"build {number}: created en-GB notes — {subject}")
+        return
+
+    for localization in localizations:
+        send("PATCH", f"betaBuildLocalizations/{localization['id']}", {
+            "data": {
+                "type": "betaBuildLocalizations",
+                "id": localization["id"],
+                "attributes": {"whatsNew": subject},
+            }
+        })
+    locales = ", ".join(loc["attributes"].get("locale", "?") for loc in localizations)
+    print(f"build {number}: notes set for {locales} — {subject}")
+
+
+def commit_subject(build_number: str) -> str | None:
+    """The first line of the commit the given build was cut from.
+
+    Read from App Store Connect rather than from local git: the newest local
+    commit is not always the one that built, and a note that names the wrong
+    change is worse than no note.
+    """
+    products = get("ciProducts").get("data", [])
+    product = next(
+        (p for p in products if p["attributes"].get("name") in ("MangaBaka", "BakaManga")),
+        None,
+    )
+    if product is None:
+        sys.exit("error: no Xcode Cloud product found for this account.")
+    runs = get(f"ciProducts/{product['id']}/buildRuns", limit=25, sort="-number").get("data", [])
+    run = next(
+        (r for r in runs if str(r["attributes"].get("number")) == str(build_number)), None
+    )
+    if run is None:
+        return None
+    message = (run["attributes"].get("sourceCommit") or {}).get("message") or ""
+    subject = message.splitlines()[0].strip() if message else ""
+    # 4,000 is Apple's ceiling on whatsNew; a subject never reaches it, but a
+    # runaway one-line commit message would.
+    return subject[:4000] or None
+
+
 def main() -> int:
     command = sys.argv[1] if len(sys.argv) > 1 else "status"
     if command == "status":
@@ -208,6 +309,8 @@ def main() -> int:
         cmd_builds()
     elif command == "why":
         cmd_why(sys.argv[2] if len(sys.argv) > 2 else None)
+    elif command == "notes":
+        cmd_notes(sys.argv[2] if len(sys.argv) > 2 else None)
     else:
         print(__doc__)
         return 2
