@@ -2863,7 +2863,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.widgets;
 				PRODUCT_NAME = MangaBakaWidgets;
 				SDKROOT = iphoneos;
@@ -2887,7 +2887,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka;
 				PRODUCT_NAME = MangaBaka;
 				SDKROOT = iphoneos;
@@ -2996,7 +2996,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka;
 				PRODUCT_NAME = MangaBaka;
 				SDKROOT = iphoneos;
@@ -3131,7 +3131,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.abdirahmanmohamed.mangabaka.widgets;
 				PRODUCT_NAME = MangaBakaWidgets;
 				SDKROOT = iphoneos;

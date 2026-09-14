@@ -74,6 +74,11 @@ targets:
         # uploaded as `1.0 (1)`, and App Store Connect refuses a build number
         # it has already seen. Hand-editing the plist does not stick; it is
         # regenerated from here.
+        #
+        # The version must never go *down*: builds 80–82 shipped as 0.1.0
+        # after build 79 had shipped as the literal 1.0, and TestFlight put
+        # the higher version on top — so a phone sat on 79 for three builds
+        # while every dashboard said 82 had landed. Hence 1.1.0 below.
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
@@ -94,7 +99,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka
         PRODUCT_NAME: MangaBaka
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
@@ -146,7 +151,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.widgets
         PRODUCT_NAME: MangaBakaWidgets
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
