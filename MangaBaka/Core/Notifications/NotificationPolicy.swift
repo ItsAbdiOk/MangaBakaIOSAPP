@@ -61,7 +61,7 @@ enum NotificationPolicy {
     ///     `ReleaseFeedService.report(for:)` costs a network round trip per
     ///     series, so this is only ever what was already fetched for some
     ///     other reason (a detail-screen visit). Empty is a legitimate
-    ///     answer, not a failure: it just means conditions 1b/2b/2c never
+    ///     answer, not a failure: it just means conditions 1b/2b never
     ///     fire until something else has warmed the cache.
     ///     `RootView+Session.refreshReminders` passes the cached feeds it
     ///     already has (it passed a literal `[:]` when this comment was first
@@ -207,10 +207,10 @@ enum NotificationPolicy {
             // feed was first cached, and could say it two days running when
             // 2a's cooldown dropped 2c's first attempt. Whether it fired at all
             // depended on which provider's cache file happened to be on disk.
-            // The catalogue status in 2a already covers the reader's ask, and
-            // `TranslationGap.originalComplete` says the useful version of this
-            // on the page — "the translation will catch up and stop" — rather
-            // than "it has finished".
+            // The catalogue status in 2a already covers the reader's ask. The
+            // feed flag it read (`ReleaseFeed.finished`) was itself deleted on
+            // 2026-09-14 — see the tombstone in `ReleaseFeedService.swift` —
+            // so there is nothing left here to restore even if it were wanted.
         }
         return planned
     }

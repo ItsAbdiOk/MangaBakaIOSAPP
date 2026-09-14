@@ -41,9 +41,9 @@ struct NotificationPolicyTests {
         )
     }
 
-    private func feed(episode: Int, finished: Bool? = nil) -> ReleaseFeed {
+    private func feed(episode: Int) -> ReleaseFeed {
         let entry = ReleaseEntry(title: "Episode \(episode)", published: now, number: episode, season: nil)
-        return ReleaseFeed(title: "Feed", entries: [entry], source: .webtoons, finished: finished)
+        return ReleaseFeed(title: "Feed", entries: [entry], source: .webtoons)
     }
 
     private let now = Date(timeIntervalSince1970: 1_757_000_000)
@@ -217,33 +217,23 @@ struct NotificationPolicyTests {
         #expect(sameSeasonAgain.isEmpty, "season 2 was already reported")
     }
 
-    /// Condition 2c, deleted 2026-09-14 on Abdi's call (Q3). It used to fire
-    /// on first sight of a feed's `finished` flag, with no baseline, worded
-    /// identically to 2a — so a webtoon that ended in 2019 notified the day
-    /// its feed was first cached. This test pinned that behaviour and is now
-    /// inverted; the catalogue status in 2a covers the reader's ask, and
-    /// `TranslationGap.originalComplete` says the useful version on the page.
-    ///
-    /// Expected failure before the deletion: `planned.map(\.id)` is
-    /// `["original-finished-1"]`, not empty.
-    @Test("A feed's finished flag no longer notifies at all")
-    func feedFinishedFlagNeverNotifies() {
-        let library = [entry(id: 1, state: .reading, status: "releasing")]
-        let finished = feed(episode: 100, finished: true)
-        let planned = NotificationPolicy.decide(
-            announced: [], feeds: [1: finished], library: library, now: now
-        )
-        #expect(planned.isEmpty, "the original's own completion flag is not a notification")
-    }
+    // `feedFinishedFlagNeverNotifies` was here. It pinned the deletion of
+    // condition 2c by building a feed with `finished: true` and asserting
+    // nothing was planned. `ReleaseFeed.finished` itself was deleted on
+    // 2026-09-14 — its only populator was Naver's private endpoint — so the
+    // test can no longer state its own premise, and the guarantee is now
+    // structural: there is no flag to read. See the tombstone in
+    // `ReleaseFeedService.swift`. The catalogue-status route below is
+    // unaffected and still covered.
 
-    /// Control for the test above: the catalogue-status route (2a) still
-    /// works, so an empty result there would mean completions had broken
-    /// outright rather than 2c having been removed.
-    @Test("Control: the catalogue status flip still notifies alongside a finished feed")
+    /// The catalogue-status route (2a) is what covers "this series is
+    /// finished" now that 2c is gone: an empty result here would mean
+    /// completions had broken outright, not merely that 2c was removed.
+    @Test("The catalogue status flip still notifies alongside a release feed")
     func catalogueCompletionStillNotifies() {
         let library = [entry(id: 1, state: .reading, status: "completed")]
         let planned = NotificationPolicy.decide(
-            announced: [], feeds: [1: feed(episode: 100, finished: true)], library: library,
+            announced: [], feeds: [1: feed(episode: 100)], library: library,
             now: now, previousStatus: [1: "releasing"]
         )
         #expect(planned.map(\.id) == ["finished-1"])

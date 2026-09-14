@@ -33,7 +33,7 @@ struct ReleaseSectionStateTests {
         let failures = failedSources.map {
             ReleaseFailure(source: $0, error: .server(status: 500, message: "", party: .webtoons))
         }
-        return ReleaseReport(summary: .none, source: nil, sourceName: nil, gap: .none, failures: failures)
+        return ReleaseReport(summary: .none, source: nil, sourceName: nil, failures: failures)
     }
 
     @Test("A provider that was carrying this series and failed is shown")

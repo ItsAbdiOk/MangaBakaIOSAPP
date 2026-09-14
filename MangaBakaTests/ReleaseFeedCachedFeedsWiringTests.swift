@@ -5,9 +5,9 @@ import Testing
 /// `refreshReminders` used to pass `feeds: [:]` to `ReleaseReminders.reschedule`
 /// unconditionally — see the comment this batch removed — because nothing at
 /// that call site had a cache of series -> `ReleaseFeed` to fill it with. The
-/// confirmed-episode, season-ended and Naver-finished notification conditions
-/// could never fire from this wiring as a result, only the announced-work and
-/// library-status ones.
+/// confirmed-episode and season-ended notification conditions could never fire
+/// from this wiring as a result, only the announced-work and library-status
+/// ones.
 ///
 /// This reads source rather than running `RootView`, which needs a whole
 /// app's worth of live dependencies to construct: the failure here is a

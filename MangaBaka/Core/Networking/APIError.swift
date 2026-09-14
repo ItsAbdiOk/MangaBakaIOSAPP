@@ -85,7 +85,10 @@ enum APIError: Error, Equatable {
         case googleBooks
         case openLibrary
         case webtoons
-        case naver
+        // `.naver` was here until 2026-09-14. Nothing could produce it: the
+        // only client that named Naver as the failing party was deleted with
+        // its private endpoint — see the tombstone in
+        // `ReleaseFeedService.swift`.
         case gigaViewer
         case mangaUpdates
 
@@ -98,7 +101,6 @@ enum APIError: Error, Equatable {
             case .googleBooks: "Google Books"
             case .openLibrary: "Open Library"
             case .webtoons: "Webtoons"
-            case .naver: "Naver"
             case .gigaViewer: "GigaViewer"
             case .mangaUpdates: "MangaUpdates"
             }

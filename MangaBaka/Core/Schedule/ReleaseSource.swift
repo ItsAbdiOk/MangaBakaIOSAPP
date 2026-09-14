@@ -14,6 +14,11 @@ import Foundation
 /// the safe direction: an unnamed source is one the reader cannot weigh.
 enum ReleaseSource: String, Equatable, Sendable, Codable, CaseIterable {
     case webtoons
+    /// Recognition only. Kept after the Naver adapter was deleted on
+    /// 2026-09-14 so a reader's `comic.naver.com` link is still attributed on
+    /// the series page — recognising a link is not calling a private endpoint.
+    /// Nothing in `AppServices.releaseFeeds` fetches it, so no `ReleaseFeed`
+    /// ever carries this source.
     case naverWebtoon
     /// GigaViewer, the Hatena-built engine behind seven Japanese publisher
     /// sites. There is no per-series feed — see `GigaViewerFeedClient` — so
@@ -61,8 +66,11 @@ enum ReleaseSource: String, Equatable, Sendable, Codable, CaseIterable {
     /// Measured 2026-09-12/13 against the live sites:
     /// - `webtoons.com` answers an RSS feed per series (20 entries, exact
     ///   timestamps).
-    /// - `comic.naver.com` answers JSON at `/api/article/list?titleId=`, and
-    ///   carries `totalCount` and `finished` that the English side does not.
+    /// - `comic.naver.com` is recognised so a reader's Korean link is
+    ///   attributed, and for nothing else: the only release data it serves is
+    ///   `/api/article/list?titleId=`, the undocumented JSON its own page
+    ///   fetches, dropped on 2026-09-14 (Q8) under the no-private-APIs rule.
+    ///   No provider fetches from this host — see `AppServices.releaseFeeds`.
     /// - The seven GigaViewer hosts each answer a magazine-wide RSS at
     ///   `/rss` — see `GigaViewerFeedClient`. Per-episode JSON was tried and
     ///   rejected: see docs/release-sources-2026-09-12.md, 2026-09-13 section.

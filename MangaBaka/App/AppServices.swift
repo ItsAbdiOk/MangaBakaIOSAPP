@@ -37,8 +37,9 @@ struct AppServices {
     /// the source the page actually depends on.
     let googleBooks = GoogleBooksClient()
     /// Reads whichever publisher's own release feed a series carries a link
-    /// to. Webtoons and GigaViewer before Naver: Naver is the Korean original
-    /// and never becomes the reader's own edition — see `ReleaseFeedService`.
+    /// to, in this order — nothing about either publisher makes one more
+    /// authoritative, see `ReleaseFeedService`.
+    ///
     /// Naver was removed 2026-09-14 (Q8): its only source of dates was
     /// `/api/article/list`, the undocumented JSON Naver's own page fetches,
     /// which the standing "no private APIs" rule forbids and an App Store

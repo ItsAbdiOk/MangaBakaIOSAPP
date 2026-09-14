@@ -1,7 +1,7 @@
 import Foundation
 
-/// A release feed, parsed — Webtoons' per-series RSS, Naver's per-series JSON,
-/// or a GigaViewer publisher's magazine-wide RSS filtered to one series.
+/// A release feed, parsed — Webtoons' per-series RSS or a GigaViewer
+/// publisher's magazine-wide RSS filtered to one series.
 ///
 /// Webtoons publishes an RSS feed per series — an official one, meant to be
 /// read by other software, unlike scraping the page. It carries the twenty most
@@ -9,7 +9,7 @@ import Foundation
 /// this app can get a *real* release schedule: everything else it knows about
 /// timing is inferred from when scanlations appeared. See `Cadence`, whose own
 /// documentation says no source publishes real schedules — true everywhere
-/// except here and Naver, which has the same guarantee for the original.
+/// except here.
 struct ReleaseFeed: Equatable, Sendable, Codable {
     let title: String
     let entries: [ReleaseEntry]
@@ -17,38 +17,29 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
     /// `ReleaseSummary`/`ReleaseFeedService` never have to guess it back out
     /// of the shape of the data.
     let source: ReleaseSource
-    /// The official episode count. Naver only: it is the one endpoint that
-    /// states this rather than leaving it to be counted from entries.
-    ///
-    /// **Permanently nil since 2026-09-13**, when Naver's adapter was deleted
-    /// under the private-API rule. `WebtoonsFeedClient` and
-    /// `GigaViewerFeedClient` are the only constructors of `ReleaseFeed` in
-    /// production and neither passes it, which in turn makes
-    /// `ReleaseFeedService.gap(primary:naver:)` return `.none` for every
-    /// series and `TranslationGap` unreachable. Left in place rather than
-    /// deleted because whether the translation gap returns from a permitted
-    /// source is a product call that has not been made — see
-    /// `docs/reviews/full2/SUMMARY.md` §6 decision 2. Do not read a use of
-    /// this field as evidence the feature works.
-    let totalCount: Int?
-    /// The official completion flag. Naver only, for the same reason — and
-    /// permanently nil for the same reason as `totalCount` above.
-    let finished: Bool?
     /// The GigaViewer host this feed was matched from, e.g. "Tonari no Young
     /// Jump" — GigaViewer has no single brand name, only seven publisher
     /// sites on one engine, so the header names whichever one answered rather
     /// than a name fixed on `ReleaseSource`. Nil for every other source.
     let sourceName: String?
 
+    // `totalCount` (the official episode count) and `finished` (the official
+    // completion flag) were here until 2026-09-14. Both were documented "Naver
+    // only" — Naver's `/api/article/list` was the one release endpoint that
+    // stated either rather than leaving it to be counted from entries — and
+    // both were permanently nil from the day that adapter was deleted under
+    // the private-API rule. `WebtoonsFeedClient` and `GigaViewerFeedClient`
+    // are the only constructors of `ReleaseFeed` in production and neither
+    // ever passed them. See the tombstone in `ReleaseFeedService.swift` for
+    // what they fed and what it would take to bring it back.
+
     init(
         title: String, entries: [ReleaseEntry], source: ReleaseSource,
-        totalCount: Int? = nil, finished: Bool? = nil, sourceName: String? = nil
+        sourceName: String? = nil
     ) {
         self.title = title
         self.entries = entries
         self.source = source
-        self.totalCount = totalCount
-        self.finished = finished
         self.sourceName = sourceName
     }
 
@@ -68,13 +59,6 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
     /// afterword, and taking its position would report episode 3 for a series
     /// on 112.
     var latestEpisodeNumber: Int? { episodes.compactMap(\.number).max() }
-
-    /// The highest season the feed names, or nil when its titles carry none.
-    ///
-    /// Needed because episode numbers restart per season on both Webtoons
-    /// ("[Season 3] Ep. 235") and Naver ("3부 235화"), so a number is only
-    /// comparable to another number from the same season.
-    var latestSeason: Int? { episodes.compactMap(\.season).max() }
 
     /// When the most recent episode actually landed.
     var lastEpisodeAt: Date? { episodes.map(\.published).max() }
@@ -96,9 +80,8 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
 
 /// Everything specific to reading a Webtoons series feed: turning a stored
 /// series link into its RSS URL, and parsing the RSS document itself. Kept
-/// apart from the generic `ReleaseFeed` shape above so Naver and GigaViewer
-/// do not inherit URL rules and an XML parser that are only ever true of
-/// Webtoons.
+/// apart from the generic `ReleaseFeed` shape above so GigaViewer does not
+/// inherit URL rules and an XML parser that are only ever true of Webtoons.
 enum WebtoonsFeedParser {
     /// The feed URL for a series link, or nil when one cannot be built.
     ///

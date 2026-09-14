@@ -3,11 +3,12 @@ import Foundation
 /// What a release section can honestly say, given whatever the feed gave up.
 ///
 /// Publisher platforms hand back wildly different amounts of history: Webtoons'
-/// RSS carries up to twenty timestamped episodes, a paywalled Naver series
-/// exposes three, some feeds answer with one entry, some fail or return none at
-/// all. The detail screen has one release section and must show the strongest
-/// claim the data supports — never pad a thin feed into a false rhythm, and
-/// never render an empty box when there is nothing honest to say.
+/// RSS carries up to twenty timestamped episodes, a GigaViewer magazine feed
+/// filtered to one series exposes only that series' rows, some feeds answer
+/// with one entry, some fail or return none at all. The detail screen has one
+/// release section and must show the strongest claim the data supports — never
+/// pad a thin feed into a false rhythm, and never render an empty box when
+/// there is nothing honest to say.
 enum ReleaseSummary: Equatable, Sendable {
     /// Nothing usable arrived. The view removes the section rather than show it
     /// empty.

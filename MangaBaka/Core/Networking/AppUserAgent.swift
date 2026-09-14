@@ -5,7 +5,7 @@ import Foundation
 /// One string, in one place. It was declared three times before this file
 /// existed — `APIClient`, `ShikimoriClient` and `MangaUpdatesClient` each
 /// carried an identical literal — and was absent entirely from
-/// `OpenLibraryCovers`, `WebtoonsFeedClient`, `NaverFeedClient` and
+/// `OpenLibraryCovers`, `WebtoonsFeedClient` and
 /// `GigaViewerFeedClient`, which is the part that matters: Open Library's
 /// covers policy asks clients to identify themselves so they can contact a
 /// misbehaving one instead of blocking it, and a publisher reading its own

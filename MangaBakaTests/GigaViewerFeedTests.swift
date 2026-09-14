@@ -143,9 +143,11 @@ struct GigaViewerFeedClientTests {
         #expect(answerResult == .answered(nil))
     }
 
-    /// F18 (`docs/reviews/tests.md`, 2026-09-13): see the sibling test on
-    /// `NaverFeedClient` for why this stops at "answers nil" rather than also
-    /// proving the back-off window suppresses a later request.
+    /// F18 (`docs/reviews/tests.md`, 2026-09-13): stops at "answers nil"
+    /// rather than also proving the back-off window suppresses a later
+    /// request. The reason was written up on the sibling `NaverFeedClient`
+    /// test, which went with that client on 2026-09-13; read F18 in
+    /// `docs/reviews/tests.md` for it rather than this comment.
     @Test("A 429 response answers nil rather than crashing")
     func rateLimitedResponseAnswersNil() async {
         URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
@@ -184,7 +186,7 @@ struct GigaViewerFeedClientTests {
 }
 
 /// `cachedFeed`: the read-only path `ReleaseFeedService.cachedFeeds` uses.
-/// Unlike Webtoons/Naver, the cache here holds the whole magazine's raw
+/// Unlike Webtoons, the cache here holds the whole magazine's raw
 /// items, keyed by host — `cachedFeed` must filter to the series itself the
 /// same way `feed(for:links:)` does, without a request for the magazine feed.
 @Suite("GigaViewer cachedFeed", .serialized)

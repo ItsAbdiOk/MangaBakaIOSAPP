@@ -34,6 +34,9 @@ private struct StubProvider: ReleaseFeedProvider {
 /// every case here is built from stubs rather than real clients.
 @Suite("Release feed service")
 struct ReleaseFeedServiceTests {
+    /// Only a fixed base for `day(_:)` below. `report(for:links:)` stopped
+    /// taking a `now` when `TranslationGap` went — nothing left in the service
+    /// reads a clock.
     private let now = Date(timeIntervalSince1970: 1_757_000_000)
     private let series = SeriesFactory.make(id: 1, title: "Tower of God")
 
@@ -43,43 +46,14 @@ struct ReleaseFeedServiceTests {
         ReleaseEntry(title: "Episode \(number)", published: day(-daysAgo), number: number, season: season)
     }
 
-    private func service(webtoons: ReleaseFeed, naver: ReleaseFeed) -> ReleaseFeedService {
-        ReleaseFeedService(providers: [
-            StubProvider(source: .webtoons, answer: webtoons),
-            StubProvider(source: .naverWebtoon, answer: naver)
-        ])
-    }
-
-    /// Tower of God, measured 2026-09-13: Webtoons "[Season 3] Ep. 235",
-    /// Naver "3부 235화" with `totalCount` 653 across every season. A gap of
-    /// 653 - 235 would be fiction; the two are on the same episode.
-    @Test("Within one season the gap is measured on episode numbers, not totalCount")
-    func sameSeasonIgnoresTotalCount() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(235, daysAgo: 0, season: 3)], source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(235 - $0, daysAgo: $0 * 7, season: 3) },
-            source: .naverWebtoon, totalCount: 653
-        )
-        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
-        #expect(report.gap == .none)
-    }
-
-    @Test("Different seasons say nothing: no number here can state the gap")
-    func differentSeasonsSayNothing() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(120, daysAgo: 0, season: 2)], source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(40 - $0, daysAgo: $0 * 7, season: 3) },
-            source: .naverWebtoon, totalCount: 653
-        )
-        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
-        // 40 < 120 would otherwise read as "not ahead", and 653 - 120 as
-        // "533 ahead". Both are wrong; silence is the honest answer.
-        #expect(report.gap == .none)
-    }
+    // The translation-gap tests were here — six of them, plus the two that
+    // made Naver the reader's edition. All deleted 2026-09-14 with
+    // `TranslationGap` itself (`docs/reviews/full2/wire.md` W6): every one
+    // built a `StubProvider(source: .naverWebtoon, ...)`, a provider wiring
+    // production has not had since the Naver adapter was removed on
+    // 2026-09-13, so they were green over unreachable code. See the tombstone
+    // in `ReleaseFeedService.swift` for what they were asserting and what a
+    // permitted source would have to supply to bring them back.
 
     @Test("Webtoons is preferred over GigaViewer when both answer")
     func webtoonsPreferredOverGigaViewer() async {
@@ -97,7 +71,7 @@ struct ReleaseFeedServiceTests {
             StubProvider(source: .webtoons, answer: webtoons),
             StubProvider(source: .gigaViewer, answer: giga)
         ])
-        let report = await service.report(for: series, links: [], now: now)
+        let report = await service.report(for: series, links: [])
         #expect(report.source == .webtoons)
     }
 
@@ -111,133 +85,9 @@ struct ReleaseFeedServiceTests {
             StubProvider(source: .webtoons, answer: nil),
             StubProvider(source: .gigaViewer, answer: giga)
         ])
-        let report = await service.report(for: series, links: [], now: now)
+        let report = await service.report(for: series, links: [])
         #expect(report.source == .gigaViewer)
         #expect(report.sourceName == "Comic Days")
-    }
-
-    @Test("Naver is never the reader's edition when another source answers")
-    func naverNeverPrimaryWhenAnotherExists() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: (1...4).map { episode($0, daysAgo: (4 - $0) * 7) },
-            source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (1...4).map { episode($0 + 50, daysAgo: (4 - $0) * 7) },
-            source: .naverWebtoon, totalCount: 60
-        )
-        let service = ReleaseFeedService(providers: [
-            StubProvider(source: .webtoons, answer: webtoons),
-            StubProvider(source: .naverWebtoon, answer: naver)
-        ])
-        let report = await service.report(for: series, links: [], now: now)
-        #expect(report.source == .webtoons)
-    }
-
-    @Test("A Korean-only reader: only Naver answers, so the summary is Naver's own")
-    func naverOnlyBecomesTheSummary() async {
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (1...4).map { episode($0, daysAgo: (4 - $0) * 7) },
-            source: .naverWebtoon, totalCount: 4
-        )
-        let service = ReleaseFeedService(providers: [
-            StubProvider(source: .webtoons, answer: nil),
-            StubProvider(source: .naverWebtoon, answer: naver)
-        ])
-        let report = await service.report(for: series, links: [], now: now)
-        #expect(report.source == .naverWebtoon)
-        #expect(!report.summary.isEmpty)
-    }
-
-    /// R3/F8 (`docs/reviews/reader.md`, `tests.md`, 2026-09-13): live GET,
-    /// 화산귀환 (`titleId=769209`, no seasons): `totalCount` 185, newest free
-    /// episode `174화` — five paid-ahead episodes and six non-episode
-    /// articles sit between them. `totalCount` used to be preferred, so the
-    /// gap read as 185 - translated, overstating the original by 11.
-    /// Expected failure before the fix: `episodes == 85` (185 - 100), where
-    /// this now asserts 74 (174 - 100).
-    @Test("The gap uses Naver's title-parsed episode number, not its article-count totalCount")
-    func gapPrefersTitleParsedNumberOverTotalCount() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(174 - $0, daysAgo: $0 * 7) },
-            source: .naverWebtoon, totalCount: 185
-        )
-        let service = ReleaseFeedService(providers: [
-            StubProvider(source: .webtoons, answer: webtoons),
-            StubProvider(source: .naverWebtoon, answer: naver)
-        ])
-        let report = await service.report(for: series, links: [], now: now)
-        guard case let .ahead(episodes) = report.gap else {
-            Issue.record("expected .ahead, got \(report.gap)")
-            return
-        }
-        #expect(episodes == 74, "174 (title-parsed) - 100 (translated), not 185 (totalCount) - 100")
-    }
-
-    // Note: `naver.totalCount` as a fallback for when no title parses at all
-    // is, by inspection, unreachable through `Self.gap` as written —
-    // `naver.lastEpisodeAt` (computed from the same `episodes` filter as
-    // `latestEpisodeNumber`) is nil exactly when `latestEpisodeNumber` is,
-    // and `gap` already returns `.none` on a nil `lastEpisodeAt` before the
-    // fallback is ever consulted. Left in place rather than removed — a
-    // future feed shape might decouple the two — but a test exercising it
-    // would be exercising dead code, so none is added here. Flagged for
-    // whoever owns this file next rather than silently dropped.
-
-    /// F7 (`docs/reviews/tests.md`, 2026-09-13): only the "both seasoned,
-    /// different season" branch of the switch in `Self.gap` had a test. The
-    /// two branches where exactly one side names a season landed on the same
-    /// `default: return .none` and had never been exercised — this is the
-    /// case the finale rule is written for: a series that has just finished
-    /// a season shows up seasoned on Webtoons and, in the fixture available
-    /// here, unseasoned on Naver.
-    @Test("A season on one side only says nothing, not a wrong number")
-    func onlyPrimarySeasonedSaysNothing() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(112, daysAgo: 0, season: 1)], source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(112 - $0, daysAgo: $0 * 7) },
-            source: .naverWebtoon, totalCount: 112
-        )
-        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
-        #expect(report.gap == .none)
-    }
-
-    @Test("A season on the original only says nothing, not a wrong number")
-    func onlyNaverSeasonedSaysNothing() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
-        )
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(112 - $0, daysAgo: $0 * 7, season: 1) },
-            source: .naverWebtoon, totalCount: 112
-        )
-        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
-        #expect(report.gap == .none)
-    }
-
-    /// R5 (`docs/reviews/reader.md`, 2026-09-13): `finished` was decoded and
-    /// never read, so a completed Korean original read as `.originalPaused` —
-    /// a hiatus, not a completion, and the opposite thing to tell a reader.
-    /// Expected failure before the fix: `report.gap == .originalPaused(...)`
-    /// where this now asserts `.originalComplete`.
-    @Test("A finished original reports complete, not paused")
-    func finishedOriginalIsComplete() async {
-        let webtoons = ReleaseFeed(
-            title: "Webtoons", entries: [episode(100, daysAgo: 0)], source: .webtoons
-        )
-        // Stale by any pause threshold (last release 400 days ago) — the
-        // fixture that would otherwise land on `.originalPaused`.
-        let naver = ReleaseFeed(
-            title: "Naver", entries: (0..<4).map { episode(140 - $0, daysAgo: 400 + $0 * 7) },
-            source: .naverWebtoon, totalCount: 140, finished: true
-        )
-        let report = await service(webtoons: webtoons, naver: naver).report(for: series, links: [], now: now)
-        #expect(report.gap == .originalComplete(episodesAhead: 40))
     }
 
     /// R1 (`docs/reviews/reader.md`, 2026-09-13), through the whole service:
@@ -257,7 +107,7 @@ struct ReleaseFeedServiceTests {
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: webtoons)
         ])
-        let report = await service.report(for: completed, links: [], now: now)
+        let report = await service.report(for: completed, links: [])
         #expect(report == .empty)
     }
 
@@ -265,10 +115,9 @@ struct ReleaseFeedServiceTests {
     func allNilIsEmpty() async {
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: nil),
-            StubProvider(source: .gigaViewer, answer: nil),
-            StubProvider(source: .naverWebtoon, answer: nil)
+            StubProvider(source: .gigaViewer, answer: nil)
         ])
-        let report = await service.report(for: series, links: [], now: now)
+        let report = await service.report(for: series, links: [])
         #expect(report == .empty)
     }
 
@@ -283,9 +132,9 @@ struct ReleaseFeedServiceTests {
     func failedProviderIsNamed() async {
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: .failed(.rateLimited(until: nil, party: .webtoons))),
-            StubProvider(source: .naverWebtoon, answer: .notCarried)
+            StubProvider(source: .gigaViewer, answer: .notCarried)
         ])
-        let report = await service.report(for: series, links: [], now: now)
+        let report = await service.report(for: series, links: [])
         #expect(report.failedSources == [.webtoons])
         #expect(report.summary == .none)
     }
@@ -294,9 +143,9 @@ struct ReleaseFeedServiceTests {
     func notCarriedProviderIsNotNamed() async {
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: .notCarried),
-            StubProvider(source: .naverWebtoon, answer: .notCarried)
+            StubProvider(source: .gigaViewer, answer: .notCarried)
         ])
-        let report = await service.report(for: series, links: [], now: now)
+        let report = await service.report(for: series, links: [])
         #expect(report.failedSources.isEmpty)
     }
 }
@@ -322,15 +171,13 @@ struct ReleaseFeedServiceCachedFeedsTests {
     /// `ReleaseFeedService` had no such method, only `report(for:)`, which
     /// costs a network request per provider and is exactly what
     /// `RootView+Session.refreshReminders` cannot pay for every launch.
-    @Test("Webtoons is preferred over GigaViewer over Naver, same as report(for:)")
-    func prefersWebtoonsOverGigaViewerOverNaver() async {
+    @Test("Webtoons is preferred over GigaViewer, same as report(for:)")
+    func prefersWebtoonsOverGigaViewer() async {
         let webtoonsFeed = ReleaseFeed(title: "Webtoons", entries: [], source: .webtoons)
         let gigaFeed = ReleaseFeed(title: "Giga", entries: [], source: .gigaViewer)
-        let naverFeed = ReleaseFeed(title: "Naver", entries: [], source: .naverWebtoon)
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: nil, cached: webtoonsFeed),
-            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed),
-            StubProvider(source: .naverWebtoon, answer: nil, cached: naverFeed)
+            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed)
         ])
         let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
         #expect(feeds[1]?.source == .webtoons)
@@ -341,8 +188,7 @@ struct ReleaseFeedServiceCachedFeedsTests {
         let gigaFeed = ReleaseFeed(title: "Giga", entries: [], source: .gigaViewer)
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: nil, cached: nil),
-            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed),
-            StubProvider(source: .naverWebtoon, answer: nil, cached: nil)
+            StubProvider(source: .gigaViewer, answer: nil, cached: gigaFeed)
         ])
         let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
         #expect(feeds[1]?.source == .gigaViewer)
@@ -352,7 +198,7 @@ struct ReleaseFeedServiceCachedFeedsTests {
     func absentWhenNothingCached() async {
         let service = ReleaseFeedService(providers: [
             StubProvider(source: .webtoons, answer: nil, cached: nil),
-            StubProvider(source: .naverWebtoon, answer: nil, cached: nil)
+            StubProvider(source: .gigaViewer, answer: nil, cached: nil)
         ])
         let feeds = await service.cachedFeeds(for: [entry(id: 1, series: series)]) { _ in [] }
         #expect(feeds[1] == nil)

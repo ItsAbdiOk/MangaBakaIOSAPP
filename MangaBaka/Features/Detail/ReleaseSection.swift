@@ -89,9 +89,6 @@ struct ReleaseSection: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     rows
-                    if !report.gap.isEmpty {
-                        gapLine
-                    }
                 }
                 .padding(.horizontal, Metrics.gutter)
             }
@@ -116,8 +113,7 @@ struct ReleaseSection: View {
     }
 
     /// "Releases · Tonari no Young Jump" for a GigaViewer feed matched to a
-    /// specific host, "Releases · Webtoons" / "Releases · Naver Webtoon"
-    /// otherwise.
+    /// specific host, "Releases · Webtoons" otherwise.
     private func header(_ source: ReleaseSource) -> String {
         if let sourceName = report.sourceName { return "Releases · \(sourceName)" }
         return source.attribution
@@ -173,28 +169,12 @@ struct ReleaseSection: View {
         return "\(seasonPart) ended on \(Self.longDate(date))"
     }
 
-    /// "The Korean original is 28 episodes ahead" or, when it has stopped
-    /// releasing, the warning that the translation will run out.
-    private var gapLine: some View {
-        Text(gapText)
-            .typeSmallMeta()
-            .foregroundStyle(Palette.textMuted)
-    }
-
-    private var gapText: String {
-        switch report.gap {
-        case .none:
-            return ""
-        case let .ahead(episodes):
-            return "The Korean original is \(episodes) episode\(episodes == 1 ? "" : "s") ahead"
-        case let .originalPaused(since, _):
-            return "The Korean original hasn't released since \(Self.longDate(since)) — " +
-                "the translation will catch up and stop"
-        case let .originalComplete(episodesAhead):
-            return "The Korean original is complete, \(episodesAhead) episode" +
-                "\(episodesAhead == 1 ? "" : "s") ahead — the translation will end there"
-        }
-    }
+    // The translation-gap line ("The Korean original is 28 episodes ahead",
+    // and the two warnings that matter — the original has paused, or is
+    // complete, so the translation will run out) rendered here until
+    // 2026-09-14. It went with `TranslationGap` itself: its only source was
+    // Naver's private `/api/article/list`. See the tombstone in
+    // `ReleaseFeedService.swift`.
 
     /// "2 Feb", or "19 Sep 2018" when `date` is not from the current year.
     ///

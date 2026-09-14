@@ -116,8 +116,10 @@ struct WebtoonsTitleTests {
     }
 
     /// Naver writes the number and its unit as one token, and the season with
-    /// 부. This is the Korean original's numbering, which is what says whether
-    /// the source is still running while the English translation lags.
+    /// 부. A parser test over a literal string: no feed the app fetches has
+    /// carried Korean titles since the Naver adapter was deleted on
+    /// 2026-09-14 — see the tombstone in `ReleaseFeedService.swift` — so this
+    /// pins the rule, not a live code path.
     @Test("Korean numbering is read")
     func koreanForms() {
         #expect(WebtoonsTitle.read("235화")?.number == 235)

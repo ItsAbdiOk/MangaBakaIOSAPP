@@ -30,9 +30,9 @@ struct SeriesDetailView: View {
     /// Fills volume gaps Apple does not carry. Nil in a build with no Google
     /// Books key, which is every Release build — see Secrets.example.xcconfig.
     var googleBooks: GoogleBooksClient?
-    /// Reads a publisher's own release feed — Webtoons, a GigaViewer magazine,
-    /// or Naver Webtoon for the Korean original. Optional like the stores
-    /// above: a page without it simply shows no release section.
+    /// Reads a publisher's own release feed — Webtoons or a GigaViewer
+    /// magazine. Optional like the stores above: a page without it simply
+    /// shows no release section.
     var releaseFeeds: ReleaseFeedService?
     /// MangaUpdates' vote-weighted categories; nil skips the section.
     var mangaUpdatesCategories: MangaUpdatesClient?

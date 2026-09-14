@@ -1,6 +1,6 @@
 import Foundation
 
-/// One entry in a release feed — Webtoons, Naver, or a GigaViewer magazine RSS.
+/// One entry in a release feed — Webtoons or a GigaViewer magazine RSS.
 ///
 /// Entries are not all episodes. "The Knight Only Lives Today" ends its first
 /// season with three `Afterword 1/2/3` items sitting above `Episode 112
@@ -19,7 +19,8 @@ struct ReleaseEntry: Equatable, Sendable, Codable {
     var isEpisode: Bool { number != nil }
 }
 
-/// Reads an episode title — Webtoons' English forms, Naver's Korean ones, and
+/// Reads an episode title — Webtoons' English forms, Korean ones (no longer
+/// reachable from any feed the app fetches; see `episodeWords`), and
 /// a Japanese publisher's `第N話` forms off a GigaViewer magazine RSS.
 ///
 /// **An allowlist of the episode word, not a test for a number.** The obvious
@@ -33,10 +34,14 @@ struct ReleaseEntry: Equatable, Sendable, Codable {
 /// pattern requiring `Episode <n>` exactly threw away every entry of Tower of
 /// God, whose titles read `[Season 3] Ep. 235`.
 enum WebtoonsTitle {
-    /// The words a feed uses for "episode", lowercased. Korean's 화 (hwa) is
-    /// here because Naver's own titles use it — `3부 235화` is season 3,
-    /// episode 235 — and the Korean feed is the one that says whether the
-    /// original is still running.
+    /// The words a feed uses for "episode", lowercased.
+    ///
+    /// Korean's 화 (hwa) is read below (`readKorean`) because Naver's titles
+    /// use it — `3부 235화` is season 3, episode 235. No feed the app fetches
+    /// carries Korean titles since the Naver adapter was deleted on
+    /// 2026-09-14 (see `ReleaseFeedService.swift`); the parsing is kept
+    /// because it is a pure string rule with its own tests and costs nothing,
+    /// not because anything currently exercises it.
     private static let episodeWords = ["episode", "ep", "ep.", "chapter", "ch", "ch."]
 
     /// The number and season in a title, or nil where it is not an episode.
