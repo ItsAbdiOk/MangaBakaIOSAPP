@@ -91,6 +91,12 @@ enum APIError: Error, Equatable {
         // `ReleaseFeedService.swift`.
         case gigaViewer
         case mangaUpdates
+        /// Anime News Network's Encyclopedia API — the English print volume
+        /// dates and ISBNs behind `ANNClient` (added 2026-09-14).
+        case animeNewsNetwork
+        /// NDL Search, Japan's national library catalogue — the Japanese and
+        /// forthcoming print volumes behind `NDLClient` (added 2026-09-14).
+        case nationalDietLibrary
 
         var displayName: String {
             switch self {
@@ -103,6 +109,11 @@ enum APIError: Error, Equatable {
             case .webtoons: "Webtoons"
             case .gigaViewer: "GigaViewer"
             case .mangaUpdates: "MangaUpdates"
+            case .animeNewsNetwork: "Anime News Network"
+            // Not the Japanese name the credit uses
+            // (`BookEdition.Source.credit`): this string lands mid-sentence
+            // in an English failure message.
+            case .nationalDietLibrary: "Japan's National Diet Library"
             }
         }
     }

@@ -1,0 +1,132 @@
+<!--
+  Recorded from the live API, not hand-written.
+
+  GET https://cdn.animenewsnetwork.com/encyclopedia/api.xml?title=17164
+  2026-09-14 — HTTP 200, text/xml;charset=UTF-8, 5,551 bytes on the wire
+  gzipped, 22,343 raw — the same 22,343 docs/sources/datasets.md §3 records
+  for this endpoint, measured in a separate session, which is the control
+  that this is the same answer and not a one-off.
+
+  Delicious in Dungeon: 15 <release> elements, every one with a day-precision
+  date, an ISBN-13 in `ean`, and the Encyclopedia `href` ANN's terms require
+  on the row. Chosen over One Piece because that answer is 237 KB.
+-->
+<ann><manga id="17164" gid="1000115504" type="manga" name="Delicious in Dungeon" precision="manga" generated-on="2026-09-14T10:11:59Z">
+<related-prev rel="serialized in" id="20256"/>
+<related-next id="26195" rel="adaptation"/>
+<info gid="3279047335" type="Picture" src="https://cdn.animenewsnetwork.com/thumbnails/fit200x200/encyc/A17164-3279047335.1433368921.jpg" width="140" height="200"><img src="https://cdn.animenewsnetwork.com/thumbnails/fit200x200/encyc/A17164-3279047335.1433368921.jpg" width="140" height="200"/><img src="https://cdn.animenewsnetwork.com/thumbnails/max500x600/encyc/A17164-3279047335.1433368921.jpg" width="421" height="600"/><img src="https://cdn.animenewsnetwork.com/images/encyc/A17164-3279047335.1433368921.jpg" width="458" height="652"/></info>
+<info gid="1734199261" type="Main title" lang="EN">Delicious in Dungeon</info>
+<info gid="3443806520" type="Alternative title" lang="PT">Delicious In Dungeon: Calabouços e Delícias</info>
+<info gid="2840404185" type="Alternative title" lang="IT">Dungeon Food</info>
+<info gid="3817457512" type="Alternative title" lang="JA">Dungeon Meshi</info>
+<info gid="2274128273" type="Alternative title" lang="PL">Dungeon Meshi - Lochy i smakołyki</info>
+<info gid="2140206128" type="Alternative title" lang="FR">Gloutons et Dragons</info>
+<info gid="2446523652" type="Alternative title" lang="ES">Tragones y mazmorras</info>
+<info gid="2370371462" type="Alternative title" lang="JA">ダンジョン飯</info>
+<info gid="709251742" type="Alternative title" lang="ZH-TW">迷宮飯</info>
+<info gid="2395211060" type="Alternative title" lang="KO">던전밥</info>
+<info gid="1472827841" type="Genres">adventure</info>
+<info gid="1088956950" type="Genres">comedy</info>
+<info gid="1937110056" type="Genres">fantasy</info>
+<info gid="3123832464" type="Themes">cooking</info>
+<info gid="2425367943" type="Themes">monsters</info>
+<info gid="4037885190" type="Objectionable content">TA</info>
+<info gid="3056315780" type="Plot Summary">The knight Laios sets out with a skilled party to claim the treasure of a lost kingdom buried deep beneath the graveyard of a small village. Unfortunately, they were bested by a Flame Dragon, who ate Laios&#039;s little sister, Farin. Although the party managed to teleport out of the dungeon, they left their equipment behind and were penniless. Demoralized, the party broke up. Now Laios must tackle the dungeon again, and with only one month to save Farin before she is digested.</info>
+<info gid="3616112979" type="Number of tankoubon">14</info>
+<info gid="803183452" type="Vintage">2014-02-15 to 2023-09-15 (serialized in Harta, vols. 11 - 107)</info>
+<ratings nb_votes="17" weighted_score="8.4775" bayesian_score="8.32445"/>
+<review href="https://www.animenewsnetwork.com/review/delicious-in-dungeon/gn-1/.116711">Delicious in Dungeon GN 1</review>
+<release date="2017-05-23" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=32917" ean="9780316471855">Delicious in Dungeon (GN 1)</release>
+<release date="2017-08-22" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=34609" ean="9780316473057">Delicious in Dungeon (GN 2)</release>
+<release date="2017-11-14" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=34610" ean="9780316412797">Delicious in Dungeon (GN 3)</release>
+<release date="2018-02-20" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=34611" ean="9780316446402">Delicious in Dungeon (GN 4)</release>
+<release date="2018-05-22" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45615" ean="9781975326449">Delicious in Dungeon (GN 5)</release>
+<release date="2018-11-13" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45616" ean="9781975328054">Delicious in Dungeon (GN 6)</release>
+<release date="2019-11-12" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45617" ean="9781975358587">Delicious in Dungeon (GN 7)</release>
+<release date="2020-03-17" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45618" ean="9781975399405">Delicious in Dungeon (GN 8)</release>
+<release date="2021-01-19" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45619" ean="9781975320164">Delicious in Dungeon (GN 9)</release>
+<release date="2022-03-08" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=45620" ean="9781975335588">Delicious in Dungeon (GN 10)</release>
+<release date="2022-08-23" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=48076" ean="9781975346720">Delicious in Dungeon (GN 11)</release>
+<release date="2023-05-23" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=52268" ean="9781975367985">Delicious in Dungeon (GN 12)</release>
+<release date="2024-03-19" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=52269" ean="9781975393854">Delicious in Dungeon (GN 13)</release>
+<release date="2024-07-23" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=52307" ean="9798855400359">Delicious in Dungeon (GN 14)</release>
+<release date="2024-12-10" href="https://www.animenewsnetwork.com/encyclopedia/releases.php?id=55867" ean="9798855413786">Delicious in Dungeon [Complete Box Set] (GN)</release>
+<news datetime="2015-01-22T00:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-01-21/japanese-comic-ranking-january-12-18/.83552">Japanese Comic Ranking, January 12-18</news>
+<news datetime="2015-02-04T22:45:00Z" href="https://www.animenewsnetwork.com:/news/2015-02-04/japanese-comic-ranking-january-26-february-1/.84099">Japanese Comic Ranking, January 26-February 1</news>
+<news datetime="2015-02-11T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-02-11/japanese-comic-ranking-february-2-8/.84333">Japanese Comic Ranking, February 2-8</news>
+<news datetime="2015-02-19T06:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-02-19/japanese-comic-ranking-february-9-15/.85157">Japanese Comic Ranking, February 9-15</news>
+<news datetime="2015-02-26T03:45:00Z" href="https://www.animenewsnetwork.com:/news/2015-02-25/japanese-comic-ranking-february-16-22/.85394">Japanese Comic Ranking, February 16-22</news>
+<news datetime="2015-03-18T21:24:10Z" href="https://www.animenewsnetwork.com:/news/2015-03-18/japanese-comic-ranking-march-9-15/.86118">Japanese Comic Ranking, March 9-15</news>
+<news datetime="2015-06-01T01:25:21Z" href="https://www.animenewsnetwork.com:/news/2015-05-31/top-selling-manga-in-japan-by-volume-2015/.88772">Top-Selling Manga in Japan by Volume: 2015 (First Half)</news>
+<news datetime="2015-08-19T22:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-08-19/japanese-comic-ranking-august-10-16/.91886">Japanese Comic Ranking, August 10-16</news>
+<news datetime="2015-08-26T21:30:00Z" href="https://www.animenewsnetwork.com:/news/2015-08-26/japanese-comic-ranking-august-17-23/.92166">Japanese Comic Ranking, August 17-23</news>
+<news datetime="2015-09-02T20:40:00Z" href="https://www.animenewsnetwork.com:/news/2015-09-02/japanese-comic-ranking-august-24-30/.92450">Japanese Comic Ranking, August 24-30</news>
+<news datetime="2015-09-09T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-09-09/japanese-comic-ranking-august-31-september-6/.92739">Japanese Comic Ranking, August 31-September 6</news>
+<news datetime="2015-09-16T22:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-09-16/japanese-comic-ranking-september-7-13/.93023">Japanese Comic Ranking, September 7-13</news>
+<news datetime="2015-12-06T10:00:00Z" href="https://www.animenewsnetwork.com:/news/2015-12-06/march-comes-in-like-a-lion-tops-da-vinci-magazine-rankings-for-2015/.96157">&lt;cite&gt;March comes in like a lion&lt;/cite&gt; Tops Da Vinci Magazine&#039;s Rankings for 2015</news>
+<news datetime="2015-12-10T10:50:00Z" href="https://www.animenewsnetwork.com:/news/2015-12-10/kono-manga-ga-sugoi-reveals-2016-series-ranking-for-male-readers/.96294">&lt;cite&gt;Kono Manga ga Sugoi!&lt;/cite&gt; Reveals 2016&#039;s Series Ranking for Male Readers</news>
+<news datetime="2016-01-18T07:30:00Z" href="https://www.animenewsnetwork.com:/news/2016-01-18/9th-manga-taisho-awards-nominate-11-titles/.97690">9th Manga Taisho Awards Nominate 11 Titles</news>
+<news datetime="2016-08-17T22:25:00Z" href="https://www.animenewsnetwork.com:/news/2016-08-17/japanese-comic-ranking-august-8-14/.105503">Japanese Comic Ranking, August 8-14</news>
+<news datetime="2016-08-24T21:30:00Z" href="https://www.animenewsnetwork.com:/news/2016-08-24/japanese-comic-ranking-august-15-21/.105731">Japanese Comic Ranking, August 15-21</news>
+<news datetime="2016-08-31T21:45:00Z" href="https://www.animenewsnetwork.com:/news/2016-08-31/japanese-comic-ranking-august-22-28/.105959">Japanese Comic Ranking, August 22-28</news>
+<news datetime="2016-09-07T22:30:00Z" href="https://www.animenewsnetwork.com:/news/2016-09-07/japanese-comic-ranking-august-29-september-4/.106215">Japanese Comic Ranking, August 29-September 4</news>
+<news datetime="2016-09-14T20:30:00Z" href="https://www.animenewsnetwork.com:/news/2016-09-14/japanese-comic-ranking-september-5-11/.106467">Japanese Comic Ranking, September 5-11</news>
+<news datetime="2016-10-29T04:00:46Z" href="https://www.animenewsnetwork.com:/news/2016-10-29/yen-press-adds-delicious-in-dungeon-and-no-game-no-life-desu-manga-your-name-manga-and-novels/.108249">Yen Press Adds &lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; &amp; &lt;cite&gt;No Game No Life, Desu!&lt;/cite&gt; Manga, &lt;cite&gt;your name.&lt;/cite&gt; Manga &amp; Novels</news>
+<news datetime="2016-12-07T01:40:00Z" href="https://www.animenewsnetwork.com:/news/2016-12-06/march-comes-in-like-a-lion-tops-da-vinci-magazine-rankings-for-2nd-year/.109547">&lt;cite&gt;March comes in like a lion&lt;/cite&gt; Tops &lt;cite&gt;Da Vinci&lt;/cite&gt; Magazine&#039;s Rankings for 2nd Year</news>
+<news datetime="2016-12-09T06:45:00Z" href="https://www.animenewsnetwork.com:/news/2016-12-09/kono-manga-ga-sugoi-reveals-2017-series-ranking-for-male-readers/.109675">&lt;cite&gt;Kono Manga ga Sugoi!&lt;/cite&gt; Reveals 2017&#039;s Series Ranking for Male Readers</news>
+<news datetime="2017-01-23T07:30:00Z" href="https://www.animenewsnetwork.com:/news/2017-01-23/10th-manga-taisho-awards-nominates-13-titles/.111362">10th Manga Taisho Awards Nominates 13 Titles</news>
+<news datetime="2017-02-23T23:00:00Z" href="https://www.animenewsnetwork.com:/news/2017-02-23/japanese-comic-ranking-february-13-19/.112635">Japanese Comic Ranking, February 13-19</news>
+<news datetime="2017-03-01T21:05:00Z" href="https://www.animenewsnetwork.com:/news/2017-03-01/japanese-comic-ranking-february-20-26/.112855">Japanese Comic Ranking, February 20-26</news>
+<news datetime="2017-03-08T22:05:00Z" href="https://www.animenewsnetwork.com:/news/2017-03-08/japanese-comic-ranking-february-27-march-5/.113161">Japanese Comic Ranking, February 27-March 5</news>
+<news datetime="2017-03-15T20:45:00Z" href="https://www.animenewsnetwork.com:/news/2017-03-15/japanese-comic-ranking-march-6-12/.113476">Japanese Comic Ranking, March 6-12</news>
+<news datetime="2017-03-22T20:30:00Z" href="https://www.animenewsnetwork.com:/news/2017-03-22/japanese-comic-ranking-march-13-19/.113769">Japanese Comic Ranking, March 13-19</news>
+<news datetime="2017-03-28T06:20:00Z" href="https://www.animenewsnetwork.com:/news/2017-03-28/mitsuharu-yanamoto-hibiki-shosetsuka-ni-naru-hoho-wins-10th-manga-taisho-awards/.114009">Mitsuharu Yanamoto&#039;s &lt;cite&gt;Hibiki: Shōsetsuka ni Naru Hōhō&lt;/cite&gt; Wins 10th Manga Taisho Awards</news>
+<news datetime="2017-05-23T21:06:13Z" href="https://www.animenewsnetwork.com:/news/2017-05-23/north-american-anime-manga-releases-may-21-27/.116502">North American Anime, Manga Releases, May 21-27</news>
+<news datetime="2017-06-01T05:20:00Z" href="https://www.animenewsnetwork.com:/news/2017-06-01/top-selling-manga-in-japan-by-volume-2017/.116863">Top-Selling Manga in Japan by Volume: 2017 (First Half)</news>
+<news datetime="2017-08-16T21:17:15Z" href="https://www.animenewsnetwork.com:/news/2017-08-16/japanese-comic-ranking-august-7-13/.120203">Japanese Comic Ranking, August 7-13</news>
+<news datetime="2017-08-22T21:10:07Z" href="https://www.animenewsnetwork.com:/news/2017-08-22/north-american-anime-manga-releases-august-20-26/.120435">North American Anime, Manga Releases, August 20-26</news>
+<news datetime="2017-08-23T20:52:55Z" href="https://www.animenewsnetwork.com:/news/2017-08-23/japanese-comic-ranking-august-14-20/.120465">Japanese Comic Ranking, August 14-20</news>
+<news datetime="2017-08-30T21:28:14Z" href="https://www.animenewsnetwork.com:/news/2017-08-30/japanese-comic-ranking-august-21-27/.120742">Japanese Comic Ranking, August 21-27</news>
+<news datetime="2017-09-06T21:11:55Z" href="https://www.animenewsnetwork.com:/news/2017-09-06/japanese-comic-ranking-august-28-september-3/.121023">Japanese Comic Ranking, August 28-September 3</news>
+<news datetime="2017-09-13T22:46:00Z" href="https://www.animenewsnetwork.com:/news/2017-09-13/japanese-comic-ranking-september-4-10/.121317">Japanese Comic Ranking, September 4-10</news>
+<news datetime="2017-11-14T23:26:18Z" href="https://www.animenewsnetwork.com:/news/2017-11-14/north-american-anime-manga-releases-november-12-18/.124023">North American Anime, Manga Releases, November 12-18</news>
+<news datetime="2018-01-22T07:00:00Z" href="https://www.animenewsnetwork.com:/news/2018-01-22/11th-manga-taisho-awards-nominates-12-titles/.126756">11th Manga Taisho Awards Nominates 12 Titles</news>
+<news datetime="2018-02-27T21:18:54Z" href="https://www.animenewsnetwork.com:/news/2018-02-27/north-american-anime-manga-releases-february-25-march-3/.128341">North American Anime, Manga Releases, February 25-March 3</news>
+<news datetime="2018-03-22T10:39:34Z" href="https://www.animenewsnetwork.com:/news/2018-03-22/paru-itagaki-beastars-wins-11th-manga-taisho-awards/.129344">Paru Itagaki&#039;s &lt;cite&gt;BEASTARS&lt;/cite&gt; Wins 11th Manga Taisho Awards</news>
+<news datetime="2018-04-18T21:25:00Z" href="https://www.animenewsnetwork.com:/news/2018-04-18/japanese-comic-ranking-april-9-15/.130550">Japanese Comic Ranking, April 9-15</news>
+<news datetime="2018-04-25T20:41:44Z" href="https://www.animenewsnetwork.com:/news/2018-04-25/japanese-comic-ranking-april-16-22/.130837">Japanese Comic Ranking, April 16-22</news>
+<news datetime="2018-05-02T22:56:07Z" href="https://www.animenewsnetwork.com:/news/2018-05-02/japanese-comic-ranking-april-23-29/.131120">Japanese Comic Ranking, April 23-29</news>
+<news datetime="2018-05-09T21:30:00Z" href="https://www.animenewsnetwork.com:/news/2018-05-09/japanese-comic-ranking-april-30-may-6/.131371">Japanese Comic Ranking, April 30-May 6</news>
+<news datetime="2018-05-16T23:53:52Z" href="https://www.animenewsnetwork.com:/news/2018-05-16/japanese-comic-ranking-may-7-13/.131646">Japanese Comic Ranking, May 7-13</news>
+<news datetime="2018-05-22T21:10:52Z" href="https://www.animenewsnetwork.com:/news/2018-05-22/north-american-anime-manga-releases-may-20-26/.131875">North American Anime, Manga Releases, May 20-26</news>
+<news datetime="2018-11-14T05:15:00Z" href="https://www.animenewsnetwork.com:/news/2018-11-14/north-american-anime-manga-releases-november-11-17/.139444">North American Anime, Manga Releases, November 11-17</news>
+<news datetime="2018-11-30T04:27:02Z" href="https://www.animenewsnetwork.com:/news/2018-11-29/top-selling-manga-in-japan-by-volume-2018/.140164">Top-Selling Manga in Japan by Volume: 2018</news>
+<news datetime="2018-12-06T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2018-12-06/manga-tops-amazon-japan-best-selling-kindle-book-ranking-for-2018/.140475">Manga Tops Amazon Japan&#039;s Best-Selling Kindle Book Ranking for 2018</news>
+<news datetime="2019-01-21T05:00:00Z" href="https://www.animenewsnetwork.com:/news/2019-01-21/12th-manga-taisho-awards-nominate-13-titles/.142346">12th Manga Taisho Awards Nominate 13 Titles</news>
+<news datetime="2019-03-19T06:55:52Z" href="https://www.animenewsnetwork.com:/news/2019-03-19/kenta-shinohara-astra-lost-in-space-wins-12th-manga-taisho-awards/.144719">Kenta Shinohara&#039;s &lt;cite&gt;Astra Lost in Space&lt;/cite&gt; Wins 12th Manga Taisho Awards</news>
+<news datetime="2019-05-29T10:35:52Z" href="https://www.animenewsnetwork.com:/news/2019-05-29/top-selling-manga-in-japan-by-volume-2019/.147238">Top-Selling Manga in Japan by Volume: 2019 (First Half)</news>
+<news datetime="2019-11-12T22:00:00Z" href="https://www.animenewsnetwork.com:/news/2019-11-12/north-american-anime-manga-releases-november-10-16/.153173">North American Anime, Manga Releases, November 10-16</news>
+<news datetime="2019-12-06T06:02:00Z" href="https://www.animenewsnetwork.com:/news/2019-12-06/kingdom-manga-tops-da-vinci-ranking/.154037">&lt;cite&gt;Kingdom&lt;/cite&gt; Manga Tops &lt;cite&gt;Da Vinci&lt;/cite&gt; Ranking</news>
+<news datetime="2020-03-17T21:30:00Z" href="https://www.animenewsnetwork.com:/news/2020-03-17/north-american-anime-manga-releases-march-15-21/.157604">North American Anime, Manga Releases, March 15-21</news>
+<news datetime="2020-12-05T09:15:00Z" href="https://www.animenewsnetwork.com:/news/2020-12-05/demon-slayer-tops-da-vinci-manga-ranking/.167101">&lt;cite&gt;Demon Slayer&lt;/cite&gt; Tops Da Vinci Manga Ranking</news>
+<news datetime="2021-01-19T22:00:00Z" href="https://www.animenewsnetwork.com:/news/2021-01-19/north-american-anime-manga-releases-january-17-23/.168562">North American Anime, Manga Releases, January 17-23</news>
+<news datetime="2021-09-15T17:00:00Z" href="https://www.animenewsnetwork.com:/news/2021-09-15/delicious-in-dungeon-manga-nears-climax/.177404">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; Manga Nears Climax</news>
+<news datetime="2022-03-09T17:00:00Z" href="https://www.animenewsnetwork.com:/news/2022-03-09/north-american-anime-manga-releases-march-6-12/.183367">North American Anime, Manga Releases, March 6-12</news>
+<news datetime="2022-08-09T15:16:03Z" href="https://www.animenewsnetwork.com:/news/2022-08-09/delicious-in-dungeon-manga-gets-tv-anime-by-studio-trigger/.188527">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; Manga Gets TV Anime by Studio Trigger</news>
+<news datetime="2022-08-16T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2022-08-16/north-american-anime-manga-releases-august-14-20/.188722">North American Anime, Manga Releases, August 14-20</news>
+<news datetime="2022-08-23T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2022-08-23/north-american-anime-manga-releases-august-21-27/.188928">North American Anime, Manga Releases, August 21-27</news>
+<news datetime="2023-05-25T20:00:00Z" href="https://www.animenewsnetwork.com:/news/2023-05-25/north-american-anime-manga-releases-may-21-27/.198359">North American Anime, Manga Releases, May 21-27</news>
+<news datetime="2023-08-14T02:40:42Z" href="https://www.animenewsnetwork.com:/news/2023-08-13/delicious-in-dungeon-manga-teases-finale-in-next-chapter/.201222">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; Manga Teases Finale in Next Chapter</news>
+<news datetime="2023-09-04T01:09:58Z" href="https://www.animenewsnetwork.com:/news/2023-09-03/delicious-in-dungeon-manga-ends-on-september-15/.201924">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; Manga Ends on September 15</news>
+<news datetime="2024-03-22T19:00:00Z" href="https://www.animenewsnetwork.com:/news/2024-03-22/north-american-anime-manga-releases-march-17-23/.208973">North American Anime, Manga Releases, March 17-23</news>
+<news datetime="2024-06-05T11:12:36Z" href="https://www.animenewsnetwork.com:/news/2024-06-05/delicious-in-dungeon-godzilla-1.0-kia-asamiya-win-seiun-awards/.211554">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt;, &lt;cite&gt;Godzilla -1.0,&lt;/cite&gt; Kia Asamiya Win Seiun Awards</news>
+<news datetime="2024-07-06T00:45:00Z" href="https://www.animenewsnetwork.com:/news/2024-07-05/yen-press-licenses-hereditary-triangle-luciole-has-a-dream-blend-s-more-manga-novels/.212784">Yen Press Licenses &lt;cite&gt;Hereditary Triangle&lt;/cite&gt;, &lt;cite&gt;Luciole Has a Dream&lt;/cite&gt;, &lt;cite&gt;Blend-S&lt;/cite&gt;, More Manga/Novels</news>
+<news datetime="2024-07-25T21:00:00Z" href="https://www.animenewsnetwork.com:/news/2024-07-25/north-american-anime-manga-releases-july-21-27/.213514">North American Anime, Manga Releases, July 21-27</news>
+<news datetime="2024-08-15T13:15:00Z" href="https://www.animenewsnetwork.com:/news/2024-08-15/harvey-awards-nominate-frieren-delicious-in-dungeon-the-summer-hikaru-died-more-manga/.214321">Harvey Awards Nominate &lt;cite&gt;Frieren&lt;/cite&gt;, &lt;cite&gt;Delicious in Dungeon&lt;/cite&gt;, &lt;cite&gt;The Summer Hikaru Died&lt;/cite&gt;, More Manga</news>
+<news datetime="2024-08-25T14:00:00Z" href="https://www.animenewsnetwork.com:/news/2024-08-25/berserk-deluxe-ranks-no.2-in-u.s-monthly-bookscan-july-list/.214668">&lt;cite&gt;Berserk Deluxe&lt;/cite&gt; Ranks #2 in U.S. Monthly Bookscan July List</news>
+<news datetime="2024-09-15T08:15:00Z" href="https://www.animenewsnetwork.com:/news/2024-09-15/jujutsu-kaisen-ranks-no.1-on-u.s-monthly-bookscan-august-list/.215519">&lt;cite&gt;Jujutsu Kaisen&lt;/cite&gt; Ranks #1 on U.S. Monthly Bookscan August List</news>
+<news datetime="2024-10-19T04:38:12Z" href="https://www.animenewsnetwork.com:/news/2024-10-19/ryoko-kui-delicious-in-dungeon-manga-wins-harvey-award/.216922">Ryōko Kui&#039;s &lt;cite&gt;Delicious in Dungeon&lt;/cite&gt; Manga Wins Harvey Award</news>
+<news datetime="2024-12-12T22:01:46Z" href="https://www.animenewsnetwork.com:/news/2024-12-12/north-american-anime-manga-releases-december-8-14/.218853">North American Anime, Manga Releases, December 8-14</news>
+<news datetime="2024-12-16T20:30:00Z" href="https://www.animenewsnetwork.com:/news/2024-12-16/bookwalker-global-store-unveils-2024-rankings/.219152">Bookwalker Global Store Unveils 2024 Rankings</news>
+<news datetime="2025-08-21T13:00:00Z" href="https://www.animenewsnetwork.com:/news/2025-08-21/delicious-in-dungeon-ryoko-kui-exhibition-comes-to-new-york-this-fall/.227899">&lt;cite&gt;Delicious in Dungeon&lt;/cite&gt;, Ryoko Kui Exhibition Comes to New York This Fall</news>
+<staff gid="960547575"><task>Story &amp; Art</task><person id="137860">Ryōko Kui</person></staff></manga></ann>

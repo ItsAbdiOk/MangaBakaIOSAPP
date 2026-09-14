@@ -65,8 +65,13 @@ private enum ContactedHosts {
         "shikimori.io",
         "itunes.apple.com",
         "googleapis.com",
+        // Added 2026-09-14 with the edition sources. `comic.naver.com` left
+        // with the adapter: the app recognises a reader's Naver link but no
+        // longer contacts the host.
+        "openlibrary.org",
+        "ndlsearch.ndl.go.jp",
+        "cdn.animenewsnetwork.com",
         "webtoons.com",
-        "comic.naver.com",
         "tonarinoyj.jp",
         "shonenjumpplus.com",
         "comic-days.com",

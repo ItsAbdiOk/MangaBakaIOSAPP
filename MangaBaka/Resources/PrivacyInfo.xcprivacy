@@ -45,8 +45,14 @@
        GigaViewer magazine hosts — tonarinoyj.jp, shonenjumpplus.com,
        comic-days.com, magcomi.com, shonenmagazine.com, comic-gardo.com,
        comic-earthstar.com — read as plain RSS with no request parameters at
-       all; api.mangaupdates.com (release cadence, unauthenticated). None of
-       the non-MangaBaka hosts receives anything that identifies the reader.
+       all; api.mangaupdates.com (release cadence, unauthenticated); and, from
+       2026-09-14, three edition sources that replace what Naver, Amazon and
+       Google Books gave us — cdn.animenewsnetwork.com (English volume dates
+       and ISBNs), openlibrary.org (editions by ISBN, alongside the covers
+       host already listed) and ndlsearch.ndl.go.jp (Japanese volumes). All
+       three are unauthenticated, keyless, and receive a title or an ISBN and
+       nothing about the reader. None of the non-MangaBaka hosts receives
+       anything that identifies the reader.
        -->
   <key>NSPrivacyCollectedDataTypes</key>
   <array>

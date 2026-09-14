@@ -1,0 +1,392 @@
+<searchRetrieveResponse xmlns="http://www.loc.gov/zing/srw/">
+  <version>1.2</version>
+  <numberOfRecords>27</numberOfRecords>
+  <nextRecordPosition>4</nextRecordPosition>
+  <extraResponseData>
+    <facets>
+      <lst name="REPOSITORY_NO">
+        <int name="R100000002">26</int>
+        <int name="R100000137">1</int>
+      </lst>
+      <lst name="NDC">
+        <int name="7">25</int>
+        <int name="9">1</int>
+      </lst>
+      <lst name="ISSUED_DATE">
+        <int name="2019">2</int>
+        <int name="2020">2</int>
+        <int name="2021">5</int>
+        <int name="2022">2</int>
+        <int name="2023">5</int>
+        <int name="2024">4</int>
+        <int name="2025">4</int>
+        <int name="2026">3</int>
+      </lst>
+      <lst name="LIBRARY">
+        <int name="国立国会図書館">26</int>
+      </lst>
+    </facets>
+  </extraResponseData>
+  <records>
+    <record>
+      <recordSchema>info:srw/schema/1/dc-v1.1</recordSchema>
+      <recordPacking>xml</recordPacking>
+      <recordData>
+        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcndl="http://ndl.go.jp/dcndl/terms/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:owl="http://www.w3.org/2002/07/owl#">
+          <dcndl:BibAdminResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873">
+            <dcterms:description>type : book</dcterms:description>
+            <dcndl:bibRecordCategory>R100000137</dcndl:bibRecordCategory>
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873#material"/>
+          </dcndl:BibAdminResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873#material">
+            <rdfs:seeAlso rdf:resource="http://iss.ndl.go.jp/isbn/9784046604873"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/ISBN">9784046604873</dcterms:identifier>
+            <dcterms:title>俺だけレベルアップな件外伝　01</dcterms:title>
+            <dc:title>
+              <rdf:Description>
+                <rdf:value>俺だけレベルアップな件外伝　01</rdf:value>
+                <dcndl:transcription>オレダケレベルアップナケンガイデン　01</dcndl:transcription>
+              </rdf:Description>
+            </dc:title>
+            <dcndl:seriesTitle>
+              <rdf:Description>
+                <rdf:value>MFC</rdf:value>
+                <dcndl:transcription>エムエフシー</dcndl:transcription>
+              </rdf:Description>
+            </dcndl:seriesTitle>
+            <dcterms:creator>
+              <foaf:Agent>
+                <foaf:name>DISCIPLES(REDICE STUDIO)</foaf:name>
+                <dcndl:transcription>ディサイプルズ　レッドアイススタジオ</dcndl:transcription>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dcterms:creator>
+              <foaf:Agent>
+                <foaf:name>Chugong</foaf:name>
+                <dcndl:transcription>チュゴン</dcndl:transcription>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dcterms:creator>
+              <foaf:Agent>
+                <foaf:name>h-goon</foaf:name>
+                <dcndl:transcription>ヒョングン</dcndl:transcription>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dc:creator>DISCIPLES(REDICE STUDIO) 著・文・その他</dc:creator>
+            <dc:creator>Chugong 原著</dc:creator>
+            <dc:creator>h-goon 著・文・その他</dc:creator>
+            <dcterms:publisher>
+              <foaf:Agent>
+                <foaf:name>ＫＡＤＯＫＡＷＡ</foaf:name>
+              </foaf:Agent>
+            </dcterms:publisher>
+            <dcterms:publisher>
+              <foaf:Agent>
+                <foaf:name>ＫＡＤＯＫＡＷＡ</foaf:name>
+              </foaf:Agent>
+            </dcterms:publisher>
+            <dcndl:publicationPlace rdf:datatype="http://purl.org/dc/terms/ISO3166">JP</dcndl:publicationPlace>
+            <dcterms:issued rdf:datatype="http://purl.org/dc/terms/W3CDTF">2026-09-18</dcterms:issued>
+            <dcterms:abstract>水篠と竜帝の死闘の末、人々はハンターやモンスターが存在しない平穏な世界で日々を過ごしていた。ところがある日、警察署に次々と犯罪者たちが自首してくる不可解な現象が起こって──！？</dcterms:abstract>
+            <dcterms:description>装丁 : B6</dcterms:description>
+            <dcterms:description>一般</dcterms:description>
+            <dcterms:description>コミックス</dcterms:description>
+            <dcterms:description>コミックス・劇画</dcterms:description>
+            <dcterms:description>コミックス（書籍）</dcterms:description>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>俺だけレベルアップな件</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>俺だけ</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>レベルアップな件</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>オレダケ</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>レベルアップナケン</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>DISCIPLES(REDICESTUDIO)</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>外伝</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>後日譚</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>レッドアイススタジオ</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>Chugong</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>h-goon</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>水篠旬</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:subject>
+              <rdf:Description>
+                <rdf:value>ソン・ジヌ</rdf:value>
+              </rdf:Description>
+            </dcterms:subject>
+            <dcterms:language rdf:datatype="http://purl.org/dc/terms/ISO639-2">jpn</dcterms:language>
+            <dcndl:price>1200</dcndl:price>
+            <dcterms:extent>176p</dcterms:extent>
+            <dcndl:materialType rdf:resource="http://ndl.go.jp/ndltype/Book" rdfs:label="図書"/>
+            <dcterms:audience>一般</dcterms:audience>
+            <rdfs:seeAlso rdf:resource="https://www.books.or.jp/book-details/9784046604873"/>
+            <foaf:thumbnail rdf:resource="https://ndlsearch.ndl.go.jp/thumbnail/9784046604873.jpg"/>
+          </dcndl:BibResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873#material">
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873#item"/>
+          </dcndl:BibResource>
+          <dcndl:Item rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046604873#item">
+            <rdfs:seeAlso rdf:resource="https://www.books.or.jp/book-details/9784046604873"/>
+          </dcndl:Item>
+        </rdf:RDF>
+      </recordData>
+      <recordPosition>1</recordPosition>
+    </record>
+    <record>
+      <recordSchema>info:srw/schema/1/dc-v1.1</recordSchema>
+      <recordPacking>xml</recordPacking>
+      <recordData>
+        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcndl="http://ndl.go.jp/dcndl/terms/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:owl="http://www.w3.org/2002/07/owl#">
+          <dcndl:BibAdminResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103">
+            <dcndl:catalogingStatus>C7</dcndl:catalogingStatus>
+            <dcndl:catalogingRule>ncr/2018</dcndl:catalogingRule>
+            <dcterms:description>type : book</dcterms:description>
+            <dcndl:bibRecordCategory>R100000002</dcndl:bibRecordCategory>
+            <dcndl:bibRecordSubCategory>115</dcndl:bibRecordSubCategory>
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103#material"/>
+          </dcndl:BibAdminResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103#material">
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/jpno/23733021"/>
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/bib/032308103"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23733021</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLBibID">032308103</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/TOHANMARCNO">34372823</dcterms:identifier>
+            <rdfs:seeAlso rdf:resource="http://iss.ndl.go.jp/isbn/9784046816351"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/ISBN">978-4-04-681635-1</dcterms:identifier>
+            <dcterms:title>俺だけレベルアップな件. 10</dcterms:title>
+            <dc:title>
+              <rdf:Description>
+                <rdf:value>俺だけレベルアップな件</rdf:value>
+                <dcndl:transcription>オレ ダケ レベル アップ ナ ケン</dcndl:transcription>
+              </rdf:Description>
+            </dc:title>
+            <dcndl:volume>
+              <rdf:Description>
+                <rdf:value>10</rdf:value>
+                <dcndl:transcription>10</dcndl:transcription>
+              </rdf:Description>
+            </dcndl:volume>
+            <dcndl:seriesTitle>
+              <rdf:Description>
+                <rdf:value>MFC</rdf:value>
+              </rdf:Description>
+            </dcndl:seriesTitle>
+            <dcterms:creator>
+              <foaf:Agent rdf:about="http://id.ndl.go.jp/auth/entity/001339729">
+                <foaf:name>DUBU, 1985-2022</foaf:name>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dcterms:creator>
+              <foaf:Agent rdf:about="http://id.ndl.go.jp/auth/entity/001339730">
+                <foaf:name>Chugong</foaf:name>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dc:creator>DUBU 漫画</dc:creator>
+            <dc:creator>Chugong 原作</dc:creator>
+            <dcterms:publisher>
+              <foaf:Agent>
+                <foaf:name>KADOKAWA</foaf:name>
+                <dcndl:transcription>カドカワ</dcndl:transcription>
+                <dcndl:location>東京</dcndl:location>
+              </foaf:Agent>
+            </dcterms:publisher>
+            <dcndl:publicationPlace rdf:datatype="http://purl.org/dc/terms/ISO3166">JP</dcndl:publicationPlace>
+            <dcterms:date>2022.8</dcterms:date>
+            <dcterms:issued rdf:datatype="http://purl.org/dc/terms/W3CDTF">2022</dcterms:issued>
+            <dcterms:description>表現種別 : テキスト</dcterms:description>
+            <dcterms:description>表現種別 : 静止画</dcterms:description>
+            <dcterms:description>機器種別 : 機器不用</dcterms:description>
+            <dcterms:description>キャリア種別 : 冊子</dcterms:description>
+            <dcterms:subject rdf:resource="http://id.ndl.go.jp/class/ndlc/Y84"/>
+            <dcterms:subject rdf:resource="http://id.ndl.go.jp/class/ndc10/726.1"/>
+            <dcterms:language rdf:datatype="http://purl.org/dc/terms/ISO639-2">jpn</dcterms:language>
+            <dcndl:originalLanguage rdf:datatype="http://purl.org/dc/terms/ISO639-2">kor</dcndl:originalLanguage>
+            <dcndl:price>940円</dcndl:price>
+            <dcterms:extent>150p ; 19cm</dcterms:extent>
+            <dcndl:genre>
+              <rdf:Description rdf:about="http://id.ndl.go.jp/auth/ndlgft/001347325">
+                <rdf:value>漫画</rdf:value>
+                <dcndl:transcription>マンガ</dcndl:transcription>
+              </rdf:Description>
+            </dcndl:genre>
+            <dcndl:materialType rdf:resource="http://ndl.go.jp/ndltype/Book" rdfs:label="図書"/>
+            <dcterms:audience>一般</dcterms:audience>
+            <rdfs:seeAlso rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103"/>
+          </dcndl:BibResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103#material">
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103#item"/>
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046816351#item"/>
+          </dcndl:BibResource>
+          <dcndl:Item rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103#item">
+            <dcndl:holdingAgent>
+              <foaf:Agent>
+                <foaf:name>国立国会図書館</foaf:name>
+                <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLLibCode">0000</dcterms:identifier>
+              </foaf:Agent>
+            </dcndl:holdingAgent>
+            <rdfs:seeAlso rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032308103"/>
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/bib/032308103"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLBibID">032308103</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23733021</dcterms:identifier>
+            <dcndl:callNumber>Y84-M49723</dcndl:callNumber>
+          </dcndl:Item>
+          <dcndl:Item rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046816351#item">
+            <rdfs:seeAlso rdf:resource="https://www.books.or.jp/book-details/9784046816351"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23733021</dcterms:identifier>
+          </dcndl:Item>
+        </rdf:RDF>
+      </recordData>
+      <recordPosition>2</recordPosition>
+    </record>
+    <record>
+      <recordSchema>info:srw/schema/1/dc-v1.1</recordSchema>
+      <recordPacking>xml</recordPacking>
+      <recordData>
+        <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcndl="http://ndl.go.jp/dcndl/terms/" xmlns:foaf="http://xmlns.com/foaf/0.1/" xmlns:owl="http://www.w3.org/2002/07/owl#">
+          <dcndl:BibAdminResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648">
+            <dcndl:catalogingStatus>C7</dcndl:catalogingStatus>
+            <dcndl:catalogingRule>ncr/2018</dcndl:catalogingRule>
+            <dcterms:description>type : book</dcterms:description>
+            <dcndl:bibRecordCategory>R100000002</dcndl:bibRecordCategory>
+            <dcndl:bibRecordSubCategory>115</dcndl:bibRecordSubCategory>
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648#material"/>
+          </dcndl:BibAdminResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648#material">
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/jpno/23824740"/>
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/bib/032695648"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23824740</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLBibID">032695648</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/TOHANMARCNO">34453511</dcterms:identifier>
+            <rdfs:seeAlso rdf:resource="http://iss.ndl.go.jp/isbn/9784046822871"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/ISBN">978-4-04-682287-1</dcterms:identifier>
+            <dcterms:title>俺だけレベルアップな件. 11</dcterms:title>
+            <dc:title>
+              <rdf:Description>
+                <rdf:value>俺だけレベルアップな件</rdf:value>
+                <dcndl:transcription>オレ ダケ レベル アップ ナ ケン</dcndl:transcription>
+              </rdf:Description>
+            </dc:title>
+            <dcndl:volume>
+              <rdf:Description>
+                <rdf:value>11</rdf:value>
+                <dcndl:transcription>11</dcndl:transcription>
+              </rdf:Description>
+            </dcndl:volume>
+            <dcndl:seriesTitle>
+              <rdf:Description>
+                <rdf:value>MFC</rdf:value>
+              </rdf:Description>
+            </dcndl:seriesTitle>
+            <dcterms:creator>
+              <foaf:Agent rdf:about="http://id.ndl.go.jp/auth/entity/001339729">
+                <foaf:name>DUBU, 1985-2022</foaf:name>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dcterms:creator>
+              <foaf:Agent rdf:about="http://id.ndl.go.jp/auth/entity/001339730">
+                <foaf:name>Chugong</foaf:name>
+              </foaf:Agent>
+            </dcterms:creator>
+            <dc:creator>DUBU 漫画</dc:creator>
+            <dc:creator>Chugong 原作</dc:creator>
+            <dcterms:publisher>
+              <foaf:Agent>
+                <foaf:name>KADOKAWA</foaf:name>
+                <dcndl:transcription>カドカワ</dcndl:transcription>
+                <dcndl:location>東京</dcndl:location>
+              </foaf:Agent>
+            </dcterms:publisher>
+            <dcndl:publicationPlace rdf:datatype="http://purl.org/dc/terms/ISO3166">JP</dcndl:publicationPlace>
+            <dcterms:date>2023.3</dcterms:date>
+            <dcterms:issued rdf:datatype="http://purl.org/dc/terms/W3CDTF">2023</dcterms:issued>
+            <dcterms:description>表現種別 : テキスト</dcterms:description>
+            <dcterms:description>表現種別 : 静止画</dcterms:description>
+            <dcterms:description>機器種別 : 機器不用</dcterms:description>
+            <dcterms:description>キャリア種別 : 冊子</dcterms:description>
+            <dcterms:subject rdf:resource="http://id.ndl.go.jp/class/ndlc/Y84"/>
+            <dcterms:subject rdf:resource="http://id.ndl.go.jp/class/ndc10/726.1"/>
+            <dcterms:language rdf:datatype="http://purl.org/dc/terms/ISO639-2">jpn</dcterms:language>
+            <dcndl:originalLanguage rdf:datatype="http://purl.org/dc/terms/ISO639-2">kor</dcndl:originalLanguage>
+            <dcndl:price>980円</dcndl:price>
+            <dcterms:extent>151p ; 19cm</dcterms:extent>
+            <dcndl:genre>
+              <rdf:Description rdf:about="http://id.ndl.go.jp/auth/ndlgft/001347325">
+                <rdf:value>漫画</rdf:value>
+                <dcndl:transcription>マンガ</dcndl:transcription>
+              </rdf:Description>
+            </dcndl:genre>
+            <dcndl:materialType rdf:resource="http://ndl.go.jp/ndltype/Book" rdfs:label="図書"/>
+            <dcterms:audience>一般</dcterms:audience>
+            <rdfs:seeAlso rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648"/>
+          </dcndl:BibResource>
+          <dcndl:BibResource rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648#material">
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648#item"/>
+            <dcndl:record rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046822871#item"/>
+          </dcndl:BibResource>
+          <dcndl:Item rdf:about="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648#item">
+            <dcndl:holdingAgent>
+              <foaf:Agent>
+                <foaf:name>国立国会図書館</foaf:name>
+                <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLLibCode">0000</dcterms:identifier>
+              </foaf:Agent>
+            </dcndl:holdingAgent>
+            <rdfs:seeAlso rdf:resource="https://ndlsearch.ndl.go.jp/books/R100000002-I032695648"/>
+            <rdfs:seeAlso rdf:resource="http://id.ndl.go.jp/bib/032695648"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/NDLBibID">032695648</dcterms:identifier>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23824740</dcterms:identifier>
+            <dcndl:callNumber>Y84-M58106</dcndl:callNumber>
+          </dcndl:Item>
+          <dcndl:Item rdf:about="https://ndlsearch.ndl.go.jp/books/R100000137-I9784046822871#item">
+            <rdfs:seeAlso rdf:resource="https://www.books.or.jp/book-details/9784046822871"/>
+            <dcterms:identifier rdf:datatype="http://ndl.go.jp/dcndl/terms/JPNO">23824740</dcterms:identifier>
+          </dcndl:Item>
+        </rdf:RDF>
+      </recordData>
+      <recordPosition>3</recordPosition>
+    </record>
+  </records>
+</searchRetrieveResponse>
