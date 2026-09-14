@@ -426,6 +426,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     // Internal rather than private so the cache half can reach them. See
     // SeriesRepository+Cache.swift — the split is the lint's doing, not a
     // widening of who is meant to touch these.
+    /// Writes to `cacheWriter`'s file: feeds, series payloads and detail
+    /// pages are all re-fetchable (Q10).
     let database: AppDatabase
     let clock: any Clock
     /// Where the exclusion id the cache was built under is persisted.
@@ -657,7 +659,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     }
 
     private func cachedSeriesCountSync() -> Int {
-        (try? database.writer.read { db in
+        (try? database.cacheWriter.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM series") ?? 0
         }) ?? 0
     }

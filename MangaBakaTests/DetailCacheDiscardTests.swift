@@ -84,7 +84,7 @@ struct DetailCacheDiscardTests {
         try await repository.writeDetailCache(extras, for: 42)
         #expect(try await repository.readDetailCache(42) != nil, "control: it was cached")
 
-        try await database.writer.write { db in
+        try await database.cacheWriter.write { db in
             try db.execute(sql: "DROP TABLE seriesDetail")
         }
 

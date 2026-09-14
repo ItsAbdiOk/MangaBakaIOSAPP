@@ -187,9 +187,15 @@ extension LibraryEntry {
             isPrivate: change.isPrivate ?? isPrivate,
             readLink: readLink,
             series: series,
-            // A change carries an enum, so a patched row's raw state is that
-            // enum's spelling; only an untouched row keeps the server's.
-            rawState: change.state.map(\.rawValue) ?? rawState
+            // A change usually carries an enum, so a patched row's raw state
+            // is that enum's spelling; only an untouched row keeps the
+            // server's. `change.rawState` is the import's exception
+            // (work-list 90) — a state this build cannot name, written back
+            // verbatim, so the cached row matches what the server now holds
+            // rather than the `.considering` the enum had to coerce it to.
+            rawState: change.state == nil
+                ? rawState
+                : (change.rawState ?? change.state?.rawValue ?? rawState)
         )
     }
 }

@@ -136,6 +136,25 @@ struct RootView: View {
     /// One handle, so two quick foregrounds do not run two walks.
     @State private var reminderRefresh: Task<Void, Never>?
 
+    /// What the tag picker may offer this reader, held rather than rebuilt.
+    ///
+    /// Item 106: this was constructed inline in `body`, so two `Set`s were
+    /// heap-allocated on every body pass — every toast, every tab selection,
+    /// every path change — to express two values that change only when the
+    /// reader opens Settings. Microseconds each, and filed by the review as
+    /// "so nobody adds a third"; the point is that the pass allocates nothing
+    /// for it now, not that a frame was being missed. **Unmeasured**: no
+    /// before/after Instruments trace was taken, because the two inputs are
+    /// four rating strings and a blocked list that is usually empty — there
+    /// is no number here worth quoting and I would rather say so than invent
+    /// one.
+    ///
+    /// Seeded in `init` rather than by `.onChange(initial: true)`: the
+    /// initial-fire version would render the first frame against an empty
+    /// audience, and an empty `allowedRatings` is the picker showing the
+    /// reader nothing rather than showing them too much.
+    @State private var tagAudience: TagAudience
+
     /// Builds the six session-lived models up front, rather than leaving them
     /// nil until the tab tree's own `.task` runs.
     ///
@@ -219,6 +238,13 @@ struct RootView: View {
         // The shared snapshot, not a private walk of its own (lane C):
         // `StackModel` reads the library to keep what is already tracked out
         // of the queue, and a second walk is 24.7 MB on a real account.
+        // Item 106: seeded from the same two stores the `onChange` pair in
+        // `body` keeps it in step with.
+        _tagAudience = State(initialValue: TagAudience(
+            allowedRatings: Set(content.preferences.queryValues),
+            showsSpoilers: false,
+            blockedIds: Set(blockedTags.blocked.ids)
+        ))
         _stackModel = State(initialValue: StackModel(
             repository: repository, shelf: shelf, library: library, snapshot: librarySnapshot
         ))
@@ -235,11 +261,19 @@ struct RootView: View {
             // What the tag picker may offer this reader: their rating
             // ceiling and their blocked list, so a picked tag can never be
             // one the search then refuses (`TagAudience`).
-            .environment(\.tagAudience, TagAudience(
-                allowedRatings: Set(content.preferences.queryValues),
-                showsSpoilers: false,
-                blockedIds: Set(blockedTags.blocked.ids)
-            ))
+            //
+            // Item 106: read from `tagAudience`, which is rebuilt only when
+            // one of the two stores actually changes. The `onChange`
+            // comparisons below are a four-element `Set<Rating>` and an array
+            // of blocked tags — no allocation — where building the value took
+            // two every pass.
+            .environment(\.tagAudience, tagAudience)
+            .onChange(of: content.preferences) { _, preferences in
+                tagAudience.allowedRatings = Set(preferences.queryValues)
+            }
+            .onChange(of: blockedTags.blocked) { _, blocked in
+                tagAudience.blockedIds = Set(blocked.ids)
+            }
             .task { await startSession() }
             // `primeAniListHealth` used to run here — a POST to
             // graphql.anilist.co on every cold launch, from every reader,

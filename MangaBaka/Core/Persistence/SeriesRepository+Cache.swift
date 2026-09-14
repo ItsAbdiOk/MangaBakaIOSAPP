@@ -22,7 +22,7 @@ extension SeriesRepository {
     private static let detailFreshness: TimeInterval = 6 * 60 * 60
 
     func readDetailCache(_ seriesId: Int) throws -> SeriesExtras? {
-        try database.writer.read { db in
+        try database.cacheWriter.read { db in
             guard let row = try CachedDetail.fetchOne(db, key: seriesId) else { return nil }
             let age = clock.now.timeIntervalSince(row.cachedAt)
             // A negative age means the device clock moved backwards; treat that
@@ -47,7 +47,7 @@ extension SeriesRepository {
         // `await`: in an async context GRDB's asynchronous `read` is the one
         // that binds, and it is the right one — the synchronous overload
         // would block this actor's thread on SQLite.
-        let rows = (try? await database.writer.read { db in
+        let rows = (try? await database.cacheWriter.read { db in
             try CachedDetail.filter(ids.contains(Column("seriesId"))).fetchAll(db)
         }) ?? []
         let now = clock.now
@@ -72,7 +72,7 @@ extension SeriesRepository {
 
     func writeDetailCache(_ extras: SeriesExtras, for seriesId: Int) throws {
         let payload = try JSONEncoder().encode(extras)
-        try database.writer.write { db in
+        try database.cacheWriter.write { db in
             try CachedDetail(
                 seriesId: seriesId, payload: payload, cachedAt: clock.now
             ).save(db)
@@ -175,7 +175,7 @@ extension SeriesRepository {
     @discardableResult
     func discardCachedFeeds() -> Bool {
         do {
-            try database.writer.write { db in
+            try database.cacheWriter.write { db in
                 // Only the feed cache is cleared. The shelf holds the
                 // reader's own saves and is not derived from the filter.
                 try db.execute(sql: "DELETE FROM feedEntry")
@@ -201,7 +201,7 @@ extension SeriesRepository {
     @discardableResult
     func discardDetailCache() -> Bool {
         do {
-            try database.writer.write { db in
+            try database.cacheWriter.write { db in
                 try db.execute(sql: "DELETE FROM seriesDetail")
             }
             return true
@@ -230,7 +230,7 @@ extension SeriesRepository {
         _ feed: FeedKind,
         requireFresh: Bool
     ) throws -> CachedFeed {
-        try database.writer.read { db in
+        try database.cacheWriter.read { db in
             let metadata = try FeedMetadata
                 .filter(Column("feedKey") == feed.cacheKey)
                 .fetchOne(db)
@@ -285,7 +285,7 @@ extension SeriesRepository {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
 
-        try database.writer.write { db in
+        try database.cacheWriter.write { db in
             for item in series {
                 let payload = try encoder.encode(item)
                 try CachedSeries(id: item.id, payload: payload, cachedAt: now)
@@ -348,7 +348,7 @@ extension SeriesRepository {
     /// second time.
     func touchFeedMetadata(_ feed: FeedKind) throws {
         let now = clock.now
-        try database.writer.write { db in
+        try database.cacheWriter.write { db in
             guard let existing = try FeedMetadata
                 .filter(Column("feedKey") == feed.cacheKey)
                 .fetchOne(db)

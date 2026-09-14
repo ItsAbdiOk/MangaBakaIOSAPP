@@ -35,7 +35,7 @@ struct ScheduleServiceTests {
                 ]
             )
         )
-        try await database.writer.write { db in
+        try await database.cacheWriter.write { db in
             try db.execute(
                 sql: """
                 INSERT INTO cadenceEntry (seriesId, payload, fetchedAt, failure) VALUES (?, ?, ?, NULL)

@@ -7,6 +7,8 @@ import GRDB
 /// refetchable, a save is not. Clearing the cache must never lose what someone
 /// chose to keep.
 actor ShelfStore {
+    /// Writes to `libraryWriter`'s file: a save is the one thing in this app
+    /// that exists nowhere else (Q10).
     private let database: AppDatabase
     private let clock: any Clock
     private let encoder = JSONEncoder()
@@ -21,7 +23,7 @@ actor ShelfStore {
 
     func record(_ series: Series, as kind: ShelfEntry.Kind) throws {
         let payload = try encoder.encode(series)
-        try database.writer.write { db in
+        try database.libraryWriter.write { db in
             try ShelfEntry(
                 seriesId: series.id,
                 kind: kind.rawValue,
@@ -32,7 +34,7 @@ actor ShelfStore {
     }
 
     func remove(seriesId: Int) throws {
-        _ = try database.writer.write { db in
+        _ = try database.libraryWriter.write { db in
             try ShelfEntry.deleteOne(db, key: seriesId)
         }
     }
@@ -44,7 +46,7 @@ actor ShelfStore {
     ///   say why (gap 116, FAILURES-SUMMARY.md). Every existing caller that
     ///   only wants the series can take `.series` and see no change.
     func entries(_ kind: ShelfEntry.Kind) throws -> (series: [Series], undecodable: Int) {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             let rows = try ShelfEntry
                 .filter(Column("kind") == kind.rawValue)
                 .order(Column("addedAt").desc)
@@ -71,14 +73,14 @@ actor ShelfStore {
     /// larger action than the one they asked for, and the Library tab is where
     /// account entries are removed.
     func clear() throws {
-        _ = try database.writer.write { db in
+        _ = try database.libraryWriter.write { db in
             try ShelfEntry.deleteAll(db)
         }
     }
 
     /// IDs the reader has already reacted to, so the stack stops showing them.
     func reactedIDs() throws -> Set<Int> {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             Set(try Int.fetchAll(db, sql: "SELECT seriesId FROM shelfEntry"))
         }
     }
@@ -93,7 +95,7 @@ actor ShelfStore {
     /// device's local calendar day, which is `StackModel`'s to define; see
     /// `StackModel.countToday`, still the pure rule the tests hold.
     func reactionCount(from: Date, to: Date) throws -> Int {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try Int.fetchOne(
                 db,
                 sql: "SELECT COUNT(*) FROM shelfEntry WHERE addedAt >= ? AND addedAt < ?",
@@ -114,7 +116,7 @@ actor ShelfStore {
     /// swipe (`record`, above), so ordering by it is ordering by an actual
     /// swipe time.
     func recentlyReactedIDs(limit: Int) throws -> [Int] {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try Int.fetchAll(
                 db,
                 sql: "SELECT seriesId FROM shelfEntry ORDER BY addedAt DESC LIMIT ?",

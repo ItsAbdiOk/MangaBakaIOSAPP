@@ -54,6 +54,20 @@ protocol LibraryProviding: Sendable {
     @discardableResult
     func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool
 
+    /// The same POST, but writing `rawState` as the state string when the
+    /// file being restored named a state this build does not know.
+    ///
+    /// Work-list 90: `LibraryEntry.State` coerces an unrecognised value to
+    /// `.considering` on purpose (see its `init(from:)`), so restoring a
+    /// backup through the enum alone rewrote every such entry. Added as a
+    /// second requirement with a default that forwards to the enum version —
+    /// the same shape `libraryPage` above uses — rather than by changing the
+    /// existing signature: every conformance that has no raw state to carry
+    /// (the test doubles, and every caller that starts from a button tap)
+    /// keeps working unchanged.
+    @discardableResult
+    func add(seriesId: Int, state: LibraryEntry.State, rawState: String?) async throws(APIError) -> Bool
+
     /// Removes a series from the reader's library entirely.
     func remove(seriesId: Int) async throws(APIError)
 
@@ -67,6 +81,11 @@ protocol LibraryProviding: Sendable {
 extension LibraryProviding {
     func libraryPage(page: Int, limit: Int) async throws(APIError) -> [LibraryEntry] {
         await library(page: page, limit: limit)
+    }
+
+    @discardableResult
+    func add(seriesId: Int, state: LibraryEntry.State, rawState: String?) async throws(APIError) -> Bool {
+        try await add(seriesId: seriesId, state: state)
     }
 }
 
@@ -86,6 +105,15 @@ struct LibraryChange: Equatable, Sendable {
     var rating: Double??
     var note: String??
     var isPrivate: Bool?
+    /// The state string to send instead of `state.rawValue`, when the value
+    /// being written is one this build's enum does not have a case for.
+    ///
+    /// Work-list 90: only an import restoring a backup sets this. `state` is
+    /// still set alongside it — everything local (the change set's own
+    /// comparison, `LibraryEntry.applying`, the caches) needs an enum, and
+    /// the coerced `.considering` is the right local answer; it is only the
+    /// wire that must not lose the server's own spelling.
+    var rawState: String?
 
     var isEmpty: Bool { body.isEmpty }
 
@@ -105,7 +133,10 @@ struct LibraryChange: Equatable, Sendable {
             progressVolume: later.progressVolume ?? progressVolume,
             rating: later.rating ?? rating,
             note: later.note ?? note,
-            isPrivate: later.isPrivate ?? isPrivate
+            isPrivate: later.isPrivate ?? isPrivate,
+            // Follows `state`: a later edit that names a known state must not
+            // leave an earlier import's raw spelling behind to overwrite it.
+            rawState: later.state == nil ? rawState : later.rawState
         )
     }
 
@@ -118,7 +149,9 @@ struct LibraryChange: Equatable, Sendable {
     /// Only what was actually set.
     var body: [String: any Sendable] {
         var body: [String: any Sendable] = [:]
-        if let state { body["state"] = state.rawValue }
+        // `rawState` wins when set: it is the server's own spelling of a
+        // state this build had to coerce to `.considering` to hold at all.
+        if let state { body["state"] = rawState ?? state.rawValue }
         if let progressChapter { body["progress_chapter"] = Self.value(progressChapter) }
         if let progressVolume { body["progress_volume"] = Self.value(progressVolume) }
         if let rating { body["rating"] = Self.value(rating) }
@@ -361,16 +394,22 @@ actor LibraryService: LibraryProviding {
 
     @discardableResult
     func add(seriesId: Int, state: LibraryEntry.State) async throws(APIError) -> Bool {
+        try await add(seriesId: seriesId, state: state, rawState: nil)
+    }
+
+    @discardableResult
+    func add(seriesId: Int, state: LibraryEntry.State, rawState: String?) async throws(APIError) -> Bool {
+        let value = rawState ?? state.rawValue
         let created = try await client.post(
             "/v1/my/library/\(seriesId)",
-            body: ["state": state.rawValue]
+            body: ["state": value]
         )
         if !created {
             // Already tracked. Moving it to the requested shelf is what the
             // reader meant by adding it, and is what the second call does.
             try await client.patch(
                 "/v1/my/library/\(seriesId)",
-                body: ["state": state.rawValue]
+                body: ["state": value]
             )
         }
         return created

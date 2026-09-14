@@ -61,7 +61,7 @@ struct TasteRecountMigrationTests {
     @Test("A fresh database has the ledger tables, empty")
     func freshDatabaseHasEmptyLedger() throws {
         let database = try AppDatabase.inMemory()
-        try database.writer.write { db in
+        try database.libraryWriter.write { db in
             let tasteSourceCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tasteSource")
             #expect(tasteSourceCount == 0)
             let tasteContributionCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tasteContribution")
@@ -75,7 +75,7 @@ struct TasteRecountMigrationTests {
 
     /// The `EXPLAIN QUERY PLAN` detail text for one statement, joined.
     private func plan(_ database: AppDatabase, sql: String) throws -> String {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try Row.fetchAll(db, sql: "EXPLAIN QUERY PLAN \(sql)")
                 .map { ($0["detail"] as String?) ?? "" }
                 .joined(separator: " | ")
@@ -126,7 +126,7 @@ struct TasteRecountMigrationTests {
     @Test("The redundant feedEntry index is gone")
     func redundantFeedIndexDropped() throws {
         let database = try AppDatabase.inMemory()
-        let names = try database.writer.read { db in
+        let names = try database.libraryWriter.read { db in
             try String.fetchAll(
                 db,
                 sql: """

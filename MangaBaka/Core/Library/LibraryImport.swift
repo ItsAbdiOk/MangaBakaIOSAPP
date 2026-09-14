@@ -23,6 +23,23 @@ struct ImportedEntry: Sendable, Equatable {
     var rating: Double?
     var note: String?
     var isPrivate: Bool?
+    /// The state string exactly as the file spelled it, when `state` had to
+    /// coerce it to `.considering` because this build has no case for it.
+    ///
+    /// Work-list 90: the export half already writes the server's own
+    /// spelling (`LibraryExport.Entry.rawState`, and the CSV `state` column
+    /// is `LibraryEntry.exportedState`). Without this the import half threw
+    /// it away again, so a backup taken on an older build and restored still
+    /// rewrote every such entry to `considering` — the round trip was lossy
+    /// in exactly the case the raw value was added for.
+    ///
+    /// Last, and defaulted, so the memberwise initialiser every call site
+    /// here and in the tests uses keeps its existing argument list.
+    var rawState: String?
+
+    /// What to send for this row's state: the file's own spelling when it
+    /// had one this build could not name, and the enum's otherwise.
+    var stateValue: String { rawState ?? state.rawValue }
 }
 
 enum ImportError: Error, Equatable {
@@ -80,7 +97,8 @@ enum LibraryImport {
                 progressVolume: entry.progressVolume,
                 rating: entry.rating,
                 note: entry.note,
-                isPrivate: entry.isPrivate
+                isPrivate: entry.isPrivate,
+                rawState: entry.rawState
             )
         }
         guard !entries.isEmpty else { return .failure(.empty) }
@@ -109,7 +127,13 @@ enum LibraryImport {
         for row in rows.dropFirst() {
             guard row.count > seriesIndex, row.count > stateIndex else { continue }
             guard let seriesId = Int(row[seriesIndex]) else { continue }
-            guard let state = LibraryEntry.State(rawValue: row[stateIndex]) else { continue }
+            // Work-list 90: an unrecognised state used to drop the whole row,
+            // which is worse than the decoder's behaviour on the same value —
+            // a CSV exported by a newer build lost every entry in a state
+            // added since. Coerced the same way `LibraryEntry.State`'s own
+            // decoder coerces it, keeping the spelling to write back.
+            let rawStateText = row[stateIndex]
+            let state = LibraryEntry.State(rawValue: rawStateText) ?? .considering
             entries.append(ImportedEntry(
                 seriesId: seriesId,
                 malId: nil,
@@ -119,7 +143,8 @@ enum LibraryImport {
                 progressVolume: field(row, "progressVolume").flatMap(Double.init),
                 rating: field(row, "rating").flatMap(Double.init),
                 note: field(row, "note"),
-                isPrivate: field(row, "isPrivate").map { $0 == "true" }
+                isPrivate: field(row, "isPrivate").map { $0 == "true" },
+                rawState: state.rawValue == rawStateText ? nil : rawStateText
             ))
         }
         guard !entries.isEmpty else { return .failure(.empty) }
@@ -411,7 +436,9 @@ extension LibraryImport {
             let change = changeSet(for: entry, comparedTo: current)
             do {
                 if current == nil {
-                    try await library.add(seriesId: seriesId, state: entry.state)
+                    try await library.add(
+                        seriesId: seriesId, state: entry.state, rawState: entry.rawState
+                    )
                 }
                 if !change.isEmpty {
                     try await library.update(seriesId: seriesId, change: change)
@@ -453,8 +480,13 @@ extension LibraryImport {
         for entry: ImportedEntry, comparedTo current: LibraryEntry?
     ) -> LibraryChange {
         var change = LibraryChange()
-        if let current, entry.state != current.state {
+        // Work-list 90: compared on the raw spellings, not the enums. Two
+        // different states this build cannot name both coerce to
+        // `.considering`, so an enum comparison called them equal and quietly
+        // declined to restore the file's real value.
+        if let current, entry.stateValue != current.exportedState {
             change.state = entry.state
+            change.rawState = entry.rawState
         }
         if let chapter = entry.progressChapter, chapter != current?.progressChapter {
             change.progressChapter = .some(chapter)

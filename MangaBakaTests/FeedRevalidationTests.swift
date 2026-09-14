@@ -66,7 +66,7 @@ struct FeedRevalidationTests {
         _ database: AppDatabase,
         feed: FeedKind
     ) async throws -> (cachedAt: Date?, lastModified: String?) {
-        try await database.writer.read { db in
+        try await database.cacheWriter.read { db in
             let cachedAt = try Date.fetchOne(
                 db, sql: "SELECT cachedAt FROM feedMetadata WHERE feedKey = ?", arguments: [feed.cacheKey]
             )

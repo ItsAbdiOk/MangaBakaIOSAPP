@@ -78,7 +78,7 @@ struct ShelfStoreTests {
         // Wipe the derived cache out from under the shelf. GRDB offers sync
         // and async writes; the sync one is named explicitly because in an
         // async test the async overload wins and does not compile.
-        try await database.writer.write { db in
+        try await database.libraryWriter.write { db in
             try db.execute(sql: "DELETE FROM series")
             try db.execute(sql: "DELETE FROM feedEntry")
         }
@@ -152,7 +152,7 @@ struct ShelfStoreTests {
         try await shelf.record(SeriesFactory.make(id: 1, title: "Fine"), as: .saved)
         // A row GRDB will hand back but the current `Series` shape cannot
         // decode — standing in for a schema this build no longer understands.
-        try await database.writer.write { db in
+        try await database.libraryWriter.write { db in
             try db.execute(
                 sql: "INSERT INTO shelfEntry (seriesId, kind, addedAt, payload) VALUES (?, ?, ?, ?)",
                 arguments: [2, ShelfEntry.Kind.saved.rawValue, Date(), Data("{}".utf8)]

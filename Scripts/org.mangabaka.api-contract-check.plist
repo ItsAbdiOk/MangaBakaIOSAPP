@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Not installed automatically -- see Scripts/README-api-contract.md.
+         Weekly: Sunday 10:00 local time is a guess (any quiet morning
+         works; the app has no traffic pattern this needs to dodge) --
+         edit StartCalendarInterval below to move it. -->
+    <key>Label</key>
+    <string>org.mangabaka.api-contract-check</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>/Users/abdi/Code/MangaBakaIOSAPP/Scripts/api-contract-schedule.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- Don't fire the instant this is bootstrapped -- only on schedule. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- The wrapper does its own logging to
+         ~/Library/Logs/mangabaka-api-contract.log with a deliberately quiet
+         policy (see that script). These paths only catch launchd-level
+         noise -- a shell that failed to even start -- which should stay
+         near-empty. -->
+    <key>StandardOutPath</key>
+    <string>/Users/abdi/Library/Logs/mangabaka-api-contract.launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/abdi/Library/Logs/mangabaka-api-contract.launchd.log</string>
+</dict>
+</plist>

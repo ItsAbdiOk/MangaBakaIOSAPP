@@ -110,7 +110,7 @@ struct StackSaveWritesThroughTests {
         let database = try AppDatabase.inMemory()
         // Dropping the table is the write failing, not a mock: `record`
         // throws a real GRDB error the moment the table it targets is gone.
-        try await database.writer.write { db in try db.drop(table: "shelfEntry") }
+        try await database.libraryWriter.write { db in try db.drop(table: "shelfEntry") }
         let shelf = ShelfStore(database: database)
         let model = StackModel(repository: SilentRepository(), shelf: shelf)
         await model.loadIfNeeded()
@@ -136,7 +136,7 @@ struct StackResetReportsFailureTests {
     @Test("A reset whose shelf clear fails is not reported as a success")
     func failedClearIsReported() async throws {
         let database = try AppDatabase.inMemory()
-        try await database.writer.write { db in try db.drop(table: "shelfEntry") }
+        try await database.libraryWriter.write { db in try db.drop(table: "shelfEntry") }
         let shelf = ShelfStore(database: database)
         let model = StackModel(repository: SilentRepository(), shelf: shelf)
 

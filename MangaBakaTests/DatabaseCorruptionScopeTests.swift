@@ -24,11 +24,14 @@ struct DatabaseCorruptionScopeTests {
         ).appendingPathComponent(name)
     }
 
+    /// The stem, not the full name: the reader's file is
+    /// "…-library.sqlite", which the cache file's name is not a prefix of.
     private func cleanUp(_ name: String) {
         guard let url = try? applicationSupportURL(for: name) else { return }
         let directory = url.deletingLastPathComponent()
+        let stem = (name as NSString).deletingPathExtension
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
-        for entry in contents where entry.hasPrefix(name) {
+        for entry in contents where entry.hasPrefix(stem) {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(entry))
         }
     }
@@ -48,7 +51,7 @@ struct DatabaseCorruptionScopeTests {
         // A real, healthy database with something irreplaceable in it.
         let url = try applicationSupportURL(for: name)
         let seeded = try AppDatabase(writer: DatabasePool(path: url.path))
-        try seeded.writer.write { db in
+        try seeded.libraryWriter.write { db in
             try db.execute(
                 sql: "INSERT INTO shelfEntry (seriesId, kind, addedAt, payload) VALUES (?, ?, ?, ?)",
                 arguments: [3397, "saved", Date(timeIntervalSince1970: 0), Data()]
@@ -69,7 +72,10 @@ struct DatabaseCorruptionScopeTests {
         // thing the old behaviour destroyed.
         let reopened = try #require(AppDatabase.onDiskResettingIfCorrupt(named: name))
         #expect(reopened.outcome == .opened)
-        let saved = try reopened.database.writer.read { db in
+        // Read through `libraryWriter`: opening the file has also split the
+        // reader's tables out of it into `mangabaka-library.sqlite` (Q10), and
+        // the row surviving that move is the thing being asserted.
+        let saved = try reopened.database.libraryWriter.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM shelfEntry") ?? 0
         }
         #expect(saved == 1)
@@ -77,6 +83,12 @@ struct DatabaseCorruptionScopeTests {
 
     /// Expected to fail before item 78 with: no `outcome` member at all
     /// (`wasReset: Bool` was the only answer).
+    ///
+    /// Since Q10 this is specifically the *pre-split* case: the file being
+    /// corrupted is one that still holds the reader's tables, and a device in
+    /// that state is told, because a salvage recovering nothing is not proof
+    /// there was nothing to recover. `AppDatabaseResetTests` covers the other
+    /// side — once the split has run, a corrupt cache file says nothing.
     ///
     /// **The fixture has to work harder than it looks.** Zeroing the header
     /// of the main file is not enough on its own: `DatabasePool` is WAL, so
@@ -103,7 +115,7 @@ struct DatabaseCorruptionScopeTests {
         let url = try applicationSupportURL(for: name)
         try autoreleasepool {
             let seeded = try AppDatabase(writer: DatabasePool(path: url.path))
-            try seeded.writer.write { db in
+            try seeded.libraryWriter.write { db in
                 try db.execute(
                     sql: "INSERT INTO shelfEntry (seriesId, kind, addedAt, payload) VALUES (?, ?, ?, ?)",
                     arguments: [3397, "saved", Date(timeIntervalSince1970: 0), Data()]
@@ -115,7 +127,7 @@ struct DatabaseCorruptionScopeTests {
             }
             // Fold the write-ahead log into the main file and truncate it, so
             // the bytes about to be corrupted are the only copy of page 1.
-            try seeded.writer.writeWithoutTransaction { db in
+            try seeded.libraryWriter.writeWithoutTransaction { db in
                 // `Row.fetchOne`, not `execute`: `wal_checkpoint` answers with
                 // a row, and the statement has to be stepped for the
                 // checkpoint to happen.

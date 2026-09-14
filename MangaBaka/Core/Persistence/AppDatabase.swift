@@ -1,20 +1,32 @@
 import Foundation
 import GRDB
 
-/// The on-device cache.
+/// The on-device storage: **two** files on the user's own device, not a
+/// server. Nothing here leaves the phone, and the developer has no access to
+/// it.
 ///
-/// This is a file on the user's own device, not a server. Nothing here leaves
-/// the phone, and the developer has no access to it. Its main job is to avoid
-/// re-downloading what the app already has, and to let previously-seen content
-/// render offline.
+/// **Why two (Q10, approved 2026-09-14).** It was one, and that one file mixed
+/// what can be fetched again with what cannot. Two things followed, both
+/// measured by the review: the corruption reset took the shelf and the history
+/// with it (item 78's salvage is a rescue, not a fix), and iCloud backed up all
+/// 17 MB of it, 82 % of which is re-downloadable.
 ///
-/// **Not all of it is disposable.** `shelfEntry` (the reader's saves and
-/// skips), `viewedEntry` (their history) and `tagAffinity`/`tasteContribution`
-/// (the taste ledger those two feed) exist nowhere else — there is no account
-/// they sync to. Losing this file loses them. Two comments in here used to
-/// call the whole thing "disposable cache data", and
-/// `onDiskResettingIfCorrupt` renamed it aside on any failure at all on the
-/// strength of that; see its doc comment.
+/// - `cacheWriter` — `mangabaka.sqlite`. Feeds, series payloads, detail pages,
+///   cadence estimates. Disposable, excluded from backup, discarded in silence
+///   if corrupt.
+/// - `libraryWriter` — `mangabaka-library.sqlite`. `shelfEntry` (the reader's
+///   saves and skips), `viewedEntry` (their history), the taste ledger
+///   (`tagAffinity`, `tasteSource`, `tasteSeen`, `tasteContribution`) and the
+///   library cache (`libraryEntry`, `libraryMetadata`). The first six exist
+///   nowhere else — there is no account they sync to. Backed up; a corrupt one
+///   is salvaged from and the reader is told.
+///
+/// `libraryEntry`/`libraryMetadata` are the one judgement call on that list:
+/// they *are* re-fetchable from the reader's MangaBaka account (939 entries,
+/// thirteen requests, 24.7 MB — see `v7_libraryCache`), so they sit on the
+/// backed-up side for their offline value rather than because losing them is
+/// unrecoverable. They are together because `LibrarySnapshot` clears both in
+/// one transaction, which two files cannot do atomically.
 ///
 /// Series are stored as an encoded JSON blob rather than as columns, so that
 /// adding a field to `Series` needs no schema migration — the cache is derived
@@ -30,33 +42,100 @@ import GRDB
 /// newer app version refetches and gets the richer response. Do not rely on
 /// reading unmodelled fields back out of an old cache.
 struct AppDatabase: Sendable {
-    let writer: any DatabaseWriter
+    /// The disposable half: `series`, `feedEntry`, `feedMetadata`,
+    /// `seriesDetail`, `cadenceEntry`. Every row in here can be fetched
+    /// again, so this file is excluded from iCloud backup and a corrupt one
+    /// is thrown away without telling anybody (Q10).
+    let cacheWriter: any DatabaseWriter
 
+    /// The irreplaceable half: `shelfEntry`, `viewedEntry`, the four taste
+    /// tables, and the library cache. There is no account the first six sync
+    /// to — if this file goes they are gone, so it is backed up and a corrupt
+    /// one still takes the salvage path and still tells the reader.
+    let libraryWriter: any DatabaseWriter
+
+    /// Both roles on one file: `inMemory()`, previews, and every test that
+    /// wants a single database it can write any table through. The cache
+    /// migrator creates every table there has ever been (see `migrator`), so
+    /// one file is a superset of both schemas and no store can tell.
     init(writer: any DatabaseWriter) throws {
-        self.writer = writer
+        cacheWriter = writer
+        libraryWriter = writer
         try Self.migrator.migrate(writer)
     }
 
-    /// On-disk database in Application Support.
-    static func onDisk(named name: String = "mangabaka.sqlite") throws -> AppDatabase {
-        let directory = try FileManager.default.url(
+    /// Two files, each already migrated by `openPool`.
+    init(migratedCache: any DatabaseWriter, migratedLibrary: any DatabaseWriter) {
+        cacheWriter = migratedCache
+        libraryWriter = migratedLibrary
+    }
+
+    /// The reader's file, derived from the cache file's name: `mangabaka.sqlite`
+    /// keeps its name (so an existing install's cache is still its cache) and
+    /// the new one is `mangabaka-library.sqlite`.
+    static func libraryName(for cacheName: String) -> String {
+        let url = URL(fileURLWithPath: cacheName)
+        let stem = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        return ext.isEmpty ? "\(stem)-library" : "\(stem)-library.\(ext)"
+    }
+
+    static func applicationSupportDirectory() throws -> URL {
+        try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
-        let url = directory.appendingPathComponent(name)
+    }
+
+    /// Opens and migrates one file in Application Support.
+    static func openPool(named name: String, migrator: DatabaseMigrator) throws -> any DatabaseWriter {
+        let url = try applicationSupportDirectory().appendingPathComponent(name)
 
         var configuration = Configuration()
         // WAL so a read does not block the writer. (This comment used to say
         // "the cache is derived data: if the file is ever corrupt, losing it
-        // costs a re-download, not user data" — untrue, and it was the stated
-        // justification for renaming the file aside on any failure. The shelf
-        // and the history live here and are not derived from anything.)
+        // costs a re-download, not user data" — untrue of the file it was
+        // written about, and it was the stated justification for renaming
+        // that file aside on any failure. It is true of `cacheWriter`'s file
+        // and of nothing else, which is the whole point of the split.)
         configuration.prepareDatabase { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
         }
-        return try AppDatabase(writer: try DatabasePool(path: url.path, configuration: configuration))
+        let pool = try DatabasePool(path: url.path, configuration: configuration)
+        try migrator.migrate(pool)
+        return pool
+    }
+
+    /// On-disk database in Application Support: the cache file, the reader's
+    /// file, and the one-time move of the reader's tables from the first to
+    /// the second.
+    ///
+    /// Throws rather than recovers; `onDiskResettingIfCorrupt` is the entry
+    /// point the app uses.
+    static func onDisk(named name: String = "mangabaka.sqlite") throws -> AppDatabase {
+        let cache = try openPool(named: name, migrator: migrator)
+        let library = try openPool(named: libraryName(for: name), migrator: libraryMigrator)
+        finishOpening(library: library, named: name)
+        return AppDatabase(migratedCache: cache, migratedLibrary: library)
+    }
+
+    /// What both entry points do once the two files are open: keep the cache
+    /// out of the backup, and move the reader's tables across if they are
+    /// still in the cache file.
+    private static func finishOpening(library: any DatabaseWriter, named name: String) {
+        excludeFromBackup(named: name)
+        // A split that fails must not fail the open: it leaves the reader's
+        // tables where they already were (see `splitReaderTables`, which only
+        // ever drops after a verified copy), so the app runs exactly as it
+        // did before and the next launch tries again.
+        do {
+            let path = try applicationSupportDirectory().appendingPathComponent(name).path
+            try splitReaderTables(cachePath: path, library: library)
+        } catch let error {
+            splitLogger.error("Library split failed, retrying next launch: \(error, privacy: .public)")
+        }
     }
 
     /// In-memory database, for tests and previews.
@@ -110,71 +189,149 @@ struct AppDatabase: Sendable {
         }
     }
 
-    /// Opens the on-disk database, recovering from a file that exists but
+    /// Opens both on-disk files, recovering from a file that exists but
     /// cannot be opened or migrated — corruption, a schema from a future
-    /// version this build cannot read — by renaming it aside and starting
-    /// fresh, rather than leaving that to `onDisk`'s caller to fall back to
-    /// an in-memory database (which remembers nothing between launches) with
-    /// no attempt to recover the on-disk path at all.
+    /// version this build cannot read — rather than leaving that to `onDisk`'s
+    /// caller to fall back to an in-memory database (which remembers nothing
+    /// between launches) with no attempt to recover the on-disk path at all.
     ///
-    /// The bad file is renamed, not deleted. Renaming rather than deleting
-    /// leaves the actual bytes on disk for on-device diagnosis, which a
-    /// `DELETE` would throw away permanently for no benefit over a rename.
+    /// **The two files are recovered differently, which is the point of the
+    /// split (Q10).** The reader's file is renamed aside, salvaged from, and
+    /// reported as a `.reset` so the shell can say so. The cache file is
+    /// deleted and nobody is told: every row in it can be fetched again, and
+    /// keeping a 14 MB copy of it in Application Support for diagnosis is the
+    /// accumulation `pruneCorruptFiles` exists to stop, on bytes that teach
+    /// nobody anything.
     ///
-    /// **Only actual corruption renames.** This used to rename for *any*
-    /// throw out of `onDisk`, and the file holds `shelfEntry`, `viewedEntry`
-    /// and `tagAffinity` — the reader's own saves, their history and the
-    /// taste ledger, none of which the app can rebuild from the network. So
-    /// a disk-full `ALTER TABLE` in a migration, a `SQLITE_BUSY` left by the
-    /// previous process, or a bug in a future migration destroyed the shelf
-    /// permanently and told the reader it "was reset". Every one of those is
-    /// transient or fixable and none of them means the bytes are bad. Only
-    /// `SQLITE_CORRUPT` and `SQLITE_NOTADB` do, and only those rename; any
-    /// other failure returns nil with the file untouched, so the next launch
-    /// can open it.
+    /// **Only actual corruption resets.** This used to rename for *any* throw
+    /// out of `onDisk`, and the one file then held `shelfEntry`,
+    /// `viewedEntry` and `tagAffinity` — the reader's own saves, their history
+    /// and the taste ledger, none of which the app can rebuild from the
+    /// network. So a disk-full `ALTER TABLE` in a migration, a `SQLITE_BUSY`
+    /// left by the previous process, or a bug in a future migration destroyed
+    /// the shelf permanently and told the reader it "was reset". Every one of
+    /// those is transient or fixable and none of them means the bytes are bad.
+    /// Only `SQLITE_CORRUPT` and `SQLITE_NOTADB` do, and only those reset; any
+    /// other failure returns nil with both files untouched, so the next launch
+    /// can open them.
     ///
-    /// Returns `nil` when the file was left alone, or when even a fresh file
-    /// at the same path cannot be opened — at which point the caller's own
+    /// Returns `nil` when a file was left alone, or when even a fresh file at
+    /// the same path cannot be opened — at which point the caller's own
     /// in-memory fallback is what runs.
     static func onDiskResettingIfCorrupt(
         named name: String = "mangabaka.sqlite",
         now: () -> Date = Date.init
     ) -> OpenResult? {
+        // The reader's file first, because a corrupt cache file salvages
+        // *into* it: on a device that has not split yet, the reader's tables
+        // are still in the cache file and deleting it would take them.
+        guard let library = openRecoveringFromCorruption(
+            named: libraryName(for: name), migrator: libraryMigrator,
+            keepingCorruptCopy: true, now: now
+        ) else { return nil }
+        salvageIfNeeded(library, into: library.writer)
+
+        // Whether the cache file can be deleted in silence. Before the split
+        // has run it may still be the only copy of the shelf; after it, it
+        // provably holds none of the reader's rows.
+        let split = (try? splitHasCompleted(library: library.writer)) ?? false
+
+        guard let cache = openRecoveringFromCorruption(
+            named: name, migrator: migrator,
+            keepingCorruptCopy: !split, now: now
+        ) else { return nil }
+        // Best-effort rescue of a pre-split cache file, into the reader's
+        // file where those tables now belong.
+        salvageIfNeeded(cache, into: library.writer)
+
+        finishOpening(library: library.writer, named: name)
+
+        // A cache reset on a device that has already split has lost the reader
+        // nothing, so it says `.opened` and shows no toast — that is the whole
+        // point of the split, and it is the case every device is in after one
+        // successful launch. A reset of the reader's own file still speaks up,
+        // and so does a cache reset *before* the split, because that file may
+        // still have been the only copy of the shelf and a salvage that
+        // recovered nothing is not proof that there was nothing to recover.
+        let lostSomething = library.wasReset || (cache.wasReset && !split)
+        return OpenResult(
+            database: AppDatabase(migratedCache: cache.writer, migratedLibrary: library.writer),
+            outcome: lostSomething ? .reset : .opened
+        )
+    }
+
+    /// One recovered file: its writer, whether it was reset, and the corrupt
+    /// copy left on disk for `salvage` to read (nil when there is nothing to
+    /// salvage from, or when the corrupt file was deleted outright).
+    struct RecoveredFile {
+        let writer: any DatabaseWriter
+        let wasReset: Bool
+        let corruptCopy: URL?
+    }
+
+    /// Opens one file, resetting it if and only if its bytes are bad.
+    ///
+    /// `keepingCorruptCopy` renames rather than deletes: renaming leaves the
+    /// bytes on disk for on-device diagnosis and, more importantly, for
+    /// `salvage` to read rows back out of. It is false only for a cache file
+    /// that provably holds nothing irreplaceable.
+    private static func openRecoveringFromCorruption(
+        named name: String,
+        migrator: DatabaseMigrator,
+        keepingCorruptCopy: Bool,
+        now: () -> Date
+    ) -> RecoveredFile? {
         do {
-            return OpenResult(database: try onDisk(named: name), outcome: .opened)
+            return RecoveredFile(
+                writer: try openPool(named: name, migrator: migrator), wasReset: false, corruptCopy: nil
+            )
         } catch let error {
             guard isCorruption(error) else { return nil }
         }
 
-        guard let directory = try? FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask,
-            appropriateFor: nil, create: true
-        ) else { return nil }
+        guard let directory = try? applicationSupportDirectory() else { return nil }
         let url = directory.appendingPathComponent(name)
 
-        // Nothing to rename means the failure was not "an existing file is
+        // Nothing to move aside means the failure was not "an existing file is
         // corrupt" — a fresh attempt at the same path would fail identically,
         // so this is not a case `.reset` should claim to have fixed.
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
 
-        // Colons are not valid in a filename on APFS; ISO 8601's own
-        // separator has to go.
-        let stamp = ISO8601DateFormatter().string(from: now()).replacingOccurrences(of: ":", with: "-")
-        let renamed = directory.appendingPathComponent("\(name).corrupt-\(stamp)")
-        try? FileManager.default.removeItem(at: renamed)
-        try? FileManager.default.moveItem(at: url, to: renamed)
+        var corruptCopy: URL?
+        if keepingCorruptCopy {
+            // Colons are not valid in a filename on APFS; ISO 8601's own
+            // separator has to go.
+            let stamp = ISO8601DateFormatter().string(from: now()).replacingOccurrences(of: ":", with: "-")
+            let renamed = directory.appendingPathComponent("\(name).corrupt-\(stamp)")
+            try? FileManager.default.removeItem(at: renamed)
+            try? FileManager.default.moveItem(at: url, to: renamed)
+            corruptCopy = renamed
+        } else {
+            try? FileManager.default.removeItem(at: url)
+        }
         // WAL mode leaves sidecar files next to the main one; they belong to
-        // the file that was just moved aside, and letting SQLite find them
-        // beside a brand new file would have it try to replay someone else's
+        // the file that has just gone, and letting SQLite find them beside a
+        // brand new file would have it try to replay someone else's
         // write-ahead log against a database that never made those writes.
         for suffix in ["-wal", "-shm"] {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(name + suffix))
         }
 
-        guard let fresh = try? onDisk(named: name) else { return nil }
-        salvage(into: fresh, from: renamed)
-        pruneCorruptFiles(in: directory, named: name, keeping: renamed)
-        return OpenResult(database: fresh, outcome: .reset)
+        guard let fresh = try? openPool(named: name, migrator: migrator) else { return nil }
+        if let corruptCopy {
+            pruneCorruptFiles(in: directory, named: name, keeping: corruptCopy)
+        }
+        return RecoveredFile(writer: fresh, wasReset: true, corruptCopy: corruptCopy)
+    }
+
+    /// Pulls the reader's tables out of a corrupt file, if one was kept.
+    /// Returns true when at least one row came back.
+    @discardableResult
+    private static func salvageIfNeeded(
+        _ file: RecoveredFile, into destination: any DatabaseWriter
+    ) -> Bool {
+        guard let corruptCopy = file.corruptCopy else { return false }
+        return salvage(into: destination, from: corruptCopy)
     }
 
     /// Whether the file itself is bad, as against the environment around it.
@@ -197,32 +354,51 @@ struct AppDatabase: Sendable {
         isCorruption(error)
     }
 
-    /// Copies the two irreplaceable tables out of the file being abandoned.
+    /// Copies the irreplaceable tables out of the file being abandoned.
     ///
     /// The shelf is the reader's own saves and skips and the viewed list is
-    /// their history; neither can be refetched, and both live in a file whose
-    /// own doc comment calls it disposable. A corrupt database often still
-    /// reads in part, so this is worth attempting — and worth attempting with
-    /// `try?`, because failing to salvage from a file that is by definition
-    /// broken is the expected case, not an error to propagate.
+    /// their history; neither can be refetched, and both used to live in a
+    /// file whose own doc comment called it disposable. A corrupt database
+    /// often still reads in part, so this is worth attempting — and worth
+    /// attempting per table with `try?`, because failing to salvage from a
+    /// file that is by definition broken is the expected case, not an error
+    /// to propagate, and one unreadable table must not lose the others.
     ///
-    /// `INSERT OR IGNORE`: the fresh database is empty, so there is nothing
-    /// to conflict with today, but a future caller that salvages into a
-    /// populated file should keep what is already there.
+    /// It now covers all of `readerTables`, not just the shelf and the
+    /// history: the taste ledger and the library cache are in the same file
+    /// and were being left behind.
+    ///
+    /// `INSERT OR IGNORE`: the destination is normally empty, but the
+    /// pre-split cache file salvages into the reader's file, which may not
+    /// be — what is already there is newer and wins.
     /// `writeWithoutTransaction` because SQLite refuses `ATTACH` inside one
     /// ("cannot ATTACH database within transaction"); each `INSERT` is then
-    /// its own implicit transaction, which is what a best-effort salvage
-    /// wants anyway — one unreadable table does not lose the other.
-    private static func salvage(into fresh: AppDatabase, from file: URL) {
-        try? fresh.writer.writeWithoutTransaction { db in
+    /// its own implicit transaction.
+    ///
+    /// Returns true when at least one row was recovered, which is what tells
+    /// `onDiskResettingIfCorrupt` whether the reader lost anything.
+    @discardableResult
+    private static func salvage(into destination: any DatabaseWriter, from file: URL) -> Bool {
+        let recovered = (try? destination.writeWithoutTransaction { db -> Int in
             try db.execute(sql: "ATTACH DATABASE ? AS salvage", arguments: [file.path])
             defer { try? db.execute(sql: "DETACH DATABASE salvage") }
-            for table in ["shelfEntry", "viewedEntry"] {
-                try? db.execute(
-                    sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"
-                )
+            var rows = 0
+            for table in readerTables {
+                do {
+                    try db.execute(
+                        sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"
+                    )
+                    rows += db.changesCount
+                } catch let error as DatabaseError {
+                    // Expected: the table may not exist in the broken file at
+                    // all (a pre-v7 cache file has no `libraryEntry`), or its
+                    // pages may be the unreadable ones.
+                    splitLogger.debug("Salvage skipped \(table): \(error, privacy: .public)")
+                }
             }
-        }
+            return rows
+        }) ?? 0
+        return recovered > 0
     }
 
     /// Keeps only the newest `.corrupt-*` file.
@@ -238,251 +414,5 @@ struct AppDatabase: Sendable {
         where file.lastPathComponent.hasPrefix("\(name).corrupt-") && file != keeping {
             try? FileManager.default.removeItem(at: file)
         }
-    }
-
-    /// **Downgrade note.** `DatabaseMigrator` only ever moves forward: it has
-    /// no notion of a database that already carries a migration this build
-    /// does not know about (an App Store rollback, TestFlight build N+1 on
-    /// disk then N reinstalled). GRDB does not fail that case, because it
-    /// never runs a migration whose name is already recorded — the file just
-    /// opens as-is, with whatever extra tables or columns the newer build
-    /// left behind and this build's code never reads. Nothing in this app
-    /// currently drops a column or renames a table between migrations, so
-    /// there is no case on record where that silence has hidden data loss;
-    /// flagged here rather than fixed because building for a downgrade this
-    /// project has never shipped would be solving a problem that does not
-    /// exist yet.
-    /// Internal rather than private so a test can migrate a database up to a
-    /// named version and assert what the next one does to it. There is no
-    /// other way to write a migration test that fails before the migration
-    /// exists, and a migration nothing tests is how `v9_tasteContribution`
-    /// shipped without its backfill.
-    static var migrator: DatabaseMigrator {
-        var migrator = DatabaseMigrator()
-
-        migrator.registerMigration("v1_cache") { db in
-            // One row per series, keyed by MangaBaka's own ID.
-            try db.create(table: "series") { table in
-                table.primaryKey("id", .integer)
-                table.column("payload", .blob).notNull()
-                table.column("cachedAt", .datetime).notNull()
-            }
-
-            // An ordered feed (rising, hidden gems, a rabbit-hole list...).
-            // `position` preserves the order the API returned, which carries
-            // real editorial meaning and must not be re-sorted client-side.
-            try db.create(table: "feedEntry") { table in
-                table.column("feedKey", .text).notNull()
-                table.column("position", .integer).notNull()
-                table.column("seriesId", .integer).notNull()
-                table.primaryKey(["feedKey", "position"])
-            }
-            try db.create(index: "feedEntry_on_feedKey", on: "feedEntry", columns: ["feedKey"])
-
-            // When each feed was last fetched, so freshness is per feed rather
-            // than per series.
-            try db.create(table: "feedMetadata") { table in
-                table.primaryKey("feedKey", .text)
-                table.column("cachedAt", .datetime).notNull()
-            }
-        }
-
-        migrator.registerMigration("v2_shelf") { db in
-            // The reader's own reactions, local until sign-in exists. Kept in
-            // its own table rather than as a column on `series` because a
-            // cached series is disposable and a save is not: clearing the cache
-            // must never lose what someone chose to keep.
-            try db.create(table: "shelfEntry") { table in
-                table.primaryKey("seriesId", .integer)
-                // "saved" or "skipped". A skip is recorded, not discarded, so
-                // the same series stops reappearing in the stack and can still
-                // be recovered.
-                table.column("kind", .text).notNull()
-                table.column("addedAt", .datetime).notNull()
-                // The series as it was when saved, so the shelf still renders
-                // when the cache has been cleared or the reader is offline.
-                table.column("payload", .blob).notNull()
-            }
-            try db.create(index: "shelfEntry_on_kind", on: "shelfEntry", columns: ["kind", "addedAt"])
-        }
-
-        migrator.registerMigration("v3_cadence") { db in
-            // One row per series we have asked MangaUpdates about.
-            //
-            // A row exists as soon as the question has been ASKED, whether or
-            // not it produced an answer. That distinction is the whole point:
-            // a null cadence with a timestamp is a settled result ("too few
-            // dated releases to estimate from"), not a gap waiting to be
-            // filled. Keying "have we looked at this?" off the cadence instead
-            // of the timestamp made the reference implementation re-fetch the
-            // same works on every build and report "8 still to do" forever.
-            try db.create(table: "cadenceEntry") { table in
-                table.primaryKey("seriesId", .integer)
-                // The estimate, JSON-encoded. Null when the series has too
-                // little release history to estimate from.
-                table.column("payload", .blob)
-                table.column("fetchedAt", .datetime).notNull()
-                // Set when the fetch itself failed, so the next build retries
-                // it rather than treating the silence as an answer.
-                table.column("failure", .text)
-            }
-        }
-
-        migrator.registerMigration("v4_history") { db in
-            // What the reader has opened. Its own table rather than a column on
-            // `series`, because the cache is disposable and this is not —
-            // clearing the cache must not erase the history, and erasing the
-            // history must not cost a re-download.
-            try db.create(table: "viewedEntry") { table in
-                table.primaryKey("seriesId", .integer)
-                table.column("viewedAt", .datetime).notNull()
-                // The series as it was when opened, so the row renders offline
-                // and after a cache clear.
-                table.column("payload", .blob).notNull()
-            }
-            try db.create(index: "viewedEntry_on_viewedAt", on: "viewedEntry", columns: ["viewedAt"])
-        }
-
-        migrator.registerMigration("v5_taste") { db in
-            // How much each tag runs through the reader's own library.
-            //
-            // Counted locally rather than asked for, because the API's taste
-            // endpoint answers in GENRES — six of Solo Leveling's 146 tags are
-            // genres — so it can never say "you read a lot of Regression".
-            try db.create(table: "tagAffinity") { table in
-                table.primaryKey("tagId", .integer)
-                // Kept for diagnosis: a score with no name is unreadable when
-                // something looks wrong.
-                table.column("name", .text).notNull()
-                // Tag weight times reading state, summed across the library.
-                table.column("score", .double).notNull()
-                // How many of the reader's series carry it. A tag that appears
-                // once is a coincidence; the same tag in five is a habit.
-                table.column("seriesCount", .integer).notNull()
-            }
-
-            // Which series have already been counted, so re-reading a library
-            // page does not count the same tags twice. The count is a running
-            // total, so double-counting is silent and permanent without this.
-            try db.create(table: "tasteSource") { table in
-                table.primaryKey("seriesId", .integer)
-                table.column("countedAt", .datetime).notNull()
-                // The state it was counted under. A series moved from reading
-                // to dropped has to be recounted at its new weight.
-                table.column("state", .text).notNull()
-            }
-        }
-
-        migrator.registerMigration("v6_seriesDetail") { db in
-            // A series page costs eight requests and cached none of them, so
-            // opening the same series twice cost sixteen. Measured: about
-            // 300 KB a visit.
-            //
-            // Its own table rather than a column on `series`, because that row
-            // is a feed's copy of a series and this is everything hanging off
-            // it — and the two go stale on different clocks.
-            try db.create(table: "seriesDetail") { table in
-                table.primaryKey("seriesId", .integer)
-                table.column("payload", .blob).notNull()
-                table.column("cachedAt", .datetime).notNull()
-            }
-        }
-
-        migrator.registerMigration("v7_libraryCache") { db in
-            // The reader's own library, on disk.
-            //
-            // Measured on a real account: 939 entries, thirteen requests,
-            // 24.7 MB — thirty times everything else the app fetches put
-            // together. Paying that on every launch is indefensible on a
-            // cellular connection, and it is the same answer every time.
-            try db.create(table: "libraryEntry") { table in
-                table.primaryKey("seriesId", .integer)
-                table.column("payload", .blob).notNull()
-            }
-            // One row, holding when the whole walk finished. Per-entry
-            // timestamps would let a half-written library look fresh.
-            try db.create(table: "libraryMetadata") { table in
-                table.primaryKey("id", .integer)
-                table.column("cachedAt", .datetime).notNull()
-                table.column("isComplete", .boolean).notNull()
-            }
-        }
-
-        migrator.registerMigration("v8_tasteSeen") { db in
-            // Every series the ledger was offered, tagged or not. The
-            // "counted but no tags known" diagnostic in Settings was built to
-            // catch a library payload with no tags — and a series with no tags
-            // was never counted, so the diagnostic could not fire. This is the
-            // count it needs: offered, as against counted.
-            try db.create(table: "tasteSeen") { table in
-                table.primaryKey("seriesId", .integer)
-            }
-        }
-
-        migrator.registerMigration("v9_tasteContribution") { db in
-            // What each library series added to the taste ledger, so removing
-            // the series can take exactly that back. Before this a removed
-            // series kept its weight until sign-out (review R9, 2026-09-13).
-            try db.create(table: "tasteContribution") { table in
-                table.column("seriesId", .integer).notNull()
-                table.column("tagId", .integer).notNull()
-                table.column("name", .text).notNull()
-                table.column("score", .double).notNull()
-                table.primaryKey(["seriesId", "tagId"])
-            }
-        }
-
-        migrator.registerMigration("v10_feedLastModified") { db in
-            // The feed's own `Last-Modified` header value, kept verbatim so
-            // the next fetch can send it back as `If-Modified-Since`.
-            // MEASURED 2026-09-13 against api.mangabaka.org: feed responses
-            // carry no `ETag`, only `Last-Modified` (e.g. "Sun, 13 Sep 2026
-            // 13:56:53 GMT") — repeating it gets a 304 with a zero-byte body.
-            // Nullable: every row already on disk predates this column, and
-            // a feed with no recorded value simply fetches unconditionally,
-            // exactly as it always has.
-            try db.alter(table: "feedMetadata") { table in
-                table.add(column: "lastModified", .text)
-            }
-        }
-
-        migrator.registerMigration("v11_recountTaste") { db in
-            // v9 created `tasteContribution` and nothing ever backfilled it.
-            // MEASURED 2026-09-14 on the real simulator file: 945
-            // `tasteSource` rows and 0 contributions — so every series
-            // already in the library at the time of that migration still
-            // contributes tag weight that removing it cannot take back, and
-            // always would have, because `absorb` skips a series `tasteSource`
-            // already names. The retraction v9 was written for has therefore
-            // never worked for anybody who had a library before it shipped.
-            //
-            // The ledger is derived entirely from the library, so the cheapest
-            // correct backfill is to forget it and let the next `absorb`
-            // recount — which now writes a contribution per tag. Nothing the
-            // reader typed lives in these three tables.
-            try db.execute(sql: "DELETE FROM tasteSource")
-            try db.execute(sql: "DELETE FROM tagAffinity")
-            try db.execute(sql: "DELETE FROM tasteSeen")
-        }
-
-        migrator.registerMigration("v12_shelfOrderIndex") { db in
-            // `ShelfStore` reads `ORDER BY addedAt DESC LIMIT 60`. The v2
-            // index is `(kind, addedAt)`, whose leading column that query does
-            // not constrain, so SQLite cannot walk it in order and sorts the
-            // whole table instead — `EXPLAIN QUERY PLAN` says USE TEMP B-TREE
-            // FOR ORDER BY. An index on `addedAt` alone serves it; the
-            // composite stays, because the by-kind reads still use it.
-            try db.create(
-                index: "shelfEntry_on_addedAt", on: "shelfEntry", columns: ["addedAt"]
-            )
-            // `feedEntry`'s primary key is (feedKey, position), so `feedKey`
-            // is already the leading column of an index SQLite maintains for
-            // free. `feedEntry_on_feedKey` is a second B-tree over the same
-            // column, written on every feed cache write and read by nothing
-            // the primary key could not answer.
-            try db.execute(sql: "DROP INDEX IF EXISTS feedEntry_on_feedKey")
-        }
-
-        return migrator
     }
 }

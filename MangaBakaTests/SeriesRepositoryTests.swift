@@ -70,7 +70,7 @@ struct SeriesRepositoryTests {
             clock: TestClock()
         )
         _ = await repository.feed(.rising, forceRefresh: false)
-        try await database.writer.write { db in
+        try await database.cacheWriter.write { db in
             try db.execute(sql: "UPDATE series SET payload = ? WHERE id = 2", arguments: [Data("{".utf8)])
         }
 

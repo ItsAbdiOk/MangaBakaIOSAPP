@@ -175,7 +175,7 @@ struct SeriesRepositoryFetchedTests {
         )
         // Close the underlying connection so the very next write fails —
         // standing in for a locked file or a full disk.
-        try database.writer.close()
+        try database.cacheWriter.close()
 
         #expect(await repository.discardCachedFeeds() == false)
     }

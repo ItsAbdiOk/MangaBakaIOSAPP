@@ -127,4 +127,43 @@ struct RootViewWiringTests {
         #expect(source.contains(".onChange(of: onboarding.hasCompleted) { _, completed in"))
         #expect(source.contains("wantsAccountAfterOnboarding = true"))
     }
+
+    /// Item 106: nothing per-entry and nothing allocating belongs in a body
+    /// pass that runs on every toast, tab selection and path change.
+    ///
+    /// Read off the source for the reason the suite's doc comment gives:
+    /// mounting `RootView` means building the whole app graph, and there is
+    /// no SwiftUI hook that reports "body ran and allocated two sets". The
+    /// cost itself is unmeasured — no Instruments trace was taken, and the
+    /// review filed it as microseconds — so this pins the shape rather than
+    /// claiming a number.
+    ///
+    /// Expected to fail before the fix with two failures: `body` held
+    /// `.environment(\.tagAudience, TagAudience(` — the inline construction,
+    /// two `Set` allocations per pass — and carried neither `onChange`.
+    @Test("The tag audience is held, not rebuilt on every body pass")
+    func tagAudienceIsNotRebuiltInBody() throws {
+        let source = try SourceTree.read("MangaBaka/App/RootView.swift")
+        #expect(
+            !source.contains(".environment(\\.tagAudience, TagAudience("),
+            "body must read the held value, not construct a new one"
+        )
+        #expect(source.contains(".environment(\\.tagAudience, tagAudience)"))
+        #expect(source.contains(".onChange(of: content.preferences)"))
+        #expect(source.contains(".onChange(of: blockedTags.blocked)"))
+    }
+
+    /// The other half of item 106, landed by lanes C and G: the Discover tab
+    /// reads a `chaptersRead` `LibraryModel` recomputes when `entries`
+    /// changes, rather than reducing ~939 entries in the tab tree's body.
+    ///
+    /// Expected to fail before that fix with:
+    /// `chaptersRead: ReadingInsights.chaptersRead(in: session.library.entries)`
+    /// in `RootView+Tabs.swift`.
+    @Test("Discover reads the cached chapter count rather than reducing the library")
+    func discoverReadsCachedChapterCount() throws {
+        let source = try SourceTree.read("MangaBaka/App/RootView+Tabs.swift")
+        #expect(source.contains("chaptersRead: session.library.chaptersRead"))
+        #expect(!source.contains("ReadingInsights.chaptersRead(in:"))
+    }
 }

@@ -89,6 +89,8 @@ actor ReleaseScheduleService {
     /// disk, caps at 3,000 and says when it was cut short.
     private let library: LibrarySnapshot
     private let mangaUpdates: MangaUpdatesClient
+    /// Writes to `cacheWriter`'s file: `cadenceEntry` is an estimate derived
+    /// from MangaUpdates and can be measured again (Q10).
     private let database: AppDatabase
     private let clock: any Clock
 
@@ -479,7 +481,7 @@ extension ReleaseScheduleService {
     /// `readCache(seriesId:)` instead — this `SELECT`s and JSON-decodes all
     /// ~940 rows, and it was doing that once per series page open to find one.
     private func readCache() throws -> [Int: CacheRow] {
-        try database.writer.read { db in
+        try database.cacheWriter.read { db in
             let rows = try Row.fetchAll(
                 db,
                 sql: "SELECT seriesId, payload, fetchedAt, failure FROM cadenceEntry"
@@ -494,7 +496,7 @@ extension ReleaseScheduleService {
 
     /// One cached row, by series id.
     private func readCache(seriesId: Int) throws -> CacheRow? {
-        try database.writer.read { db in
+        try database.cacheWriter.read { db in
             try Row.fetchOne(
                 db,
                 sql: """
@@ -528,7 +530,7 @@ extension ReleaseScheduleService {
     /// would delete everything else.
     private func pruneCache(keeping inScope: Set<Int>) {
         guard !inScope.isEmpty else { return }
-        try? database.writer.write { db in
+        try? database.cacheWriter.write { db in
             let placeholders = Array(repeating: "?", count: inScope.count).joined(separator: ",")
             try db.execute(
                 sql: "DELETE FROM cadenceEntry WHERE seriesId NOT IN (\(placeholders))",
@@ -539,7 +541,7 @@ extension ReleaseScheduleService {
 
     private func write(seriesId: Int, cadence: Cadence?, failure: String?) throws {
         let payload = cadence.flatMap { try? JSONEncoder().encode($0) }
-        try database.writer.write { db in
+        try database.cacheWriter.write { db in
             try db.execute(
                 sql: """
                 INSERT INTO cadenceEntry (seriesId, payload, fetchedAt, failure)

@@ -1,0 +1,325 @@
+import Foundation
+import GRDB
+
+/// The schema: what tables there are, in which of the two files, and the
+/// migrations that got them there.
+///
+/// Split out of `AppDatabase.swift` when the one database became two (Q10);
+/// nothing here changed in that move except where it lives.
+extension AppDatabase {
+    /// **Downgrade note.** `DatabaseMigrator` only ever moves forward: it has
+    /// no notion of a database that already carries a migration this build
+    /// does not know about (an App Store rollback, TestFlight build N+1 on
+    /// disk then N reinstalled). GRDB does not fail that case, because it
+    /// never runs a migration whose name is already recorded — the file just
+    /// opens as-is, with whatever extra tables or columns the newer build
+    /// left behind and this build's code never reads. Nothing in this app
+    /// currently drops a column or renames a table between migrations, so
+    /// there is no case on record where that silence has hidden data loss;
+    /// flagged here rather than fixed because building for a downgrade this
+    /// project has never shipped would be solving a problem that does not
+    /// exist yet.
+    /// Internal rather than private so a test can migrate a database up to a
+    /// named version and assert what the next one does to it. There is no
+    /// other way to write a migration test that fails before the migration
+    /// exists, and a migration nothing tests is how `v9_tasteContribution`
+    /// shipped without its backfill.
+    static var migrator: DatabaseMigrator {
+        var migrator = DatabaseMigrator()
+
+        migrator.registerMigration("v1_cache") { db in
+            // One row per series, keyed by MangaBaka's own ID.
+            try db.create(table: "series") { table in
+                table.primaryKey("id", .integer)
+                table.column("payload", .blob).notNull()
+                table.column("cachedAt", .datetime).notNull()
+            }
+
+            // An ordered feed (rising, hidden gems, a rabbit-hole list...).
+            // `position` preserves the order the API returned, which carries
+            // real editorial meaning and must not be re-sorted client-side.
+            try db.create(table: "feedEntry") { table in
+                table.column("feedKey", .text).notNull()
+                table.column("position", .integer).notNull()
+                table.column("seriesId", .integer).notNull()
+                table.primaryKey(["feedKey", "position"])
+            }
+            try db.create(index: "feedEntry_on_feedKey", on: "feedEntry", columns: ["feedKey"])
+
+            // When each feed was last fetched, so freshness is per feed rather
+            // than per series.
+            try db.create(table: "feedMetadata") { table in
+                table.primaryKey("feedKey", .text)
+                table.column("cachedAt", .datetime).notNull()
+            }
+        }
+
+        migrator.registerMigration("v2_shelf", migrate: createShelfEntry)
+
+        migrator.registerMigration("v3_cadence") { db in
+            // One row per series we have asked MangaUpdates about.
+            //
+            // A row exists as soon as the question has been ASKED, whether or
+            // not it produced an answer. That distinction is the whole point:
+            // a null cadence with a timestamp is a settled result ("too few
+            // dated releases to estimate from"), not a gap waiting to be
+            // filled. Keying "have we looked at this?" off the cadence instead
+            // of the timestamp made the reference implementation re-fetch the
+            // same works on every build and report "8 still to do" forever.
+            try db.create(table: "cadenceEntry") { table in
+                table.primaryKey("seriesId", .integer)
+                // The estimate, JSON-encoded. Null when the series has too
+                // little release history to estimate from.
+                table.column("payload", .blob)
+                table.column("fetchedAt", .datetime).notNull()
+                // Set when the fetch itself failed, so the next build retries
+                // it rather than treating the silence as an answer.
+                table.column("failure", .text)
+            }
+        }
+
+        migrator.registerMigration("v4_history", migrate: createViewedEntry)
+
+        migrator.registerMigration("v5_taste", migrate: createTasteTables)
+
+        migrator.registerMigration("v6_seriesDetail") { db in
+            // A series page costs eight requests and cached none of them, so
+            // opening the same series twice cost sixteen. Measured: about
+            // 300 KB a visit.
+            //
+            // Its own table rather than a column on `series`, because that row
+            // is a feed's copy of a series and this is everything hanging off
+            // it — and the two go stale on different clocks.
+            try db.create(table: "seriesDetail") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("payload", .blob).notNull()
+                table.column("cachedAt", .datetime).notNull()
+            }
+        }
+
+        migrator.registerMigration("v7_libraryCache", migrate: createLibraryCache)
+
+        migrator.registerMigration("v8_tasteSeen", migrate: createTasteSeen)
+
+        migrator.registerMigration("v9_tasteContribution", migrate: createTasteContribution)
+
+        migrator.registerMigration("v10_feedLastModified") { db in
+            // The feed's own `Last-Modified` header value, kept verbatim so
+            // the next fetch can send it back as `If-Modified-Since`.
+            // MEASURED 2026-09-13 against api.mangabaka.org: feed responses
+            // carry no `ETag`, only `Last-Modified` (e.g. "Sun, 13 Sep 2026
+            // 13:56:53 GMT") — repeating it gets a 304 with a zero-byte body.
+            // Nullable: every row already on disk predates this column, and
+            // a feed with no recorded value simply fetches unconditionally,
+            // exactly as it always has.
+            try db.alter(table: "feedMetadata") { table in
+                table.add(column: "lastModified", .text)
+            }
+        }
+
+        migrator.registerMigration("v11_recountTaste") { db in
+            // v9 created `tasteContribution` and nothing ever backfilled it.
+            // MEASURED 2026-09-14 on the real simulator file: 945
+            // `tasteSource` rows and 0 contributions — so every series
+            // already in the library at the time of that migration still
+            // contributes tag weight that removing it cannot take back, and
+            // always would have, because `absorb` skips a series `tasteSource`
+            // already names. The retraction v9 was written for has therefore
+            // never worked for anybody who had a library before it shipped.
+            //
+            // The ledger is derived entirely from the library, so the cheapest
+            // correct backfill is to forget it and let the next `absorb`
+            // recount — which now writes a contribution per tag. Nothing the
+            // reader typed lives in these three tables.
+            try db.execute(sql: "DELETE FROM tasteSource")
+            try db.execute(sql: "DELETE FROM tagAffinity")
+            try db.execute(sql: "DELETE FROM tasteSeen")
+        }
+
+        migrator.registerMigration("v12_shelfOrderIndex") { db in
+            try createShelfOrderIndex(db)
+            // `feedEntry`'s primary key is (feedKey, position), so `feedKey`
+            // is already the leading column of an index SQLite maintains for
+            // free. `feedEntry_on_feedKey` is a second B-tree over the same
+            // column, written on every feed cache write and read by nothing
+            // the primary key could not answer.
+            try db.execute(sql: "DROP INDEX IF EXISTS feedEntry_on_feedKey")
+        }
+
+        return migrator
+    }
+
+    /// The tables that belong to the reader, in the order they must be copied
+    /// and dropped. Named once, because `salvage`, `splitReaderTables` and
+    /// `libraryMigrator` all have to agree about the list, and a table missing
+    /// from one of them is a silent data loss rather than a compile error.
+    ///
+    /// `libraryEntry` and `libraryMetadata` are here on a judgement call — see
+    /// `AppDatabase`'s own doc comment — not because they are irreplaceable.
+    ///
+    /// **A new `v…` migration must never touch a table on this list.** They
+    /// are created in the cache file by v2-v9 for history's sake and dropped
+    /// out of it again by `splitReaderTables`, so on every device that has
+    /// launched once they are simply not there: an `ALTER TABLE shelfEntry` in
+    /// the cache migrator would throw on open, and `onDiskResettingIfCorrupt`
+    /// correctly declines to call that corruption. Change them in
+    /// `libraryMigrator` instead.
+    static let readerTables = [
+        "shelfEntry", "viewedEntry",
+        "tagAffinity", "tasteSource", "tasteSeen", "tasteContribution",
+        "libraryEntry", "libraryMetadata"
+    ]
+
+    /// The schema of `libraryWriter`'s file.
+    ///
+    /// Every table here is also created by `migrator`, from the same
+    /// functions: the cache migrator's history cannot be rewritten (existing
+    /// installs have already recorded v1-v12 and will never re-run them), so
+    /// a device that installed before the split still creates the reader's
+    /// tables in the cache file and `splitReaderTables` moves them out. The
+    /// shared `create…` functions are what stop the two schemas drifting;
+    /// `LibrarySplitTests.schemasMatch` asserts they have not.
+    static var libraryMigrator: DatabaseMigrator {
+        var migrator = DatabaseMigrator()
+        migrator.registerMigration("L1_readerTables") { db in
+            try createShelfEntry(db)
+            try createShelfOrderIndex(db)
+            try createViewedEntry(db)
+            try createTasteTables(db)
+            try createTasteSeen(db)
+            try createTasteContribution(db)
+            try createLibraryCache(db)
+            // One row, written once `splitReaderTables` has copied and
+            // verified everything. Its presence is what stops a second copy
+            // from a cache file whose drop was interrupted — see that
+            // function for why re-copying after the app has started writing
+            // here would resurrect deleted rows.
+            try db.create(table: "librarySplit") { table in
+                table.primaryKey("id", .integer)
+                table.column("completedAt", .datetime).notNull()
+            }
+        }
+        return migrator
+    }
+
+    // MARK: - Table definitions shared by both files
+
+    /// The reader's own reactions, local until sign-in exists. Kept in its own
+    /// table rather than as a column on `series` because a cached series is
+    /// disposable and a save is not: clearing the cache must never lose what
+    /// someone chose to keep.
+    static func createShelfEntry(_ db: Database) throws {
+        try db.create(table: "shelfEntry") { table in
+            table.primaryKey("seriesId", .integer)
+            // "saved" or "skipped". A skip is recorded, not discarded, so
+            // the same series stops reappearing in the stack and can still
+            // be recovered.
+            table.column("kind", .text).notNull()
+            table.column("addedAt", .datetime).notNull()
+            // The series as it was when saved, so the shelf still renders
+            // when the cache has been cleared or the reader is offline.
+            table.column("payload", .blob).notNull()
+        }
+        try db.create(index: "shelfEntry_on_kind", on: "shelfEntry", columns: ["kind", "addedAt"])
+    }
+
+    /// `ShelfStore` reads `ORDER BY addedAt DESC LIMIT 60`. The `(kind,
+    /// addedAt)` index's leading column that query does not constrain, so
+    /// SQLite cannot walk it in order and sorts the whole table instead —
+    /// `EXPLAIN QUERY PLAN` says USE TEMP B-TREE FOR ORDER BY. An index on
+    /// `addedAt` alone serves it; the composite stays, because the by-kind
+    /// reads still use it.
+    static func createShelfOrderIndex(_ db: Database) throws {
+        try db.create(index: "shelfEntry_on_addedAt", on: "shelfEntry", columns: ["addedAt"])
+    }
+
+    /// What the reader has opened. Its own table rather than a column on
+    /// `series`, because the cache is disposable and this is not — clearing
+    /// the cache must not erase the history, and erasing the history must not
+    /// cost a re-download.
+    static func createViewedEntry(_ db: Database) throws {
+        try db.create(table: "viewedEntry") { table in
+            table.primaryKey("seriesId", .integer)
+            table.column("viewedAt", .datetime).notNull()
+            // The series as it was when opened, so the row renders offline
+            // and after a cache clear.
+            table.column("payload", .blob).notNull()
+        }
+        try db.create(index: "viewedEntry_on_viewedAt", on: "viewedEntry", columns: ["viewedAt"])
+    }
+
+    /// How much each tag runs through the reader's own library, and which
+    /// series have already been counted.
+    ///
+    /// Counted locally rather than asked for, because the API's taste
+    /// endpoint answers in GENRES — six of Solo Leveling's 146 tags are
+    /// genres — so it can never say "you read a lot of Regression".
+    static func createTasteTables(_ db: Database) throws {
+        try db.create(table: "tagAffinity") { table in
+            table.primaryKey("tagId", .integer)
+            // Kept for diagnosis: a score with no name is unreadable when
+            // something looks wrong.
+            table.column("name", .text).notNull()
+            // Tag weight times reading state, summed across the library.
+            table.column("score", .double).notNull()
+            // How many of the reader's series carry it. A tag that appears
+            // once is a coincidence; the same tag in five is a habit.
+            table.column("seriesCount", .integer).notNull()
+        }
+
+        // Which series have already been counted, so re-reading a library
+        // page does not count the same tags twice. The count is a running
+        // total, so double-counting is silent and permanent without this.
+        try db.create(table: "tasteSource") { table in
+            table.primaryKey("seriesId", .integer)
+            table.column("countedAt", .datetime).notNull()
+            // The state it was counted under. A series moved from reading
+            // to dropped has to be recounted at its new weight.
+            table.column("state", .text).notNull()
+        }
+    }
+
+    /// Every series the ledger was offered, tagged or not. The "counted but no
+    /// tags known" diagnostic in Settings was built to catch a library payload
+    /// with no tags — and a series with no tags was never counted, so the
+    /// diagnostic could not fire. This is the count it needs: offered, as
+    /// against counted.
+    static func createTasteSeen(_ db: Database) throws {
+        try db.create(table: "tasteSeen") { table in
+            table.primaryKey("seriesId", .integer)
+        }
+    }
+
+    /// What each library series added to the taste ledger, so removing the
+    /// series can take exactly that back. Before this a removed series kept
+    /// its weight until sign-out (review R9, 2026-09-13).
+    static func createTasteContribution(_ db: Database) throws {
+        try db.create(table: "tasteContribution") { table in
+            table.column("seriesId", .integer).notNull()
+            table.column("tagId", .integer).notNull()
+            table.column("name", .text).notNull()
+            table.column("score", .double).notNull()
+            table.primaryKey(["seriesId", "tagId"])
+        }
+    }
+
+    /// The reader's own library, on disk.
+    ///
+    /// Measured on a real account: 939 entries, thirteen requests, 24.7 MB —
+    /// thirty times everything else the app fetches put together. Paying that
+    /// on every launch is indefensible on a cellular connection, and it is the
+    /// same answer every time.
+    static func createLibraryCache(_ db: Database) throws {
+        try db.create(table: "libraryEntry") { table in
+            table.primaryKey("seriesId", .integer)
+            table.column("payload", .blob).notNull()
+        }
+        // One row, holding when the whole walk finished. Per-entry
+        // timestamps would let a half-written library look fresh.
+        try db.create(table: "libraryMetadata") { table in
+            table.primaryKey("id", .integer)
+            table.column("cachedAt", .datetime).notNull()
+            table.column("isComplete", .boolean).notNull()
+        }
+    }
+}

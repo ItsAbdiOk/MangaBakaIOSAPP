@@ -23,6 +23,8 @@ import GRDB
 /// library rather than from browsing: what you *read* counts, what you looked
 /// at does not.
 actor TasteLedger {
+    /// Writes to `libraryWriter`'s file: the ledger is derived from the
+    /// reader's library and from nothing the network can return (Q10).
     private let database: AppDatabase
     private let clock: any Clock
 
@@ -77,7 +79,7 @@ actor TasteLedger {
     /// dropped from the library since the last call and its contribution is
     /// retracted below (R9).
     func absorb(_ entries: [LibraryEntry]) throws {
-        try database.writer.write { db in
+        try database.libraryWriter.write { db in
             for entry in entries {
                 guard let series = entry.series else { continue }
                 try TasteSeen(seriesId: entry.seriesId).save(db)
@@ -128,7 +130,7 @@ actor TasteLedger {
     ///   reach into most groups on a series page without the highlight
     ///   becoming meaningless by covering everything.
     func favoured(limit: Int = 30) throws -> [TagAffinity] {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try TagAffinity
                 // Two series minimum. One is a coincidence — every library has
                 // a single series carrying some tag nobody would claim as a
@@ -147,7 +149,7 @@ actor TasteLedger {
     /// How many of the reader's series have been counted, for diagnosis and
     /// for a screen that wants to say where the numbers came from.
     func countedSeries() throws -> Int {
-        try database.writer.read { db in try TasteSource.fetchCount(db) }
+        try database.libraryWriter.read { db in try TasteSource.fetchCount(db) }
     }
 
     /// How many series the ledger was offered at all, tagged or not.
@@ -157,7 +159,7 @@ actor TasteLedger {
     /// it was built to catch was unreachable — a tagless series was skipped
     /// before it was counted, so "counted but no tags" could never happen.
     func seenSeries() throws -> Int {
-        try database.writer.read { db in try TasteSeen.fetchCount(db) }
+        try database.libraryWriter.read { db in try TasteSeen.fetchCount(db) }
     }
 
     /// How many distinct tags are known, whatever their score.
@@ -167,7 +169,7 @@ actor TasteLedger {
     /// counted but no tags known means the library's own payload carries no
     /// tags, and nothing on screen would otherwise say so.
     func knownTags() throws -> Int {
-        try database.writer.read { db in try TagAffinity.fetchCount(db) }
+        try database.libraryWriter.read { db in try TagAffinity.fetchCount(db) }
     }
 
     /// Counts one series the app has met somewhere else — a feed, a search, a
@@ -190,7 +192,7 @@ actor TasteLedger {
     @discardableResult
     func absorb(_ series: Series, as state: LibraryEntry.State) throws -> Bool {
         let tags = series.richTags
-        return try database.writer.write { db in
+        return try database.libraryWriter.write { db in
             try TasteSeen(seriesId: series.id).save(db)
             guard !tags.isEmpty else { return false }
             let previous = try TasteSource.fetchOne(db, key: series.id)
@@ -209,7 +211,7 @@ actor TasteLedger {
     /// out: a taste profile built from someone else's library would be worse
     /// than none.
     func clear() throws {
-        _ = try database.writer.write { db in
+        _ = try database.libraryWriter.write { db in
             try TagAffinity.deleteAll(db)
             try TasteSource.deleteAll(db)
             try db.execute(sql: "DELETE FROM tasteContribution")

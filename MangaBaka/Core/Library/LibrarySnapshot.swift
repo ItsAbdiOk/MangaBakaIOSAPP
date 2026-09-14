@@ -46,6 +46,9 @@ actor LibrarySnapshot {
     private static let freshness: TimeInterval = 6 * 60 * 60
 
     private let library: any LibraryProviding
+    /// Writes to `libraryWriter`'s file: `libraryEntry` and `libraryMetadata`
+    /// live with the reader's own data, and the two are cleared in one
+    /// transaction, which two files could not do atomically (Q10).
     private let database: AppDatabase?
     private let clock: any Clock
     private var cached: Result?
@@ -200,7 +203,7 @@ actor LibrarySnapshot {
     /// The library as it was last written, if that was recently enough.
     private func readCache() -> Result? {
         guard let database else { return nil }
-        return try? database.writer.read { db in
+        return try? database.libraryWriter.read { db in
             guard let meta = try LibraryMetadata.fetchOne(db, key: 1) else { return nil }
             let age = clock.now.timeIntervalSince(meta.cachedAt)
             // A negative age means the device clock moved backwards; treat that
@@ -236,7 +239,7 @@ actor LibrarySnapshot {
     private func writeCache(_ result: Result) {
         guard let database, !result.entries.isEmpty else { return }
         let encoder = JSONEncoder()
-        try? database.writer.write { db in
+        try? database.libraryWriter.write { db in
             // Replaced wholesale rather than merged: an entry removed on the
             // website would otherwise survive here forever.
             try db.execute(sql: "DELETE FROM libraryEntry")
@@ -294,7 +297,7 @@ actor LibrarySnapshot {
     private func writeSingleEntry(_ entry: LibraryEntry) {
         guard let database else { return }
         guard let payload = try? JSONEncoder().encode(entry) else { return }
-        try? database.writer.write { db in
+        try? database.libraryWriter.write { db in
             try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).save(db)
         }
     }
@@ -308,7 +311,7 @@ actor LibrarySnapshot {
         // The copy on disk is wrong too. A write is exactly when a stale
         // library is most visible — the reader just changed the thing they are
         // looking at.
-        try? database?.writer.write { db in
+        try? database?.libraryWriter.write { db in
             try db.execute(sql: "DELETE FROM libraryEntry")
             try db.execute(sql: "DELETE FROM libraryMetadata")
         }

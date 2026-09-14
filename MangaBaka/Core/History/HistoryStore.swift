@@ -24,6 +24,8 @@ actor HistoryStore {
     /// thing to hold on someone's behalf than a short list.
     static let limit = 20
 
+    /// Writes to `libraryWriter`'s file: the history is the reader's own and
+    /// cannot be refetched (Q10).
     private let database: AppDatabase
     private let clock: any Clock
     private let encoder = JSONEncoder()
@@ -45,7 +47,7 @@ actor HistoryStore {
     /// "what was I just looking at" than one that shows it once.
     func record(_ series: Series) throws {
         let payload = try encoder.encode(series)
-        try database.writer.write { db in
+        try database.libraryWriter.write { db in
             try ViewedEntry(
                 seriesId: series.id,
                 viewedAt: clock.now,
@@ -84,7 +86,7 @@ actor HistoryStore {
         allowedFormats: [String] = [],
         blockedTags: [Int] = []
     ) throws -> [Series] {
-        let series = try database.writer.read { db in
+        let series = try database.libraryWriter.read { db in
             try ViewedEntry
                 // seriesId only breaks a tie between two identical timestamps,
                 // so the order is stable rather than whatever SQLite returns.
@@ -112,14 +114,14 @@ actor HistoryStore {
     /// saved, because forgetting that you looked at something is not the same
     /// as un-saving it.
     func clear() throws {
-        _ = try database.writer.write { db in
+        _ = try database.libraryWriter.write { db in
             try ViewedEntry.deleteAll(db)
         }
     }
 
     /// How many are held, for Settings to say what clearing would remove.
     func count() throws -> Int {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try ViewedEntry.fetchCount(db)
         }
     }
@@ -132,7 +134,7 @@ actor HistoryStore {
     /// per lookup. Fetching everything once and closing over the result is
     /// the whole reason this exists rather than a single-id accessor.
     func lastOpenedDates() throws -> [Int: Date] {
-        try database.writer.read { db in
+        try database.libraryWriter.read { db in
             try ViewedEntry.fetchAll(db).reduce(into: [:]) { dates, entry in
                 dates[entry.seriesId] = entry.viewedAt
             }
@@ -149,7 +151,7 @@ actor HistoryStore {
     /// A guess: five entries before this says anything, so one late-night
     /// read on a fresh history does not become "your reading hour is 2am".
     func usualReadingHour() throws -> Int? {
-        let hours = try database.writer.read { db in
+        let hours = try database.libraryWriter.read { db in
             try ViewedEntry.fetchAll(db).map { Calendar.current.component(.hour, from: $0.viewedAt) }
         }
         guard hours.count >= 5 else { return nil }
