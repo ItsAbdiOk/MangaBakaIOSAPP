@@ -10,6 +10,10 @@ struct BrowseView: View {
     /// directly. Absent where a caller has no route out of a publisher.
     let catalogue: CatalogueService?
     let onOpenPublisher: ((PublisherRecord) -> Void)?
+    /// The tag tree (`TagTreeView`) — the same vocabulary as "All tags"
+    /// below, drilled a level at a time instead of listed flat. Absent where
+    /// a caller has no stack to present it in.
+    let onOpenTagTree: (() -> Void)?
 
     init(
         model: BrowseModel,
@@ -17,7 +21,8 @@ struct BrowseView: View {
         onPickGenre: @escaping (Genre) -> Void,
         onPickTag: @escaping (Tag) -> Void,
         catalogue: CatalogueService? = nil,
-        onOpenPublisher: ((PublisherRecord) -> Void)? = nil
+        onOpenPublisher: ((PublisherRecord) -> Void)? = nil,
+        onOpenTagTree: (() -> Void)? = nil
     ) {
         _model = State(initialValue: model)
         self.blocked = blocked
@@ -25,6 +30,7 @@ struct BrowseView: View {
         self.onPickTag = onPickTag
         self.catalogue = catalogue
         self.onOpenPublisher = onOpenPublisher
+        self.onOpenTagTree = onOpenTagTree
     }
 
     var body: some View {
@@ -136,6 +142,20 @@ struct BrowseView: View {
                 .typeSectionHeader()
                 .foregroundStyle(Palette.textPrimary)
             Spacer(minLength: 0)
+            if let onOpenTagTree {
+                Button(action: onOpenTagTree) {
+                    Label("Tree", systemImage: "list.bullet.indent")
+                        .typeChip()
+                        .foregroundStyle(Palette.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Palette.surfaceChip, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Palette.border, lineWidth: 0.5))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.press(haptic: Haptics.selection))
+                .accessibilityLabel("Browse the tag tree")
+            }
             Button { model.showsSpoilers.toggle() } label: {
                 Text(model.spoilerLabel)
                     .typeChip()

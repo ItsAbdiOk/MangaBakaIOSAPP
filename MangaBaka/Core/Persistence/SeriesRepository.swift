@@ -854,6 +854,17 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     private func fetchExtras(for seriesId: Int) async -> SeriesExtras {
         // Concurrent rather than sequential: six independent reads, and the
         // detail screen should not wait for them in series.
+        //
+        // Three of the six are `.background`: news, relationships and
+        // collections all render below the fold, and `.background` *waits*
+        // for a slot where `.userInitiated` throws `.rateLimited` outright
+        // (`RateLimitGate`). Counted 2026-09-14 (`docs/reviews/detail-page-budget.md`):
+        // a cold open is nine MangaBaka requests, all `.userInitiated`, so
+        // with Discover prefetching alongside the guaranteed floor was 60 / 9
+        // ≈ 6.6 opens a minute before the throttle card — and a walk of six
+        // series showed it three times. Six foreground legs raise that floor
+        // to 10 a minute; `full`, `links` and `works` stay foreground because
+        // the reader is looking at what they draw.
         async let links: Result<[SeriesLink], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesLink] in
             try await client.getLossy("/v1/series/\(seriesId)/links")
@@ -862,12 +873,13 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             () async throws(APIError) -> [NewsItem] in
             try await client.getLossy(
                 "/v1/series/\(seriesId)/news",
-                query: [URLQueryItem(name: "limit", value: "6")]
+                query: [URLQueryItem(name: "limit", value: "6")],
+                priority: .background
             )
         }
         async let related: Result<[SeriesRelationship], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesRelationship] in
-            try await client.getLossy("/v1/series/\(seriesId)/relationships")
+            try await client.getLossy("/v1/series/\(seriesId)/relationships", priority: .background)
         }
         // The only source of tags and year — see SeriesExtras.
         async let full: Result<Series, APIError> = Self.attempt {
@@ -876,7 +888,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
         async let editions: Result<[SeriesEdition], APIError> = Self.attempt {
             () async throws(APIError) -> [SeriesEdition] in
-            try await client.getLossy("/v1/series/\(seriesId)/collections")
+            try await client.getLossy("/v1/series/\(seriesId)/collections", priority: .background)
         }
         // Published volumes: dates, prices, page counts, ISBNs and per-volume
         // cover art. A sixth concurrent read rather than a lazy one, because

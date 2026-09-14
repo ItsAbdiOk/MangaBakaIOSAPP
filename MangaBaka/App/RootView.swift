@@ -47,6 +47,7 @@ struct RootView: View {
     /// file lazily and holds it, and a per-page instance would reload it per
     /// page.
     let wikidata: WikidataIdentityTable
+    let ownedVolumes: OwnedVolumes
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -109,6 +110,10 @@ struct RootView: View {
     @State var searchModel: SearchModel
     @State var browseModel: BrowseModel
     @State var showsBrowse = false
+    /// The tag tree is a sheet with its own stack rather than a push: the
+    /// search stack's path is `[Series]`, and a typed path cannot hold the
+    /// `Tag` values the tree pushes level by level.
+    @State var showsTagTree = false
     /// Internal rather than private: `RootView+Failures.swift` reads this to
     /// guard "Use as seed" against a tap landing before the tab's own
     /// `.task` has built the model (gap 77).
@@ -215,6 +220,7 @@ struct RootView: View {
         openLibraryEditions: OpenLibraryEditions,
         ndl: NDLClient,
         wikidata: WikidataIdentityTable,
+        ownedVolumes: OwnedVolumes,
         taste: TasteProfile,
         catalogue: CatalogueService,
         blockedTags: BlockedTagsStore,
@@ -250,6 +256,7 @@ struct RootView: View {
         self.openLibraryEditions = openLibraryEditions
         self.ndl = ndl
         self.wikidata = wikidata
+        self.ownedVolumes = ownedVolumes
         self.taste = taste
         self.catalogue = catalogue
         self.blockedTags = blockedTags

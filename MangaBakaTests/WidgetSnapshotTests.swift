@@ -68,7 +68,7 @@ struct WidgetSnapshotTests {
             try JSONSerialization.jsonObject(with: data) as? [String: Any]
         )
 
-        #expect(Set(object.keys) == ["dueThisWeek", "pickBackUp", "writtenAt"])
+        #expect(Set(object.keys) == ["dueThisWeek", "pickBackUp", "nextVolumes", "writtenAt"])
 
         let items = try #require(object["dueThisWeek"] as? [[String: Any]])
         #expect(items.count == 1)

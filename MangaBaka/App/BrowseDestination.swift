@@ -20,6 +20,7 @@ struct BrowseDestination: View {
     let blocked: BlockedTagsStore
     let catalogue: CatalogueService
     let onPick: (Pick) -> Void
+    let onOpenTagTree: () -> Void
 
     var body: some View {
         BrowseView(
@@ -28,7 +29,8 @@ struct BrowseDestination: View {
             onPickGenre: { onPick(Pick(genre: $0.value)) },
             onPickTag: { onPick(Pick(tag: $0.name)) },
             catalogue: catalogue,
-            onOpenPublisher: { onPick(Pick(publisher: $0.name)) }
+            onOpenPublisher: { onPick(Pick(publisher: $0.name)) },
+            onOpenTagTree: onOpenTagTree
         )
     }
 }

@@ -47,6 +47,7 @@ struct MangaBakaApp: App {
                 openLibraryEditions: services.openLibraryEditions,
                 ndl: services.ndl,
                 wikidata: services.wikidata,
+                ownedVolumes: services.ownedVolumes,
                 taste: services.taste,
                 catalogue: services.catalogue,
                 blockedTags: services.blockedTags,

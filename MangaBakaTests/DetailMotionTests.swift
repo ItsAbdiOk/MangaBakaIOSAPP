@@ -19,9 +19,13 @@ struct SeriesDetailSectionIndexTests {
         #expect(SeriesDetailView.sectionIndex(for: .releases) == 5)
         #expect(SeriesDetailView.sectionIndex(for: .volumes) == 6)
         #expect(SeriesDetailView.sectionIndex(for: .editions) == 7)
-        #expect(SeriesDetailView.sectionIndex(for: .onwardRows) == 8)
-        #expect(SeriesDetailView.sectionIndex(for: .categories) == 9)
-        #expect(SeriesDetailView.sectionIndex(for: .trackers) == 10)
+        // Added 2026-09-14 between editions and the onward rows: the brief
+        // predates the Wikidata table, so its place is by kinship (it is a
+        // catalogue fact like editions) rather than by the brief.
+        #expect(SeriesDetailView.sectionIndex(for: .siblings) == 8)
+        #expect(SeriesDetailView.sectionIndex(for: .onwardRows) == 9)
+        #expect(SeriesDetailView.sectionIndex(for: .categories) == 10)
+        #expect(SeriesDetailView.sectionIndex(for: .trackers) == 11)
     }
 
     @Test("The order is strictly increasing, so no two sections share a step")

@@ -123,16 +123,19 @@ extension RootView {
                         BrowseDestination(
                             model: browseModel,
                             blocked: blockedTags,
-                            catalogue: catalogue
-                        ) { pick in
-                            searchModel.applyBrowse(
-                                genre: pick.genre,
-                                tag: pick.tag,
-                                publisher: pick.publisher
-                            )
-                            showsBrowse = false
-                        }
+                            catalogue: catalogue,
+                            onPick: { pick in
+                                searchModel.applyBrowse(
+                                    genre: pick.genre,
+                                    tag: pick.tag,
+                                    publisher: pick.publisher
+                                )
+                                showsBrowse = false
+                            },
+                            onOpenTagTree: { showsTagTree = true }
+                        )
                     }
+                    .sheet(isPresented: $showsTagTree) { tagTreeSheet }
                 }
             }
         }
@@ -163,6 +166,24 @@ extension RootView {
         .preferredColorScheme(.dark)
     }
 
+    /// The tag tree, in a sheet with an untyped stack of its own so `Tag`
+    /// levels can push. A series tapped inside lands on the search stack
+    /// (`path: $searchPath`) *behind* the sheet, so the sheet closes the
+    /// moment that path grows — the detail is then the top of the screen.
+    private var tagTreeSheet: some View {
+        NavigationStack {
+            TagTreeView(model: TagTreeModel(), repository: repository, path: $searchPath)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { showsTagTree = false }
+                    }
+                }
+        }
+        .onChange(of: searchPath.count) { before, after in
+            if after > before { showsTagTree = false }
+        }
+    }
+
     /// Tapping the current tab returns to its root.
     func popToRoot(_ tab: AppTab) {
         switch tab {
@@ -178,6 +199,7 @@ extension RootView {
         case .search:
             searchPath.removeAll()
             showsBrowse = false
+            showsTagTree = false
         }
     }
 }

@@ -55,6 +55,16 @@ struct SeriesDetailView: View {
     /// Not optional and not defaulted, for the reason `embeddingIndex` is
     /// neither — it is a file-backed actor there should be exactly one of.
     var wikidata: WikidataIdentityTable
+    /// The reader's own physical shelf — which rows of "Volumes on record"
+    /// they own. Optional like the third parties, though it is not one: a
+    /// page without it draws the rows with no ticks, which is what a preview
+    /// and the corrupt-database fallback get.
+    var ownedVolumes: OwnedVolumes?
+    /// What `ownedVolumes` holds for this series, read once per page by
+    /// `loadOwned` and updated in place by `toggleOwned`.
+    @State var owned: Set<OwnedVolumeKey> = []
+    /// The barcode sheet — see `ISBNScanSheet`.
+    @State var isScanning = false
     /// What the three catalogue legs merged to. `.empty` until `loadEditions`
     /// answers; an empty answer is "we do not know", never "there is nothing"
     /// — see `ForthcomingVolume`.
@@ -99,6 +109,10 @@ struct SeriesDetailView: View {
     /// No failure state: an on-device file read either has a vector for this
     /// series or it does not, and both leave this empty.
     @State var similarByDescription: [Series] = []
+    /// The same story in other formats, from the Wikidata table — see
+    /// `loadSiblings()`. Empty for three quarters of the catalogue, and empty
+    /// means "not in the table", never "stands alone".
+    @State var siblingRows: [SeriesSiblingRow] = []
     // Internal, not private: the shelf lives in SeriesDetailView+Store.swift
     // for the lint's ceiling on this type.
     @State var appleVolumes: [AppleBooksVolume] = []
@@ -190,8 +204,8 @@ struct SeriesDetailView: View {
     /// in this order" rather than a bare integer nobody can trace back to
     /// the layout.
     enum Section: Int, CaseIterable {
-        case stats, synopsis, cast, tags, credits, releases, volumes, editions, onwardRows, categories,
-             trackers
+        case stats, synopsis, cast, tags, credits, releases, volumes, editions, siblings, onwardRows,
+             categories, trackers
     }
 
     /// A section's place in the stagger, tested in `DetailMotionTests`
@@ -324,9 +338,12 @@ struct SeriesDetailView: View {
                 )
                 .arrives(index: Self.sectionIndex(for: .releases))
                 volumesShelf
+                    .environment(\.ownedShelf, ownedShelfControls)
                     .arrives(index: Self.sectionIndex(for: .volumes))
                 DetailEditions(editions: extras.editions)
                     .arrives(index: Self.sectionIndex(for: .editions))
+                SeriesSiblingsSection(rows: siblingRows, path: $path)
+                    .arrives(index: Self.sectionIndex(for: .siblings))
                 DetailOnwardRows(
                     relationships: extras.relationships,
                     similar: similar,
@@ -383,6 +400,14 @@ struct SeriesDetailView: View {
             )
         }
         .task(id: series.id) { await load() }
+        .sheet(isPresented: $isScanning) {
+            ISBNScanSheet(
+                shelves: editions.shelves,
+                seriesID: shown.id,
+                owned: owned,
+                toggle: toggleOwned
+            )
+        }
     }
 }
 
@@ -622,6 +647,8 @@ extension SeriesDetailView {
         // reader is already looking at. See `SeriesDetailView+Editions` for
         // what this costs in requests.
         async let catalogues: Void = loadEditions()
+        // The reader's own ticks, off the reader's own file. No network.
+        async let ticks: Void = loadOwned()
         // After `store` in the argument list only for readability; it does
         // not depend on it. It does depend on `extras.links`, which `loadCore`
         // has already populated by the time `loadOnward` runs.
@@ -630,8 +657,9 @@ extension SeriesDetailView {
         // "Detail readable" (`loadCore`), the same reasoning as every other
         // leg in this group.
         async let byDescription: Void = loadSimilarByDescription()
+        async let siblings: Void = loadSiblings()
         async let categories: Void = loadCategories()
-        _ = await (cast, cadence, taste, store, onward, byDescription, categories)
+        _ = await (cast, cadence, taste, store, onward, byDescription, siblings, categories, ticks)
         await catalogues
     }
 

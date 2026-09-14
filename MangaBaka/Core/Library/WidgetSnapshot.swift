@@ -46,9 +46,92 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         var id: Int { seriesID }
     }
 
+    /// One upcoming volume the "Next volume" widget can show.
+    ///
+    /// See `nextVolumeCandidates(from:repository:now:)` for exactly which
+    /// series this can and cannot cover, and why. `Codable` fields only — no
+    /// derived properties — because this crosses to `WidgetSnapshotData` the
+    /// same way `Item` does, decoded by a target that does not link this file.
+    struct NextVolumeEntry: Codable, Sendable, Equatable, Identifiable, Hashable {
+        let seriesID: Int
+        let title: String
+        /// "Vol. 12", or "Other editions" — `SeriesWork.Volume.label` as-is,
+        /// never re-derived here.
+        let volumeLabel: String
+        /// UTC midnight, matching `Item.due` — a release date is a calendar
+        /// day, not an instant, and `SeriesWork.date` is already parsed that
+        /// way (`SeriesWork.formatter`, fixed to `secondsFromGMT: 0`).
+        let date: Date
+        let coverURL: URL?
+        /// Which catalogue said this. Always "MangaBaka" today — see
+        /// `nextVolumeCandidates`'s doc comment for why the ANN/Open
+        /// Library/NDL legs behind the series page's own "Next volume"
+        /// section are not reachable from here.
+        let sourceName: String
+        /// Non-nil only when `sourceName` is Anime News Network: their API
+        /// terms require a link to the specific entry on any page showing
+        /// their details (`VolumeCatalogue.requiresPerEntryLink`). Carried
+        /// now so a future ANN-sourced candidate needs no shape change —
+        /// always nil today, since nothing here is ANN-sourced yet.
+        let sourceURL: URL?
+
+        var id: Int { seriesID }
+    }
+
     var dueThisWeek: [Item] = []
     var pickBackUp: [Item] = []
+    var nextVolumes: [NextVolumeEntry] = []
     var writtenAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case dueThisWeek, pickBackUp, nextVolumes, writtenAt
+    }
+
+    /// Written out because a hand-rolled `init(from:)` (below) suppresses the
+    /// synthesized memberwise initialiser, and every call site in this app —
+    /// `write(...)`, `clear(...)`, the tests — constructs this positionally by
+    /// name. `dueThisWeek`/`pickBackUp`/`nextVolumes` all default to `[]` so a
+    /// caller that only has a date (`clock.now` in `write`) keeps compiling.
+    init(
+        dueThisWeek: [Item] = [],
+        pickBackUp: [Item] = [],
+        nextVolumes: [NextVolumeEntry] = [],
+        writtenAt: Date
+    ) {
+        self.dueThisWeek = dueThisWeek
+        self.pickBackUp = pickBackUp
+        self.nextVolumes = nextVolumes
+        self.writtenAt = writtenAt
+    }
+
+    /// Tolerant of a snapshot written before `nextVolumes` existed.
+    ///
+    /// **Measured, not assumed, 2026-09-14:** Foundation's synthesized
+    /// `Decodable` does *not* fall back to a stored property's default value
+    /// for a missing key, even when the property is non-Optional with a `= []`
+    /// default — verified with a throwaway `Codable` struct decoding `{}`
+    /// against a `var list: [Int] = []` field, which threw `keyNotFound`
+    /// rather than producing `[]`. So the plain `Codable` conformance this
+    /// type had before today would have thrown on every snapshot written by
+    /// an older build the instant `nextVolumes` was added as a plain stored
+    /// property, and `read()`'s `try?` would have turned that into "no
+    /// snapshot at all" — silently discarding a perfectly good `dueThisWeek`
+    /// and `pickBackUp` list along with it. `decodeIfPresent(...) ?? []` here
+    /// is what actually keeps an old file readable — the same reasoning
+    /// `EditionVolume.init(from:)` already applies to `alsoFrom`/`dateFrom`.
+    ///
+    /// `dueThisWeek` and `pickBackUp` stay required keys: every snapshot this
+    /// app has ever written carries both, so a decode failure on either means
+    /// a genuinely corrupt file, and failing loudly (to `nil`, via the
+    /// caller's `try?`) is correct there in a way it is not for a key that
+    /// simply predates this field.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dueThisWeek = try container.decode([Item].self, forKey: .dueThisWeek)
+        pickBackUp = try container.decode([Item].self, forKey: .pickBackUp)
+        nextVolumes = try container.decodeIfPresent([NextVolumeEntry].self, forKey: .nextVolumes) ?? []
+        writtenAt = try container.decode(Date.self, forKey: .writtenAt)
+    }
 
     /// The App Group both the app and `MangaBakaWidgets` are entitled to.
     ///
@@ -91,6 +174,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     static func write(
         dueThisWeek: [Item]? = nil,
         pickBackUp: [Item]? = nil,
+        nextVolumes: [NextVolumeEntry]? = nil,
         clock: any Clock = SystemClock()
     ) {
         guard let containerURL else { return }
@@ -98,11 +182,13 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         var snapshot = existing ?? WidgetSnapshot(writtenAt: clock.now)
         if let dueThisWeek { snapshot.dueThisWeek = dueThisWeek }
         if let pickBackUp { snapshot.pickBackUp = pickBackUp }
-        // Whether either list actually moved. `writtenAt` is excluded
+        if let nextVolumes { snapshot.nextVolumes = nextVolumes }
+        // Whether any list actually moved. `writtenAt` is excluded
         // deliberately, since it always differs.
         let changed = existing == nil
             || existing?.dueThisWeek != snapshot.dueThisWeek
             || existing?.pickBackUp != snapshot.pickBackUp
+            || existing?.nextVolumes != snapshot.nextVolumes
 
         // The file is still rewritten either way: `writtenAt` is how the
         // widget knows whether what it is showing was computed recently
@@ -137,7 +223,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// container in a state `write(...)` can merge into.
     static func clear(clock: any Clock = SystemClock()) {
         guard let containerURL else { return }
-        let empty = WidgetSnapshot(dueThisWeek: [], pickBackUp: [], writtenAt: clock.now)
+        let empty = WidgetSnapshot(dueThisWeek: [], pickBackUp: [], nextVolumes: [], writtenAt: clock.now)
         guard let data = try? encoder.encode(empty) else { return }
         try? data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
         WidgetCenter.shared.reloadAllTimelines()
@@ -265,7 +351,7 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// roughly 8 MB each decoded, which is a jetsam rather than a widget. A
     /// grey placeholder in a 32x44 slot is a far smaller loss than the whole
     /// extension being killed — and the timeline it was building with it.
-    private static func widgetCover(_ cover: Cover) -> URL? {
+    static func widgetCover(_ cover: Cover) -> URL? {
         cover.x250 ?? cover.x350
     }
 }

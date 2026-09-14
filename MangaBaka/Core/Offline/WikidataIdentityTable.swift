@@ -78,13 +78,14 @@ actor WikidataIdentityTable {
         let byMangaBakaID: [Int: Int]
         let byAniListID: [Int: Int]
         let byMangaUpdatesID: [String: Int]
+        let byMyAnimeListID: [Int: Int]
         let byQID: [Int: Int]
         let built: String
         let counts: WikidataCoverage?
 
         static let empty = LoadState(
             rows: [], byMangaBakaID: [:], byAniListID: [:], byMangaUpdatesID: [:],
-            byQID: [:], built: "", counts: nil
+            byMyAnimeListID: [:], byQID: [:], built: "", counts: nil
         )
     }
 
@@ -158,6 +159,22 @@ actor WikidataIdentityTable {
         return loaded.byAniListID[aniListID].map { loaded.rows[$0] }
     }
 
+    /// For a shared mangaupdates.com link (`OpenSharedURLIntent`). The id is
+    /// the base-36 text the site's URLs carry, the same shape `Series.mangaUpdatesID`
+    /// holds — not the decimal form.
+    func identity(mangaUpdatesID: String) -> WikidataIdentity? {
+        let loaded = ensureLoaded()
+        return loaded.byMangaUpdatesID[mangaUpdatesID].map { loaded.rows[$0] }
+    }
+
+    /// For a shared myanimelist.net link. The only caller is the share-sheet
+    /// intent, so the index is built for it here rather than left to a title
+    /// search that could land on the wrong series.
+    func identity(myAnimeListID: Int) -> WikidataIdentity? {
+        let loaded = ensureLoaded()
+        return loaded.byMyAnimeListID[myAnimeListID].map { loaded.rows[$0] }
+    }
+
     func identity(qid: Int) -> WikidataIdentity? {
         let loaded = ensureLoaded()
         return loaded.byQID[qid].map { loaded.rows[$0] }
@@ -225,6 +242,7 @@ actor WikidataIdentityTable {
         var byMangaBakaID: [Int: Int] = [:]
         var byAniListID: [Int: Int] = [:]
         var byMangaUpdatesID: [String: Int] = [:]
+        var byMyAnimeListID: [Int: Int] = [:]
         var byQID: [Int: Int] = [:]
         byMangaBakaID.reserveCapacity(wire.counts.withMangaBakaID)
         byAniListID.reserveCapacity(wire.counts.withAniListID)
@@ -240,6 +258,7 @@ actor WikidataIdentityTable {
             if let id = row.mangaBakaID { byMangaBakaID[id] = byMangaBakaID[id] ?? index }
             if let id = row.aniListID { byAniListID[id] = byAniListID[id] ?? index }
             if let id = row.mangaUpdatesID { byMangaUpdatesID[id] = byMangaUpdatesID[id] ?? index }
+            if let id = row.myAnimeListID { byMyAnimeListID[id] = byMyAnimeListID[id] ?? index }
         }
 
         return LoadState(
@@ -247,6 +266,7 @@ actor WikidataIdentityTable {
             byMangaBakaID: byMangaBakaID,
             byAniListID: byAniListID,
             byMangaUpdatesID: byMangaUpdatesID,
+            byMyAnimeListID: byMyAnimeListID,
             byQID: byQID,
             built: wire.built,
             counts: wire.counts

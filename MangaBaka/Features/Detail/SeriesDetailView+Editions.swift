@@ -1,3 +1,4 @@
+import os
 import SwiftUI
 
 /// The three catalogue legs behind the volumes shelf: Anime News Network,
@@ -60,6 +61,58 @@ extension SeriesDetailView {
             ann: ann, openLibrary: open, ndl: ndl, works: extras.volumes, format: format, for: shown
         )
     }
+
+    // MARK: - The reader's own shelf
+
+    /// What the section reads through `\.ownedShelf` — see
+    /// `EditionShelvesSection`'s doc comment for why it is an environment
+    /// value and not a parameter. Nil when the page has no store, so the rows
+    /// draw with no ticks rather than ticks that cannot be kept.
+    var ownedShelfControls: OwnedShelfControls? {
+        guard ownedVolumes != nil else { return nil }
+        return OwnedShelfControls(
+            seriesID: shown.id, owned: owned, toggle: toggleOwned, scan: { isScanning = true }
+        )
+    }
+
+    /// The reader's ticks for this series, off the reader's own file.
+    ///
+    /// A read that throws leaves `owned` empty and logs: on the corrupt-
+    /// database fallback the table does not exist (`OwnedVolumes` records
+    /// why), and a page that crashed for it would be worse than a page with
+    /// no ticks. Not `.failed` into the failure kit — there is no request to
+    /// retry, and the only reader-facing consequence is ticks that do not
+    /// appear, which the log is enough to diagnose.
+    func loadOwned() async {
+        guard let ownedVolumes else { return }
+        do {
+            owned = try await ownedVolumes.owned(for: shown.id)
+        } catch let error {
+            Self.ownedLogger.error("Owned volumes could not be read: \(error, privacy: .public)")
+        }
+    }
+
+    /// Ticks or unticks one row, optimistically. The write is off the main
+    /// actor; the set is updated first so the circle fills under the finger,
+    /// and put back if the write fails.
+    func toggleOwned(_ volume: EditionVolume) {
+        guard let ownedVolumes else { return }
+        let key = OwnedVolumeKey(seriesID: shown.id, volume: volume)
+        let nowOwned = !owned.contains(key)
+        if nowOwned { owned.insert(key) } else { owned.remove(key) }
+        Task {
+            do {
+                try await ownedVolumes.setOwned(key, nowOwned)
+            } catch let error {
+                Self.ownedLogger.error("Owned volume could not be written: \(error, privacy: .public)")
+                if nowOwned { owned.remove(key) } else { owned.insert(key) }
+            }
+        }
+    }
+
+    private static let ownedLogger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "owned"
+    )
 
     // MARK: - The three legs
 

@@ -14,7 +14,7 @@ import Foundation
 /// through the same field names and the same ISO-8601 date strategy this
 /// decodes with.
 struct WidgetSnapshotData: Codable {
-    struct Item: Codable, Identifiable, Hashable {
+    struct Item: Codable, Identifiable, Hashable, Sendable {
         let seriesID: Int
         let title: String
         let subtitle: String
@@ -27,9 +27,47 @@ struct WidgetSnapshotData: Codable {
         var id: Int { seriesID }
     }
 
+    /// Mirrors `WidgetSnapshot.NextVolumeEntry` field for field.
+    struct NextVolumeEntry: Codable, Identifiable, Hashable, Sendable {
+        let seriesID: Int
+        let title: String
+        let volumeLabel: String
+        let date: Date
+        let coverURL: URL?
+        let sourceName: String
+        let sourceURL: URL?
+        var id: Int { seriesID }
+    }
+
     var dueThisWeek: [Item] = []
     var pickBackUp: [Item] = []
+    var nextVolumes: [NextVolumeEntry] = []
     var writtenAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case dueThisWeek, pickBackUp, nextVolumes, writtenAt
+    }
+
+    /// **Not what it looks like — measured, 2026-09-14.** A non-Optional
+    /// stored property's `= []` default is not consulted by Foundation's
+    /// synthesized `Decodable` for a missing key; it throws `keyNotFound`
+    /// regardless (verified with a throwaway `Codable` struct decoding `{}`
+    /// against a `var list: [Int] = []` field). Left as plain synthesis, a
+    /// snapshot written by a build that predates `nextVolumes` would fail
+    /// this whole decode the moment the field was added as an ordinary
+    /// stored property — and `read()`'s `try?` turns that into "no snapshot
+    /// at all", silently discarding `dueThisWeek` and `pickBackUp` too, not
+    /// just the new field. `decodeIfPresent(...) ?? []` below is what
+    /// actually carries an old file through; `Item.due` right above gets
+    /// the same leniency for free only because it is `Optional`-typed, which
+    /// synthesis does handle specially.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dueThisWeek = try container.decode([Item].self, forKey: .dueThisWeek)
+        pickBackUp = try container.decode([Item].self, forKey: .pickBackUp)
+        nextVolumes = try container.decodeIfPresent([NextVolumeEntry].self, forKey: .nextVolumes) ?? []
+        writtenAt = try container.decode(Date.self, forKey: .writtenAt)
+    }
 
     /// Must match `WidgetSnapshot.appGroupID` exactly — see that type's doc
     /// comment for the signing risk (App Groups is a capability the

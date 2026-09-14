@@ -207,7 +207,10 @@ extension AppDatabase {
     /// Harmless in the other direction: a pre-split *cache* file has no
     /// `librarySplit` table, and `salvage` already expects and logs a missing
     /// table per `readerTables` entry.
-    static let salvagedTables = readerTables + ["librarySplit"]
+    ///
+    /// `ownedVolume` too: it is user data with no copy anywhere else, so a
+    /// salvage that dropped it would lose every tick the reader ever made.
+    static let salvagedTables = readerTables + ["librarySplit", "ownedVolume"]
 
     /// Runs a cache-migrator step only if the table it touches is still in the
     /// cache file.
@@ -252,6 +255,30 @@ extension AppDatabase {
             try db.create(table: "librarySplit") { table in
                 table.primaryKey("id", .integer)
                 table.column("completedAt", .datetime).notNull()
+            }
+        }
+        migrator.registerMigration("L2_ownedVolumes") { db in
+            // The volumes the reader says they physically own — a tick per
+            // row of "Volumes on record" (`OwnedVolumes`). Here and *not* in
+            // `migrator`: this is the first reader table born after the
+            // split, so there is no cache-file history to honour, and putting
+            // it there as well would leave every device an empty copy in the
+            // file that is not backed up. The cost is that `inMemory()`, which
+            // runs only the cache migrator, has no such table — recorded on
+            // `OwnedVolumes`, which is the one thing that reads it.
+            //
+            // Not on `readerTables` either: that list is what
+            // `splitReaderTables` copies *out of the cache file*, and this
+            // table was never there. `salvage` therefore does not carry it
+            // out of a corrupt reader's file yet — `salvagedTables` is the
+            // place to add it, and that is a one-line change outside this
+            // migration.
+            try db.create(table: "ownedVolume") { table in
+                table.column("seriesId", .integer).notNull()
+                // `OwnedVolumeKey.identity`: `isbn:…` or `row:…`.
+                table.column("identity", .text).notNull()
+                table.column("ownedAt", .datetime).notNull()
+                table.primaryKey(["seriesId", "identity"])
             }
         }
         return migrator

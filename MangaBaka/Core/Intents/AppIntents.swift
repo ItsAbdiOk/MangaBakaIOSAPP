@@ -220,9 +220,16 @@ struct MangaBakaShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: DueThisWeekIntent(),
+            // "What's out this week" added for the task that asked for a
+            // separate `OutThisWeekIntent`: `DueThisWeekIntent` already
+            // answers exactly that question (library releases due in the
+            // next seven days), so this extends its phrases instead of
+            // standing up a second intent that reads the same data — see
+            // this task's report.
             phrases: [
                 "What's due this week in \(.applicationName)",
-                "What's due in \(.applicationName)"
+                "What's due in \(.applicationName)",
+                "What's out this week in \(.applicationName)"
             ],
             shortTitle: "Due this week",
             systemImageName: "calendar"
@@ -232,6 +239,24 @@ struct MangaBakaShortcuts: AppShortcutsProvider {
             phrases: ["Open a series in \(.applicationName)"],
             shortTitle: "Open a series",
             systemImageName: "book"
+        )
+        AppShortcut(
+            intent: OpenSharedURLIntent(),
+            phrases: [
+                "Open this link in \(.applicationName)",
+                "Open this in \(.applicationName)"
+            ],
+            shortTitle: "Open a shared link",
+            systemImageName: "link"
+        )
+        AppShortcut(
+            intent: AddToLibraryIntent(),
+            phrases: [
+                "Add a series to my \(.applicationName) library",
+                "Add to my \(.applicationName) library"
+            ],
+            shortTitle: "Add to library",
+            systemImageName: "plus.circle"
         )
     }
 }

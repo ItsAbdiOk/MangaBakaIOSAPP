@@ -25,6 +25,16 @@ import SwiftUI
 /// already applied `Series.coverLanguages` — the same rule the cover fan uses —
 /// to every source at once, so this view draws what it is given and there is no
 /// second place for "English plus the original" to be decided differently.
+///
+/// **The reader's own shelf** — the tick beside each row and the "You own 3
+/// of 12" line — arrives through `\.ownedShelf` rather than as parameters.
+/// The page owns that state (`SeriesDetailView.owned`) the way it owns
+/// `openURL`, and the section is built inside `volumesShelf` in
+/// `+Store.swift` alongside the store shelf, which has no such state; an
+/// environment value lets the page set it once, on the whole shelf, without
+/// the store shelf having to carry a parameter it does not use. A page that
+/// sets nothing (a preview, the corrupt-database fallback) draws the rows
+/// with no ticks at all.
 struct EditionShelvesSection: View {
     let answer: VolumeEditionAnswer
     /// True while the three legs are still out. A skeleton rather than an empty
@@ -36,6 +46,7 @@ struct EditionShelvesSection: View {
     var now: Date = .init()
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.ownedShelf) private var ownedShelf
 
     /// Whether this section has anything to say. A page with no shelves, no
     /// failure and nothing in flight says nothing — the same rule
@@ -83,6 +94,18 @@ struct EditionShelvesSection: View {
                 Text("Checking catalogues…")
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
+            } else if let ownedShelf, !answer.isEmpty {
+                // Only once there are rows to match against: a scan on an
+                // empty shelf can only ever say "not on this series' shelf".
+                Button { ownedShelf.scan() } label: {
+                    Label("Scan a barcode", systemImage: "barcode.viewfinder")
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.accent)
+                        .frame(minHeight: Metrics.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.press)
+                .accessibilityHint("Opens the camera to mark a volume as owned by its ISBN")
             }
         }
         .padding(.horizontal, Metrics.gutter)
@@ -215,6 +238,15 @@ struct EditionShelvesSection: View {
                 Text(Self.creditLine(for: shelf))
                     .typeGridMeta()
                     .foregroundStyle(Palette.textMuted)
+                if let ownedShelf,
+                   let line = OwnedSummary.line(
+                       for: shelf, owned: ownedShelf.owned, seriesID: ownedShelf.seriesID
+                   ) {
+                    Text(line)
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, Metrics.gutter)
 
@@ -269,6 +301,9 @@ struct EditionShelvesSection: View {
         // is belt and braces — and it is the belt that is load-bearing.
         if !volume.edition.catalogue.requiresPerEntryLink || volume.sourceLink != nil {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let ownedShelf {
+                    ownedTick(volume, in: ownedShelf)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(volume.title)
                         .typeCardTitle()
@@ -317,4 +352,38 @@ struct EditionShelvesSection: View {
         }
         return line
     }
+
+    /// The tick. A circle, filled when owned — the same pair
+    /// `SeedPickerSheet` uses for "in the blend", so it reads as a state the
+    /// reader set rather than a link.
+    private func ownedTick(_ volume: EditionVolume, in shelf: OwnedShelfControls) -> some View {
+        let key = OwnedVolumeKey(seriesID: shelf.seriesID, volume: volume)
+        let isOwned = shelf.owned.contains(key)
+        return Button { shelf.toggle(volume) } label: {
+            Image(systemName: isOwned ? "checkmark.circle.fill" : "circle")
+                .typeSymbol(size: 16, weight: .regular)
+                .foregroundStyle(isOwned ? Palette.accent : Palette.textMuted)
+                .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.press)
+        .accessibilityLabel(isOwned ? "Owned" : "Not owned")
+        .accessibilityValue(volume.title)
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// What the page hands the section about the reader's own shelf — see the
+/// section's doc comment for why this is an environment value.
+struct OwnedShelfControls {
+    let seriesID: Int
+    let owned: Set<OwnedVolumeKey>
+    /// Ticks or unticks one row; the page persists it and updates `owned`.
+    let toggle: (EditionVolume) -> Void
+    /// Opens the barcode sheet.
+    let scan: () -> Void
+}
+
+extension EnvironmentValues {
+    @Entry var ownedShelf: OwnedShelfControls?
 }

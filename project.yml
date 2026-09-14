@@ -95,6 +95,11 @@ targets:
             CFBundleURLSchemes: [mangabaka]
         MB_PAT: $(MB_PAT)
         MB_API_BASE_URL: $(MB_API_BASE_URL)
+        # The barcode scanner on the volumes shelf. Text is what iOS shows in
+        # the permission prompt; it is the only place the camera is used.
+        NSCameraUsageDescription: >-
+          MangaBaka reads the barcode on a volume's back cover to mark it as
+          one you own. Nothing is recorded or sent anywhere.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka

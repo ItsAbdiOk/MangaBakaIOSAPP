@@ -6,5 +6,6 @@ struct MangaBakaWidgetsBundle: WidgetBundle {
     var body: some Widget {
         DueThisWeekWidget()
         PickBackUpWidget()
+        NextVolumeWidget()
     }
 }

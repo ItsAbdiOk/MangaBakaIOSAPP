@@ -301,8 +301,15 @@ extension RootView {
         await session.library.load()
         await spotlight.reindex(walk.entries)
         let lastOpened = (try? await history.lastOpenedDates()) ?? [:]
+        // Cache-only: `nextVolumeCandidates` reads the repository's detail
+        // cache and asks the network for nothing, so a library walk costs
+        // the same as before this widget existed.
+        let nextVolumes = await WidgetSnapshot.nextVolumeCandidates(
+            from: walk.entries, repository: repository
+        )
         WidgetSnapshot.write(
-            pickBackUp: WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened)
+            pickBackUp: WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened),
+            nextVolumes: WidgetSnapshot.nextVolumeItems(candidates: nextVolumes)
         )
     }
 
@@ -476,6 +483,7 @@ extension RootView {
             openLibraryEditions: openLibraryEditions,
             ndl: ndl,
             wikidata: wikidata,
+            ownedVolumes: ownedVolumes,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),

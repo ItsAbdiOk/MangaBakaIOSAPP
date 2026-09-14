@@ -37,6 +37,8 @@
 	<string>$(MB_API_BASE_URL)</string>
 	<key>MB_PAT</key>
 	<string>$(MB_PAT)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MangaBaka reads the barcode on a volume's back cover to mark it as one you own. Nothing is recorded or sent anywhere.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

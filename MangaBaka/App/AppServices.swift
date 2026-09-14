@@ -25,6 +25,8 @@ struct AppServices {
     let repository: SeriesRepository
     let shelf: ShelfStore
     let history: HistoryStore
+    /// Volumes the reader has ticked as owned — user data, in the library file.
+    let ownedVolumes: OwnedVolumes
     let client: APIClient
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
@@ -173,6 +175,7 @@ struct AppServices {
         )
         shelf = ShelfStore(database: database)
         history = HistoryStore(database: database)
+        ownedVolumes = OwnedVolumes(database: database)
 
         // The store owns the reader's choice; the repository owns acting on it.
         // Wiring them together here keeps the repository out of UserDefaults and

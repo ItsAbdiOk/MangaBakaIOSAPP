@@ -57,19 +57,23 @@ enum CoverLoader {
         return URLSession(configuration: configuration)
     }()
 
-    static func covers(
-        for items: [WidgetSnapshotData.Item],
+    static func covers<Row: WidgetCoverRow>(
+        for items: [Row],
         session: URLSession = CoverLoader.session
     ) async -> [Int: UIImage] {
         await withTaskGroup(of: (Int, UIImage?).self) { group in
             for item in items.prefix(maxCovers) {
                 guard let url = item.coverURL else { continue }
+                // Two values, not the row: capturing `item` drags the generic
+                // `Row.Type` into the child task, which Swift 6 rejects as
+                // non-Sendable.
+                let seriesID = item.seriesID
                 group.addTask {
                     guard let (data, _) = try? await session.data(from: url) else {
-                        return (item.seriesID, nil)
+                        return (seriesID, nil)
                     }
                     let full = UIImage(data: data)
-                    return (item.seriesID, await full?.byPreparingThumbnail(ofSize: thumbnailSize) ?? full)
+                    return (seriesID, await full?.byPreparingThumbnail(ofSize: thumbnailSize) ?? full)
                 }
             }
             var result: [Int: UIImage] = [:]
@@ -80,3 +84,20 @@ enum CoverLoader {
         }
     }
 }
+
+/// What `CoverLoader.covers(for:)` needs from a snapshot row — just enough to
+/// fetch and key an image, so it does not care whether it was handed a
+/// `dueThisWeek`/`pickBackUp` row or a `nextVolumes` one.
+///
+/// Added 2026-09-14 alongside `NextVolumeEntry`: before this, `covers(for:)`
+/// took `[WidgetSnapshotData.Item]` by name, which is the due/pick-back-up
+/// shape only — a second, near-identical copy of this whole function is the
+/// duplication this project's standards reject, for two structs that already
+/// agree on the two fields that matter here.
+protocol WidgetCoverRow: Sendable {
+    var seriesID: Int { get }
+    var coverURL: URL? { get }
+}
+
+extension WidgetSnapshotData.Item: WidgetCoverRow {}
+extension WidgetSnapshotData.NextVolumeEntry: WidgetCoverRow {}
