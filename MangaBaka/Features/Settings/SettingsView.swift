@@ -47,7 +47,9 @@ struct SettingsView: View {
     /// because the session already walked it (item 20). Threaded through to
     /// `LibraryTransferSection`, which used to build its own.
     let library: any LibraryProviding
-    let loadExisting: () async -> [LibraryEntry]
+    /// Nil when the library could not be read — see `LibraryTransferSection`,
+    /// which refuses an import rather than treating that as an empty library.
+    let loadExisting: () async -> [LibraryEntry]?
     let formats: FormatPreferencesStore
     let blockedTags: BlockedTagsStore
     let catalogue: CatalogueService
@@ -82,7 +84,7 @@ struct SettingsView: View {
         validate: @escaping () async -> TokenCheck,
         content: ContentPreferencesStore,
         library: any LibraryProviding,
-        loadExisting: @escaping () async -> [LibraryEntry],
+        loadExisting: @escaping () async -> [LibraryEntry]?,
         formats: FormatPreferencesStore,
         blockedTags: BlockedTagsStore,
         catalogue: CatalogueService,
@@ -94,7 +96,12 @@ struct SettingsView: View {
         taste: TasteProfile,
         onAccountChanged: @escaping () async -> Void,
         titleRevision: Binding<Int>,
-        store: any TokenPersisting = TokenStore(),
+        // No default. `= TokenStore()` built a third instance of a type whose
+        // memo was per instance, so the token this view wrote was invisible to
+        // the client that validated it a moment later — the token came back
+        // 401 and this view then deleted it as rejected (second-pass review
+        // S1, 2026-09-14). `RootView+Session` passes the app's one store.
+        store: any TokenPersisting,
         defaults: UserDefaults = .standard
     ) {
         self.validate = validate

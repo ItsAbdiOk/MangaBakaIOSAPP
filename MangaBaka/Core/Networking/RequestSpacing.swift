@@ -34,8 +34,8 @@ struct RequestSpacing: Sendable {
     ///
     /// The same ceiling `RateLimitGate.maxHonouredRetryAfter` applies to
     /// MangaBaka itself, and **a guess for the same reason it is one there**:
-    /// nothing on record says what AniList, Shikimori, MangaUpdates, Webtoons,
-    /// Naver or GigaViewer actually send on a 429. What is not a guess is what
+    /// nothing on record says what AniList, Shikimori, MangaUpdates, Webtoons
+    /// or GigaViewer actually send on a 429. What is not a guess is what
     /// an uncapped value costs — `TimeInterval("nan")` and `TimeInterval("inf")`
     /// both parse to non-finite doubles rather than failing (confirmed on
     /// device, see `APIClient.parseRetryAfter`), and a NaN reaching
@@ -46,8 +46,9 @@ struct RequestSpacing: Sendable {
     static let maxHonouredRetryAfter = RateLimitGate.maxHonouredRetryAfter
 
     /// The back-off used when a 429 carries no usable `Retry-After` at all.
-    /// **A guess**, carried over unchanged from the nine call sites that each
-    /// hard-coded it before this function existed.
+    /// **A guess**, carried over unchanged from the call sites that each
+    /// hard-coded it before this function existed — all ten of them as of
+    /// 2026-09-14, when `GoogleBooksClient` was the last one moved across.
     static let unstatedBackOff: TimeInterval = 60
 
     /// Parses a `Retry-After` header, clamps it, and pushes the next slot out
@@ -67,14 +68,18 @@ struct RequestSpacing: Sendable {
     @discardableResult
     mutating func backOff(
         retryAfterHeader header: String?,
-        now: Date,
-        cap: TimeInterval = RequestSpacing.maxHonouredRetryAfter
+        now: Date
     ) -> TimeInterval? {
         guard let seconds = APIClient.parseRetryAfter(header) else {
             backOff(until: now.addingTimeInterval(Self.unstatedBackOff))
             return nil
         }
-        let honoured = min(max(seconds, 0), cap)
+        // Until 2026-09-14 the ceiling was a `cap:` parameter with a default
+        // and no caller anywhere — added for a call site that never
+        // materialised. A parameter nobody passes reads as configurability
+        // that was considered and is not; the constant says the same thing and
+        // cannot drift per client.
+        let honoured = min(max(seconds, 0), Self.maxHonouredRetryAfter)
         backOff(until: now.addingTimeInterval(honoured))
         return honoured
     }

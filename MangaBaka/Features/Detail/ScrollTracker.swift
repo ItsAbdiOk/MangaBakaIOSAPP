@@ -25,6 +25,19 @@ final class ScrollTracker {
     /// travelled out — see `DetailBarTitle.crossfadeProgress`.
     var crossfade: CGFloat = 0
 
+    /// `CoverGallery` reuses this class for its own single per-frame scroll
+    /// write rather than declaring a second `@Observable` type for one
+    /// property (item 64) — but its horizontal page fraction (0…`pages.count
+    /// - 1`) is a different quantity than `offset`'s vertical points
+    /// travelled, so it gets its own name instead of reading wrong on that
+    /// screen. `SeriesDetailView`'s tracker never touches this property, and
+    /// `CoverGallery`'s never touches `offset` or `crossfade`.
+    var pageProgress: Double = 0
+
+    init(pageProgress: Double = 0) {
+        self.pageProgress = pageProgress
+    }
+
     /// A named method rather than a closure body: Xcode Cloud's Swift 6.3.3
     /// crashed in the SIL verifier ("OwnershipModelEliminator") on the inline
     /// version of this under whole-module optimisation — build 69,
@@ -33,9 +46,13 @@ final class ScrollTracker {
         offset = travelled
         let progress = DetailBarTitle.crossfadeProgress(travelled: travelled)
         guard progress != crossfade else { return }
-        let animation = Motion.reduced(Motion.glide)
-        withAnimation(animation) {
-            crossfade = progress
-        }
+        // Item 65 / screens F24 (2026-09-14): this used to wrap the
+        // assignment in `withAnimation(Motion.reduced(Motion.glide))`, so a
+        // continuous 0…1 value picked up a new animation towards a
+        // one-frame-old target on every scroll sample — a transaction paid
+        // per frame for a trail the eye never saw. `crossfade` is a plain
+        // value now; `DetailBarTitle.showsBarTitle` is the one discontinuity
+        // in this handover and is what should animate, if anything does.
+        crossfade = progress
     }
 }

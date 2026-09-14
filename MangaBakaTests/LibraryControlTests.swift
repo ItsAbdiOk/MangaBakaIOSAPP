@@ -311,3 +311,102 @@ struct LibraryControlReachabilityTests {
         #expect(source.contains("LibraryEditSheet(entry: entry, series: series)"))
     }
 }
+
+/// Second-pass review (2026-09-14): item 31, the no-account state that was
+/// computed and never read, and item 72, the two writes that never reached
+/// the shared store. In an extension so the suite body stays under the
+/// lint's ceiling; `FakeLibrary` is file-private and reachable from here.
+extension LibraryControlTests {
+    /// Item 31. `needsAccount` was set and read nowhere, so a reader with no
+    /// token got no button and no line saying why. The decision now has a
+    /// name the body switches on.
+    ///
+    /// Expected to fail before the fix: `LibraryControlModel.ControlState`
+    /// does not exist — a compile failure. The old model exposed no value a
+    /// test could have asserted was wrong: `needsAccount` was true, and the
+    /// body simply did not look at it.
+    @Test("No account is a state the control names, not silence")
+    func noAccountIsNamed() async {
+        let library = FakeLibrary()
+        let store = LibraryModel(library: library, hasCredentials: { false })
+        let subject = LibraryControlModel(library: library, store: store, seriesId: 7)
+        #expect(subject.state == .unknown, "control: nothing is claimed before the store answers")
+
+        await subject.load()
+        #expect(store.screenState == .noAccount, "control: the store itself says no account")
+        #expect(subject.state == .noAccount)
+        #expect(subject.current == nil)
+        #expect(!LibraryControlModel.noAccountLine.isEmpty)
+    }
+
+    @Test("The states rank: a saved entry, then a failed check, then no account, then Add")
+    func stateOrder() async {
+        let library = FakeLibrary()
+        library.entries = [FakeLibrary.entry(seriesId: 7, state: .reading)]
+        let subject = model(library)
+        await subject.load()
+        guard case let .saved(entry) = subject.state else {
+            Issue.record("a listed series is .saved, got \(subject.state)")
+            return
+        }
+        #expect(entry.seriesId == 7)
+
+        let other = model(library, id: 9)
+        await other.load()
+        #expect(other.state == .canAdd)
+    }
+
+    /// Item 72. `add` used to patch only the control's own `entry`, so the
+    /// Library tab did not list the series until its next walk.
+    ///
+    /// Expected to fail before the fix with: `store.entries.map(\.seriesId)
+    /// == []` — the store still empty after the add.
+    @Test("Adding from a series page lists it on the Library tab now")
+    func addReachesTheStore() async {
+        let library = FakeLibrary()
+        let store = LibraryModel(library: library)
+        let subject = LibraryControlModel(library: library, store: store, seriesId: 7)
+        await subject.load()
+        #expect(store.entries.isEmpty, "control")
+
+        await subject.add(state: .planToRead)
+        #expect(store.entries.map(\.seriesId) == [7])
+        #expect(store.entries.first?.state == .planToRead)
+        #expect(store.shelves.map(\.state) == [.planToRead])
+        #expect(subject.current?.id == LibraryControlModel.placeholderID(for: 7),
+                "the placeholder id, until the next walk brings the server's")
+    }
+
+    /// Expected to fail before the fix with: `store.entries.map(\.seriesId)
+    /// == [7]` — the removed series still on the shelf.
+    @Test("Removing from a series page takes it off the Library tab now")
+    func removeReachesTheStore() async {
+        let library = FakeLibrary()
+        library.entries = [FakeLibrary.entry(seriesId: 7, state: .reading)]
+        let store = LibraryModel(library: library)
+        let subject = LibraryControlModel(library: library, store: store, seriesId: 7)
+        await subject.load()
+        #expect(store.entries.map(\.seriesId) == [7], "control")
+
+        await subject.remove()
+        #expect(store.entries.isEmpty)
+        #expect(store.shelves.isEmpty)
+        #expect(subject.current == nil)
+    }
+
+    /// A failed write reaches neither.
+    @Test("A refused add or remove changes nothing on the Library tab")
+    func refusedWriteChangesNothing() async {
+        let library = FakeLibrary()
+        library.entries = [FakeLibrary.entry(seriesId: 7, state: .reading)]
+        library.failure = .offline
+        let store = LibraryModel(library: library)
+        let subject = LibraryControlModel(library: library, store: store, seriesId: 7)
+        await subject.load()
+
+        await subject.remove()
+        #expect(store.entries.map(\.seriesId) == [7])
+        #expect(subject.current?.seriesId == 7)
+        #expect(subject.failure != nil)
+    }
+}

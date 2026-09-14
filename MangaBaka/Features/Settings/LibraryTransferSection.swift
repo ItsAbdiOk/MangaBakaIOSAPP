@@ -12,7 +12,13 @@ import UniformTypeIdentifiers
 @Observable
 final class LibraryTransferModel {
     private let library: any LibraryProviding
-    private let loadExisting: () async -> [LibraryEntry]
+    /// Optional on purpose: nil means the walk failed or was page-capped,
+    /// which is not the same answer as "your library is empty". Importing
+    /// against the wrong one of those rewrites the reader's real account --
+    /// `LibraryImport`'s "never downgrade progress" guard compares against
+    /// this set, so an empty one turns every row into an add and walks their
+    /// own progress backwards, one request per row (review 2, item 4).
+    private let loadExisting: () async -> [LibraryEntry]?
 
     private(set) var entries: [LibraryEntry] = []
     var isPickingFile = false
@@ -44,7 +50,7 @@ final class LibraryTransferModel {
         }
     }
 
-    init(library: any LibraryProviding, loadExisting: @escaping () async -> [LibraryEntry]) {
+    init(library: any LibraryProviding, loadExisting: @escaping () async -> [LibraryEntry]?) {
         self.library = library
         self.loadExisting = loadExisting
     }
@@ -61,9 +67,17 @@ final class LibraryTransferModel {
     /// Whether the export payloads are ready to share.
     var isExportReady: Bool { jsonFile != nil }
 
+    /// Whether `entries` is the reader's whole library rather than a default.
+    /// An empty library is a legitimate answer; not having read it is not.
+    private(set) var knowsTheLibrary = false
+
+    /// Nil from `loadExisting` leaves `knowsTheLibrary` false, which is what
+    /// refuses the import below.
     func loadEntriesIfNeeded() async {
-        guard entries.isEmpty else { return }
-        entries = await loadExisting()
+        guard !knowsTheLibrary else { return }
+        guard let existing = await loadExisting() else { return }
+        entries = existing
+        knowsTheLibrary = true
         encodeExports()
     }
 
@@ -98,6 +112,11 @@ final class LibraryTransferModel {
         }
 
         await loadEntriesIfNeeded()
+        guard knowsTheLibrary else {
+            parseFailureMessage = "Couldn't read your library just now, so importing"
+                + " could overwrite what is already there. Try again in a moment."
+            return
+        }
 
         switch LibraryImport.parse(data) {
         case let .success(parsed):
@@ -182,7 +201,7 @@ struct LibraryTransferSection: View {
     /// appearance — ~13 requests and ~25 MB for an export nobody had tapped,
     /// on a screen that looks like a settings page. No defaults now, so the
     /// wasteful stand-in cannot come back by omission.
-    init(library: any LibraryProviding, loadExisting: @escaping () async -> [LibraryEntry]) {
+    init(library: any LibraryProviding, loadExisting: @escaping () async -> [LibraryEntry]?) {
         _model = State(initialValue: LibraryTransferModel(library: library, loadExisting: loadExisting))
     }
 

@@ -40,6 +40,12 @@ actor GoogleBooksClient {
         self.cacheDirectory = cacheDirectory
     }
 
+    /// Test-only: when this client's spacing will next let a request out.
+    /// Exposed so `GoogleBooksRetryAfterTests` can prove the 429 branch
+    /// honours the server's own header, rather than inferring it by actually
+    /// waiting out an hour.
+    var nextAllowedForTesting: Date { spacing.nextAllowed }
+
     /// The series' volumes, sourced from Google's catalogue, or nil when the
     /// request failed — including the shared quota being spent, which is the
     /// common case. Empty means asked and none.
@@ -104,7 +110,20 @@ actor GoogleBooksClient {
               let http = response as? HTTPURLResponse
         else { return nil }
         if http.statusCode == 429 {
-            spacing.backOff(until: clock.now.addingTimeInterval(60))
+            // Clamped and parsed in one place (`RequestSpacing.backOff`): a bare
+            // `TimeInterval.init` accepted "nan" and "1e9" here, and either one
+            // ended this client's spacing for the process. See that function.
+            //
+            // Until 2026-09-14 this was a hard-coded 60 that never read the
+            // header at all — the one 429 branch of ten the shared function
+            // missed, in the client documented at `:13` as the one that 429s
+            // most. Google answering `Retry-After: 3600` was retried once a
+            // minute for the hour it asked to be left alone. The old behaviour
+            // is preserved exactly when the header is absent, because
+            // `RequestSpacing.unstatedBackOff` is also 60.
+            _ = spacing.backOff(
+                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
+            )
             return nil
         }
         guard (200..<300).contains(http.statusCode) else { return nil }

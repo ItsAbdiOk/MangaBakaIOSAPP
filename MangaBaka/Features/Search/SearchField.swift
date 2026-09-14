@@ -88,7 +88,8 @@ struct SearchField: ViewModifier {
 
     /// The query's tags, genres and publisher, as the field's tokens. A
     /// token removed with the field's own × writes the query back without
-    /// it and re-asks if anything was asked (`SearchModel.filtersDidChange`).
+    /// it and re-asks if anything was asked — or, when it was the last
+    /// thing in the field, cancels (`SearchModel.tokensDidChange`).
     private var tokens: Binding<[SearchToken]> {
         Binding(
             get: { SearchToken.tokens(for: model.query) },
@@ -96,7 +97,7 @@ struct SearchField: ViewModifier {
                 let query = SearchToken.applying(next, to: model.query)
                 guard query != model.query else { return }
                 model.query = query
-                model.filtersDidChange()
+                model.tokensDidChange()
             }
         )
     }

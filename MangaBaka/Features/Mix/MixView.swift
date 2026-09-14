@@ -25,6 +25,7 @@ struct MixView: View {
     @State var isPickingTags = false
     @State var isPickingSeed = false
     @State var isNamingLens = false
+    @Environment(ToastCentre.self) private var toasts: ToastCentre?
     /// Bumped each time a blend run actually lands with results — not on
     /// every tap of "Blend", and not on a run that comes back empty or
     /// failed. `.celebrates(on:)` fires on any change to its trigger, so a
@@ -33,6 +34,12 @@ struct MixView: View {
     @State private var landedBlends = 0
 
     static let typeOptions = ["manga", "novel", "manhwa", "manhua"]
+
+    /// What the lens save says, for either outcome — the pair `SearchView`
+    /// shows. `nonisolated static` so the wording is testable off-screen.
+    nonisolated static func lensToast(saved: Bool) -> (message: String, kind: ToastCentre.Kind) {
+        saved ? ("Lens saved", .success) : ("Couldn't save that lens", .failure)
+    }
 
     init(
         model: MixModel,
@@ -71,6 +78,13 @@ struct MixView: View {
         .task {
             suggestedSeeds = await model.suggestedSeeds()
         }
+        // While the picker covers the grid every toggle writes
+        // `model.filters.tags`, and each used to be a blend nobody could see
+        // (F20). Held for the sheet's life and blended once as it closes —
+        // on the flag rather than `onDismiss`, so a swipe-down counts too.
+        .onChange(of: isPickingTags) { _, presenting in
+            if presenting { model.holdBlends() } else { model.releaseBlends() }
+        }
         .sheet(isPresented: $isPickingTags) {
             if let catalogue {
                 // No `mode:`. `SearchQuery` sends `tag_mode=and` whatever the
@@ -92,7 +106,13 @@ struct MixView: View {
         }
         .sheet(isPresented: $isNamingLens) {
             SaveLensSheet(query: model.filters) { name in
-                lenses?.save(name: name, query: model.filters)
+                // `save` reports whether it landed (it refuses an empty query
+                // or name); Search says which with a toast (gap 55) and this
+                // dropped the `Bool`, so "saved" and "the tap missed" looked
+                // the same (screens F21, 2026-09-14). Same wording as Search.
+                let saved = lenses?.save(name: name, query: model.filters) ?? false
+                let toast = Self.lensToast(saved: saved)
+                toasts?.show(toast.message, kind: toast.kind)
             }
             .presentationDetents([.height(420)])
             .presentationCornerRadius(Metrics.radiusSheet)

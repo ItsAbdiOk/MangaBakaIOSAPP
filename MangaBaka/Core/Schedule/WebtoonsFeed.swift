@@ -19,8 +19,20 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
     let source: ReleaseSource
     /// The official episode count. Naver only: it is the one endpoint that
     /// states this rather than leaving it to be counted from entries.
+    ///
+    /// **Permanently nil since 2026-09-13**, when Naver's adapter was deleted
+    /// under the private-API rule. `WebtoonsFeedClient` and
+    /// `GigaViewerFeedClient` are the only constructors of `ReleaseFeed` in
+    /// production and neither passes it, which in turn makes
+    /// `ReleaseFeedService.gap(primary:naver:)` return `.none` for every
+    /// series and `TranslationGap` unreachable. Left in place rather than
+    /// deleted because whether the translation gap returns from a permitted
+    /// source is a product call that has not been made — see
+    /// `docs/reviews/full2/SUMMARY.md` §6 decision 2. Do not read a use of
+    /// this field as evidence the feature works.
     let totalCount: Int?
-    /// The official completion flag. Naver only, for the same reason.
+    /// The official completion flag. Naver only, for the same reason — and
+    /// permanently nil for the same reason as `totalCount` above.
     let finished: Bool?
     /// The GigaViewer host this feed was matched from, e.g. "Tonari no Young
     /// Jump" — GigaViewer has no single brand name, only seven publisher

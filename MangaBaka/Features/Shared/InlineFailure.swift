@@ -13,7 +13,13 @@ struct InlineFailure: View {
     let error: APIError
     var retry: (() async -> Void)?
 
-    @State private var isRetrying = false
+    /// A second tap while one retry is still running used to fire a second,
+    /// overlapping one from this view's own hand-rolled `isRetrying` flag and
+    /// an unstructured `Task` that reset it on the main actor whether or not
+    /// this view was still around — the same rule `FailureState` already
+    /// pulled into a type of its own for the same reason (S13, 2026-09-14).
+    /// See `RetryGate`.
+    @State private var gate = RetryGate()
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -30,15 +36,10 @@ struct InlineFailure: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if let retry {
-                StateAction(title: isRetrying ? "Retrying…" : "Retry", weight: .aside) {
-                    guard !isRetrying else { return }
-                    isRetrying = true
-                    Task {
-                        await retry()
-                        isRetrying = false
-                    }
+                StateAction(title: gate.isRetrying ? "Retrying…" : "Retry", weight: .aside) {
+                    Task { await gate.fire(retry) }
                 }
-                .disabled(isRetrying)
+                .disabled(gate.isRetrying)
             }
         }
         .padding(.horizontal, Metrics.gutter)

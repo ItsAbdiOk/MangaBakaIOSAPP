@@ -46,10 +46,51 @@ struct DetailHero: View {
     @State private var columnWidth: CGFloat = 0
 
     /// What a set of measured heights is true for.
+    ///
+    /// Everything `column(_:fill:)` lays out from, not only the series id:
+    /// the kicker, the byline, the chapter line, the "Also known as" count
+    /// and the schedule block's shape all arrive *after* the first layout —
+    /// `extras` fills in the chapter count and status a v2 feed payload
+    /// lacks, and the cadence answers later still. With only the id in the
+    /// key the measurers retired against the first, thinner column, and the
+    /// form chosen no longer fit once the lines landed: the gap under the
+    /// cover this whole mechanism exists to prevent came back (review item
+    /// 66, 2026-09-14). Strings rather than `Series` itself, so a field
+    /// that does not change the column's height does not re-measure it.
     struct MeasureKey: Equatable {
         var seriesID: Int
         var width: CGFloat
         var typeSize: DynamicTypeSize
+        var kicker: String?
+        var byline: String?
+        var chapterCount: String?
+        var titleCount: Int
+        /// 0 no block, 1 loading, 2 failed, 3 an estimate — each a
+        /// different height in `DetailScheduleBlock`.
+        var scheduleShape: Int
+    }
+
+    /// Which `DetailScheduleBlock` the column carries, if any — see
+    /// `MeasureKey.scheduleShape`. The same test `column(_:fill:)` makes,
+    /// with the estimate winning: `isLoading` is only read there when
+    /// nothing has answered.
+    nonisolated static func scheduleShape(hasSchedule: Bool, isLoading: Bool, failed: Bool) -> Int {
+        if hasSchedule { return 3 }
+        if failed { return 2 }
+        return isLoading ? 1 : 0
+    }
+
+    /// The key for the column as it would be laid out right now. Pure and
+    /// static so `DetailHeroFormTests` can hold that a chapter count landing
+    /// changes it and a field that does not shape the column does not.
+    nonisolated static func measureKey(
+        series: Series, scheduleShape: Int, width: CGFloat, typeSize: DynamicTypeSize
+    ) -> MeasureKey {
+        MeasureKey(
+            seriesID: series.id, width: width, typeSize: typeSize,
+            kicker: kicker(for: series), byline: byline(for: series), chapterCount: chapterCount(for: series),
+            titleCount: series.titles?.count ?? 0, scheduleShape: scheduleShape
+        )
     }
 
     /// Side by side normally; stacked at accessibility text sizes.
@@ -186,7 +227,13 @@ struct DetailHero: View {
     /// current series, width and type size is not already known.
     @ViewBuilder
     private var measurers: some View {
-        let key = MeasureKey(seriesID: series.id, width: columnWidth, typeSize: typeSize)
+        let key = Self.measureKey(
+            series: series,
+            scheduleShape: Self.scheduleShape(
+                hasSchedule: schedule != nil, isLoading: isScheduleLoading, failed: scheduleFailure != nil
+            ),
+            width: columnWidth, typeSize: typeSize
+        )
         if columnWidth > 0, measuredFor != key {
             ZStack {
                 column(.chapters, fill: false)
@@ -311,8 +358,10 @@ struct DetailHero: View {
     }
 
     /// "Manhwa · Completed". Either half alone is still worth showing.
-    private var kicker: String? {
-        let parts = [Self.typeLabel(series.type), SeriesStatus.label(for: series.status)]
+    private var kicker: String? { Self.kicker(for: series) }
+
+    nonisolated static func kicker(for series: Series) -> String? {
+        let parts = [typeLabel(series.type), SeriesStatus.label(for: series.status)]
             .compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -336,8 +385,10 @@ struct DetailHero: View {
     /// The mockup writes "native title · author". A series with no native title
     /// distinct from the displayed one shows the author alone rather than a
     /// separator with nothing before it.
-    private var byline: String? {
-        let parts = [nativeTitle, series.authors?.joined(separator: ", ")]
+    private var byline: String? { Self.byline(for: series) }
+
+    nonisolated static func byline(for series: Series) -> String? {
+        let parts = [nativeTitle(of: series), series.authors?.joined(separator: ", ")]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -345,13 +396,15 @@ struct DetailHero: View {
 
     /// "212 chapters". Nil when MangaBaka has no count, which is common enough
     /// on new series that the line has to be able to not exist.
-    private var chapterCount: String? {
+    private var chapterCount: String? { Self.chapterCount(for: series) }
+
+    nonisolated static func chapterCount(for series: Series) -> String? {
         guard let chapters = series.totalChapters, chapters > 0 else { return nil }
         let whole = Int(wholeOrClamped: chapters)
         return "\(whole) \(whole == 1 ? "chapter" : "chapters")"
     }
 
-    private var nativeTitle: String? {
+    nonisolated private static func nativeTitle(of series: Series) -> String? {
         guard let displayed = series.displayTitle else { return nil }
         return series.titles?
             .first { $0.traits.contains("native") && $0.title != displayed }?

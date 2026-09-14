@@ -331,10 +331,11 @@ private extension SearchView {
                     .padding(.bottom, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 } else if case let .offlineIndex(builtDate) = model.origin {
-                    // No retry closure: retrying is what the reader already
-                    // did by switching "Browse offline" off, or what
-                    // happens on its own the next time a search succeeds
-                    // against the network.
+                    // No retry closure: this bar is for "Browse offline" and
+                    // a genuine `.offline` fallback, neither of which has a
+                    // moment to retry at. A rate-limited fallback keeps its
+                    // `failure`, so it takes the branch above — countdown,
+                    // auto-retry and all (F8); Return re-asks from here too.
                     StaleBar(
                         headline: "From the offline index (built \(OfflineIndexDateLabel.short(builtDate)))",
                         detail: "Top 20,000 series, covers load when you're back."

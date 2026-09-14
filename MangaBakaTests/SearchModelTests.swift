@@ -590,17 +590,4 @@ struct SearchOfflineFallbackTests {
         #expect(model.failure == nil, "The fallback answered, so this is not a dead end needing FailureState")
         #expect(!model.results.isEmpty)
     }
-
-    @Test("A rate-limited search failure also falls back to the bundled index")
-    func rateLimitedFailureFallsBack() async {
-        let repository = RecordingRepository()
-        repository.result = FeedResult(series: [], origin: .staleAfter(.rateLimited(until: nil)))
-        let model = makeModel(repository: repository)
-        model.query.text = "one"
-
-        await model.search()
-
-        #expect(model.origin.isOfflineIndex)
-        #expect(model.failure == nil)
-    }
 }

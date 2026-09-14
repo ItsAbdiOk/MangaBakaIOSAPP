@@ -74,6 +74,21 @@ struct SeedPickerEmptyCopyTests {
         let copy = SeedPickerSheet.emptyCopy(message: nil, queryText: "Zzzqqq")
         #expect(copy == "Nothing called \u{201C}Zzzqqq\u{201D}.")
     }
+
+    /// Screens F17 (2026-09-14): the picker read `isSearching` and ignored
+    /// `isPending`, so every keystroke showed "Nothing called “x”." for the
+    /// 300 ms debounce before flickering to a spinner. Expected to fail
+    /// before the fix with: `copy == nil` → `"Nothing called “Zzz”."` (once
+    /// the `isPending:` parameter exists at all; before that it does not
+    /// compile, which proves nothing about behaviour).
+    @Test("A pending search is not an empty answer")
+    func pendingSearchIsNotEmpty() {
+        let copy = SeedPickerSheet.emptyCopy(message: nil, queryText: "Zzz", isPending: true)
+        #expect(copy == nil)
+        // A failure still speaks over a pending re-ask: the reader tapped
+        // "Try again" and the message stays until the answer replaces it.
+        #expect(SeedPickerSheet.emptyCopy(message: "Offline", queryText: "Zzz", isPending: true) == "Offline")
+    }
 }
 
 /// Gap 45 (M10): rows past the three-seed cap were dimmed with hit-testing

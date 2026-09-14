@@ -90,12 +90,53 @@ ok "tests passed"
 # docs-only push was paying it in full. The memo lives in .git/, so it is
 # per-clone and never committed; delete it to force a full archive.
 ARCHIVE_MEMO="$(git rev-parse --git-dir)/mb-prepush-archive-ok"
-# Every input to the compile: both source trees, the project description and
-# the build settings. Trees from HEAD, not the working directory, because HEAD
-# is what is being pushed — and because step 3 above just rewrote the tree.
-SOURCE_STAMP=$(git rev-parse HEAD:MangaBaka HEAD:MangaBakaWidgets HEAD:project.yml HEAD:Configs 2>/dev/null | tr '\n' ' ')
+# Every input to the compile: both source trees, the project description, the
+# build settings, the resolved package versions, and the compiler itself.
+#
+# Trees from HEAD, not the working directory, because HEAD is what is being
+# pushed — and because step 3 above just rewrote the tree. That is also why the
+# memo is refused on a dirty tree below: `xcodebuild archive` compiles the
+# *working* tree, so on a dirty tree the memo would record HEAD's hashes for an
+# archive of something else, and the next clean push would skip the archive it
+# never actually ran (review item 61, 2026-09-14).
+#
+# `xcodebuild -version` is in the stamp because the failure this step exists to
+# catch — builds 69 and 71 dying in the Swift 6.3.3 SIL verifier — is a property
+# of the compiler, not of the code. Without it, bumping Xcode on an unchanged
+# tree skips the one check that would have found the next one of those.
+#
+# Package.resolved because it pins the dependency versions the archive compiles
+# against and lives inside the excluded .xcodeproj, so a dependency bump on its
+# own looked like "no change".
+#
+# The `tr` is deliberately *not* in the same pipeline as `git rev-parse`. It was,
+# and a pipeline's exit status is its last command's, so a renamed stamped path
+# was invisible twice over: the failure was swallowed, and `git rev-parse` echoes
+# the argument it could not resolve to stdout, so the stamp became a constant
+# string containing that literal path. Constant means it matches the memo on
+# every subsequent push — the archive would have been skipped forever, silently.
+# (Measured 2026-09-14: `git rev-parse HEAD:MangaBaka HEAD:NoSuchDir` exits 128
+# and prints `HEAD:NoSuchDir`; piped to `tr`, the `if` saw 0.)
+#
+# Empty means "archive unconditionally and write no memo", which is the safe
+# direction, and both guards below already read it that way.
+if SOURCE_STAMP=$(
+    git rev-parse HEAD:MangaBaka HEAD:MangaBakaWidgets HEAD:project.yml HEAD:Configs \
+        HEAD:MangaBaka.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved \
+        2>/dev/null
+) && TOOLCHAIN_STAMP=$(xcodebuild -version 2>/dev/null); then
+    SOURCE_STAMP=$(printf '%s\n%s' "$SOURCE_STAMP" "$TOOLCHAIN_STAMP" | tr '\n' ' ')
+else
+    SOURCE_STAMP=""
+fi
 
-if [ -n "$SOURCE_STAMP" ] && [ -f "$ARCHIVE_MEMO" ] \
+# Dirty in anything the compiler sees. Scoped to those paths so an edited README
+# does not cost a ten-minute archive.
+COMPILE_INPUTS_DIRTY=$(
+    git status --porcelain -- MangaBaka MangaBakaWidgets project.yml Configs 2>/dev/null
+) || COMPILE_INPUTS_DIRTY="dirty"
+
+if [ -n "$SOURCE_STAMP" ] && [ -z "$COMPILE_INPUTS_DIRTY" ] && [ -f "$ARCHIVE_MEMO" ] \
    && [ "$(cat "$ARCHIVE_MEMO")" = "$SOURCE_STAMP" ]; then
     ok "Release archive skipped (no Swift, project or config change since the last one)"
 else
@@ -114,8 +155,14 @@ else
     fi
     # Not `[ ... ] && printf`: under `set -e` an empty stamp would make that
     # line the script's last exit status and abort a push that just passed.
-    if [ -n "$SOURCE_STAMP" ]; then
+    #
+    # Nothing is memoised off a dirty tree: see the stamp's comment above.
+    # Removing any stale memo as well, so a later clean push cannot match one
+    # written before this archive.
+    if [ -n "$SOURCE_STAMP" ] && [ -z "$COMPILE_INPUTS_DIRTY" ]; then
         printf '%s' "$SOURCE_STAMP" >"$ARCHIVE_MEMO"
+    else
+        rm -f "$ARCHIVE_MEMO"
     fi
     # A few hundred MB, and nothing reads it after this point.
     rm -rf "$MB_TMP/MangaBaka.xcarchive"

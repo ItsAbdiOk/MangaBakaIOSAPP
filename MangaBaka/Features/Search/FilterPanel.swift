@@ -54,6 +54,10 @@ struct FilterPanel: View {
     @State private var isPickingTags = false
     @State private var isPickingGenres = false
     @State private var isPickingPublisher = false
+    /// Which year field has the keyboard, if any. The count waits for the
+    /// field to be left: the fields write `query` per digit, so "2020" was
+    /// up to four `limit=1` search-window requests (screens F26, 2026-09-14).
+    @FocusState private var focusedYear: YearField?
     @State private var genres: [Genre] = []
     @State private var resultCount: Int?
     @State private var countTask: Task<Void, Never>?
@@ -71,8 +75,14 @@ struct FilterPanel: View {
     /// slot is *queued*, not whether a reader can still search.
     nonisolated static let countDebounce = Duration.milliseconds(350)
 
-    /// See `countSource(query:preferOffline:hasNetworkCounter:hasOfflineCounter:)`.
-    enum CountSource: Equatable { case none, offline, network }
+    /// See `countSource(query:preferOffline:hasNetworkCounter:hasOfflineCounter:isHeld:)`.
+    /// `.held` keeps the last number on screen and books nothing: a picker
+    /// sheet is up, or a year field has the keyboard, and the count is asked
+    /// for once when that ends.
+    enum CountSource: Equatable { case none, offline, network, held }
+
+    /// The two year fields, for `focusedYear`.
+    enum YearField: Hashable { case from, to }
 
     private let types = ["manga", "novel", "manhwa", "manhua", "oel", "other"]
     private let statuses = ["releasing", "completed", "hiatus", "cancelled", "upcoming"]
@@ -149,6 +159,16 @@ struct FilterPanel: View {
         // Flipping "Browse offline" changes where the count comes from
         // without changing the query, so it needs its own trigger.
         .onChange(of: preferOffline?.wrappedValue) { _, _ in scheduleCount(for: query) }
+        // Leaving a year field is the commit; the digits typed into it were
+        // held (F26). A sheet closing is the same moment for a picker: every
+        // toggle inside it wrote `query` and was a count each, under a sheet
+        // that hid the number.
+        .onChange(of: focusedYear) { _, now in
+            if now == nil { scheduleCount(for: query) }
+        }
+        .onChange(of: isPickingTags || isPickingGenres || isPickingPublisher) { _, presenting in
+            if !presenting { scheduleCount(for: query) }
+        }
         .task { scheduleCount(for: query) }
         .sheet(isPresented: $isPickingTags) {
             if let catalogue {
@@ -313,10 +333,17 @@ extension FilterPanel {
     /// Before 2026-09-13 the panel read only `canShow` and `previewCount`,
     /// so the toggle that promised "no requests" still sent one count per
     /// settled filter change (review UX#2).
+    ///
+    /// `isHeld` — a picker sheet up, or a year field with the keyboard —
+    /// answers `.held` before anything else: the count is not wrong, it is
+    /// not due yet. A query that cannot show still answers `.none`, so a
+    /// held panel with nothing set does not keep a stale number.
     nonisolated static func countSource(
-        query: SearchQuery, preferOffline: Bool, hasNetworkCounter: Bool, hasOfflineCounter: Bool
+        query: SearchQuery, preferOffline: Bool, hasNetworkCounter: Bool, hasOfflineCounter: Bool,
+        isHeld: Bool = false
     ) -> CountSource {
         guard canShow(query: query) else { return .none }
+        if isHeld { return .held }
         if preferOffline { return hasOfflineCounter ? .offline : .none }
         return hasNetworkCounter ? .network : .none
     }
@@ -331,10 +358,14 @@ extension FilterPanel {
             query: query,
             preferOffline: preferOffline?.wrappedValue ?? false,
             hasNetworkCounter: previewCount != nil,
-            hasOfflineCounter: offlineCount != nil
+            hasOfflineCounter: offlineCount != nil,
+            isHeld: isPickingTags || isPickingGenres || isPickingPublisher || focusedYear != nil
         )
+        // Held: the last number stays, nothing is booked, and the sheet's
+        // dismiss or the field's blur asks again (F26).
+        if source == .held { return }
         let counter: ((SearchQuery) async -> Int?)? = switch source {
-        case .none: nil
+        case .none, .held: nil
         case .offline: offlineCount
         case .network: previewCount
         }
@@ -431,7 +462,9 @@ extension FilterPanel {
         section("Year") {
             HStack(spacing: Metrics.gapChips) {
                 yearField("From", value: $query.yearFrom)
+                    .focused($focusedYear, equals: .from)
                 yearField("To", value: $query.yearTo)
+                    .focused($focusedYear, equals: .to)
             }
         }
     }

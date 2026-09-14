@@ -31,7 +31,7 @@ struct ScheduleView: View {
                 case .loading:
                     loadingSkeleton
                 case let .failed(error):
-                    FailureState(error: error, retry: { await model.load() })
+                    FailureState(error: error, retry: { await model.load(forceRefresh: true) })
                         .padding(.top, 60)
                 case .empty:
                     emptyState
@@ -61,10 +61,17 @@ struct ScheduleView: View {
                     // the estimate half of the screen with no word, even
                     // though the announced section above it (a different
                     // read) still had real content to show.
+                    // No `deadline:`, deliberately — the one `StaleBar` site
+                    // that withholds it. The bar can count a 429 down and
+                    // fire `retry` at zero, and this retry is `load()`: the
+                    // library walk again, 13 requests and ~25 MB on a real
+                    // account. Re-running that the instant a rate limit lifts
+                    // is the wrong default for that cost; the reader taps
+                    // Retry when they want it (screens §StaleBar, 2026-09-14).
                     if let stale = model.announcedStaleLine {
                         StaleBar(
                             headline: stale.headline, detail: stale.detail,
-                            retry: { await model.load() }
+                            retry: { await model.load(forceRefresh: true) }
                         )
                         .padding(.bottom, 14)
                     }

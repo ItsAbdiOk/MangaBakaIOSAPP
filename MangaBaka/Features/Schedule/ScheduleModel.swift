@@ -138,6 +138,17 @@ final class ScheduleModel {
         "\(snapshot.dated.count) estimated of \(snapshot.inScope) in scope"
     }
 
+    /// Built once rather than per body read: `measuredLine` is read from
+    /// `ScheduleView`'s body, and a `RelativeDateTimeFormatter` carries a
+    /// locale and a calendar it has to set up each time it is allocated —
+    /// `DiscoverModel.ageFormatter` was made static for the same reason
+    /// (screens F18, 2026-09-14).
+    private static let ageFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+
     var measuredLine: String {
         guard let measuredAt = snapshot.measuredAt else {
             return snapshot.pending > 0
@@ -145,8 +156,7 @@ final class ScheduleModel {
                 : "Not measured yet"
         }
         let now = Date()
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
+        let formatter = Self.ageFormatter
         // Rows measured at different times are described by the oldest: the
         // schedule is as old as its oldest estimate. Opening one series page
         // six weeks after a build refreshes one row, and "Measured 1 minute
@@ -297,7 +307,24 @@ final class ScheduleModel {
         return groups
     }
 
-    func load() async {
+    /// The screen's read. `ScheduleView`'s `.task` carries no id, so SwiftUI
+    /// runs it again on every pop-back from a series row; each run re-read
+    /// `service.snapshot()` and `librarySnapshot.all()` — the whole library,
+    /// deduped and decoded — and `isLoading = true` flipped `hasNeverMeasured`
+    /// false for a frame, so `scopeCard` flashed over `firstRunCard` (screens
+    /// F19, 2026-09-14; D-1, fixed on Discover with `hasLoadedOnce`). A
+    /// re-appearance now only resumes a build still running, which is the
+    /// part it genuinely needs. The retries pass `forceRefresh` and read again.
+    ///
+    /// The trade: a library change made from a series page (a chapter
+    /// marked read, a state changed) is not reflected on pop-back until the
+    /// next Measure or retry. Discover took the same trade for its rows.
+    func load(forceRefresh: Bool = false) async {
+        if hasLoadedOnce, !forceRefresh {
+            progress = await service.progress
+            if progress.isRunning { followBuild() }
+            return
+        }
         isLoading = true
         snapshot = await service.snapshot()
         progress = await service.progress
@@ -333,9 +360,18 @@ final class ScheduleModel {
     /// release calendar under the heading "yours".
     private func loadAnnounced() async {
         guard let calendar, let librarySnapshot else { return }
-        let entries = await librarySnapshot.all()
+        // `wholeLibrary`: "yours" under the release calendar must not be a
+        // fraction of the reader's library presented as all of it. Nil shows
+        // the walk's own failure instead (review 2, lane B's table).
+        guard let entries = await librarySnapshot.load().wholeLibrary else { return }
+        // `uniquingKeysWith:`, not `uniqueKeysWithValues:` — the latter traps
+        // on a repeated series id. Safe today only because
+        // `LibrarySnapshot.load()` dedupes (`LibrarySnapshot.swift`), which is
+        // one refactor away from the trap reader N5 recorded; this costs
+        // nothing and removes the dependency (screens F29, 2026-09-14).
         seriesByID = Dictionary(
-            uniqueKeysWithValues: entries.compactMap { entry in entry.series.map { (entry.seriesId, $0) } }
+            entries.compactMap { entry in entry.series.map { (entry.seriesId, $0) } },
+            uniquingKeysWith: { first, _ in first }
         )
         announced = await calendar.mine(seriesIDs: Set(entries.map(\.seriesId)))
         announcedFailure = await calendar.lastFailure

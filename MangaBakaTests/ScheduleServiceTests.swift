@@ -10,7 +10,9 @@ struct ScheduleServiceTests {
     @Test("The service reports a failed library walk instead of an empty scope")
     func serviceReportsFailure() async throws {
         let service = ReleaseScheduleService(
-            library: LibrarySnapshot(library: OfflineLibrary()), database: try AppDatabase.inMemory()
+            library: LibrarySnapshot(library: OfflineLibrary()),
+            mangaUpdates: MangaUpdatesClient(),
+            database: try AppDatabase.inMemory()
         )
         let snapshot = await service.snapshot()
         #expect(snapshot.libraryFailure == .offline)
@@ -44,7 +46,9 @@ struct ScheduleServiceTests {
             )
         }
         let service = ReleaseScheduleService(
-            library: LibrarySnapshot(library: OneEntryLibrary(entry: entry)), database: database
+            library: LibrarySnapshot(library: OneEntryLibrary(entry: entry)),
+            mangaUpdates: MangaUpdatesClient(),
+            database: database
         )
         let snapshot = await service.snapshot()
 

@@ -144,7 +144,13 @@ actor AppleBooksClient {
             let retryAfter = spacing.backOff(
                 retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"), now: clock.now
             )
-            return .failure(.rateLimited(retryAfter: retryAfter ?? 60, party: .appleBooks))
+            // `unstatedBackOff` rather than a literal 60: `backOff` has just
+            // pushed the slot out by exactly that when the header was unusable,
+            // and a second copy of the number means the screen could one day
+            // name a wait the client is not taking.
+            return .failure(
+                .rateLimited(retryAfter: retryAfter ?? RequestSpacing.unstatedBackOff, party: .appleBooks)
+            )
         }
         // Gap 73: 403 used to get the same 60s backoff as 429, on the theory
         // that Apple answers an over-limit client with 403 as often as with

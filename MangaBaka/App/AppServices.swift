@@ -9,6 +9,17 @@ import SwiftUI
 /// container or a service locator: it is the composition root, written out
 /// plainly, and nothing reads from it at runtime except the one place that
 /// hands it all to `RootView`.
+/// The two setters `AppServices.wire` drives on the library.
+///
+/// Exists so `wire`'s library half can be recorded by a test double. See
+/// `AppServices.wire` for why that was worth a protocol.
+protocol LibraryFiltering: Sendable {
+    func updateContentRatings(_ ratings: [String]) async
+    func updateFormats(_ formats: [String]) async
+}
+
+extension LibraryService: LibraryFiltering {}
+
 @MainActor
 struct AppServices {
     let repository: SeriesRepository
@@ -69,9 +80,15 @@ struct AppServices {
     let reminders = ReleaseReminders()
     let onboarding = OnboardingState()
     /// The Keychain, read once for "is there a token at all" rather than
-    /// inferred from a 401 (item 86 / Q7). `TokenStore` memoises its own
-    /// reads behind a lock, so holding one instance is what makes the
-    /// `hasCredentials` closure below cost nothing per call.
+    /// inferred from a 401 (item 86 / Q7).
+    ///
+    /// This is the app's only `TokenStore()`. `SettingsView` and
+    /// `ResolvingTokenProvider` used to default their own, and `TokenStore`
+    /// memoised per instance, so the three disagreed about whether a token
+    /// existed (second-pass review S1, 2026-09-14 — see `TokenStore.cache`).
+    /// The memo is static now, so the reads are coherent whoever holds the
+    /// value; passing this one through is what makes the single owner
+    /// visible rather than a thing you have to know.
     let tokenStore: TokenStore
     /// True when the on-disk cache existed but could not be opened or
     /// migrated, and was renamed aside so a fresh one could be opened in its
@@ -80,6 +97,16 @@ struct AppServices {
     /// the old silent fall-through to an in-memory database that simply
     /// forgot everything on every relaunch with no explanation.
     let databaseWasReset: Bool
+    /// "Can this app authenticate a request at all" — the Keychain token or,
+    /// on a Debug build, the build-time `MB_PAT`.
+    ///
+    /// One closure rather than the two separate `{ keychain.read() != nil }`
+    /// spellings this used to carry, because those ignored `MB_PAT` and so
+    /// disagreed with the client on every build Abdi develops on: the Library
+    /// tab said "No account" while Discover, the stack and Settings' token
+    /// check were all authenticated (item 13 / S3, 2026-09-14). Defined on
+    /// `ResolvingTokenProvider`, where the credential is actually resolved.
+    let hasCredentials: @Sendable () -> Bool
 
     init() {
         let updates = MangaUpdatesClient()
@@ -87,7 +114,12 @@ struct AppServices {
         let keychain = TokenStore()
         tokenStore = keychain
 
-        let apiClient = Self.makeClient()
+        // Built here, not inside `makeClient`, because two things need it:
+        // the client, to sign requests, and `hasCredentials` below, to answer
+        // "is this reader signed in" with the same rule (item 13).
+        let credentials = ResolvingTokenProvider(store: keychain, infoDictionary: Bundle.main.infoDictionary)
+        hasCredentials = { credentials.hasCredentials }
+        let apiClient = Self.makeClient(tokenProvider: credentials)
         client = apiClient
         let opened = Self.makeDatabase()
         let database = opened.database
@@ -148,7 +180,7 @@ struct AppServices {
         // widget tile, the Spotlight index — while the screens' own
         // `hasCredentials` correctly said "No account" (walk, 2026-09-14).
         let sharedLibrary = LibrarySnapshot(
-            library: libraryService, database: database, hasCredentials: { keychain.read() != nil }
+            library: libraryService, database: database, hasCredentials: hasCredentials
         )
         librarySnapshot = sharedLibrary
 
@@ -158,17 +190,14 @@ struct AppServices {
             library: sharedLibrary, mangaUpdates: updates, database: database
         )
         taste = TasteProfile(
-            library: libraryService,
-            ledger: TasteLedger(database: database),
-            snapshot: sharedLibrary
+            library: libraryService, ledger: TasteLedger(database: database), snapshot: sharedLibrary
         )
         catalogue = CatalogueService(client: apiClient)
         calendar = ReleaseCalendar(client: apiClient)
 
-        Self.wire(content: store, formats: formatStore, blocked: blocked,
-                  to: built, library: libraryService)
+        Self.wire(content: store, formats: formatStore, blocked: blocked, to: built, library: libraryService)
 
-        Self.applyStoredExclusion(to: repository, library: libraryService)
+        Self.applyStoredExclusion(to: repository, library: libraryService, signedIn: hasCredentials())
 
         Self.startBackgroundWarmup()
 
@@ -188,7 +217,7 @@ struct AppServices {
             // `ScreenState.noAccount` and the screen behind it were dead
             // code — a reader with no token paid a 401 per Library visit and
             // was shown the generic failure instead.
-            hasCredentials: { keychain.read() != nil }
+            hasCredentials: hasCredentials
         )
     }
 
@@ -204,12 +233,21 @@ struct AppServices {
     /// default, so filtering feeds but not recommendations is the setting
     /// failing silently exactly where it matters most; and "no novels" would
     /// otherwise hold everywhere except the one screen built from taste.
+    ///
+    /// `library` is `any LibraryFiltering`, not `LibraryService`, for the
+    /// test's sake: the kill criterion stated below used to be false. With a
+    /// concrete `LibraryService` the only double available was a real one,
+    /// which records nothing, so `updateContentRatings` and `updateFormats`
+    /// on the library half were asserted by nothing — two of the five lines
+    /// could be deleted with the suite still green, and they are the two that
+    /// filter the reader's own recommendations by rating (item 59,
+    /// 2026-09-14). A seam whose only purpose is a test, and said so here.
     static func wire(
         content: ContentPreferencesStore,
         formats: FormatPreferencesStore,
         blocked: BlockedTagsStore,
         to repository: any SeriesRepositoryProtocol,
-        library: LibraryService
+        library: any LibraryFiltering
     ) {
         content.onChange = { ratings in
             await repository.updateContentRatings(ratings)
@@ -281,7 +319,7 @@ struct AppServices {
     }
 
     /// The API client, pointed at whatever the build says.
-    private static func makeClient() -> APIClient {
+    private static func makeClient(tokenProvider: some TokenProvider) -> APIClient {
         let info = Bundle.main.infoDictionary
 
         // Falls back to the documented production host if the build setting is
@@ -292,7 +330,7 @@ struct AppServices {
 
         // Resolved per request rather than chosen once, so a token entered in
         // Settings takes effect immediately instead of after a relaunch.
-        return APIClient(baseURL: base, tokenProvider: ResolvingTokenProvider(infoDictionary: info))
+        return APIClient(baseURL: base, tokenProvider: tokenProvider)
     }
 
     /// The on-device cache.
@@ -355,7 +393,17 @@ struct AppServices {
     /// whatever this process started with.
     ///
     /// Nil when unauthenticated, which is the ordinary case and not a failure.
-    private static func applyStoredExclusion(to repository: SeriesRepository, library: LibraryService) {
+    ///
+    /// `hasCredentials` because "unauthenticated" was being discovered by
+    /// *asking*: `profileID()` sent `/v1/my/profile` on every signed-out cold
+    /// launch, a request that can only ever be a 401, against the 180/min
+    /// budget the whole app shares (item 15, 2026-09-14). Taken once here
+    /// rather than as a closure: this runs at the end of `init`, and the
+    /// token cannot change before the `Task` starts.
+    private static func applyStoredExclusion(
+        to repository: SeriesRepository, library: LibraryService, signedIn: Bool
+    ) {
+        guard signedIn else { return }
         Task {
             await repository.updateLibraryExclusion(userID: library.profileID())
         }

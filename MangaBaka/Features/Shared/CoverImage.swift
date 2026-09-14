@@ -139,6 +139,17 @@ struct CoverImage: View {
 
         let start = Date()
         guard let image = await CoverStore.shared.image(for: url) else { return }
+        // The row may have left the screen while the fetch was out. `.task`
+        // is cancelled on disappear, but `CoverStore.image(for:)` is
+        // deliberately not (a cover half-downloaded for a row that scrolled
+        // off is still worth finishing for the cache), so it answers
+        // normally after cancellation — and this assignment used to hand a
+        // row that `onDisappear` had just emptied its decoded bitmap straight
+        // back. A fast fling over 513 rows did that for hundreds of rows at
+        // once, which is the per-row copy item 33's release exists to free
+        // (review item 47, 2026-09-14). The cache keeps the pixels; the row
+        // re-reads them synchronously through `cached(_:)` when it returns.
+        guard !Task.isCancelled else { return }
         loaded = image
         onLoaded?()
 
@@ -151,10 +162,14 @@ struct CoverImage: View {
         // Deferred a tick so the placeholder-only frame above this actually
         // commits before `isReady` flips — setting both in the same pass
         // would let the image arrive already fully visible, with nothing for
-        // `appearsSoftly` to cross-fade from.
-        Task { @MainActor in
-            isReady = true
-        }
+        // `appearsSoftly` to cross-fade from. A `yield` rather than the
+        // unstructured `Task { @MainActor in … }` this used to be: both
+        // enqueue one job on the main executor behind the current pass, but
+        // a detached task cannot see this `.task`'s cancellation, so a row
+        // released between the two passes was still marked ready (item 47).
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+        isReady = true
     }
 
     /// The line between "arrived instantly" and "arrived, and should be seen

@@ -29,10 +29,20 @@ enum FeedAnswer: Equatable, Sendable {
 
 /// Something that can answer a series' release feed for one publisher.
 ///
-/// One protocol, three adapters (`WebtoonsFeedClient`, `NaverFeedClient`,
-/// `GigaViewerFeedClient`), assembled by `ReleaseFeedService`. Each adapter
-/// owns its own request spacing and cache, because each publisher has its
-/// own rules for both.
+/// One protocol, two adapters (`WebtoonsFeedClient`, `GigaViewerFeedClient`),
+/// assembled by `ReleaseFeedService`. Each adapter owns its own request
+/// spacing and cache, because each publisher has its own rules for both.
+///
+/// There was a third. `NaverFeedClient` was deleted on 2026-09-13 under the
+/// private-API rule (`AppServices.swift`), and this comment named it as a
+/// conformer for a day afterwards. What is still standing behind it is
+/// bigger than a comment and is not this file's to remove: `ReleaseFeed`'s
+/// `totalCount` and `finished` are documented "Naver only" and nothing
+/// populates them, so `ReleaseFeedService.gap(primary:naver:)` returns
+/// `.none` unconditionally and `TranslationGap` is unreachable. See
+/// `docs/reviews/full2/SUMMARY.md` §6 decision 2 — it is a product call
+/// (delete the concept, or restore a permitted source for it), and until it
+/// is made the dead branch must at least not read as alive.
 ///
 /// **Tapas was not built.** `tapas.io/series/<slug>.json` answers, but with
 /// no episode list at all, and every episode-list URL shape tried (`/episodes`,
@@ -50,13 +60,15 @@ protocol ReleaseFeedProvider: Sendable {
     /// Whatever this provider already has on disk for this series, with no
     /// request and no spacing claim — the cache `feed(for:links:)` would have
     /// read had it been called, and nothing more. Cache age is ignored: a
-    /// season-ended or Naver-finished feed a week stale is still season-ended
-    /// or finished, and `ReleaseReminders.reschedule` only needs to notice a
+    /// season-ended feed a week stale is still season-ended, and the
+    /// "original series finished" condition below with it (unreachable today
+    /// — see this protocol's own doc), and `ReleaseReminders.reschedule` only
+    /// needs to notice a
     /// change since the last time it looked, not a fresh number.
     ///
     /// Built for `ReleaseFeedService.cachedFeeds(for:links:)`, which
-    /// `RootView+Session.refreshReminders` calls so the confirmed-episode,
-    /// season-ended and Naver-finished notification conditions can fire from
+    /// `RootView+Session.refreshReminders` calls so the confirmed-episode and
+    /// season-ended notification conditions can fire from
     /// whatever a prior series-page visit already cached, without adding a
     /// single network call of its own.
     func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed?

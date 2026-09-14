@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import MangaBaka
 
@@ -87,7 +88,7 @@ struct DetailHeroMeasurementTests {
         // The measurers are mounted behind a key, so a settled hero stops
         // re-measuring. The key has to carry everything that changes the
         // answer, or a swipe to the next series would keep the old heights.
-        #expect(source.contains("MeasureKey(seriesID: series.id, width: columnWidth, typeSize: typeSize)"))
+        #expect(SourceTree.containsRun(source, "let key = Self.measureKey( series: series, scheduleShape:"))
         #expect(SourceTree.containsRun(source, "if columnWidth > 0, measuredFor != key {"))
         // And the visible column is stretched to the cover, never the measurer.
         #expect(source.contains(".frame(minHeight: coverHeight, alignment: .top)"))
@@ -102,5 +103,57 @@ struct DetailHeroMeasurementTests {
         #expect(source.contains("if form.hasByline, let byline"))
         let block = try SourceTree.read("MangaBaka/Features/Detail/DetailScheduleBlock.swift")
         #expect(SourceTree.containsRun(block, "if isExpanded { Text(ScheduleRow.cadenceLine(estimate))"))
+    }
+}
+
+/// Item 66 (second-pass review, 2026-09-14). The measurers retired once
+/// `measuredFor` matched a key of series id, width and type size — but the
+/// chapter line, the kicker, the byline, the "Also known as" count and the
+/// schedule block all arrive *after* the first layout, and each changes the
+/// column's height. The key now carries them, so a chapter count landing
+/// from `extras` puts the measurers back.
+///
+/// Expected to fail before the fix: `DetailHero.measureKey` does not exist
+/// — a compile failure, not a wrong value. The old `MeasureKey` had no
+/// field a chapter count could be expressed in, so no assertion against it
+/// could have failed for the right reason; this is stated rather than
+/// dressed up.
+@Suite("The hero re-measures when the column's inputs land")
+struct DetailHeroMeasureKeyTests {
+    private func key(_ series: Series, scheduleShape: Int = 0) -> DetailHero.MeasureKey {
+        DetailHero.measureKey(series: series, scheduleShape: scheduleShape, width: 175, typeSize: .large)
+    }
+
+    @Test("A chapter count arriving from extras changes the key")
+    func chapterCountChangesTheKey() {
+        let lean = SeriesFactory.make(id: 7, title: "Regressed")
+        let filled = SeriesFactory.make(id: 7, title: "Regressed", totalChapters: 212)
+        #expect(key(lean) != key(filled))
+        #expect(key(filled).chapterCount == "212 chapters")
+    }
+
+    @Test("A status and type arriving changes the key; a rating does not")
+    func kickerChangesTheKeyRatingDoesNot() {
+        let lean = SeriesFactory.make(id: 7, title: "Regressed")
+        let withKicker = SeriesFactory.make(id: 7, title: "Regressed", status: "completed", type: "manhwa")
+        #expect(key(lean) != key(withKicker))
+        #expect(key(withKicker).kicker == "Manhwa · Completed")
+        // The rating is on the stats strip, not in the column: no re-measure.
+        let rated = SeriesFactory.make(id: 7, title: "Regressed", rating: 8.6)
+        #expect(key(lean) == key(rated))
+    }
+
+    @Test("The schedule block's shape is part of the key")
+    func scheduleShapeIsInTheKey() {
+        let series = SeriesFactory.make(id: 7, title: "Regressed")
+        let loading = DetailHero.scheduleShape(hasSchedule: false, isLoading: true, failed: false)
+        let none = DetailHero.scheduleShape(hasSchedule: false, isLoading: false, failed: false)
+        let estimate = DetailHero.scheduleShape(hasSchedule: true, isLoading: false, failed: false)
+        #expect(Set([none, loading, estimate]).count == 3)
+        // Measured while the ask was out, then it answered "none": the
+        // block leaves and the column is shorter than measured.
+        #expect(key(series, scheduleShape: loading) != key(series, scheduleShape: none))
+        // An estimate outranks a loading flag still set beside it.
+        #expect(DetailHero.scheduleShape(hasSchedule: true, isLoading: true, failed: false) == estimate)
     }
 }

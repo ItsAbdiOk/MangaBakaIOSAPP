@@ -184,12 +184,6 @@ final class LibraryModel {
         refreshListed()
     }
 
-    /// Recomputes what the filter, the search box and the sort decide.
-    private func refreshListed() {
-        listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
-        jumpTargets = Self.jumpTargets(in: listed)
-    }
-
     /// Every state that has anything in it, in reading order.
     ///
     /// Dropped is last on purpose — it is the one state a reader wants counted
@@ -428,7 +422,7 @@ final class LibraryModel {
         // Work-list 15: anything the reader edited between two pages was
         // overwritten by `entries = rows` and is now replayed. The snapshot
         // does the same to its own copy before caching, so the two agree.
-        pendingChanges.removeAll()
+        clearPendingEdits()
     }
 
     /// Patches one entry after a write lands, in memory and in the shared
@@ -462,6 +456,11 @@ final class LibraryModel {
     /// Edits made while the walk was still landing pages, newest per series.
     /// See `apply(_:to:)` and work-list 15.
     private var pendingChanges: [Int: LibraryChange] = [:]
+    /// Rows added or removed from a series page while the walk was still
+    /// landing pages — the same hazard as `pendingChanges`, for the two
+    /// writes `apply(_:to:)` cannot express. See `insert(_:)`, `remove(seriesId:)`.
+    private var pendingInserts: [Int: LibraryEntry] = [:]
+    private var pendingRemovals: Set<Int> = []
 
     /// Clears everything this model remembers about who was signed in.
     ///
@@ -501,6 +500,7 @@ final class LibraryModel {
             guard let change = pendingChanges[row.seriesId] else { return row }
             return row.applying(change)
         }
+        replayPendingRows()
         isComplete = complete
         shelves = Self.shelves(from: entries)
         refreshFromEntries()
@@ -554,6 +554,77 @@ final class LibraryModel {
             return "Queued, not started."
         case .considering:
             return "Maybes. The stack's pile, on the server."
+        }
+    }
+}
+
+/// The two writes a series page makes that `apply(_:to:)` cannot express:
+/// a row that did not exist and a row that no longer does. `LibraryControl`
+/// used to update only its own `entry` for both, so the Library tab kept
+/// showing a removed series — and not showing an added one — until its next
+/// walk (review item 72, 2026-09-14). In an extension for the lint's
+/// type-body ceiling; `private` members are reachable from the same file.
+///
+/// **Not written to the snapshot's cache.** `LibrarySnapshot` has an
+/// `apply(seriesId:change:)` for edits and nothing for a new or deleted row
+/// (`Core/Library`, not this feature's to change), so a relaunch inside the
+/// cache's six hours shows the row as it was until the next walk. The
+/// in-session screen is what this fixes.
+extension LibraryModel {
+    /// Shows `entry` on the shelves now. Replaces a row for the same series
+    /// if one is already listed.
+    func insert(_ entry: LibraryEntry) {
+        if let index = entries.firstIndex(where: { $0.seriesId == entry.seriesId }) {
+            entries[index] = entry
+        } else {
+            entries.append(entry)
+        }
+        if !isComplete {
+            pendingInserts[entry.seriesId] = entry
+            pendingRemovals.remove(entry.seriesId)
+        }
+        shelves = Self.shelves(from: entries)
+        refreshFromEntries()
+    }
+
+    /// Takes the series off the shelves now.
+    func remove(seriesId: Int) {
+        entries.removeAll { $0.seriesId == seriesId }
+        if !isComplete {
+            pendingRemovals.insert(seriesId)
+            pendingInserts[seriesId] = nil
+        }
+        shelves = Self.shelves(from: entries)
+        refreshFromEntries()
+    }
+
+    /// Recomputes what the filter, the search box and the sort decide. Here
+    /// rather than in the class body only for the lint's type-body ceiling.
+    private func refreshListed() {
+        listed = Self.listed(from: entries, filter: filter, search: searchText, sort: sort)
+        jumpTargets = Self.jumpTargets(in: listed)
+    }
+
+    /// The walk has finished: every mid-walk edit has been replayed onto
+    /// the final page, and the snapshot has done the same to its own copy.
+    private func clearPendingEdits() {
+        pendingChanges.removeAll()
+        pendingInserts.removeAll()
+        pendingRemovals.removeAll()
+    }
+
+    /// Re-applies the inserts and removals made mid-walk to the page that
+    /// just replaced `entries` wholesale — the replay `pendingChanges` gets
+    /// in `apply(_:isComplete:)`, for rows rather than fields. The server's
+    /// own row wins over a placeholder once a page carries it.
+    private func replayPendingRows() {
+        guard !pendingInserts.isEmpty || !pendingRemovals.isEmpty else { return }
+        if !pendingRemovals.isEmpty {
+            entries.removeAll { pendingRemovals.contains($0.seriesId) }
+        }
+        let listed = Set(entries.map(\.seriesId))
+        for (seriesId, entry) in pendingInserts where !listed.contains(seriesId) {
+            entries.append(entry)
         }
     }
 }

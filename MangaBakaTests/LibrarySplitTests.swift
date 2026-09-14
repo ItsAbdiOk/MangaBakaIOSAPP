@@ -214,9 +214,14 @@ struct LibrarySplitTests {
     }
 
     /// The two migrators create the reader's tables from the same functions.
-    /// This asserts that they really do produce the same schema — a column
-    /// order that drifted would make the split's `SELECT *` copy columns into
-    /// the wrong places, and `EXCEPT` is the only thing that would catch it.
+    /// This asserts that they really do produce the same schema.
+    ///
+    /// The comment here used to say that a drifted column order would be
+    /// caught at runtime by the split's `EXCEPT`. It would not — see
+    /// `copyAndVerify`, work-list 56. This test is the check on *declaration*
+    /// drift (the `sqlite_master` text, indexes included); the device's own
+    /// check is now the `PRAGMA table_info` comparison in `copyPlan`, which
+    /// `refusesToCopyWhenTheColumnsDisagree` below exercises.
     @Test("Both files define the reader's tables identically")
     func schemasMatch() throws {
         let cache = try DatabaseQueue()

@@ -175,8 +175,16 @@ struct APIClientCacheRefundTests {
 /// reader's own data never sits in the shared on-disk `URLCache` rested
 /// entirely on MangaBaka's own `no-store` header, which the comment beside
 /// `makeRequest` already calls "their guarantee to change, not ours to
-/// depend on". `ClientRequestDelegate.willCacheResponse` now refuses to
-/// cache such a response regardless of what headers it carries.
+/// depend on". `APIClient.perform` now evicts the entry from the session's
+/// own `URLCache` after the load, regardless of what headers the response
+/// carries.
+///
+/// Not `ClientRequestDelegate.willCacheResponse`, which is what this comment
+/// credited until 2026-09-14 and what the first version of the fix used: that
+/// callback is never delivered under `session.data(for:delegate:)` (measured,
+/// see `identityCarryingResponseIsNeverCached` below) and the method no longer
+/// exists. Describing the inert version as shipped, in the file whose job is
+/// to prove it did not, is the failure mode this suite exists to catch.
 @Suite("APIClient never caches an identity-carrying response", .serialized)
 struct APIClientIdentityCacheTests {
     private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
@@ -245,6 +253,87 @@ struct APIClientIdentityCacheTests {
 
         struct SeriesID: Decodable { let id: String }
         _ = try await client.get(path, as: SeriesID.self)
+
+        let cache = try #require(session.configuration.urlCache)
+        let request = URLRequest(url: baseURL.appendingPathComponent(path))
+        #expect(cache.cachedResponse(for: request) != nil)
+    }
+
+    /// The harder half of the rule, and until 2026-09-14 the untested one:
+    /// both tests above use `/v1/my/profile`, which the path prefix alone
+    /// catches. `makeRequest`'s own comment says the prefix is *not*
+    /// sufficient — `/v1/series/mix` is public by path but puts the reader's
+    /// 32-character account id in the query, and the URL is the cache key.
+    ///
+    /// Narrow `APIClient.identifyingParameters`, or drop the `carriesIdentity`
+    /// clause, and every other test in this suite still passes while the
+    /// account id starts being written to a 256 MB on-disk cache. This is the
+    /// only assertion that goes red.
+    ///
+    /// Expected to fail with `carriesIdentity` removed by finding a non-nil
+    /// cached response for the `exclude_user_library` URL — a wrong *value*,
+    /// not a compile error.
+    @Test("A public path carrying the reader's account id is not stored either")
+    func identifyingQueryParameterIsNeverCached() async throws {
+        let path = "/v1/series/mix"
+        let accountID = "0123456789abcdef0123456789abcdef"
+        CachingStubProtocol.handler = { _ in
+            CachingStubProtocol.StubResponse(
+                statusCode: 200,
+                body: Data(#"{"status":200,"data":{"id":"mix-1"}}"#.utf8),
+                headers: ["Cache-Control": "public, max-age=60", "Content-Type": "application/json"]
+            )
+        }
+        defer { CachingStubProtocol.handler = nil }
+
+        let session = CachingStubProtocol.makeSession()
+        let client = APIClient(
+            baseURL: baseURL,
+            session: session,
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
+
+        struct MixID: Decodable { let id: String }
+        let identifying = [URLQueryItem(name: "exclude_user_library", value: accountID)]
+        _ = try await client.get(path, query: identifying, as: MixID.self)
+
+        let cache = try #require(session.configuration.urlCache)
+        // The cache key is the whole URL, query included, so the lookup has to
+        // be spelled the same way `makeRequest` built it.
+        var components = try #require(
+            URLComponents(
+                url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false
+            )
+        )
+        components.queryItems = identifying
+        let identifyingURL = try #require(components.url)
+        #expect(cache.cachedResponse(for: URLRequest(url: identifyingURL)) == nil)
+    }
+
+    /// The control for the test above, and the one that makes it about the
+    /// *parameter* rather than about the path: the same public endpoint with
+    /// no identifying query is still stored.
+    @Test("The same public path without the parameter is still stored")
+    func publicMixWithoutTheParameterIsStillCached() async throws {
+        let path = "/v1/series/mix"
+        CachingStubProtocol.handler = { _ in
+            CachingStubProtocol.StubResponse(
+                statusCode: 200,
+                body: Data(#"{"status":200,"data":{"id":"mix-1"}}"#.utf8),
+                headers: ["Cache-Control": "public, max-age=60", "Content-Type": "application/json"]
+            )
+        }
+        defer { CachingStubProtocol.handler = nil }
+
+        let session = CachingStubProtocol.makeSession()
+        let client = APIClient(
+            baseURL: baseURL,
+            session: session,
+            tokenProvider: UnauthenticatedTokenProvider()
+        )
+
+        struct MixID: Decodable { let id: String }
+        _ = try await client.get(path, as: MixID.self)
 
         let cache = try #require(session.configuration.urlCache)
         let request = URLRequest(url: baseURL.appendingPathComponent(path))

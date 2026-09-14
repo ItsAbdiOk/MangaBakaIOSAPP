@@ -16,7 +16,7 @@ struct OpenSeriesIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        IntentBridge.shared.pendingSeriesID = series.id
+        IntentBridge.shared.pending = IntentBridge.Open(id: series.id)
         return .result()
     }
 }
@@ -43,7 +43,16 @@ struct DueThisWeekIntent: AppIntent {
             return .result(dialog: "Open MangaBaka first, then ask again.")
         }
         let snapshot = await services.schedule.snapshot()
-        let announced = await services.calendar.mine(seriesIDs: await services.librarySnapshot.seriesIDs())
+        // `wholeLibrarySeriesIDs`, not `seriesIDs`: a walk that failed or was
+        // page-capped delivers a partial set, and announcing "nothing is
+        // coming up" from a partial library is a confident wrong answer —
+        // the reader cannot see that the walk failed, they just hear that
+        // their series has nothing due. Nil means say so instead.
+        let library = await services.librarySnapshot.load()
+        guard let mine = library.wholeLibrarySeriesIDs else {
+            return .result(dialog: "I couldn't read your library just now, so I can't say what's due.")
+        }
+        let announced = await services.calendar.mine(seriesIDs: mine)
         let feedWorks = await Self.feedDueWorks(
             for: snapshot.dated, feeds: services.releaseFeeds, repository: services.repository
         )

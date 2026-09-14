@@ -215,9 +215,34 @@ struct SeriesPageSourceRuleTests {
         let source = try detail("DetailBackdrop.swift")
         #expect(source.contains("let washHeight = min(height, proxy.size.height)"))
         #expect(source.contains("height: washHeight, alignment: .top"))
-        // Flattened before `.offset`, so the parallax moves one finished
-        // bitmap rather than re-running blur, saturation and gradient.
-        #expect(source.contains(".compositingGroup()\n            .offset(y: Self.parallaxOffset"))
+        // Flattened before the parallax moves it — `.compositingGroup()` is
+        // the last call in `wash(in:)`, so the wash is one finished bitmap
+        // by the time `ParallaxOffset` (item 65) applies `.offset` to it,
+        // rather than blur, saturation and gradient re-running per frame.
+        #expect(source.contains(".clipped()"))
+        #expect(SourceTree.containsRun(source, ".compositingGroup()\n    }"))
+    }
+
+    /// Item 65 / screens F25 (2026-09-14): the tracker read used to sit at
+    /// the bottom of the same body that built the `AsyncImage`, the blur, the
+    /// saturation and the gradient, so a scroll frame re-diffed all of that
+    /// SwiftUI tree even though `.compositingGroup()` had already collapsed
+    /// the GPU work to one bitmap. Splitting the read into its own child
+    /// means a scroll frame invalidates only that child.
+    @Test("Only ParallaxOffset reads the backdrop's tracker")
+    func onlyParallaxOffsetReadsTheTracker() throws {
+        let source = try detail("DetailBackdrop.swift")
+        #expect(source.contains("private struct ParallaxOffset<Content: View>: View {"))
+        #expect(source.contains("tracker?.offset ?? 0"))
+        // `wash(in:)` — the function building the AsyncImage, the blur, the
+        // saturation and the gradient, bounded from its signature to its own
+        // closing `.compositingGroup()` — never mentions the tracker at all.
+        let signature = "private func wash(in proxy: GeometryProxy) -> some View {"
+        let funcStart = try #require(source.range(of: signature))
+        let funcEnd = try #require(
+            source.range(of: ".compositingGroup()\n    }", range: funcStart.upperBound..<source.endIndex)
+        )
+        #expect(!source[funcStart.upperBound..<funcEnd.upperBound].contains("tracker"))
     }
 
     /// Item 56: `position` started nil and was assigned in `onAppear`, so

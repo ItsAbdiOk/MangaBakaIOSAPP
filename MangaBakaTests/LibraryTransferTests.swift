@@ -95,6 +95,47 @@ struct LibraryExportTests {
         #expect(parsed[0].progressChapter == 17)
     }
 
+    /// Work-list 28: `LibraryExport.defused` puts an apostrophe in front of a
+    /// title or note beginning `=`, `+`, `-` or `@` so a spreadsheet does not
+    /// run it as a formula, and nothing ever took it back off.
+    ///
+    /// EXPECTED TO FAIL ON THE OLD CODE with: `parsed[0].note` reading
+    /// **"'=SUM(A1:A9)"** instead of "=SUM(A1:A9)" for each of the four
+    /// prefixes, and `title` the same. That is not cosmetic — `LibraryImport
+    /// .apply` sends the note back to the server, so exporting and
+    /// re-importing spent a real PATCH writing the apostrophe into the
+    /// reader's account, and doing it twice wrote two.
+    @Test(
+        "A defused note survives the round trip without its apostrophe",
+        arguments: ["=SUM(A1:A9)", "+1", "-1", "@import"]
+    )
+    func defusedFieldsRoundTrip(dangerous: String) {
+        let entry = makeEntry(note: dangerous)
+        let data = LibraryExport.csv([entry])
+        let text = String(bytes: data, encoding: .utf8) ?? ""
+        #expect(text.contains("'" + dangerous), "the export still defuses it")
+
+        guard case let .success(parsed) = LibraryImport.parse(data) else {
+            Issue.record("defused CSV failed to parse back")
+            return
+        }
+        #expect(parsed.count == 1)
+        #expect(parsed[0].note == dangerous)
+    }
+
+    /// The control: an apostrophe the reader actually typed is theirs and is
+    /// not stripped. Without this, "strip a leading apostrophe" would pass the
+    /// test above while quietly editing everybody's notes.
+    @Test("An apostrophe the reader typed themselves survives the round trip")
+    func aGenuineApostropheIsKept() {
+        let entry = makeEntry(note: "'tis the season")
+        guard case let .success(parsed) = LibraryImport.parse(LibraryExport.csv([entry])) else {
+            Issue.record("CSV failed to parse back")
+            return
+        }
+        #expect(parsed[0].note == "'tis the season")
+    }
+
     @Test("A CSV with columns in a different order than the header still parses")
     func csvReorderedColumnsParse() {
         let csv = "state,seriesId,rating\r\nreading,555,60\r\n"

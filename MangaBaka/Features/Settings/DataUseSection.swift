@@ -18,6 +18,13 @@ struct DataUseSection: View {
     @State private var total = 0
     @State private var requests = 0
     @State private var images = 0
+    /// Every row `getLossy` threw away this session, across all endpoints.
+    ///
+    /// Session-wide and not only per-endpoint because the expanded list is
+    /// the *eight slowest* paths: a fast endpoint that drops rows would never
+    /// appear in it, and item 20's whole point is that a silent drop must be
+    /// countable somewhere. This line is always on screen.
+    @State private var droppedRows = 0
     @State private var slowest: [(path: String, entry: NetworkLedger.Entry)] = []
     @State private var isExpanded = false
 
@@ -98,13 +105,26 @@ struct DataUseSection: View {
         guard requests > 0 else { return "Nothing fetched yet" }
         // Images are named separately because they are almost all of it, and
         // lumping them in hides the one number worth doing anything about.
-        return "\(requests) requests · \(format(images)) of it cover art"
+        return Self.breakdownCaption(
+            requests: requests, images: format(images), droppedRows: droppedRows
+        )
+    }
+
+    /// `nonisolated static` so the string is testable without a view.
+    nonisolated static func breakdownCaption(requests: Int, images: String, droppedRows: Int) -> String {
+        let base = "\(requests) requests · \(images) of it cover art"
+        guard droppedRows > 0 else { return base }
+        return base + " · \(droppedRows) row\(droppedRows == 1 ? "" : "s") the app couldn't read"
     }
 
     private func endpointRow(_ row: (path: String, entry: NetworkLedger.Entry)) -> some View {
         SettingsRow(
             title: row.path,
-            caption: "\(row.entry.requests) calls · \(format(row.entry.bytes))"
+            caption: Self.endpointCaption(
+                calls: row.entry.requests,
+                bytes: format(row.entry.bytes),
+                droppedRows: row.entry.droppedRows
+            )
         ) {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(milliseconds(row.entry.averageSeconds))
@@ -115,6 +135,20 @@ struct DataUseSection: View {
                     .foregroundStyle(Palette.textMuted)
             }
         }
+    }
+
+    /// Item 20: `NetworkLedger.Entry.droppedRows` was written by fourteen
+    /// `getLossy` call sites and read by nothing, so `LossyArray`'s own stated
+    /// justification — "is the app quietly showing nineteen of twenty?" — could
+    /// not be answered anywhere in the app. A lossy decode that silently drops
+    /// a row is strictly worse than a strict one that empties a section, unless
+    /// something counts the drops out loud. This is the only place that does.
+    ///
+    /// `nonisolated static` so the string is testable without a view.
+    nonisolated static func endpointCaption(calls: Int, bytes: String, droppedRows: Int) -> String {
+        let base = "\(calls) calls · \(bytes)"
+        guard droppedRows > 0 else { return base }
+        return base + " · \(droppedRows) row\(droppedRows == 1 ? "" : "s") dropped"
     }
 
     private func format(_ bytes: Int) -> String {
@@ -138,5 +172,6 @@ struct DataUseSection: View {
         requests = await NetworkLedger.shared.totalRequests
         images = await NetworkLedger.shared.imageBytes
         slowest = await NetworkLedger.shared.slowest()
+        droppedRows = await NetworkLedger.shared.byPath.values.reduce(0) { $0 + $1.droppedRows }
     }
 }

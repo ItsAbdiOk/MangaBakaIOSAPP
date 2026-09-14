@@ -160,12 +160,10 @@ struct MixModelTests {
 
 /// The blend's DNA: ten weighted tags, and the only steering the API allows.
 ///
-/// `.serialized` because `MixFilterStrip.pendingFilterBlend` is a single
-/// `static` slot — an extension cannot add stored state, and only one Mix
-/// screen is ever on screen, so one slot is right in the app. Two filter-burst
-/// tests suspended on their debounce at once would each cancel the other's
-/// pending blend and both read one blend short.
-@Suite("Blend DNA", .serialized)
+/// Was `.serialized` while the filter debounce lived in a `static` slot on
+/// `MixFilterStrip`; it is per-model now (`MixModel.filtersDidChange`, F28),
+/// so the tests no longer share state.
+@Suite("Blend DNA")
 @MainActor
 struct BlendDNATests {
     private func makeShelf() throws -> ShelfStore {
@@ -254,13 +252,15 @@ struct BlendDNATests {
     /// reason; the type/tag filter chips in `MixFilterStrip` were not, and
     /// each tap fired its own `Task { await model.run() }` undebounced.
     ///
-    /// Rewritten for item 45. The chips no longer call `requestBlend`
+    /// Rewritten for item 45. The chips no longer call the blend
     /// themselves — one `.onChange(of: model.filters)` on the strip does it
     /// for every control that writes a filter, so the rating segments and the
     /// tag-picker sheet re-blend too. A test that only called `toggleType`
     /// was therefore driving half the path and counted one blend, not two:
     /// the mutation happened and nothing asked again. Each tap here is the
     /// write plus the hook that `onChange` fires, which is the whole tap.
+    /// The hook is `MixModel.filtersDidChange` since F28 (2026-09-14) — the
+    /// strand debounce and this one are the same timer now.
     @Test("A burst of filter-chip taps is one re-blend, not one per tap")
     func filterChipBurstBlendsOnce() async throws {
         let repository = MixRepository()
@@ -271,7 +271,7 @@ struct BlendDNATests {
         let view = MixView(model: model, path: .constant([]))
         for type in ["manga", "novel", "manhwa"] {
             view.toggleType(type)
-            view.requestBlend()
+            model.filtersDidChange()
         }
 
         // Well past MixModel.strandDebounce (350ms), so the coalesced request
@@ -294,7 +294,7 @@ struct BlendDNATests {
 
         let view = MixView(model: model, path: .constant([]))
         view.toggleType("manga")
-        view.requestBlend()
+        model.filtersDidChange()
         try await Task.sleep(for: .milliseconds(600))
 
         #expect(repository.mixCalls == 2)
@@ -524,22 +524,22 @@ struct MixTagFilterTests {
 
 /// Item 45: every control in the filter strip writes `model.filters`, and one
 /// `.onChange` on the strip turns that write into a debounced re-blend. The
-/// chips calling `requestBlend` themselves is what left the rating segments
+/// chips calling the blend themselves is what left the rating segments
 /// and the tag-picker sheet silent, so the hook living in exactly one place is
 /// the fix — and a source pin is the only way to see it, since the rule lives
-/// in a SwiftUI `body` with no value to assert on.
+/// in a SwiftUI `body` with no value to assert on. The hook is the model's
+/// own debounce since F28; the strip has no timer of its own any more.
 @Suite("A filter write is what asks for a re-blend", .enabled(if: SourceTree.isAvailable))
 struct MixFilterBlendHookTests {
     @Test("The strip re-blends on any filter change, not per chip")
     func filterChangeIsHooked() throws {
         let source = try SourceTree.read("MangaBaka/Features/Mix/MixFilterStrip.swift")
-        #expect(SourceTree.containsRun(source, ".onChange(of: model.filters) { requestBlend() }"))
+        #expect(SourceTree.containsRun(source, ".onChange(of: model.filters) { model.filtersDidChange() }"))
         // One hook, not one per control: a second call site would blend twice
-        // for one tap. The declaration is struck out first so it is not
-        // counted as a call.
-        let callSites = source
-            .replacingOccurrences(of: "func requestBlend()", with: "")
-            .components(separatedBy: "requestBlend()").count - 1
+        // for one tap.
+        let callSites = source.components(separatedBy: "filtersDidChange()").count - 1
         #expect(callSites == 1, "exactly one place turns a filter write into a blend")
+        // No second timer beside the model's (F28).
+        #expect(!source.contains("Task {"), "the strip schedules nothing itself")
     }
 }

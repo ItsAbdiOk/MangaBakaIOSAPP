@@ -156,6 +156,31 @@ struct DiscoverTests {
         #expect(model.staleDetail?.contains("Too many requests") == true)
     }
 
+    /// Screens F13 (2026-09-14): `staleFailure` returned the screen-wide
+    /// `failure` — whichever row's error the task group delivered first —
+    /// while `isShowingStale` was per-row. An empty offline row beside a
+    /// rate-limited row with content read "Offline" with no countdown.
+    /// Expected to fail before the fix, on the runs where the offline row
+    /// answers first, with: `model.staleFailure == .rateLimited(until:
+    /// until)` → `.offline` (the order is the task group's, so the old code
+    /// fails most runs rather than every run).
+    @Test("The stale bar names the stale row's failure, not the first row's")
+    func staleFailureIsTheStaleRowsOwn() async {
+        let until = Date().addingTimeInterval(30)
+        let repository = TableRepository([
+            .rising: FeedResult(series: [], origin: .staleAfter(.offline)),
+            .hiddenGems: FeedResult(series: [], origin: .network),
+            .trending: FeedResult(series: [series(1)], origin: .staleAfter(.rateLimited(until: until))),
+            .newReleases: FeedResult(series: [], origin: .network)
+        ])
+        let model = DiscoverModel(repository: repository)
+        await model.load()
+
+        #expect(model.isShowingStale == true)
+        #expect(model.staleFailure == .rateLimited(until: until))
+        #expect(model.staleFailure?.rateLimitDeadline == until, "The bar's countdown has its deadline")
+    }
+
     /// Expected to fail before the fix with: `rows[index].hasReachedEnd ==
     /// true` — `loadMore` used to set `hasReachedEnd = !result.hasMore`
     /// unconditionally, and a page-2 failure looked exactly like the end of
@@ -211,12 +236,15 @@ struct DiscoverTests {
 struct CommunityPulseRetryTests {
     private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
 
-    private func makeService() -> CommunityPulseService {
-        CommunityPulseService(client: APIClient(
-            baseURL: baseURL,
-            session: URLProtocolStub.makeSession(),
-            tokenProvider: UnauthenticatedTokenProvider()
-        ))
+    private func makeService(clock: any Clock = SystemClock()) -> CommunityPulseService {
+        CommunityPulseService(
+            client: APIClient(
+                baseURL: baseURL,
+                session: URLProtocolStub.makeSession(),
+                tokenProvider: UnauthenticatedTokenProvider()
+            ),
+            clock: clock
+        )
     }
 
     /// Expected to fail before the fix with: a second `load()` making zero
@@ -226,10 +254,16 @@ struct CommunityPulseRetryTests {
     @Test("A failed pulse retries on the next explicit load")
     func retriesAfterFailure() async {
         URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
-        let service = makeService()
+        // Item 9 put a 60 s floor between *failed* attempts, so the retry this
+        // test is about now has to be asked for past that floor. The floor is
+        // the fix; the retry is still the promise, and this is what proves the
+        // floor did not quietly turn back into the permanent "already tried".
+        let clock = TestClock()
+        let service = makeService(clock: clock)
         await service.load()
         #expect(service.didFail == true)
         #expect(service.pulse == nil)
+        clock.advance(by: CommunityPulseService.retryIntervalForTesting + 1)
 
         URLProtocolStub.setHandler { _ in
             .respond(.init(body: Data("""
@@ -243,6 +277,29 @@ struct CommunityPulseRetryTests {
 
         #expect(service.didFail == false)
         #expect(service.pulse != nil)
+    }
+
+    /// Item 9 / the half pass 1 recorded as folded into a Lane D fix and never
+    /// wrote. `DiscoverView.swift:148` calls `load()` on every appearance, so
+    /// before this a host that was refusing — offline, a 429 — was asked again
+    /// on every tab flick, once per appearance, for the life of the process.
+    ///
+    /// Expected to fail on the old code with a wrong *value*: `guard pulse ==
+    /// nil` was the only gate, so the second `load()` issued a second request
+    /// and the count reads 2 where this wants 1.
+    @Test("A failed pulse is not re-asked on the next appearance")
+    func failureIsNotReaskedImmediately() async {
+        URLProtocolStub.setHandler { _ in .fail(URLError(.notConnectedToInternet)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let service = makeService(clock: clock)
+
+        await service.load()
+        // A tab flick: back to Discover a second later.
+        clock.advance(by: 1)
+        await service.load()
+
+        #expect(URLProtocolStub.requests.count == 1)
     }
 
     @Test("A successful load is never retried")

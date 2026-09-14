@@ -455,18 +455,23 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Tags the reader never wants to see, sent as `blocked_tag`.
     var blockedTags: [Int] = []
 
-    /// Volume covers, per series, for as long as the app is running.
+    /// Volume covers, per series, for the rest of the session or until the
+    /// cap pushes them out.
     ///
     /// In memory rather than on disk: these are only wanted while a series page
     /// or its gallery is open, and the case worth covering is going back and
     /// forward between them — which used to refetch 58 KB every time.
-    var cachedImages: [Int: [SeriesImage]] = [:]
+    /// Bounded because "for as long as the app is running" was literal
+    /// (work-list 54); see `BoundedCache`.
+    var cachedImages = BoundedCache<[SeriesImage]>()
 
-    /// Relationships, per series, for as long as the app is running. Not the
-    /// disk cache: this is for the library row re-reading the same handful of
-    /// finished series' relationships every time it appears, not for surviving
-    /// a relaunch.
-    var cachedRelationships: [Int: [SeriesRelationship]] = [:]
+    /// Relationships, per series. Not the disk cache: this is for the library
+    /// row re-reading the same handful of finished series' relationships every
+    /// time it appears, not for surviving a relaunch. Bounded for the same
+    /// reason as `cachedImages`, and more so — nothing cleared this one at
+    /// all, where `cachedImages` is at least emptied by an `.images`
+    /// invalidation.
+    var cachedRelationships = BoundedCache<[SeriesRelationship]>()
 
     init(
         client: APIClient, database: AppDatabase, clock: any Clock = SystemClock(),
@@ -753,7 +758,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// it exists to hide is a bug this app has already shipped once, on
     /// personalised recommendations.
     func images(for seriesId: Int) async -> [SeriesImage]? {
-        if let cached = cachedImages[seriesId] { return cached }
+        if let cached = cachedImages.value(for: seriesId) { return cached }
         // Nil, not swallowed: a failed fetch and a series with no covers used
         // to look identical from here, and the gallery read "1 cover" (the
         // series' own primary cover, drawn from elsewhere) for a throttled
@@ -765,7 +770,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             return nil
         }
         let presentable = all.presentable(allowedRatings: contentRatings)
-        cachedImages[seriesId] = presentable
+        cachedImages.insert(presentable, for: seriesId)
         return presentable
     }
 
@@ -816,11 +821,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// asks for it for up to eight finished series and does not want the
     /// other five requests each time.
     func relationships(for seriesId: Int) async -> [SeriesRelationship]? {
-        if let cached = cachedRelationships[seriesId] { return cached }
+        if let cached = cachedRelationships.value(for: seriesId) { return cached }
         guard let fetched: [SeriesRelationship] = try? await client.getLossy(
             "/v1/series/\(seriesId)/relationships"
         ) else { return nil }
-        cachedRelationships[seriesId] = fetched
+        cachedRelationships.insert(fetched, for: seriesId)
         return fetched
     }
 

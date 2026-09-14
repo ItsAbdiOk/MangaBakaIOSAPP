@@ -29,21 +29,43 @@ elif [ -f Configs/Secrets.xcconfig ]; then
 fi
 
 # 2. A token-shaped literal in shipping code.
+#
+# **`{10,}`, and it must stay in step with `TokenStore.looksValid`**, which
+# accepts `mb-` plus a total length over 12 — so the shortest token the app
+# itself will store has a ten-character suffix. This said `{16,}`, which left
+# every 13-to-18-character token invisible to the scanner while the app
+# accepted it happily: the check and the thing it checks disagreed about what
+# a token is (review item 72, 2026-09-14). `TokenStoreCacheTests` pins the two
+# numbers against each other, because a shell script cannot read a Swift
+# constant and copying it here is how they drifted the first time.
+#
+# `MB_SUFFIX` is the ten. Named once so the four greps below cannot drift from
+# each other the way this one drifted from Swift.
+MB_SUFFIX='mb-[A-Za-z0-9]{10,}'
+# Excluded: `mb-xxxxxxxxxxx`, the placeholder MangaBaka's own OpenAPI document
+# uses ~40 times in docs/schemas. It only became a match at `{10,}`. Matched on
+# an all-`x` suffix rather than by excluding the directory, so a real token
+# pasted into a vendored file is still caught.
+MB_PLACEHOLDER='mb-x+([^A-Za-z0-9]|$)'
 if git rev-parse --git-dir >/dev/null 2>&1; then
-    if git grep -nE '"mb-[A-Za-z0-9]{16,}"' -- 'MangaBaka/*.swift' >/dev/null 2>&1; then
+    if git grep -nE "\"$MB_SUFFIX\"" -- 'MangaBaka/*.swift' 2>/dev/null \
+        | grep -vE "$MB_PLACEHOLDER" | grep -q .; then
         note "a token-shaped literal is present in shipping code."
     fi
     # 3. Any tracked file, not just Swift. Tests are excluded because their
     #    fixtures carry deliberately fake token-shaped strings.
-    if git grep -nE 'mb-[A-Za-z0-9]{16,}' -- . ':(exclude)*Tests*' >/dev/null 2>&1; then
+    if git grep -nE "$MB_SUFFIX" -- . ':(exclude)*Tests*' 2>/dev/null \
+        | grep -vE "$MB_PLACEHOLDER" | grep -q .; then
         note "a token-shaped string is present in a tracked file. Move it to Configs/Secrets.xcconfig."
     fi
 else
-    if grep -rEl '"mb-[A-Za-z0-9]{16,}"' MangaBaka --include='*.swift' >/dev/null 2>&1; then
+    if grep -rEn "\"$MB_SUFFIX\"" MangaBaka --include='*.swift' 2>/dev/null \
+        | grep -vE "$MB_PLACEHOLDER" | grep -q .; then
         note "a token-shaped literal is present in shipping code."
     fi
-    if grep -rEl 'mb-[A-Za-z0-9]{16,}' . \
-        --exclude-dir=.git --exclude-dir='*Tests*' >/dev/null 2>&1; then
+    if grep -rEn "$MB_SUFFIX" . \
+        --exclude-dir=.git --exclude-dir='*Tests*' 2>/dev/null \
+        | grep -vE "$MB_PLACEHOLDER" | grep -q .; then
         note "a token-shaped string is present in a checked-out file."
     fi
 fi

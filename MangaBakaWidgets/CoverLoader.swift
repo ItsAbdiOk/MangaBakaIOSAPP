@@ -26,13 +26,34 @@ enum CoverLoader {
     /// **A guess: 10 seconds.** Shorter than the app's own 20, because this
     /// runs inside `getTimeline`: a hung CDN on `URLSession.shared`'s 60 s
     /// default turned the hourly reload into a no-op that also spent one of
-    /// WidgetKit's rationed reloads. No cookies and no cache for the same
-    /// reasons `ThirdPartySession` gives in the app target.
+    /// WidgetKit's rationed reloads. No cookies for the same reasons
+    /// `ThirdPartySession` gives in the app target. (`.ephemeral` still has an
+    /// in-memory `URLCache`; "no cache" here means nothing on disk.)
+    ///
+    /// **User-Agent.** This session sent none until 2026-09-14 — the one
+    /// client outside `ThirdPartySession`, because it lives in the other
+    /// target. `AppUserAgent.swift` is compiled into this extension
+    /// (`project.yml`) rather than the string being copied.
+    ///
+    /// MEASURED 2026-09-14, `curl -sI` against a real
+    /// `cdn.mangabaka.dev/imgproxy/...` cover, one request per agent:
+    /// no `User-Agent` header at all → **200**; a CFNetwork-shaped default
+    /// (`MangaBakaWidgetsExtension/1 CFNetwork/… Darwin/…`) → **200**;
+    /// `AppUserAgent.value` → **200**; `Python-urllib/3.11` → **403**. The
+    /// same four against `api.mangabaka.org/v1/genres` gave the same answers,
+    /// which reproduces the 2026-09-08 measurement in `AppUserAgent` and is
+    /// the control for this one. So both hosts run a **blocklist of known bot
+    /// agents, not a requirement to identify** — the widget's covers were
+    /// *not* failing, and the review's inference that they were is wrong.
+    /// The header is set anyway: it is what `AppUserAgent` exists for, the
+    /// blocklist is someone else's to change, and a `try?`-swallowed cover is
+    /// the one failure here nobody would ever see.
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
+        configuration.httpAdditionalHeaders = ["User-Agent": AppUserAgent.value]
         return URLSession(configuration: configuration)
     }()
 

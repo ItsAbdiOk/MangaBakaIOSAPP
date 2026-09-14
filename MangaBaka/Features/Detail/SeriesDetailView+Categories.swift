@@ -23,7 +23,10 @@ extension SeriesDetailView {
             categories = MangaUpdatesCategories.ranked(series)
             categoriesFailure = nil
         } catch {
-            categoriesFailure = error
+            // Never on screen for a request the reader walked away from —
+            // see `presentableFailure`. The previous answer, if any, stands.
+            guard let failure = Self.presentableFailure(error) else { return }
+            categoriesFailure = failure
         }
     }
 }

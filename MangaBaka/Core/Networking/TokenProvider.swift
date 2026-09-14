@@ -28,10 +28,34 @@ struct ResolvingTokenProvider: TokenProvider {
     private let store: TokenStore
     private let buildTimeToken: String?
 
-    init(store: TokenStore = TokenStore(), infoDictionary: [String: Any]?) {
+    /// `store` has no default. It used to be `= TokenStore()`, which built a
+    /// third instance of a type whose memo was per-instance, so the client
+    /// read a stale "no token" while Settings wrote into a different one
+    /// (second-pass review S1, 2026-09-14). The memo is static now and the
+    /// bug cannot come back through this door, but the parameter stays
+    /// required so the single owner of the store is visible at the one call
+    /// site that builds this (`AppServices.init`).
+    init(store: TokenStore, infoDictionary: [String: Any]?) {
         self.store = store
         self.buildTimeToken = PATTokenProvider(infoDictionary: infoDictionary)?.token
     }
+
+    /// Whether this provider can authenticate a request at all.
+    ///
+    /// The decision lives here because this is where the credential is
+    /// resolved. `AppServices` used to spell it `{ keychain.read() != nil }`
+    /// in two places, which ignored `buildTimeToken` — so every Debug build
+    /// with `MB_PAT` in `Secrets.xcconfig` and nothing in the Keychain said
+    /// "No account" in the Library tab and cleared Spotlight, the widget and
+    /// the taste ledger on every launch, while Discover, the stack and
+    /// Settings' token check all authenticated successfully. Two definitions
+    /// of "signed in", disagreeing on exactly the builds the app is developed
+    /// on — which is the reason S1 above survived every walk
+    /// (second-pass review item 13 / S3, 2026-09-14).
+    ///
+    /// Same expression as `authorizationHeader()`'s guard, deliberately: if
+    /// that one can produce a header, this must answer `true`.
+    var hasCredentials: Bool { store.read() != nil || buildTimeToken != nil }
 
     func authorizationHeader() async -> (field: String, value: String)? {
         // A token the reader entered on this device wins over one baked in at

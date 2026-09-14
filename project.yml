@@ -67,6 +67,15 @@ targets:
       path: Configs/Info.plist
       properties:
         CFBundleDisplayName: MangaBaka
+        # Wired to the build settings below rather than left at XcodeGen's
+        # literal `1.0` / `1` defaults. Until 2026-09-14 both plists shipped
+        # those literals, so `MARKETING_VERSION` never reached the bundle and
+        # neither did CI's `CURRENT_PROJECT_VERSION` sed — every archive
+        # uploaded as `1.0 (1)`, and App Store Connect refuses a build number
+        # it has already seen. Hand-editing the plist does not stick; it is
+        # regenerated from here.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -113,6 +122,13 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: MangaBakaWidgets
+      # `CoverLoader` builds its own `URLSession` in this target and cannot
+      # reach `ThirdPartySession`, which is what carries the User-Agent for
+      # the app's eight clients. One file across the seam rather than a
+      # copied literal, the same trick `MangaBakaTests` uses below for
+      # `WidgetSnapshotData.swift`: the rule in CLAUDE.md is to expose a
+      # duplicated constant at its source, not to document the duplication.
+      - path: MangaBaka/Core/Networking/AppUserAgent.swift
     dependencies:
       - sdk: WidgetKit.framework
       - sdk: SwiftUI.framework
@@ -120,6 +136,10 @@ targets:
       path: Configs/MangaBakaWidgetsInfo.plist
       properties:
         CFBundleDisplayName: MangaBaka Widgets
+        # Same as the app target, and it has to match it: iOS refuses to
+        # install an extension whose version pair differs from its host's.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the current queue is actually built from.
 ///
@@ -309,7 +310,13 @@ final class StackModel {
         let task = Task { await performRefill() }
         refillTask = task
         await task.value
-        refillTask = nil
+        // Only this call's own task. `resetStack` cancels and nils the handle
+        // and then starts a newer refill; when the cancelled one finished it
+        // used to nil *that* registration too, so the next `react()` that
+        // ran the queue low started a third refill alongside the second —
+        // two feed requests for one stack, the thing the dedup above exists
+        // to prevent (review item 48, 2026-09-14).
+        if refillTask == task { refillTask = nil }
     }
 
     private func refreshSaved() async {
@@ -318,9 +325,17 @@ final class StackModel {
 
     private func performRefill() async {
         isLoading = true
-        defer { isLoading = false }
+        // A cancelled refill leaves the spinner to the refill that replaced
+        // it; clearing it here would end the newer one's loading state early.
+        defer { if !Task.isCancelled { isLoading = false } }
 
         reacted = (try? await shelf.reactedIDs()) ?? []
+        // Checked after every await, not left to `URLSession`: a cached feed
+        // answers with no suspension at all, so cancellation is only ever
+        // seen by asking. Without these a refill cancelled by `resetStack`
+        // still appended to the queue it had just emptied — cards drawn from
+        // the seeds the reader had thrown away (item 48).
+        guard !Task.isCancelled else { return }
         // Reset each cycle rather than left over from a previous refill —
         // otherwise a caption earned by a cold-start answer minutes ago could
         // outlive it and mislabel an ordinary blend fallback.
@@ -332,6 +347,7 @@ final class StackModel {
         // available.
         if await profileIsUsable() {
             let fresh = await fetchProfilePage()
+            guard !Task.isCancelled else { return }
             if !fresh.isEmpty {
                 append(fresh)
                 source = .yourProfile
@@ -351,6 +367,7 @@ final class StackModel {
         // "that's the stack for now" while more was plainly available.
         for _ in 0..<2 {
             let fresh = await fetchBatch()
+            guard !Task.isCancelled else { return }
             if !fresh.isEmpty {
                 append(fresh)
                 failure = nil
@@ -370,9 +387,15 @@ final class StackModel {
     /// away two series the reader had not seen yet — every time the stack
     /// topped itself up, which is constantly.
     private func append(_ series: [Series]) {
+        // The last line of defence for item 48 — every path into the queue
+        // goes through here, whatever `performRefill` checked on the way.
+        guard !Task.isCancelled else { return }
         let known = Set(queue.map(\.id))
         var fresh = series.filter { !known.contains($0.id) }
         if let ranker, !ranker.isEmpty, source != .yourProfile {
+            #if DEBUG
+            Self.logScoreSpread(ranker, over: fresh)
+            #endif
             fresh = ranker.rank(fresh) { $0 }
             // "Shares Regression, Action with what you read": the ranker's
             // matches, where the source had no reason of its own.
@@ -614,7 +637,11 @@ extension StackModel {
     /// `sorted` is not documented stable, so the seed pool would otherwise
     /// differ run to run among the many entries at priority 0.
     private func snapshotEntries() async -> [LibraryEntry]? {
-        if let snapshot { return await snapshot.all() }
+        // `wholeLibrary`, not `all()`: nil means the walk failed or was
+        // page-capped, and a partial library here would seed the stack from
+        // a fraction of what the reader tracks — and exclude nothing they
+        // already have (review 2, lane B's table).
+        if let snapshot { return await snapshot.load().wholeLibrary }
         guard let library else { return nil }
         return await library.library(page: 1, limit: 50)
     }
@@ -661,6 +688,29 @@ extension StackModel {
         // 107/108, K6/K7).
         source = profileFailure.map(Source.unavailable) ?? .random
     }
+
+    /// Debug builds only: how many of a dealt batch the ranker could score
+    /// at all, and the spread, so "the stack is ordered by your tags" can
+    /// be checked against a real deal rather than believed. A stable sort
+    /// over all-zero scores and one over real scores are indistinguishable
+    /// from the screen (review item 19, 2026-09-14). Measured 2026-09-14
+    /// against the live `/v1/series/mix` (limit 20): every row carried
+    /// `tags_v2` (30–103 each), so a non-empty ranker scores a blend — the
+    /// review's premise that the mix feed arrives tagless was wrong, and
+    /// `schema=full` is a 400 on that endpoint ("Unrecognized key"). If this
+    /// ever logs `scored 0 of N` for a reader with a ledger, the tags have
+    /// gone, not the ranker.
+    #if DEBUG
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "stack")
+
+    private static func logScoreSpread(_ ranker: TasteRanker, over batch: [Series]) {
+        let scores = batch.map(ranker.score)
+        let scored = scores.count { $0 > 0 }
+        let top = scores.max() ?? 0
+        let line = "Taste ranker scored \(scored) of \(batch.count); top \(top)"
+        logger.debug("\(line, privacy: .public)")
+    }
+    #endif
 
     /// Moves to the next group of seeds. False when the pool is exhausted.
     private func advanceSeeds() -> Bool {

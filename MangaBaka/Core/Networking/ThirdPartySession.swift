@@ -2,10 +2,12 @@ import Foundation
 
 /// The `URLSession` every third-party client uses.
 ///
-/// Nine clients — AniList, Shikimori, Apple Books, Google Books, Open Library,
-/// Webtoons, Naver, GigaViewer, MangaUpdates — each defaulted to
+/// Eight clients — AniList, Shikimori, Apple Books, Google Books, Open
+/// Library, Webtoons, GigaViewer, MangaUpdates — each defaulted to
 /// `URLSession.shared`, which meant none of the rules `APIClient` already has
-/// for MangaBaka's own host applied to any of them:
+/// for MangaBaka's own host applied to any of them. (There were nine; Naver's
+/// adapter was deleted on 2026-09-13 under the private-API rule — see
+/// `AppServices.swift`.)
 ///
 /// **Cookies.** `URLSession.shared` accepts and replays them. Webtoons sets
 /// five per answer (including a `locale` cookie with a one-year lifetime) and
@@ -23,9 +25,12 @@ import Foundation
 /// patience than a screen does.
 ///
 /// **User-Agent.** Carried for every client at once, so the four that sent
-/// none now do — see `AppUserAgent`.
+/// none now do — see `AppUserAgent`. The widget extension's `CoverLoader`
+/// cannot use this session (different target, no access to this file) and sets
+/// the same header itself off the same `AppUserAgent`; it is the ninth client
+/// and the only one outside this seam.
 ///
-/// **Disk cache.** Off. All nine clients keep their own on-disk caches with
+/// **Disk cache.** Off. All eight clients keep their own on-disk caches with
 /// their own freshness rules (`AppleBooksClient.readCache` and six siblings);
 /// a second, invisible `URLCache` layer underneath them only makes "how old is
 /// this answer" unanswerable, and the feed responses are `no-store` anyway.
@@ -56,7 +61,7 @@ enum ThirdPartySession {
         return URLSession(configuration: configuration)
     }
 
-    /// One session shared by all nine clients, so they share one connection
+    /// One session shared by all eight clients, so they share one connection
     /// pool the way they would have on `URLSession.shared` — the thing that
     /// was actually right about the old default.
     static let shared = make()

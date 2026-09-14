@@ -1,0 +1,881 @@
+{
+ "status": 200,
+ "data": [
+  {
+   "score": 0.2768145232939597,
+   "cosine": 0.3273295760154724,
+   "shared_tags": [
+    {
+     "id": 4135,
+     "name": "Sick Family Member"
+    },
+    {
+     "id": 3901,
+     "name": "Sick Parent"
+    },
+    {
+     "id": 1306,
+     "name": "Family Dynamics"
+    },
+    {
+     "id": 1304,
+     "name": "Parent-Child"
+    },
+    {
+     "id": 675,
+     "name": "Adult Male Lead"
+    },
+    {
+     "id": 903,
+     "name": "Adult Protagonist"
+    },
+    {
+     "id": 1004,
+     "name": "Modern Era"
+    },
+    {
+     "id": 419,
+     "name": "Anti-Hero"
+    },
+    {
+     "id": 362,
+     "name": "Ensemble Cast"
+    },
+    {
+     "id": 261,
+     "name": "Urban Fantasy"
+    }
+   ],
+   "shared_tags_total": 43,
+   "matched_author": false,
+   "matched_related": false,
+   "matched_seed_ids": [
+    3397
+   ],
+   "series": {
+    "id": 188930,
+    "state": "active",
+    "merged_with": null,
+    "canonical_url": "https://mangabaka.org/manga/188930/Lulu-s-Hell-House",
+    "title": "Lulu no Hell House",
+    "native_title": "\u30eb\u30eb\u306e\u4ea1\u970a\u5c4b\u6577\uff08\u30d8\u30eb\u30cf\u30a6\u30b9\uff09",
+    "romanized_title": "Lulu no Bourei Yashiki",
+    "secondary_titles": {
+     "en": [
+      {
+       "type": "alternative",
+       "title": "Lulu's Hell House",
+       "note": "On covers"
+      }
+     ],
+     "ja": [
+      {
+       "type": "native",
+       "title": "\u30eb\u30eb\u306e\u4ea1\u970a\u5c4b\u6577",
+       "note": "Without furigana"
+      }
+     ],
+     "ja-ro": [
+      {
+       "type": "native",
+       "title": "Lulu no Bourei Yashiki",
+       "note": "Without furigana"
+      }
+     ]
+    },
+    "cover": {
+     "raw": {
+      "url": "https://images.mangabaka.dev/e/f/f/c/3/c/b/6/cb0f/4f20/991e/a0cf6d445000",
+      "size": 307719,
+      "height": 1920,
+      "width": 1350,
+      "blurhash": "|CBD+#WE9aRkt7NH9ZX8xt.9NbM{oJnhf8SOj[n$01WWs,s-wvs:bcnhoKIVs-t6kCR+R+RjbHR*nhxYWBbbo#NGi_S4kWVYayx[NGIVWq-paeaz$yRk%LaeIpoMxtR*M{ODae$%xabcofM{W=NGI@t7WBayaxj[Rks.s:",
+      "thumbhash": "VtcJDQJod36GB3doiId3hwVCYAEy",
+      "format": "jpeg"
+     },
+     "x150": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x150@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x150@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x150@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw"
+     },
+     "x250": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x250@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x250@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x250@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw"
+     },
+     "x350": {
+      "x1": "https://cdn.mangabaka.dev/imgproxy/plain/x350@1/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x2": "https://cdn.mangabaka.dev/imgproxy/plain/x350@2/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw",
+      "x3": "https://cdn.mangabaka.dev/imgproxy/plain/x350@3/aHR0cHM6Ly9pbWFnZXMubWFuZ2FiYWthLmRldi9lL2YvZi9jLzMvYy9iLzYvY2IwZi80ZjIwLzk5MWUvYTBjZjZkNDQ1MDAw"
+     }
+    },
+    "authors": [
+     "Ikuno Tajima"
+    ],
+    "artists": [
+     "Ikuno Tajima"
+    ],
+    "description": "A notorious property with a hidden past is now in the hands of Dan, a sharp and talented real estate agent.\nThe place? A manor that once belonged to the affluent Midnight family\u2014whose bloodline vanished over a century ago. \n\n(Source: Square Enix, translated)",
+    "year": 2025,
+    "published": {
+     "start_date": "2025-04-18",
+     "end_date": null,
+     "start_date_is_estimated": false,
+     "end_date_is_estimated": null
+    },
+    "status": "releasing",
+    "is_licensed": false,
+    "has_anime": false,
+    "anime": null,
+    "content_rating": "safe",
+    "type": "manga",
+    "rating": 69,
+    "popularity": {
+     "global": {
+      "current": 22952,
+      "history": {
+       "1d": 23029,
+       "1w": 22950,
+       "1mo": 22632,
+       "3mo": 34722,
+       "6mo": 41339,
+       "1y": 39452
+      }
+     },
+     "type": {
+      "current": 15669,
+      "history": {
+       "1d": 15725,
+       "1w": 15698,
+       "1mo": 15666,
+       "3mo": 25820,
+       "6mo": 30943,
+       "1y": 30620
+      }
+     }
+    },
+    "final_volume": "2",
+    "total_chapters": "16",
+    "links": [
+     "https://magazine.jp.square-enix.com/gfantasy/story/ruruno/",
+     "https://mangabaka.org/188930"
+    ],
+    "links_v2": [
+     {
+      "id": "019dbbe2-9445-7a4f-bd6b-22fc97d7552d",
+      "url": "https://magazine.jp.square-enix.com/gfantasy/story/ruruno/",
+      "name": "magazine.jp.square-enix.com",
+      "name_display": "SQUARE ENIX Magazine",
+      "type": "info",
+      "language": "ja"
+     }
+    ],
+    "publishers": [
+     {
+      "name": "Square Enix",
+      "type": "Original",
+      "note": null
+     }
+    ],
+    "titles": [
+     {
+      "language": "ko",
+      "traits": [
+       "official"
+      ],
+      "title": "\ub8e8\ub8e8\uc758 \ub9dd\ub839 \uc800\ud0dd",
+      "note": null,
+      "is_primary": true
+     },
+     {
+      "language": "ja-Latn",
+      "traits": [
+       "native",
+       "alternative"
+      ],
+      "title": "Lulu no Bourei Yashiki",
+      "note": "without furigana",
+      "is_primary": false
+     },
+     {
+      "language": "ja-Latn",
+      "traits": [
+       "native"
+      ],
+      "title": "Lulu no Hell House",
+      "note": "with furigana",
+      "is_primary": true
+     },
+     {
+      "language": "en",
+      "traits": [
+       "alternative"
+      ],
+      "title": "Lulu\u2019s Hell House",
+      "note": "On native covers",
+      "is_primary": true
+     },
+     {
+      "language": "vi",
+      "traits": [],
+      "title": "Ng\u00f4i Nh\u00e0 Ma \u00c1m C\u1ee7a Lulu (Ng\u00f4i Nh\u00e0 \u0110\u1ecba Ng\u1ee5c)",
+      "note": null,
+      "is_primary": true
+     },
+     {
+      "language": "ru",
+      "traits": [],
+      "title": "\u0414\u043e\u043c \u0441 \u043f\u0440\u0438\u0432\u0438\u0434\u0435\u043d\u0438\u044f\u043c\u0438 \u041b\u0443\u043b\u0443",
+      "note": null,
+      "is_primary": true
+     },
+     {
+      "language": "ja",
+      "traits": [
+       "native",
+       "alternative"
+      ],
+      "title": "\u30eb\u30eb\u306e\u4ea1\u970a\u5c4b\u6577",
+      "note": "without furigana",
+      "is_primary": false
+     },
+     {
+      "language": "ja",
+      "traits": [
+       "native"
+      ],
+      "title": "\u30eb\u30eb\u306e\u4ea1\u970a\u5c4b\u6577\u3008\u30d8\u30eb\u30cf\u30a6\u30b9\u3009",
+      "note": "with furigana",
+      "is_primary": true
+     },
+     {
+      "language": "zh",
+      "traits": [],
+      "title": "\u9732\u9732\u7684\u4ea1\u7075\u5b85\u7b2c",
+      "note": null,
+      "is_primary": true
+     },
+     {
+      "language": "zh-hk",
+      "traits": [],
+      "title": "\u9732\u9732\u7684\u4ea1\u9748\u5b85\u7b2c",
+      "note": null,
+      "is_primary": true
+     }
+    ],
+    "genres_v2": null,
+    "genres": [
+     "drama",
+     "fantasy",
+     "horror",
+     "mystery",
+     "shounen",
+     "supernatural"
+    ],
+    "tags_v2": [
+     {
+      "id": 40,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 912,
+      "name": "Shoujo",
+      "level": 3,
+      "name_path": "Audience Demographics > Female Oriented > Shoujo",
+      "series_count": 37161,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "unweighted"
+     },
+     {
+      "id": 38,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 911,
+      "name": "Shounen",
+      "level": 3,
+      "name_path": "Audience Demographics > Male Oriented > Shounen",
+      "series_count": 29427,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 419,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 418,
+      "name": "Anti-Hero",
+      "level": 3,
+      "name_path": "Character Archetype > Hero > Anti-Hero",
+      "series_count": 1467,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 675,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 802,
+      "name": "Adult Male Lead",
+      "level": 3,
+      "name_path": "Character Traits > Age > Adult Male Lead",
+      "series_count": 827,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 903,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 802,
+      "name": "Adult Protagonist",
+      "level": 3,
+      "name_path": "Character Traits > Age > Adult Protagonist",
+      "series_count": 977,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 4105,
+      "is_spoiler": true,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 543,
+      "name": "Body Image",
+      "level": 2,
+      "name_path": "Character Traits > Body Image",
+      "series_count": 119,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "incidental"
+     },
+     {
+      "id": 158,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 332,
+      "name": "Primarily Adult Cast",
+      "level": 3,
+      "name_path": "Character Types > Cast > Primarily Adult Cast",
+      "series_count": 7417,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 58,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 544,
+      "name": "Male Lead",
+      "level": 2,
+      "name_path": "Character Types > Male Lead",
+      "series_count": 22982,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "incidental"
+     },
+     {
+      "id": 247,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 7325,
+      "name": "Non-Human Protagonist",
+      "level": 3,
+      "name_path": "Character Types > Protagonists > Non-Human Protagonist",
+      "series_count": 3811,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "unweighted"
+     },
+     {
+      "id": 362,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 7326,
+      "name": "Ensemble Cast",
+      "level": 3,
+      "name_path": "Character Types > Supporting Cast > Ensemble Cast",
+      "series_count": 1935,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 4209,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 544,
+      "name": "Working Adult",
+      "level": 2,
+      "name_path": "Character Types > Working Adult",
+      "series_count": 195,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 3914,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 535,
+      "name": "Haunted Location",
+      "level": 2,
+      "name_path": "Locations > Haunted Location",
+      "series_count": 78,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 394,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 563,
+      "name": "Curses",
+      "level": 2,
+      "name_path": "Narrative Tropes > Curses",
+      "series_count": 1268,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 2810,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 2914,
+      "name": "Real Estate Agent",
+      "level": 3,
+      "name_path": "Occupations > Security > Real Estate Agent",
+      "series_count": 17,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 3018,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 1306,
+      "name": "Estranged Family",
+      "level": 5,
+      "name_path": "Relationship > Family Relationship > Family > Family Dynamics > Estranged Family",
+      "series_count": 417,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 4135,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 1306,
+      "name": "Sick Family Member",
+      "level": 5,
+      "name_path": "Relationship > Family Relationship > Family > Family Dynamics > Sick Family Member",
+      "series_count": 76,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 3901,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 1304,
+      "name": "Sick Parent",
+      "level": 5,
+      "name_path": "Relationship > Family Relationship > Family > Parent-Child > Sick Parent",
+      "series_count": 85,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 292,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 539,
+      "name": "Afterlife",
+      "level": 2,
+      "name_path": "Settings > Afterlife",
+      "series_count": 456,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 36,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [
+       121
+      ],
+      "parent_id": 539,
+      "name": "Fantasy",
+      "level": 2,
+      "name_path": "Settings > Fantasy",
+      "series_count": 59746,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 261,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 36,
+      "name": "Urban Fantasy",
+      "level": 3,
+      "name_path": "Settings > Fantasy > Urban Fantasy",
+      "series_count": 2334,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 4553,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 539,
+      "name": "Haunted House",
+      "level": 2,
+      "name_path": "Settings > Haunted House",
+      "series_count": 41,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 259,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 539,
+      "name": "Mythology",
+      "level": 2,
+      "name_path": "Settings > Mythology",
+      "series_count": 1650,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 22,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [
+       229,
+       394
+      ],
+      "parent_id": 539,
+      "name": "Supernatural",
+      "level": 2,
+      "name_path": "Settings > Supernatural",
+      "series_count": 30579,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 547,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": false,
+      "implied_by_tag_ids": [
+       247
+      ],
+      "parent_id": 545,
+      "name": "Non-human",
+      "level": 2,
+      "name_path": "Species & Creatures > Non-human",
+      "series_count": 4523,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "unweighted"
+     },
+     {
+      "id": 229,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 546,
+      "name": "Ghosts",
+      "level": 3,
+      "name_path": "Species & Creatures > Supernatural Beings > Ghosts",
+      "series_count": 2447,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 39,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 542,
+      "name": "Action",
+      "level": 2,
+      "name_path": "Themes > Action",
+      "series_count": 34747,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "unweighted"
+     },
+     {
+      "id": 31,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 542,
+      "name": "Drama",
+      "level": 2,
+      "name_path": "Themes > Drama",
+      "series_count": 79376,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 44,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 542,
+      "name": "Horror",
+      "level": 2,
+      "name_path": "Themes > Horror",
+      "series_count": 10062,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 32,
+      "is_spoiler": false,
+      "is_genre": true,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 542,
+      "name": "Mystery",
+      "level": 2,
+      "name_path": "Themes > Mystery",
+      "series_count": 12280,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 673,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 7533,
+      "name": "Conspiracy",
+      "level": 3,
+      "name_path": "Themes > Politics > Conspiracy",
+      "series_count": 1144,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "recurrent"
+     },
+     {
+      "id": 1362,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 1361,
+      "name": "Class Struggle",
+      "level": 3,
+      "name_path": "Themes > Social Issues > Class Struggle",
+      "series_count": 206,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "recurrent"
+     },
+     {
+      "id": 749,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 830,
+      "name": "Torture",
+      "level": 3,
+      "name_path": "Themes > Violence > Torture",
+      "series_count": 804,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     },
+     {
+      "id": 4453,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 7528,
+      "name": "Overwork",
+      "level": 3,
+      "name_path": "Themes > Work > Overwork",
+      "series_count": 49,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 1004,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 129,
+      "name": "Modern Era",
+      "level": 3,
+      "name_path": "Time Period > Period Piece > Modern Era",
+      "series_count": 1216,
+      "description": "",
+      "content_rating": "safe",
+      "weight": "core"
+     },
+     {
+      "id": 121,
+      "is_spoiler": false,
+      "is_genre": false,
+      "is_explicit": true,
+      "implied_by_tag_ids": [],
+      "parent_id": 2759,
+      "name": "Magic",
+      "level": 2,
+      "name_path": "World Building > Magic",
+      "series_count": 8386,
+      "description": null,
+      "content_rating": "safe",
+      "weight": "defining"
+     }
+    ],
+    "tags": [
+     "Haunted House",
+     "Male Protagonist",
+     "Class Struggle",
+     "Real Estate Agents",
+     "Adult Protagonist",
+     "Urban Fantasy",
+     "Curses",
+     "Overwork",
+     "Action",
+     "Anti-Hero",
+     "Sick Parents",
+     "Torture",
+     "Non-Human Protagonists",
+     "Ghosts",
+     "Afterlife",
+     "Estranged Family",
+     "Ensemble Cast",
+     "Working Adults",
+     "Haunted Location",
+     "Sick Family Members",
+     "Mythology",
+     "Modern Era",
+     "Body Image",
+     "Conspiracy",
+     "Adult Male Lead",
+     "Magic",
+     "Primarily Adult Cast"
+    ],
+    "last_updated_at": "2026-09-14T01:52:45.884Z",
+    "relationships": null,
+    "relationships_v2": [],
+    "source": {
+     "anilist": {
+      "id": 191297,
+      "rating": 7.5,
+      "rating_normalized": 75
+     },
+     "anime_planet": {
+      "id": "lulu-no-hell-house",
+      "rating": null,
+      "rating_normalized": null
+     },
+     "anime_news_network": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "kitsu": {
+      "id": null,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "manga_updates": {
+      "id": "3xhare3",
+      "rating": 6.3,
+      "rating_normalized": 63
+     },
+     "my_anime_list": {
+      "id": 181057,
+      "rating": null,
+      "rating_normalized": null
+     },
+     "shikimori": {
+      "id": 181057,
+      "rating": null,
+      "rating_normalized": null
+     }
+    }
+   }
+  }
+ ]
+}

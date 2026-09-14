@@ -20,7 +20,7 @@ struct CoverGallery: View {
         self.pages = [(nil, frontCover)] + images.map { ($0.caption, $0.image) }
         _selection = State(initialValue: startAt)
         _scrolledIndex = State(initialValue: startAt)
-        _progress = State(initialValue: Double(startAt))
+        _tracker = State(initialValue: ScrollTracker(pageProgress: Double(startAt)))
     }
 
     let frontCover: Cover
@@ -32,21 +32,28 @@ struct CoverGallery: View {
     /// has no volume, language or id of its own.
     ///
     /// Built in `init`, not computed. It was a computed property read inside
-    /// `ForEach(Array(pages.enumerated()))` and again by `backdrop`, and
-    /// `backdrop` re-runs on every `progress` frame of a drag — so the whole
-    /// array was rebuilt and re-enumerated continuously through a swipe
-    /// (item 120). Both inputs are `let`s taken in `init`, so there is
-    /// nothing for it to be later.
+    /// `ForEach(Array(pages.enumerated()))` and again by `GalleryBackdrop`
+    /// (then still inline as `backdrop`), which re-ran on every scroll frame
+    /// of a drag — so the whole array was rebuilt and re-enumerated
+    /// continuously through a swipe (item 120). Both inputs are `let`s taken
+    /// in `init`, so there is nothing for it to be later.
     private let pages: [(caption: String?, cover: Cover)]
 
     /// Fractional page position, so the background can follow the drag rather
-    /// than snap when the page changes.
-    @State private var progress: Double = 0
+    /// than snap when the page changes. Held in a `ScrollTracker` rather than
+    /// in `@State` on this root: `progress` used to be written here on every
+    /// scroll frame and read by `backdrop`, also in this root's body — so the
+    /// whole body, the `LazyHStack` of `ZoomableCover`s and two 1000pt
+    /// `DetailBackdrop`s both, re-evaluated on every sample of a swipe
+    /// (item 64, the detail-ui F1 pattern one screen deeper). This root's own
+    /// body reads no property on `tracker` — only `GalleryBackdrop`, below,
+    /// does.
+    @State private var tracker = ScrollTracker()
 
     var body: some View {
         NavigationStack {
             ZStack {
-                backdrop
+                GalleryBackdrop(pages: pages, tracker: tracker)
                 pager
             }
             .background(Palette.ground)
@@ -154,36 +161,9 @@ struct CoverGallery: View {
                 guard outer.size.width > 0 else { return 0 }
                 return geometry.contentOffset.x / outer.size.width
             } action: { _, position in
-                progress = position
+                tracker.pageProgress = position
             }
         }
-    }
-
-    /// The light behind the cards.
-    ///
-    /// Two washes, the covers on either side of the drag, blended by how far
-    /// through the drag the reader is. Nothing switches at a page boundary:
-    /// halfway between two covers the background is halfway between their
-    /// colours, which is what makes it read as one lit surface the cards are
-    /// sliding over rather than a picture behind each one.
-    private var backdrop: some View {
-        let lower = Int(progress.rounded(.down))
-        let upper = lower + 1
-        let blend = progress - Double(lower)
-
-        return ZStack {
-            if let cover = pages[safe: lower]?.cover {
-                DetailBackdrop(cover: cover, height: 1000)
-                    .opacity(1 - blend)
-            }
-            if let cover = pages[safe: upper]?.cover {
-                DetailBackdrop(cover: cover, height: 1000)
-                    .opacity(blend)
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     /// "Vol. 3 · EN", or the count when the cover has nothing to say about
@@ -212,6 +192,44 @@ private struct GalleryZoomTransition: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// The light behind the cards.
+///
+/// Two washes, the covers on either side of the drag, blended by how far
+/// through the drag the reader is. Nothing switches at a page boundary:
+/// halfway between two covers the background is halfway between their
+/// colours, which is what makes it read as one lit surface the cards are
+/// sliding over rather than a picture behind each one.
+///
+/// Pulled out of the gallery's root body (item 64): `tracker.pageProgress` is
+/// written on every scroll frame, and reading it here rather than in the root
+/// means a frame invalidates this view alone, not the root's `LazyHStack` of
+/// `ZoomableCover`s beside it — the same isolation `ScrollTracker`'s own doc
+/// comment describes for `SeriesDetailView`.
+private struct GalleryBackdrop: View {
+    let pages: [(caption: String?, cover: Cover)]
+    let tracker: ScrollTracker
+
+    var body: some View {
+        let lower = Int(tracker.pageProgress.rounded(.down))
+        let upper = lower + 1
+        let blend = tracker.pageProgress - Double(lower)
+
+        return ZStack {
+            if let cover = pages[safe: lower]?.cover {
+                DetailBackdrop(cover: cover, height: 1000)
+                    .opacity(1 - blend)
+            }
+            if let cover = pages[safe: upper]?.cover {
+                DetailBackdrop(cover: cover, height: 1000)
+                    .opacity(blend)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

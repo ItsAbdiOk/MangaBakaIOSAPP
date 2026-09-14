@@ -186,8 +186,10 @@ enum LibraryExport {
     /// The note is the reader's own text, but pasted text is real input and
     /// this file is meant to be opened in exactly those two apps. A leading
     /// apostrophe is the conventional defusal — spreadsheets strip it on
-    /// display, and `LibraryImport` sees it only in a field that could not
-    /// have been a number anyway. Applied to the title and the note only:
+    /// display, and `LibraryImport.rearmed` takes it back off, which it did
+    /// not do until work-list 28: a round trip spent a real PATCH writing the
+    /// apostrophe into the reader's note. Applied to the title and the note
+    /// only:
     /// every other column is a number, a date or an enum, and a negative
     /// priority is `-1`, not a formula.
     private static func defused(_ field: String) -> String {

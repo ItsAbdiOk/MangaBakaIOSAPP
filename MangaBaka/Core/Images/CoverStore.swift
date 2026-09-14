@@ -28,13 +28,27 @@ final class CoverStore {
     /// Bytes, not entries: cover art varies enormously in size and a count
     /// limit would hold either far too much or far too little.
     ///
-    /// 96 MB ≈ 300 decoded covers at 320 KB each (a 256×384 pt cover at
-    /// @3x is 768×1152 px, four bytes a pixel ≈ 3.4 MB decoded — so 320 KB
-    /// is the *cost* the store charges, which is the encoded size, not the
-    /// decoded one). **The 300-cover target is a guess**: it was chosen as
-    /// "a long Discover scroll plus a series page", never measured against
-    /// an eviction rate. What would settle it is the hit rate on a real
-    /// scroll; until then do not treat it as derived.
+    /// **96 MB is about 28 covers, not 300.** This comment used to say 300, on
+    /// the arithmetic that the store charges 320 KB per cover — "the encoded
+    /// size, not the decoded one". It does not: `approximateBytes` below is
+    /// `cgImage.bytesPerRow * height`, and its own comment says so, in this
+    /// file, about this number (work-list 50). A 256×384 pt cover at @3x is
+    /// 768×1152 px at four bytes a pixel ≈ 3.4 MB decoded, so 96 MB buys
+    /// ~28 of them.
+    ///
+    /// The decoded cost is the one kept, because decoded bitmaps are what is
+    /// actually resident: charging the encoded size would keep the limit's
+    /// number and lose its meaning — 300 covers held decoded is ~1 GB, which
+    /// is a jetsam, not a cache.
+    ///
+    /// So **96 MB is the guess**, not 300, and on this arithmetic it is
+    /// smaller than one Discover grid plus the series page behind it — i.e.
+    /// the store may be evicting covers the reader is still scrolling past,
+    /// and `NSCache` eviction is silent, so `image(for:)` refetches them.
+    /// NOT MEASURED. What settles it is an `NSCacheDelegate` eviction count
+    /// over one 60-cover Discover fling (review P2): if that is above zero on
+    /// a single screen, raise the limit. Raising it before that number exists
+    /// would be trading the reader's memory for a guess.
     private let cache: NSCache<NSURL, UIImage> = {
         let cache = NSCache<NSURL, UIImage>()
         cache.totalCostLimit = 96 * 1024 * 1024
@@ -89,10 +103,40 @@ final class CoverStore {
     /// the first thing a reader saw when they scrolled was a placeholder. This
     /// asks for them early and throws the result away — the point is the cache
     /// entry, and a duplicate request is deduped by `image(for:)` anyway.
+    /// How many speculative covers may be in flight at once.
+    ///
+    /// **A guess.** Six is "about one row of a Discover grid ahead", chosen so
+    /// that prefetching cannot out-number the covers already on screen. What
+    /// would settle it is the concurrent-request count during one fling, which
+    /// needs a device.
+    private static let prefetchWidth = 6
+
     func prefetch(_ urls: [URL?]) {
-        for url in urls.compactMap({ $0 }) where cache.object(forKey: url as NSURL) == nil {
-            guard inFlight[url] == nil else { continue }
-            Task { _ = await image(for: url) }
+        // Work-list 51: this used to start one unstructured, default-priority
+        // `Task` per URL. A grid handing it 40-60 URLs therefore started 40-60
+        // concurrent `URLSession.data` calls, each of which then decodes and
+        // `byPreparingForDisplay`s on the cooperative pool — competing with
+        // the scroll that asked for them, which is the exact problem `fetch`'s
+        // `nonisolated` was introduced to solve. Covers are not on the
+        // rate-limited API, so this spends no request budget; it is the app's
+        // largest byte consumer and it is speculative by definition, so it
+        // runs bounded and at `.utility`, losing to what is already visible.
+        let wanted = urls.compactMap { $0 }.filter {
+            cache.object(forKey: $0 as NSURL) == nil && inFlight[$0] == nil
+        }
+        guard !wanted.isEmpty else { return }
+        Task(priority: .utility) { [weak self] in
+            await withTaskGroup(of: Void.self) { group in
+                var running = 0
+                for url in wanted {
+                    if running >= Self.prefetchWidth {
+                        await group.next()
+                        running -= 1
+                    }
+                    group.addTask(priority: .utility) { _ = await self?.image(for: url) }
+                    running += 1
+                }
+            }
         }
     }
 

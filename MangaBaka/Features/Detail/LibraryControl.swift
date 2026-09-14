@@ -28,14 +28,47 @@ final class LibraryControlModel {
     /// and it is not saved", so a series the reader already had showed "Add
     /// to library" the moment the library's own walk had trouble — live.
     private(set) var checkFailure: APIError?
-    /// The shared library has no credentials to walk with at all. The
-    /// control renders nothing for this rather than offering to add a series
-    /// nothing can be added to yet — a series page is not the place to ask
-    /// for a token.
+    /// The shared library has no credentials to walk with at all. Rendered
+    /// as one muted line saying so, where the button would be. It used to
+    /// be set here and read nowhere: the control drew nothing at all for a
+    /// reader with no token — no button, no explanation — while the Library
+    /// tab had a whole screen for the same state (review item 31,
+    /// 2026-09-14). Still not a place to ask for a token; it only says
+    /// where one goes.
     private(set) var needsAccount = false
 
     var isKnown: Bool { entry != nil }
     var current: LibraryEntry? { entry.flatMap { $0 } }
+
+    /// What the control shows, decided in one place so the decision can be
+    /// tested — the body used to chain `if let` branches that silently fell
+    /// through for the no-account case.
+    enum ControlState: Equatable {
+        /// The library has not answered yet: nothing is claimed.
+        case unknown
+        case noAccount
+        case checkFailed(APIError)
+        case saved(LibraryEntry)
+        case canAdd
+    }
+
+    var state: ControlState {
+        if let current { return .saved(current) }
+        if let checkFailure { return .checkFailed(checkFailure) }
+        if needsAccount { return .noAccount }
+        return isKnown ? .canAdd : .unknown
+    }
+
+    /// The one line shown instead of the button when there is no account.
+    nonisolated static let noAccountLine = "Add a MangaBaka token in Settings to track this"
+
+    /// The id a row added from this control carries until the next walk
+    /// replaces it with the server's. **A guess**: server ids are positive
+    /// and nowhere near `Int.max`, so this cannot collide with a real row
+    /// — the trap `ForEach` would spring on two equal ids — and sorts as
+    /// the newest under `LibrarySort`'s "recently added", which is what a
+    /// row just added is.
+    nonisolated static func placeholderID(for seriesId: Int) -> Int { Int.max - seriesId }
 
     init(library: any LibraryProviding, store: LibraryModel, seriesId: Int, series: Series? = nil) {
         self.library = library
@@ -96,14 +129,17 @@ final class LibraryControlModel {
         }
         // Gap 87/96(j): patched locally rather than re-walking the whole
         // library to learn what was just written. The real server-assigned
-        // `id` is not known until the next full read — **a guess**, used
-        // only for this control's own display and never written into the
-        // shared `store`, so nothing else in the app treats it as real.
-        entry = .some(LibraryEntry(
-            id: seriesId, seriesId: seriesId, state: state, progressChapter: nil,
+        // `id` is not known until the next full read — see `placeholderID`.
+        // Written into the shared `store` too, so the Library tab lists the
+        // series now rather than after its next walk (item 72); it used to
+        // update only this control's own `entry`.
+        let placeholder = LibraryEntry(
+            id: Self.placeholderID(for: seriesId), seriesId: seriesId, state: state, progressChapter: nil,
             progressVolume: nil, rating: nil, note: nil, startDate: nil, finishDate: nil,
             numberOfRereads: nil, priority: nil, isPrivate: nil, readLink: nil, series: series
-        ))
+        )
+        store.insert(placeholder)
+        entry = .some(store.entries.first { $0.seriesId == seriesId } ?? placeholder)
     }
 
     /// Writes the change, then patches the shared store's own copy of this
@@ -139,9 +175,9 @@ final class LibraryControlModel {
     }
 
     /// Trusts the server's own acknowledgement rather than re-walking to
-    /// confirm it — same reasoning as `apply(_:)`. The shared `store` still
-    /// carries the row until its own next reload; only this control's
-    /// display is updated immediately.
+    /// confirm it — same reasoning as `apply(_:)`. The shared `store` drops
+    /// the row too (item 72): it used to keep it until its own next reload,
+    /// so the Library tab still listed a series the reader had just removed.
     func remove() async {
         isWorking = true
         failure = nil
@@ -152,6 +188,7 @@ final class LibraryControlModel {
             failure = error.userFacingMessage
             return
         }
+        store.remove(seriesId: seriesId)
         entry = .some(nil)
     }
 
@@ -202,20 +239,28 @@ struct LibraryControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let entry = model.current {
+            switch model.state {
+            case let .saved(entry):
                 saved(entry)
-            } else if let checkFailure = model.checkFailure {
+            case let .checkFailed(checkFailure):
                 // Gap 86: this used to be indistinguishable from "the walk
                 // finished and this series is not in it", which offered
                 // "Add to library" live for a series the reader already had.
                 InlineFailure(error: checkFailure) { await model.load() }
-            } else if model.isKnown {
+            case .noAccount:
+                // Not a sign-in prompt — a series page is not where the
+                // reader is asked for a token — and not "Add to library"
+                // with no account to add it to. One line saying where to go,
+                // as the Library tab does for the same state (item 31).
+                Text(LibraryControlModel.noAccountLine)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .canAdd:
                 addButton
+            case .unknown:
+                EmptyView()
             }
-            // model.needsAccount: nothing rendered. A series page is not
-            // where the reader is asked to sign in, and offering "Add to
-            // library" with no account to add it to is the bug this
-            // replaces.
         }
         // The chosen state's chip (the "saved" row swapping in for the "Add"
         // button, and the chip's own label changing) answers the tap rather

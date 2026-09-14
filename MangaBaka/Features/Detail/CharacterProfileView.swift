@@ -7,7 +7,7 @@ import Translation
 ///
 /// ```swift
 /// .sheet(item: $tappedCharacter) { character in
-///     CharacterProfileView(character: character)
+///     CharacterProfileView(character: character, aniList: aniList, shikimori: shikimori)
 /// }
 /// ```
 ///
@@ -19,10 +19,24 @@ import Translation
 /// Shikimori answers.
 struct CharacterProfileView: View {
     let character: SeriesCharacter
-    /// Injectable for previews and tests; defaults to a real client in the app.
-    var aniList: AniListClient = AniListClient()
-    /// Injectable for previews and tests; defaults to a real client in the app.
-    var shikimori: ShikimoriClient = ShikimoriClient()
+    /// The shared clients, threaded from `AppServices.characters` through
+    /// `CharacterRow`. These used to default to `AniListClient()` and
+    /// `ShikimoriClient()` — a new actor per sheet, with its own spacing
+    /// and backoff, blind to the 429 the cast fetch had just taken from the
+    /// same host (review item 63, 2026-09-14). No defaults now, for the
+    /// reason `SeriesDetailView.embeddingIndex` gives: a defaulted client
+    /// is how a second copy comes back by omission.
+    let aniList: AniListClient
+    let shikimori: ShikimoriClient
+
+    init(character: SeriesCharacter, aniList: AniListClient?, shikimori: ShikimoriClient?) {
+        self.character = character
+        // A row built without a service — a preview, a test — still gets a
+        // working sheet; the app's page always passes both (see the source
+        // pin in `CharacterProfileTests`).
+        self.aniList = aniList ?? AniListClient()
+        self.shikimori = shikimori ?? ShikimoriClient()
+    }
 
     @State private var state: LoadState = .loading
     /// Set once a Shikimori profile with a real description has loaded, and

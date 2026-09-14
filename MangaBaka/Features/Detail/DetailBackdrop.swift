@@ -31,9 +31,11 @@ struct DetailBackdrop: View {
     /// fires for a view inside the scrolled content — cannot reach it.
     ///
     /// A `ScrollTracker` rather than a plain `CGFloat` so the per-frame write
-    /// invalidates this view and nothing else (item 54). Nil where there is
-    /// no parallax to do — `CoverGallery` draws two of these as a static
-    /// wash behind its pager.
+    /// invalidates only the one thing that reads it, not every view holding a
+    /// reference to this object (item 54) — inside this type that reader is
+    /// `ParallaxOffset` alone, not `DetailBackdrop` itself (item 65). Nil
+    /// where there is no parallax to do — `CoverGallery` draws two of these
+    /// as a static wash behind its pager.
     var tracker: ScrollTracker?
 
     @Environment(\.displayScale) private var displayScale
@@ -97,74 +99,102 @@ struct DetailBackdrop: View {
 
     /// `scale` before `blur` — blurring first leaves the edges transparent and
     /// the corners of the page read as lighter than the middle.
+    ///
+    /// The tracker read used to sit at the bottom of this same body, after the
+    /// `AsyncImage`, the blur, the saturation and the gradient — so a scroll
+    /// frame re-diffed all of that SwiftUI tree even though `.compositingGroup`
+    /// had already collapsed the GPU work to one bitmap (item 65 / screens F25,
+    /// 2026-09-14). `ParallaxOffset` below is the only thing that reads
+    /// `tracker.offset`; `wash(in:)` never does, so a scroll frame invalidates
+    /// only the thin wrapper.
     var body: some View {
         GeometryReader { proxy in
-            // Deliberately not CoverImage: that frames every cover at a fixed
-            // 2:3 and adds a shadow, both wrong for a full-bleed wash, and its
-            // placeholder would paint a grey rectangle behind the hero on a
-            // slow connection rather than nothing.
-            // The wash's own height, not the ScrollView's: `height` caps it
-            // (see the property), so asking the CDN for a full-page image
-            // downloads and blurs artwork nobody sees.
-            let washHeight = min(height, proxy.size.height)
-            let url = cover.url(forHeight: washHeight, scale: displayScale)
-            ZStack {
-                // The ambient tint, always in place under the image layer —
-                // it is what a reader sees for however long the network
-                // takes, in place of the flat ground the wash used to have
-                // nothing else to fall back to.
-                // No `.opacity` of its own: the whole `ZStack` (this tint and
-                // the image both) gets `Self.opacity` together, below, so
-                // the handover from one to the other doesn't change the
-                // wash's overall strength.
-                if let ambientColour {
-                    ambientColour
-                }
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().scaledToFill()
-                            .accessibilityIgnoresInvertColors()
-                            .onAppear { isImageReady = true }
-                    default:
-                        Color.clear
-                    }
-                }
-                .appearsSoftly(when: isImageReady)
+            ParallaxOffset(tracker: tracker) {
+                wash(in: proxy)
             }
-            // `height` applied at last. It was declared, documented
-            // ("blurring a full-page image costs more the taller it is") and
-            // never read, so a 72pt Gaussian ran over the whole scroll view
-            // on a 1.6x-scaled layer, every frame (item 55). Top-aligned:
-            // below the hero the page is solid ground anyway, which
-            // `SeriesDetailView` paints behind this.
-            .frame(width: proxy.size.width, height: washHeight, alignment: .top)
-            .scaleEffect(Self.scale)
-            .blur(radius: Self.blurRadius, opaque: false)
-            .saturation(Self.saturation)
-            .opacity(Self.opacity)
-            .overlay {
-                LinearGradient(
-                    stops: [
-                        .init(color: Palette.ground.opacity(0.55), location: 0),
-                        .init(color: Palette.ground.opacity(0.28), location: 0.26),
-                        .init(color: Palette.ground.opacity(0.88), location: 0.74),
-                        .init(color: Palette.ground, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .clipped()
-            // Flattened before the parallax moves it, so a scroll frame
-            // offsets one finished bitmap instead of re-running the blur,
-            // the saturation and the gradient (item 55). It is also what
-            // makes `CoverGallery`'s cross-fade of two of these blend two
-            // rendered layers rather than two live blur pipelines.
-            .compositingGroup()
-            .offset(y: Self.parallaxOffset(scrollOffset: tracker?.offset ?? 0))
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func wash(in proxy: GeometryProxy) -> some View {
+        // Deliberately not CoverImage: that frames every cover at a fixed
+        // 2:3 and adds a shadow, both wrong for a full-bleed wash, and its
+        // placeholder would paint a grey rectangle behind the hero on a
+        // slow connection rather than nothing.
+        // The wash's own height, not the ScrollView's: `height` caps it
+        // (see the property), so asking the CDN for a full-page image
+        // downloads and blurs artwork nobody sees.
+        let washHeight = min(height, proxy.size.height)
+        let url = cover.url(forHeight: washHeight, scale: displayScale)
+        return ZStack {
+            // The ambient tint, always in place under the image layer —
+            // it is what a reader sees for however long the network
+            // takes, in place of the flat ground the wash used to have
+            // nothing else to fall back to.
+            // No `.opacity` of its own: the whole `ZStack` (this tint and
+            // the image both) gets `Self.opacity` together, below, so
+            // the handover from one to the other doesn't change the
+            // wash's overall strength.
+            if let ambientColour {
+                ambientColour
+            }
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().scaledToFill()
+                        .accessibilityIgnoresInvertColors()
+                        .onAppear { isImageReady = true }
+                default:
+                    Color.clear
+                }
+            }
+            .appearsSoftly(when: isImageReady)
+        }
+        // `height` applied at last. It was declared, documented
+        // ("blurring a full-page image costs more the taller it is") and
+        // never read, so a 72pt Gaussian ran over the whole scroll view
+        // on a 1.6x-scaled layer, every frame (item 55). Top-aligned:
+        // below the hero the page is solid ground anyway, which
+        // `SeriesDetailView` paints behind this.
+        .frame(width: proxy.size.width, height: washHeight, alignment: .top)
+        .scaleEffect(Self.scale)
+        .blur(radius: Self.blurRadius, opaque: false)
+        .saturation(Self.saturation)
+        .opacity(Self.opacity)
+        .overlay {
+            LinearGradient(
+                stops: [
+                    .init(color: Palette.ground.opacity(0.55), location: 0),
+                    .init(color: Palette.ground.opacity(0.28), location: 0.26),
+                    .init(color: Palette.ground.opacity(0.88), location: 0.74),
+                    .init(color: Palette.ground, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .clipped()
+        // Flattened before the parallax moves it, so a scroll frame
+        // offsets one finished bitmap instead of re-running the blur,
+        // the saturation and the gradient (item 55). It is also what
+        // makes `CoverGallery`'s cross-fade of two of these blend two
+        // rendered layers rather than two live blur pipelines.
+        .compositingGroup()
+    }
+}
+
+/// Reads `tracker?.offset` alone, so a scroll frame invalidates this thin
+/// wrapper and not `wash`'s `AsyncImage`, blur, saturation and gradient below
+/// it (item 65 / screens F25, 2026-09-14). `content` already ends in
+/// `.compositingGroup()` — flattened before this moves it, same reasoning as
+/// the comment there — so the offset always applies to one finished bitmap.
+private struct ParallaxOffset<Content: View>: View {
+    let tracker: ScrollTracker?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .offset(y: DetailBackdrop.parallaxOffset(scrollOffset: tracker?.offset ?? 0))
     }
 }

@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import MangaBaka
 
-/// `RequestSpacing.backOff(retryAfterHeader:now:cap:)` — the one place the
+/// `RequestSpacing.backOff(retryAfterHeader:now:)` — the one place the
 /// nine third-party clients now parse and clamp `Retry-After`.
 ///
 /// Each of them used to do it inline with a bare `TimeInterval.init`, which

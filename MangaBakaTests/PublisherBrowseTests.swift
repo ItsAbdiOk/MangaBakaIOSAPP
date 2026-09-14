@@ -58,3 +58,134 @@ struct PublisherBrowseTests {
         #expect(model.query.types == ["novel"])
     }
 }
+
+/// A clock that does not wait, so the debounce collapses without spending
+/// 350 ms of real time per test. Same shape as `SearchAskRulesTests`'.
+private struct ImmediateClock: _Concurrency.Clock {
+    typealias Instant = ContinuousClock.Instant
+
+    var now: Instant { ContinuousClock().now }
+    var minimumResolution: Duration { .zero }
+
+    func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+        try Task.checkCancellation()
+    }
+}
+
+/// Holds a request open until the test lets it answer, so "a keystroke
+/// landed while the request was in the air" is a sequence the test controls
+/// rather than a race it hopes for.
+private actor Gate {
+    private var released = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !released else { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        released = true
+        waiters.forEach { $0.resume() }
+        waiters = []
+    }
+}
+
+/// Yields until `condition` holds or `hops` have passed — a bound far past
+/// what scheduling needs, so a broken sequence ends instead of hanging.
+@MainActor
+private func settle(hops: Int = 1_000, until condition: () -> Bool) async {
+    for _ in 0..<hops where !condition() {
+        await Task.yield()
+    }
+}
+
+/// Screens F14 (2026-09-14): the spinner's lifecycle across a cancelled
+/// request. The B-1 cancellation guard returned with `isSearching` still
+/// true, and the replacement's short-text branch never touched it.
+@Suite("The publisher field's spinner")
+@MainActor
+struct PublisherSearchSpinnerTests {
+    /// Type "se", let the request go out, delete to "s". Expected to fail
+    /// before the fix with: `search.isSearching == false` → `true` (the
+    /// short-text branch reset results and flags but not the spinner, and
+    /// the cancelled request returned before its own reset).
+    @Test("Deleting to one character while a request is in the air clears the spinner")
+    func shortTextClearsSpinnerAfterCancelledRequest() async {
+        let gate = Gate()
+        let search = PublisherSearch(
+            search: { _ in
+                await gate.wait()
+                return []
+            },
+            clock: ImmediateClock()
+        )
+
+        search.update(query: "se")
+        await settle { search.isSearching }
+        #expect(search.isSearching, "Sanity: the request is in the air")
+
+        search.update(query: "s")
+        #expect(search.isSearching == false)
+
+        await gate.release()
+        await settle { search.hasSearched }
+        #expect(search.isSearching == false)
+        #expect(search.hasSearched == false, "A cancelled answer writes nothing")
+        #expect(search.didFail == false)
+    }
+
+    /// The control: a request that lands unopposed clears its own spinner
+    /// and records that it searched — the known answer the test above must
+    /// not have broken.
+    @Test("A request that lands clears the spinner and marks the search done")
+    func landedRequestClearsSpinner() async {
+        let search = PublisherSearch(search: { _ in [] }, clock: ImmediateClock())
+
+        search.update(query: "seven")
+        await settle { search.hasSearched }
+
+        #expect(search.hasSearched)
+        #expect(search.isSearching == false)
+        #expect(search.didFail == false)
+    }
+
+    /// Item 48's own case, kept: a keystroke mid-flight must not clear the
+    /// spinner under the replacement's request, and the cancelled answer
+    /// must not be written.
+    @Test("A cancelled answer does not clear the spinner the replacement owns")
+    func cancelledAnswerLeavesReplacementSpinner() async {
+        let first = Gate()
+        let second = Gate()
+        let calls = Counter()
+        let search = PublisherSearch(
+            search: { text in
+                calls.record(text)
+                if text == "se" { await first.wait() } else { await second.wait() }
+                return nil
+            },
+            clock: ImmediateClock()
+        )
+
+        search.update(query: "se")
+        await settle { calls.count == 1 }
+        search.update(query: "sev")
+        await settle { calls.count == 2 }
+        #expect(search.isSearching, "The second request is in the air")
+
+        await first.release()
+        await settle(hops: 50) { false }
+        #expect(search.isSearching, "The first answer, cancelled, must not clear the second's spinner")
+        #expect(search.didFail == false, "The cancelled failure is not shown")
+
+        await second.release()
+        await settle { search.hasSearched }
+        #expect(search.isSearching == false)
+        #expect(search.didFail, "The live request's failure is")
+    }
+
+    private final class Counter: @unchecked Sendable {
+        private(set) var count = 0
+        func record(_ text: String) { count += 1 }
+    }
+}

@@ -186,9 +186,18 @@ final class ReleaseReminders {
         }
         rescheduleTask = task
         await task.value
+        // Only this pass's own handle. A later `reschedule` may already have
+        // chained a newer task onto this one; clearing unconditionally would
+        // drop *its* registration and the pass after that would run alongside
+        // it instead of behind it (review item 72, 2026-09-14). Cleared at all
+        // because the handle used to be kept for the life of the app — the
+        // last pass, its captured arrays and all, never released.
+        if rescheduleTask == task { rescheduleTask = nil }
     }
 
-    private var rescheduleTask: Task<Void, Never>?
+    /// `private(set)` rather than `private` so `ReminderPacingTests` can
+    /// assert it is released once the pass is over.
+    private(set) var rescheduleTask: Task<Void, Never>?
 
     private func performReschedule(
         announced: [UpcomingWork],
@@ -223,11 +232,16 @@ final class ReleaseReminders {
         // be told at all.
         seedFirstSeenBaselines(library: library, feeds: feeds)
 
+        // Read once. `fired` is a computed property that decodes the whole
+        // ledger out of `UserDefaults` on every read, and this pass used to
+        // read it twice — here and again for `updatedFired` — on the main
+        // actor, on the launch path (review item 36, 2026-09-14).
+        let firedLedger = fired
         let scheduled = Self.applyFatigueGuard(
-            candidates, now: now, fired: fired, seriesLastNotified: seriesLastNotified
+            candidates, now: now, fired: firedLedger, seriesLastNotified: seriesLastNotified
         )
 
-        var updatedFired = fired
+        var updatedFired = firedLedger
         var updatedSeriesLastNotified = seriesLastNotified
         var updatedStatus = seriesStatus
         var updatedEpisode = knownEpisode
@@ -236,7 +250,16 @@ final class ReleaseReminders {
             await notify(id: item.id, title: item.title, body: item.body, at: item.date)
             updatedFired[item.id] = item.date
             guard let seriesID = item.seriesID else { continue }
-            updatedSeriesLastNotified[seriesID] = now
+            // The moment it will *arrive*, not the moment this pass decided.
+            // `applyFatigueGuard` can push a candidate days forward, and the
+            // cooldown is a promise about the lock screen — "24 hours between
+            // two things arriving about one series" — so measuring it from
+            // queue time let a deferred season-ending and next day's chapter
+            // land on the same morning seconds apart (review item 35,
+            // 2026-09-14). `triggerDate` because a release dated "today" is
+            // stamped at midnight and actually fires a minute from now; the
+            // guard above measures against this same value.
+            updatedSeriesLastNotified[seriesID] = ReminderRequest.triggerDate(for: item.date, now: now)
             if item.id.hasPrefix("finished-"), let status = library.first(where: { $0.seriesId == seriesID })?
                 .series?.status {
                 updatedStatus[seriesID] = status
@@ -246,7 +269,7 @@ final class ReleaseReminders {
                 updatedSeason[seriesID] = season
             }
         }
-        defaults.set(updatedFired, forKey: Self.firedKey)
+        defaults.set(Self.pruned(updatedFired, now: now), forKey: Self.firedKey)
         defaults.set(Self.encodeIntKeys(updatedSeriesLastNotified), forKey: Self.seriesLastNotifiedKey)
         defaults.set(Self.encodeIntKeys(updatedStatus), forKey: Self.statusKey)
         defaults.set(Self.encodeIntKeys(updatedEpisode), forKey: Self.episodeKey)
@@ -301,18 +324,46 @@ extension ReleaseReminders {
 
         for candidate in candidates.sorted(by: { $0.date < $1.date }) {
             guard fired[candidate.id] == nil else { continue }
+            // Placed first, judged second. The cooldown is about when two
+            // notifications *arrive*, and `place` is what decides that — a
+            // candidate the daily cap pushes to day 2 is 48 hours from one
+            // sent today however close together this pass decided them. It
+            // used to compare `now` against a `now` stamped when the earlier
+            // one was queued, so a series with one notification deferred to
+            // day 2 and a fresh fact on day 1 got both on day 2's lock screen
+            // a second apart (review item 35, 2026-09-14). The trial copy of
+            // `allocated` keeps a refused candidate from spending a slot.
+            var trial = allocated
+            guard let placed = place(
+                candidate, from: today, allocated: &trial, calendar: calendar
+            ) else { continue }
+            let arrival = ReminderRequest.triggerDate(for: placed.date, now: now, calendar: calendar)
             if let seriesID = candidate.seriesID, let last = seriesSeenThisPass[seriesID],
-               now.timeIntervalSince(last) < ReleaseReminders.sameSeriesCooldown {
+               abs(arrival.timeIntervalSince(last)) < ReleaseReminders.sameSeriesCooldown {
                 continue
             }
-            guard let placed = place(
-                candidate, from: today, allocated: &allocated, calendar: calendar
-            ) else { continue }
-
+            allocated = trial
             results.append(placed)
-            if let seriesID = candidate.seriesID { seriesSeenThisPass[seriesID] = now }
+            if let seriesID = candidate.seriesID { seriesSeenThisPass[seriesID] = arrival }
         }
         return results
+    }
+
+    /// **A guess: sixty days.** How long a fired id is remembered. The ledger
+    /// is per event — `release-feed-<series>-<episode>`, `release-work-<id>`
+    /// — and was append-only, so a reader following a few dozen weeklies
+    /// accrued thousands of keys a year that every launch decoded, scanned,
+    /// re-encoded and wrote back (review item 36, 2026-09-14). Sixty is
+    /// comfortably past `maxDeferralDays` (14), so nothing still pending or
+    /// still counting against a day's cap is ever dropped; anything older
+    /// cannot be a candidate again, because the policy's baselines have
+    /// already moved past it.
+    nonisolated static let firedRetention: TimeInterval = 60 * 60 * 24 * 60
+
+    /// `fired` with everything older than `firedRetention` dropped. Future
+    /// dates — deferred notifications — are always kept.
+    nonisolated static func pruned(_ fired: [String: Date], now: Date) -> [String: Date] {
+        fired.filter { now.timeIntervalSince($0.value) < firedRetention }
     }
 
     /// **A guess: fourteen days.** How far forward the overflow walk will go
@@ -359,7 +410,11 @@ extension ReleaseReminders {
     private static let seasonKey = "reminders.knownSeason"
 
     private var fired: [String: Date] {
-        (defaults.dictionary(forKey: Self.firedKey) as? [String: Date]) ?? [:]
+        // Per entry, not `as? [String: Date]` over the whole dictionary: that
+        // cast is all-or-nothing, so one value that was not a `Date` silently
+        // read the ledger as empty and made every past notification eligible
+        // again at once (review item 36, 2026-09-14).
+        defaults.dictionary(forKey: Self.firedKey)?.compactMapValues { $0 as? Date } ?? [:]
     }
 
     private var seriesLastNotified: [Int: Date] {

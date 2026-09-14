@@ -98,7 +98,13 @@ extension RootView {
                                     // snapshot has already walked once this
                                     // session and answers from cache.
                                     library: library,
-                                    loadExisting: { await librarySnapshot.all() },
+                                    // `wholeLibrary`, not `all()`: this is the
+                                    // set the import compares against to
+                                    // refuse a downgrade, and a failed walk
+                                    // answering "[]" turned every row into an
+                                    // add that walked the reader's own
+                                    // progress backwards (review 2, item 4).
+                                    loadExisting: { await librarySnapshot.load().wholeLibrary },
                                     formats: formats,
                                     blockedTags: blockedTags,
                                     catalogue: catalogue,
@@ -109,7 +115,14 @@ extension RootView {
                                     history: history,
                                     taste: taste,
                                     onAccountChanged: { await forgetPreviousAccount() },
-                                    titleRevision: $titleRevision
+                                    titleRevision: $titleRevision,
+                                    // The app's one `TokenStore`, not a
+                                    // fourth of its own (second-pass review
+                                    // S1): Settings is the only writer, and
+                                    // what it writes has to be what the
+                                    // client reads back a moment later when
+                                    // it validates the token.
+                                    store: tokenStore
                                 )
                             }
                     }
@@ -166,7 +179,18 @@ extension RootView {
         // written to fix it. `forgetProfile()` above has already dropped the
         // cached id, so this asks the client for whoever is signed in now;
         // nil when that is nobody, which is the ordinary signed-out case.
-        await repository.updateLibraryExclusion(userID: await library.profileID())
+        //
+        // Item 15: "nobody" is now answered without asking. This path's
+        // commonest trigger is "Remove token", and `profileID()` sent a
+        // `/v1/my/profile` that could only ever be a 401 — a spent request
+        // against the 180/min ceiling the whole app shares, to learn what the
+        // Keychain already knew. The exclusion is nil when signed out either
+        // way, so clearing it is the same answer one request cheaper.
+        if hasCredentials() {
+            await repository.updateLibraryExclusion(userID: await library.profileID())
+        } else {
+            await repository.updateLibraryExclusion(userID: nil)
+        }
         // Pending notifications name series from the previous account's
         // library. Without this, "<title> has finished" arrives on the lock
         // screen for an account the reader has signed out of.
@@ -293,14 +317,16 @@ extension RootView {
     /// request the page would make on arrival anyway. Discover, because a
     /// link is a door into the app rather than into the reader's shelf.
     func openSeries(id: Int) async {
-        if let mine = await librarySnapshot.all().first(where: { $0.seriesId == id })?.series {
+        // `.entries`: showing the reader their own row if it arrived is
+        // better than refusing because the walk was partial.
+        if let mine = await librarySnapshot.load().entries.first(where: { $0.seriesId == id })?.series {
             selection = .library
             shelfPath = [mine]
             return
         }
         // Gap 76: a second "Open X" arriving while this one is still awaiting
-        // `extras` cancels this task (`.task(id: bridge.pendingSeriesID)` in
-        // `RootView.body` restarts on a new id) but nothing here noticed —
+        // `extras` cancels this task (`.task(id: bridge.pending?.token)` in
+        // `RootView.body` restarts on a new token) but nothing here noticed —
         // the cancelled call kept running to completion and could still land
         // its own `discoverPath` assignment after the newer one had already
         // set the right series, leaving the reader on the wrong page.
@@ -321,7 +347,9 @@ extension RootView {
     }
 
     func openFromSpotlight(seriesID: Int) async {
-        let entries = await librarySnapshot.all()
+        // `.entries`: a partial walk can still hold the row Spotlight
+        // matched, and opening it beats refusing.
+        let entries = await librarySnapshot.load().entries
         guard !Task.isCancelled else { return }
         guard let series = entries.first(where: { $0.seriesId == seriesID })?.series else {
             // Gap 61: a series Spotlight indexed yesterday that has since
@@ -349,8 +377,12 @@ extension RootView {
             return
         }
 
-        let announced = await calendar.mine(seriesIDs: await librarySnapshot.seriesIDs())
         let walk = await librarySnapshot.load()
+        // Nil rather than a partial set: a reminder scheduled from half a
+        // library is a notification about a series the reader may not track,
+        // and silence is the better failure here.
+        guard let mine = walk.wholeLibrarySeriesIDs else { return }
+        let announced = await calendar.mine(seriesIDs: mine)
         // Followed publishers: once a day per follow, one search each. No
         // `notify` closure — Abdi's rule (2026-09-13) is two conditions only,
         // and a publisher follow is neither; the check still runs so
@@ -378,7 +410,13 @@ extension RootView {
             announced: announced,
             library: walk.entries,
             feeds: feeds,
-            libraryFailure: walk.failure
+            libraryFailure: walk.failure,
+            // Item 8: `isComplete` was never passed, so it took its `true`
+            // default and `performReschedule`'s guard — the one that refuses
+            // to schedule off a walk cut short at the page cap — was dead
+            // code from the day it was written. `walk.isComplete` is the same
+            // `walk` the entries above come from.
+            isComplete: walk.isComplete
         )
     }
 
@@ -455,6 +493,14 @@ extension RootView {
                 // (UX#11): a tag from a series page replaces the last search,
                 // which may be an hour old and about something else.
                 searchModel.openTag(tag)
+                // Item 21: the tag is most often tapped on a series page
+                // reached *from* Search, and that page sits on `searchPath`.
+                // Switching the tab without popping it changed the results
+                // underneath a detail page that stayed on top, so the tap did
+                // nothing visible — one spent search request and no sign of
+                // it. Popping is what the tab bar's own re-tap already does
+                // (`RootView+Tabs.popToRoot`); this path never called it.
+                searchPath.removeAll()
                 selection = .search
             },
             onOpenSchedule: {

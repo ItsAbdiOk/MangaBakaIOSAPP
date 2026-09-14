@@ -41,6 +41,32 @@ private final class CountingFeedRepository: StubRepositoryBase, @unchecked Senda
     }
 }
 
+/// Fails one row on its first ask and answers every later ask with content,
+/// counting per row — so "how many rows did the retry re-fetch" is a
+/// number, not an inference.
+private final class FailOnceRepository: StubRepositoryBase, @unchecked Sendable {
+    private let counts = OSAllocatedUnfairLock(initialState: [FeedKind: Int]())
+    private let failing: FeedKind
+
+    init(failing: FeedKind) {
+        self.failing = failing
+    }
+
+    func calls(_ kind: FeedKind) -> Int { counts.withLock { $0[kind] ?? 0 } }
+    var totalCalls: Int { counts.withLock { $0.values.reduce(0, +) } }
+
+    override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
+        let call = counts.withLock { state -> Int in
+            state[feed, default: 0] += 1
+            return state[feed, default: 0]
+        }
+        if feed == failing, call == 1 {
+            return FeedResult(series: [], origin: .staleAfter(.rateLimited(until: nil)))
+        }
+        return FeedResult(series: CountingFeedRepository.page(1), origin: .network, hasMore: true)
+    }
+}
+
 /// What `DiscoverView`'s `.task` re-running costs, and what a cancelled load
 /// is allowed to say.
 @Suite("Discover reloads")
@@ -130,5 +156,53 @@ struct DiscoverReloadTests {
 
         #expect(model.rows.allSatisfy { $0.failure == .offline })
         #expect(model.failure == .offline)
+    }
+}
+
+/// Screens F11 (2026-09-14): a row's `InlineFailure` retry called
+/// `load(forceRefresh: true)` — all four rows re-fetched, two from the
+/// 30/min family, for one row's failure.
+@Suite("Retrying one Discover row")
+@MainActor
+struct DiscoverRowRetryTests {
+    private var trendingID: DiscoverModel.Row.ID { FeedKind.trending.cacheKey }
+
+    /// Expected to fail before the fix with: `retryRow` did not exist — the
+    /// view's retry closure was `load(forceRefresh: true)`, which on this
+    /// stub is `repository.totalCalls == 8`, not 5.
+    @Test("A row's retry re-fetches that row and nothing else")
+    func retryFetchesOneRow() async {
+        let repository = FailOnceRepository(failing: .trending)
+        let model = DiscoverModel(repository: repository)
+
+        await model.load()
+        #expect(repository.totalCalls == 4)
+        let trending = model.rows.first { $0.id == trendingID }
+        #expect(trending?.series.isEmpty == true, "Sanity: the row asked and failed")
+        #expect(trending?.failure == .rateLimited(until: nil))
+        #expect(model.failure == .rateLimited(until: nil), "The screen-wide verdict names the failure")
+
+        await model.retryRow(trendingID)
+
+        #expect(repository.totalCalls == 5)
+        #expect(repository.calls(.trending) == 2)
+        let retried = model.rows.first { $0.id == trendingID }
+        #expect(retried?.series.count == 20)
+        #expect(retried?.failure == nil)
+        #expect(retried?.isLoading == false)
+        #expect(model.failure == nil, "No row is failing now, so the screen is not")
+    }
+
+    /// The control: pull-to-refresh still re-fetches every row.
+    @Test("Pull-to-refresh after a row retry still asks for all four")
+    func forceRefreshStillAsksAll() async {
+        let repository = FailOnceRepository(failing: .trending)
+        let model = DiscoverModel(repository: repository)
+
+        await model.load()
+        await model.retryRow(trendingID)
+        await model.load(forceRefresh: true)
+
+        #expect(repository.totalCalls == 9)
     }
 }

@@ -121,7 +121,12 @@ actor ReleaseScheduleService {
 
     init(
         library: LibrarySnapshot,
-        mangaUpdates: MangaUpdatesClient = MangaUpdatesClient(),
+        // No default. A second `MangaUpdatesClient` means a second
+        // `RequestSpacing`: two actors, two independent 3 s windows, and a 429
+        // back-off earned by one invisible to the other — which is the bug this
+        // parameter was added to fix, and a default would let any future call
+        // site reintroduce it silently, with no build error and no failing test.
+        mangaUpdates: MangaUpdatesClient,
         database: AppDatabase,
         clock: any Clock = SystemClock()
     ) {

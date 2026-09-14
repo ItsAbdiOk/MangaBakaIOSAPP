@@ -103,7 +103,10 @@ actor TasteProfile {
         snapshot: LibrarySnapshot?
     ) async -> Set<Int> {
         if let ledger, let snapshot {
-            try? await ledger.absorb(await snapshot.all())
+            // The whole `Result`, not its entries: `absorb` retracts every
+            // source that is missing from what it is given, and a failed walk
+            // and an empty library are the same `[]` (work-list 5).
+            try? await ledger.absorb(await snapshot.load())
         }
 
         let local = (try? await ledger?.favouredIDs()) ?? []
@@ -129,7 +132,11 @@ actor TasteProfile {
     /// around rather than depending on one endpoint's shape.
     func note(_ series: Series) async {
         guard let ledger, let snapshot, !series.richTags.isEmpty else { return }
-        let entries = await snapshot.all()
+        // `.entries`, not `.wholeLibrary`: this only asks whether the reader
+        // already has this one series, and a row that did arrive is a row that
+        // is there whether or not the walk finished. A short walk costs a
+        // series that is not counted this time, not a wrong count.
+        let entries = await snapshot.load().entries
         guard let entry = entries.first(where: { $0.seriesId == series.id }) else { return }
         // Only drop the cache when something actually moved. `absorb`
         // returns false for a series already counted in this state, which is

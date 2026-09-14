@@ -78,7 +78,32 @@ actor TasteLedger {
     /// removal: a `TasteSource` row whose series is not in `entries` was
     /// dropped from the library since the last call and its contribution is
     /// retracted below (R9).
-    func absorb(_ entries: [LibraryEntry]) throws {
+    /// Counts the reader's library into the ledger, from a walk that says how
+    /// it went.
+    ///
+    /// **Takes the `Result`, not its entries, because the retraction below
+    /// cannot tell the two empties apart.** Work-list 5: `TasteProfile` fed
+    /// this `snapshot.all()`, which is `[]` for a failed walk exactly as it is
+    /// for an empty library, so opening one series page while offline — or
+    /// inside a rate-limit window, or with the API 500ing — matched every
+    /// `tasteSource` row as stale and retracted all of them. On Abdi's real
+    /// install that is 945 sources and ~3,175 tags, per the `v11_recountTaste`
+    /// measurement. It rebuilds on the next successful walk, at the cost of the
+    /// 939-select/939-upsert pass `absorb(_ series:)` exists to avoid paying.
+    ///
+    /// A page-capped walk is refused for the same reason a failed one is: the
+    /// sweep's whole premise is that `entries` is everything.
+    func absorb(_ library: LibrarySnapshot.Result) throws {
+        try absorb(library.entries, retractingMissing: library.isWholeLibrary)
+    }
+
+    /// - Parameter retractingMissing: whether `entries` is known to be the
+    ///   reader's *whole* library, so that a `tasteSource` row missing from it
+    ///   means the series left the library rather than that the walk stopped
+    ///   short. There is no default: the caller has to say, because getting
+    ///   this wrong silently empties the ledger. Prefer `absorb(_ library:)`,
+    ///   which answers it from the walk itself.
+    func absorb(_ entries: [LibraryEntry], retractingMissing: Bool) throws {
         try database.libraryWriter.write { db in
             for entry in entries {
                 guard let series = entry.series else { continue }
@@ -113,11 +138,19 @@ actor TasteLedger {
             // code path did that. `TasteSource` rows not present in this full
             // snapshot are exactly the series that dropped out since the last
             // absorb; retract what they contributed and forget them.
-            let presentIDs = entries.map(\.seriesId)
-            let stale = try TasteSource.filter(!presentIDs.contains(Column("seriesId"))).fetchAll(db)
-            for source in stale {
-                try Self.retract(seriesId: source.seriesId, in: db)
-                try source.delete(db)
+            //
+            // Only when `entries` really is the whole library. With an empty
+            // array the predicate is `NOT 0`, which matches every row, so a
+            // failed walk retracted the entire ledger (work-list 5).
+            if retractingMissing {
+                let presentIDs = entries.map(\.seriesId)
+                let stale = try TasteSource
+                    .filter(!presentIDs.contains(Column("seriesId")))
+                    .fetchAll(db)
+                for source in stale {
+                    try Self.retract(seriesId: source.seriesId, in: db)
+                    try source.delete(db)
+                }
             }
 
             try Self.prune(db)
@@ -211,12 +244,34 @@ actor TasteLedger {
     /// out: a taste profile built from someone else's library would be worse
     /// than none.
     func clear() throws {
-        _ = try database.libraryWriter.write { db in
-            try TagAffinity.deleteAll(db)
-            try TasteSource.deleteAll(db)
-            try db.execute(sql: "DELETE FROM tasteContribution")
+        try database.libraryWriter.write { db in
+            for table in Self.tables {
+                try db.execute(sql: "DELETE FROM \(table)")
+            }
         }
     }
+
+    /// The tables the ledger *is*.
+    ///
+    /// Named once because three places have to agree about this list and they
+    /// already did not. Work-list 12: `clear()` deleted `tagAffinity`,
+    /// `tasteSource` and `tasteContribution` and left `tasteSeen`, so after a
+    /// sign-out — `RootView+Session` calls `forgetEverything()` there precisely
+    /// so no account-scoped data survives — `DataUseSection` read `seenSeries`
+    /// first and Settings said "945 series seen, and none of them carried
+    /// tags": the previous account's count, dressed up as this feature's one
+    /// diagnosable failure. `v11_recountTaste` already deleted `tasteSeen`, so
+    /// the migration and the clear disagreed about what forgetting the ledger
+    /// means.
+    ///
+    /// `v11` is not derived from this list on purpose: it is a recorded
+    /// migration and what it did on the devices that have run it cannot be
+    /// changed, so it keeps its three literal statements.
+    /// `TasteLedgerTests.everyLedgerTableIsAReaderTable` is what stops this
+    /// list and `AppDatabase.readerTables` drifting apart.
+    nonisolated static let tables = [
+        "tagAffinity", "tasteSource", "tasteSeen", "tasteContribution"
+    ]
 
     /// Adds one series' tags to `tagAffinity`, and records exactly what was
     /// added in `tasteContribution` so it can be taken back later without

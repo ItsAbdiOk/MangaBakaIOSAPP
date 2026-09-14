@@ -52,11 +52,22 @@ struct PublisherView: View {
     }
 
     @State private var order: Order = .popular
+    /// The order the grid's current `series` answer. `.task(id: order)`
+    /// re-runs on every re-appearance as well as on an order change, and
+    /// without this it reset the grid to page 1 on every pop-back from a
+    /// series opened in it — two search-window requests and the reader's
+    /// place in the grid gone (D-1, fixed on Discover with `hasLoadedOnce`
+    /// and not here; screens F10, 2026-09-14). Pull-to-refresh and the
+    /// stale bar call `load()` directly and are unaffected.
+    @State private var loadedOrder: Order?
     @State private var detail: PublisherDetail?
     @State private var series: [Series] = []
-    /// Everything MangaBaka attributes to the name, from the count endpoint —
-    /// Shueisha is thousands, and the header said "100" because that was the
-    /// page (Abdi's screenshot, 2026-09-11). Nil until counted.
+    /// Everything MangaBaka attributes to the name — Shueisha is thousands,
+    /// and the header said "100" because that was the page (Abdi's
+    /// screenshot, 2026-09-11). From the search response's own
+    /// `pagination.count` (`FeedResult.total`); the separate `limit=1` count
+    /// request is only spent when that is missing (screens F9, 2026-09-14 —
+    /// E F1, fixed on Search a day earlier). Nil until known.
     @State private var total: Int?
     @State private var page = 1
     @State private var hasMore = false
@@ -138,7 +149,13 @@ struct PublisherView: View {
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
-        .task(id: order) { await load() }
+        .task(id: order) {
+            guard Self.needsLoad(loadedOrder: loadedOrder, order: order, seriesIsEmpty: series.isEmpty) else {
+                return
+            }
+            await load()
+            loadedOrder = order
+        }
     }
 
     /// Two chips, the way the Library filters states. A picked chip is the
@@ -278,6 +295,22 @@ struct PublisherView: View {
         if let total { return total }
         return hasMore ? nil : seriesCount
     }
+
+    /// Whether `.task(id: order)` firing means a load. A re-appearance with
+    /// the grid already answering this order is not one; an order change,
+    /// a first appearance, or an empty grid (a load that was cancelled or
+    /// failed on the way out) is. `nonisolated static` so the rule is
+    /// testable without a hosted view (F10).
+    nonisolated static func needsLoad(loadedOrder: Order?, order: Order, seriesIsEmpty: Bool) -> Bool {
+        loadedOrder != order || seriesIsEmpty
+    }
+
+    /// The page the grid now holds after a `loadMore` answer: advanced only
+    /// when the page actually landed, so a retry asks for the page that
+    /// failed rather than the one after it (F27).
+    nonisolated static func nextPage(after page: Int, result: FeedResult) -> Int {
+        result.blockingError == nil ? page + 1 : page
+    }
 }
 
 /// The grid, paging, and the loads that fill both — split from the type
@@ -362,9 +395,7 @@ extension PublisherView {
         isLoading = true
         loadMoreFailure = nil
         page = 1
-        async let found = repository.search(query)
-        async let counted = repository.count(query)
-        let result = await found
+        let result = await repository.search(query)
         guard generation == loadGeneration else { return }
         series = result.series
         origin = result.origin
@@ -374,12 +405,18 @@ extension PublisherView {
         // stopped paging after page one for any publisher common enough to
         // have one. See FeedResult.hasMore.
         hasMore = result.hasMore
-        let countedValue = await counted
-        guard generation == loadGeneration else { return }
         // Gap 57: falling back to `series.count` here is what printed "100"
         // for Shueisha — the page size, not the total. Hidden instead until
-        // the real count answers; see `headerCount`.
-        total = countedValue
+        // the real count answers; see `headerCount`. The search response
+        // carries the total itself; `count` — a second request from the
+        // same 30/min window — is only for a response that did not
+        // (a cached or failed page, F9).
+        if let known = result.total {
+            total = known
+        } else {
+            total = await repository.count(query)
+            guard generation == loadGeneration else { return }
+        }
         // The directory knows publishers, not people.
         if kind == .publisher, detail == nil,
            let id = await catalogue.findPublisher(named: name)?.publisherID {
@@ -400,8 +437,14 @@ extension PublisherView {
         isLoadingMore = true
         loadMoreFailure = nil
         defer { isLoadingMore = false }
-        page += 1
-        let result = await repository.search(query)
+        // Asked for, not yet advanced to: `page += 1` used to run before the
+        // request, so a failed page 2 left `page` at 2 and the trailing
+        // `InlineFailure`'s retry asked for page 3 — page 2 was never seen
+        // (screens F27, 2026-09-14). `SearchModel.loadMore` got this right.
+        var next = query
+        next.page = page + 1
+        let result = await repository.search(next)
+        page = Self.nextPage(after: page, result: result)
         let known = Set(series.map(\.id))
         let additions = result.series.filter { !known.contains($0.id) }
         series.append(contentsOf: additions)

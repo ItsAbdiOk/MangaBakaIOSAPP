@@ -213,12 +213,23 @@ final class SearchModel {
     /// Tokens are the tag, genre and publisher filters the field shows
     /// (`SearchToken`); the rest of the filters stay on the panel, where
     /// they live — Cancel clears what the field holds, not the panel.
+    ///
+    /// The sort goes too. `openTag` and `applyBrowse` choose
+    /// `popularity_asc` on the reader's behalf, and it survived Cancel: every
+    /// title typed afterwards went out `sort_by=popularity_asc` — the most
+    /// popular fuzzy match, not the relevance order that finds ONE PIECE
+    /// first (the `random` measurement at `queryDidChange` has the same
+    /// shape; screens F7, 2026-09-14). A sort the reader picked on the panel
+    /// is lost with it — the price of one rule, and the Sort chips are a tap
+    /// away. Cancel is "start over".
     func cancelSearch() {
         cancelPendingDebounce()
         query.text = nil
         query.tags = []
         query.genres = []
         query.publisher = nil
+        query.sort = nil
+        query.randomSeed = nil
         resetToIdle()
     }
 
@@ -237,6 +248,29 @@ final class SearchModel {
         guard hasAsked else { return }
         cancelPendingDebounce()
         scheduleDebouncedSearch()
+    }
+
+    /// A token removed with the field's ×. The last one gone leaves the
+    /// field empty, and an empty field is idle — the rule `queryDidChange`
+    /// applies to text. This used to fall through to `filtersDidChange`,
+    /// whose only guard is `hasAsked`, and `search()`'s `query.isEmpty`
+    /// counts `sort`: the sort `openTag`/`applyBrowse` had chosen went out
+    /// on its own — `{tags: [], sort: popularity_asc}`, the whole catalogue
+    /// by popularity, 30 rows under an empty field headed "N results ·
+    /// Popularity" (screens F6, 2026-09-14). Cancel, because that is what an
+    /// emptied field is; it takes the app-chosen sort with it.
+    ///
+    /// Its own entry point rather than a rule inside `filtersDidChange`: a
+    /// scope tap also arrives there, and "Show results" with only panel
+    /// filters is a legitimate ask with no text and no tokens — a scope tap
+    /// after it must narrow the results, not reset the screen.
+    func tokensDidChange() {
+        guard hasAsked else { return }
+        guard query.askedText != nil || !SearchToken.tokens(for: query).isEmpty else {
+            cancelSearch()
+            return
+        }
+        filtersDidChange()
     }
 
     /// Back to the idle panel: nothing asked, nothing shown, nothing owed.
@@ -299,7 +333,11 @@ final class SearchModel {
         // Already answered, and the answer is still good: Return after the
         // debounce, or "one " after "one", sends nothing. A failure is asked
         // again (that is what retry is), and random is a reshuffle every time.
-        if let answered, answered == query.asAsked, failure == nil, query.sort != "random" {
+        // Offline results are never "already answered" for the network:
+        // Return on the offline index is the reader asking whether the
+        // network is back (F8).
+        if let answered, answered == query.asAsked, failure == nil, query.sort != "random",
+           origin == .network {
             return
         }
         // Random pages against one seed, or page 2 is a fresh shuffle of
@@ -368,10 +406,23 @@ final class SearchModel {
             let keepWhatIsShown = !results.isEmpty && !Self.isOffline(blockingError)
             if Self.isOfflineEligible(blockingError), !keepWhatIsShown {
                 await runOfflineSearch(mine: mine, page: 1, appending: false)
+                // A rate limit lifts on a deadline, and the fallback used to
+                // forget it: `failure` cleared, `answered` set, so no
+                // countdown, no auto-retry, Return refused as a byte-identical
+                // re-ask — the reader stranded on the offline index until
+                // they changed the text (screens F8, 2026-09-14). Kept, the
+                // grid renders `StaleBar(deadline:)` over the offline rows
+                // and `search()` re-asks when it reaches zero. Genuine
+                // `.offline` has no deadline and keeps today's behaviour.
+                if case .rateLimited = blockingError, mine == generation {
+                    failure = blockingError
+                }
                 return
             }
             failure = blockingError
-            origin = .network
+            // `origin` is left as it was: `results` are, too. Writing
+            // `.network` here over offline rows kept under a second 429 sent
+            // `loadMore` to page the network for an offline grid.
             return
         }
         // Deduplicated like every later page: a repeated id within one page

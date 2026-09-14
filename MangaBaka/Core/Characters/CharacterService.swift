@@ -69,8 +69,12 @@ actor CharacterService {
         }
     }
 
-    private let aniList: AniListClient
-    private let shikimori: ShikimoriClient
+    /// Internal, not private: `CharacterProfileView` used to build its own
+    /// pair per presentation, which bypassed this service's outage memory —
+    /// so a source that had just 403'd was asked again on every profile
+    /// opened (review 2, item 63).
+    let aniList: AniListClient
+    let shikimori: ShikimoriClient
 
     /// Which source(s) contributed last. Diagnostic only — nothing on screen
     /// reads it.

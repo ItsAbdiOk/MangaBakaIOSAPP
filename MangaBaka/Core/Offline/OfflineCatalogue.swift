@@ -154,8 +154,6 @@ actor OfflineCatalogue {
         return loaded.built.isEmpty ? nil : loaded.entries.count
     }
 
-    /// The export's own build date, e.g. "2026-09-13". Nil when the resource
-    /// is missing or unreadable — a packaging bug, not a real "no date".
     /// Titles for a set of ids, for rows built from ids alone — the
     /// "Similar by description" cards resolve their neighbours here rather
     /// than with one request per id.
@@ -170,6 +168,8 @@ actor OfflineCatalogue {
         return found
     }
 
+    /// The export's own build date, e.g. "2026-09-13". Nil when the resource
+    /// is missing or unreadable — a packaging bug, not a real "no date".
     func builtDate() -> String? {
         let loaded = ensureLoaded()
         return loaded.built.isEmpty ? nil : loaded.built
@@ -373,7 +373,13 @@ actor OfflineCatalogue {
     private func passesRating(_ entry: OfflineIndexEntry, minimum: Int?) -> Bool {
         guard let minimum else { return true }
         guard let rating = entry.rating else { return false }
-        return Int(rating.rounded()) >= minimum
+        // `Int(wholeOrClamped:)`, not `Int(_:)`. `rating` is decoded from the
+        // bundled `OfflineIndex.json.gz`, which is outside the app in the
+        // sense that matters: a NaN or an out-of-`Int` value there traps, and
+        // this project's rule is that a `Double` the app did not compute does
+        // not go through `Int(_:)` (work-list 53; `SpotlightIndex` and
+        // `APIError.humanDuration` already follow it).
+        return Int(wholeOrClamped: rating.rounded()) >= minimum
     }
 
     /// A series with no known year fails a year filter rather than passing it

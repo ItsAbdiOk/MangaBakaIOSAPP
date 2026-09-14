@@ -119,3 +119,34 @@ struct BarTitleCrossfadeTests {
         #expect(DetailBarTitle.crossfadeProgress(travelled: -50) == 0, "clamped")
     }
 }
+
+/// Item 65 / screens F24 (2026-09-14): `ScrollTracker.update` wrapped its
+/// continuous 0…1 `crossfade` assignment in `withAnimation` on every scroll
+/// sample — a new animation per frame towards a target one frame old, paid
+/// for a trail the eye never saw. No test can observe the wasted transaction
+/// itself without ViewInspector, so this pins the source shape of the fix:
+/// a direct assignment, with the SIL-crash comment for the named method kept
+/// verbatim since it records a measurement (build 69, 2026-09-13).
+@Suite("ScrollTracker's crossfade update", .enabled(if: SourceTree.isAvailable))
+struct ScrollTrackerUpdateTests {
+    /// Expected to fail before the fix with the old text still present:
+    /// `withAnimation(animation) {\n            crossfade = progress\n        }`.
+    @Test("Crossfade is assigned directly, not animated per scroll frame")
+    func crossfadeIsAssignedDirectly() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Detail/ScrollTracker.swift")
+        #expect(SourceTree.containsRun(source, "guard progress != crossfade else { return }"))
+        // Bounded to the function body, not the whole file: the comment
+        // right above the assignment names `withAnimation` in prose to
+        // record why it was removed, and that sentence must stay.
+        let funcStart = try #require(source.range(of: "func update(travelled: CGFloat) {"))
+        let funcEnd = try #require(
+            source.range(of: "\n    }\n}", range: funcStart.upperBound..<source.endIndex)
+        )
+        let body = source[funcStart.upperBound..<funcEnd.lowerBound]
+        #expect(body.contains("crossfade = progress"))
+        // The old shape: the assignment sat inside a `withAnimation` call.
+        #expect(!SourceTree.containsRun(String(body), "withAnimation(animation) { crossfade = progress"))
+        // The measurement that explains the named method must survive.
+        #expect(source.contains("Xcode Cloud's Swift 6.3.3"))
+    }
+}

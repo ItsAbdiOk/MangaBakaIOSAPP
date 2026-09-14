@@ -34,6 +34,9 @@ extension AppDatabase {
         /// A row in the cache file was not found, identically, in the
         /// reader's file after the copy. Nothing is dropped.
         case verificationFailed(table: String, missingRows: Int)
+        /// The two files disagree about what this table's columns are, so
+        /// there is no honest way to copy it. Nothing is copied or dropped.
+        case schemaDrift(table: String, cache: [String], library: [String])
     }
 
     /// Whether the reader's tables have already been moved out of the cache
@@ -89,33 +92,7 @@ extension AppDatabase {
             }
 
             if !alreadyCopied {
-                try db.inTransaction {
-                    for table in present {
-                        try db.execute(
-                            sql: "INSERT OR IGNORE INTO main.\(table) SELECT * FROM cache.\(table)"
-                        )
-                    }
-                    return .commit
-                }
-                guard last > .copy else { return }
-
-                // Whole-row `EXCEPT`, not a count comparison: it proves every
-                // source row arrived *identically*, and it is the check that
-                // fails loudly if the two schemas ever drift into different
-                // column orders rather than silently copying the wrong
-                // columns into each other.
-                for table in present {
-                    let missing = try Int.fetchOne(db, sql: """
-                        SELECT COUNT(*) FROM (
-                            SELECT * FROM cache.\(table) EXCEPT SELECT * FROM main.\(table)
-                        )
-                        """) ?? 0
-                    guard missing == 0 else {
-                        throw SplitError.verificationFailed(table: table, missingRows: missing)
-                    }
-                }
-                guard last > .verify else { return }
-
+                guard try copyAndVerify(present, in: db, stoppingAfter: last) else { return }
                 try mark(db)
             }
             guard last > .mark else { return }
@@ -127,6 +104,90 @@ extension AppDatabase {
                 return .commit
             }
             splitLogger.info("Moved \(present.count) reader tables out of the cache file.")
+        }
+    }
+
+    /// Copies each table by name, then proves every source row arrived.
+    ///
+    /// **By name, not `SELECT *`.** Work-list 56: the copy used to be
+    /// `INSERT INTO main.X SELECT * FROM cache.X`, which is positional, and the
+    /// verification below was described as the thing that "fails loudly if the
+    /// two schemas ever drift into different column orders". It cannot. Reorder
+    /// `shelfEntry` to `(seriesId, kind, addedAt, payload)` on one side only and
+    /// `kind` receives the date; SQLite's type affinity accepts both; the verify
+    /// then compares `SELECT *` against `SELECT *`, which yields each file's own
+    /// order, so the two tuples are identical and `EXCEPT` returns zero. Copy,
+    /// verify, mark and drop all report success and the reader's shelf is
+    /// permanently scrambled. Only an arity change was ever caught (`EXCEPT`
+    /// errors on mismatched column counts). Reasoned against SQLite's `EXCEPT`
+    /// semantics on 2026-09-14, not run.
+    ///
+    /// So: the column names are compared first and a real difference throws
+    /// `schemaDrift` before anything is written, and both the copy and the
+    /// verify name their columns, in the cache file's order, on both sides — a
+    /// pure reorder now copies correctly instead of scrambling, and a column
+    /// present on one side only refuses instead of copying wrong.
+    /// `LibrarySplitTests.schemasMatch` still compares the two `sqlite_master`
+    /// texts; that test remains the check on *declaration* drift, and this is
+    /// the one the device runs.
+    ///
+    /// - Returns: whether to go on and `mark`. False when `last` stopped the
+    ///   job at `.copy` or `.verify`.
+    private static func copyAndVerify(
+        _ present: [String], in db: Database, stoppingAfter last: SplitStep
+    ) throws -> Bool {
+        let plan = try copyPlan(for: present, db)
+        try db.inTransaction {
+            for step in plan {
+                try db.execute(sql: """
+                    INSERT OR IGNORE INTO main.\(step.table) (\(step.columns))
+                    SELECT \(step.columns) FROM cache.\(step.table)
+                    """)
+            }
+            return .commit
+        }
+        guard last > .copy else { return false }
+
+        // Whole-row `EXCEPT`, not a count comparison: it proves every source
+        // row arrived *identically*, value by value.
+        for step in plan {
+            let missing = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM (
+                    SELECT \(step.columns) FROM cache.\(step.table)
+                    EXCEPT SELECT \(step.columns) FROM main.\(step.table)
+                )
+                """) ?? 0
+            guard missing == 0 else {
+                throw SplitError.verificationFailed(table: step.table, missingRows: missing)
+            }
+        }
+        return last > .verify
+    }
+
+    /// The column list to copy each table by, once the two files have been
+    /// checked to agree about what those columns are.
+    private static func copyPlan(
+        for tables: [String], _ db: Database
+    ) throws -> [(table: String, columns: String)] {
+        try tables.map { table in
+            let cache = try columnNames(of: table, in: "cache", db)
+            let library = try columnNames(of: table, in: "main", db)
+            // Sets, not sequences: a pure reorder is copyable by name and is
+            // handled below. A column on one side only is not.
+            guard Set(cache) == Set(library) else {
+                throw SplitError.schemaDrift(table: table, cache: cache, library: library)
+            }
+            return (table, cache.map { "\"\($0)\"" }.joined(separator: ", "))
+        }
+    }
+
+    /// `PRAGMA table_info` for one attached schema, in declaration order.
+    private static func columnNames(
+        of table: String, in schema: String, _ db: Database
+    ) throws -> [String] {
+        try Row.fetchAll(db, sql: "PRAGMA \(schema).table_info(\(table))").map { row in
+            let name: String = row["name"]
+            return name
         }
     }
 

@@ -20,8 +20,8 @@ struct LibrarySnapshotTests {
         let library = CountingLibrary(total: 250)
         let snapshot = LibrarySnapshot(library: library)
 
-        _ = await snapshot.all()
-        _ = await snapshot.seriesIDs()
+        _ = await snapshot.load().entries
+        _ = await snapshot.load().seriesIDs
         _ = await snapshot.load()
 
         #expect(library.calls == 3, "250 entries is three pages, walked once")
@@ -35,9 +35,9 @@ struct LibrarySnapshotTests {
         let library = CountingLibrary(total: 250)
         let snapshot = LibrarySnapshot(library: library)
 
-        async let first = snapshot.all()
-        async let second = snapshot.all()
-        async let third = snapshot.seriesIDs()
+        async let first = snapshot.load().entries
+        async let second = snapshot.load().entries
+        async let third = snapshot.load().seriesIDs
         _ = await (first, second, third)
 
         #expect(library.calls == 3)
@@ -67,9 +67,9 @@ struct LibrarySnapshotTests {
         let library = CountingLibrary(total: 100)
         let snapshot = LibrarySnapshot(library: library)
 
-        _ = await snapshot.all()
+        _ = await snapshot.load().entries
         await snapshot.invalidate()
-        _ = await snapshot.all()
+        _ = await snapshot.load().entries
 
         // Four, not two: a hundred entries fills page one exactly, so the
         // walk asks for page two, gets nothing and stops. Two requests per
@@ -154,12 +154,12 @@ struct LibraryDiskCacheTests {
         let library = Recording(entries: entries(150))
 
         let first = LibrarySnapshot(library: library, database: database, clock: clock)
-        #expect(await first.all().count == 150)
+        #expect(await first.load().entries.count == 150)
         let afterFirst = library.calls
 
         // A different instance is a different launch.
         let second = LibrarySnapshot(library: library, database: database, clock: clock)
-        #expect(await second.all().count == 150)
+        #expect(await second.load().entries.count == 150)
         #expect(library.calls == afterFirst, "nothing over the wire the second time")
     }
 
@@ -188,7 +188,7 @@ struct LibraryDiskCacheTests {
         // A session with a token: walked once, and written to disk.
         #expect(await LibrarySnapshot(
             library: library, database: database, clock: clock
-        ).all().count == 150)
+        ).load().entries.count == 150)
 
         // The token goes away. Same disk, same clock, well inside the
         // six-hour window — which is exactly the state the walk was in.
@@ -208,7 +208,7 @@ struct LibraryDiskCacheTests {
         // Forgotten, not merely withheld: a later launch that does have a
         // token must walk afresh rather than pick the old rows back up.
         let signedInAgain = LibrarySnapshot(library: library, database: database, clock: clock)
-        #expect(await signedInAgain.all().count == 150)
+        #expect(await signedInAgain.load().entries.count == 150)
         #expect(library.calls > callsBefore, "re-walked; the old account's rows are off disk")
     }
 
@@ -221,13 +221,13 @@ struct LibraryDiskCacheTests {
         let clock = TestClock()
         let library = Recording(entries: entries(150))
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         let afterFirst = library.calls
 
         let second = LibrarySnapshot(
             library: library, database: database, clock: clock, hasCredentials: { true }
         )
-        #expect(await second.all().count == 150)
+        #expect(await second.load().entries.count == 150)
         #expect(library.calls == afterFirst, "still nothing over the wire on a second launch")
     }
 
@@ -253,9 +253,9 @@ struct LibraryDiskCacheTests {
         )
         let library = Recording(entries: [entry])
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
 
-        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         let cached = try #require(reread.first)
         #expect(cached.series?.displayTitle == "Lout of Count's Family")
         #expect(cached.progressChapter == 12, "the ordinary fields too, not just the odd one")
@@ -267,11 +267,11 @@ struct LibraryDiskCacheTests {
         let clock = TestClock()
         let library = Recording(entries: entries(50))
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         let afterFirst = library.calls
 
         clock.advance(by: 7 * 60 * 60)
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         #expect(library.calls > afterFirst)
     }
 
@@ -284,11 +284,11 @@ struct LibraryDiskCacheTests {
         let library = Recording(entries: entries(50))
 
         let snapshot = LibrarySnapshot(library: library, database: database, clock: clock)
-        _ = await snapshot.all()
+        _ = await snapshot.load().entries
         await snapshot.invalidate()
         let afterFirst = library.calls
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         #expect(library.calls > afterFirst, "the next launch must not read the old copy")
     }
 
@@ -304,7 +304,7 @@ struct LibraryDiskCacheTests {
         let clock = TestClock()
         let library = Recording(entries: entries(3))
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
 
         // Corrupt one row directly, the way an app downgrade or a dropped
         // decodable field would: valid JSON, but not a `LibraryEntry` anymore.
@@ -314,7 +314,7 @@ struct LibraryDiskCacheTests {
             ])
         }
 
-        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         #expect(library.calls > 0, "a short cache must not be handed back as though it were whole")
     }
 
@@ -327,7 +327,7 @@ struct LibraryDiskCacheTests {
         let clock = TestClock()
         let library = Recording(entries: entries(3))
         let snapshot = LibrarySnapshot(library: library, database: database, clock: clock)
-        _ = await snapshot.all()
+        _ = await snapshot.load().entries
         let callsBeforePatch = library.calls
 
         var change = LibraryChange()
@@ -335,12 +335,12 @@ struct LibraryDiskCacheTests {
         await snapshot.apply(seriesId: 1, change: change)
 
         #expect(library.calls == callsBeforePatch, "patching must not touch the network")
-        let patched = await snapshot.all().first { $0.seriesId == 1 }
+        let patched = await snapshot.load().entries.first { $0.seriesId == 1 }
         #expect(patched?.state == .completed)
 
         // The disk copy has to carry it too, or the next launch reads the
         // pre-patch row back.
-        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        let reread = await LibrarySnapshot(library: library, database: database, clock: clock).load().entries
         #expect(reread.first { $0.seriesId == 1 }?.state == .completed)
     }
 
@@ -357,7 +357,7 @@ struct LibraryDiskCacheTests {
 
         let library2 = Recording(entries: entries(50))
         let next = LibrarySnapshot(library: library2, database: database, clock: TestClock())
-        #expect(await next.all().count == 50)
+        #expect(await next.load().entries.count == 50)
         #expect(library2.calls > 0, "nothing was cached, so it had to ask")
     }
 

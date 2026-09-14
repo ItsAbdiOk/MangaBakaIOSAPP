@@ -138,7 +138,7 @@ final class JourneyPerformanceTests: XCTestCase {
             let expectation = expectation(description: "absorbed")
             Task {
                 try? await ledger.clear()
-                try? await ledger.absorb(rows)
+                try? await ledger.absorb(rows, retractingMissing: true)
                 expectation.fulfill()
             }
             wait(for: [expectation], timeout: 30)

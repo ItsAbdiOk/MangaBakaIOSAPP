@@ -118,16 +118,19 @@ struct PublisherWiringTests {
         #expect(view.contains("case .author: query.staff = name"))
         #expect(view.contains("if kind == .publisher, detail == nil,"))
         #expect(view.contains("query.sort = order.rawValue"))
-        // The header is the count endpoint's total, not the page's length,
-        // and the grid pages: Shueisha said "100" when it is thousands.
-        #expect(view.contains("async let counted = repository.count(query)"))
+        // The header's total comes from the search response itself; the
+        // count endpoint is the fallback, not a second request per load —
+        // see `PublisherLoadRequestTests` for the behaviour (F9).
         // Gap 57: this used to be `Text((total ?? series.count).formatted())`
         // unconditionally — `series.count` is the *page* size, and that is
         // exactly what printed "100" for a publisher with thousands. See
         // `PublisherHeaderCountTests` for the fixed decision itself.
         #expect(view.contains("Self.headerCount(total: total, seriesCount: series.count, hasMore: hasMore)"))
         #expect(view.contains("hasMore = result.hasMore"))
-        #expect(view.contains(".task(id: order) { await load() }"))
+        // Guarded, not bare: `.task(id: order) { await load() }` re-ran on
+        // every pop-back (F10). The guard's rule is `needsLoad`, tested below.
+        #expect(view.contains(".task(id: order) {"))
+        #expect(view.contains("guard Self.needsLoad(loadedOrder: loadedOrder, order: order,"))
         let credits = try SourceTree.read("MangaBaka/Features/Detail/DetailCredits.swift")
         #expect(credits.contains("onOpenPublisher(publishers[0].name.trimmingCharacters(in: .whitespaces))"))
         let root = try SourceTree.read("MangaBaka/App/RootView+Session.swift")
@@ -199,5 +202,115 @@ struct PublisherHeaderCountTests {
     @Test("An unknown total with every page in is the real count")
     func unknownTotalCompleteIsAccurate() {
         #expect(PublisherView.headerCount(total: nil, seriesCount: 42, hasMore: false) == 42)
+    }
+}
+
+/// Counts what the publisher page asks the repository for, and answers with
+/// or without the total the live search response carries.
+private final class CountingPublisherRepository: StubRepositoryBase, @unchecked Sendable {
+    private(set) var searchCalls = 0
+    private(set) var countCalls = 0
+    /// What `/v2/series/search` answers as `pagination.count` — 1,265 for
+    /// `publisher=Seven Seas` live on 2026-09-10. Nil simulates a cached or
+    /// failed page, which carries no pagination block.
+    var total: Int? = 1_265
+
+    override func search(_ query: SearchQuery) async -> FeedResult {
+        searchCalls += 1
+        return FeedResult(series: [SeriesFactory.make(id: 1)], origin: .network, hasMore: true, total: total)
+    }
+
+    override func count(_ query: SearchQuery) async -> Int? {
+        countCalls += 1
+        return 1_265
+    }
+}
+
+/// Screens F9 (2026-09-14): `load()` ran `search` and `count` in parallel —
+/// two requests from the same 30/min window for a number the first already
+/// carried. E F1 fixed this on Search a day earlier; the source pin in
+/// `PublisherWiringTests` used to assert the duplicate.
+///
+/// `load()` is driven on an unhosted view: its `@State` writes do not
+/// persist off-screen (SwiftUI logs a warning, nothing more), but the
+/// repository counts what was asked, which is the whole assertion.
+@Suite("The publisher page spends one request per load")
+@MainActor
+struct PublisherLoadRequestTests {
+    private func catalogue() -> CatalogueService {
+        CatalogueService(client: APIClient(
+            baseURL: URL(string: "https://api.example.invalid").unsafeTestURL,
+            tokenProvider: UnauthenticatedTokenProvider()
+        ))
+    }
+
+    /// `.author` so the directory lookup, which is publisher-only, is not
+    /// reached — it would go to the network. Expected to fail before the fix
+    /// with: `repository.countCalls == 0` → `1`.
+    @Test("A search response that carries the total is not counted again")
+    func totalFromSearchIsNotCountedAgain() async {
+        let repository = CountingPublisherRepository()
+        let view = PublisherView(
+            name: "REDICE STUDIO", kind: .author, catalogue: catalogue(),
+            repository: repository, path: .constant([])
+        )
+
+        await view.load()
+
+        #expect(repository.searchCalls == 1)
+        #expect(repository.countCalls == 0)
+    }
+
+    /// The control, and the fallback: a response with no pagination block
+    /// still gets its header number from the count endpoint (gap 57 must
+    /// not come back as a hidden count).
+    @Test("A search response without a total falls back to one count request")
+    func missingTotalIsCounted() async {
+        let repository = CountingPublisherRepository()
+        repository.total = nil
+        let view = PublisherView(
+            name: "REDICE STUDIO", kind: .author, catalogue: catalogue(),
+            repository: repository, path: .constant([])
+        )
+
+        await view.load()
+
+        #expect(repository.searchCalls == 1)
+        #expect(repository.countCalls == 1)
+    }
+}
+
+/// The two pure decisions behind F10 and F27.
+@Suite("The publisher page's reload and paging rules")
+struct PublisherPagingRuleTests {
+    /// F10: `.task(id: order)` fires on every re-appearance; only an order
+    /// change, the first appearance, or an empty grid is a load. Expected to
+    /// fail before the fix with: no `needsLoad` existed — the task called
+    /// `load()` unconditionally.
+    @Test("A re-appearance with the grid answering the same order does not reload")
+    func reappearanceDoesNotReload() {
+        typealias Rule = PublisherView
+        #expect(Rule.needsLoad(loadedOrder: .popular, order: .popular, seriesIsEmpty: false) == false)
+        #expect(Rule.needsLoad(loadedOrder: nil, order: .popular, seriesIsEmpty: true), "First appearance")
+        #expect(Rule.needsLoad(loadedOrder: .popular, order: .newest, seriesIsEmpty: false), "Order changed")
+        #expect(
+            PublisherView.needsLoad(loadedOrder: .popular, order: .popular, seriesIsEmpty: true),
+            "A load cancelled or failed on the way out is asked again"
+        )
+    }
+
+    /// F27: `page += 1` ran before the request, so a failed page 2 left
+    /// `page` at 2 and the retry fetched page 3. Expected to fail before the
+    /// fix with: no `nextPage` existed — the advance was unconditional.
+    @Test("A failed page is asked for again, not skipped")
+    func failedPageIsNotSkipped() {
+        let failed = FeedResult(series: [], origin: .staleAfter(.offline), hasMore: true)
+        #expect(PublisherView.nextPage(after: 1, result: failed) == 1)
+        let landed = FeedResult(series: [SeriesFactory.make(id: 2)], origin: .network, hasMore: true)
+        #expect(PublisherView.nextPage(after: 1, result: landed) == 2)
+        // A page that landed with nothing new still advances: the API said
+        // it was a page, and asking for it again would loop.
+        let empty = FeedResult(series: [], origin: .network, hasMore: true)
+        #expect(PublisherView.nextPage(after: 3, result: empty) == 4)
     }
 }

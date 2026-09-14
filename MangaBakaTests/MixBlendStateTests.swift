@@ -28,6 +28,28 @@ private func seededShelf(saves: Int) async throws -> ShelfStore {
     return shelf
 }
 
+/// A clock that does not wait, so the model's debounce fires on the next
+/// hop or was never booked — the two outcomes the hold tests tell apart.
+private struct ImmediateClock: _Concurrency.Clock {
+    typealias Instant = ContinuousClock.Instant
+
+    var now: Instant { ContinuousClock().now }
+    var minimumResolution: Duration { .zero }
+
+    func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+        try Task.checkCancellation()
+    }
+}
+
+/// Yields until `condition` holds or `hops` have passed — far past what
+/// scheduling needs, so a blend that never comes ends the test.
+@MainActor
+private func settle(hops: Int = 1_000, until condition: () -> Bool) async {
+    for _ in 0..<hops where !condition() {
+        await Task.yield()
+    }
+}
+
 /// The DNA chips, the tag ids the blend is actually filtered by, and what a
 /// superseded blend is allowed to say.
 @Suite("Mix blend state")
@@ -185,6 +207,90 @@ struct MixBlendStateTests {
     @Test("The suggested seed row is capped")
     func suggestedSeedsAreCapped() async throws {
         let shelf = try await seededShelf(saves: 60)
+        let model = MixModel(repository: BlendRepository(), shelf: shelf)
+
+        let suggested = await model.suggestedSeeds()
+
+        #expect(suggested.count == 24)
+    }
+}
+
+/// Screens F20 (2026-09-14): every toggle in the tag picker was a blend
+/// 350 ms later while the sheet still covered the grid.
+@Suite("Blends while the tag picker is up")
+@MainActor
+struct MixTagPickerHoldTests {
+    private func model(_ repository: BlendRepository) async throws -> MixModel {
+        let shelf = ShelfStore(database: try AppDatabase.inMemory(), clock: TestClock())
+        let model = MixModel(repository: repository, shelf: shelf, clock: ImmediateClock())
+        model.addSeed(SeriesFactory.make(id: 1, title: "Seed"))
+        return model
+    }
+
+    /// Three tags picked with the sheet up, then the sheet closed. Expected
+    /// to fail before the fix with: `repository.mixCalls == 0` → `3` (each
+    /// write blended; `holdBlends` did not exist — before it does, the call
+    /// does not compile, which proves nothing about behaviour).
+    @Test("Three picks with the sheet up are no requests; closing it is one")
+    func picksAreHeldUntilDismiss() async throws {
+        let repository = BlendRepository()
+        let model = try await model(repository)
+
+        model.holdBlends()
+        for tag in ["Isekai", "Regression", "Revenge"] {
+            model.filters.tags.append(tag)
+            model.filtersDidChange()
+        }
+        await settle(hops: 100) { false }
+        #expect(repository.mixCalls == 0)
+
+        model.releaseBlends()
+        await settle { repository.mixCalls == 1 }
+        #expect(repository.mixCalls == 1)
+        #expect(model.isHoldingBlends == false)
+    }
+
+    /// The control, and the other half: a sheet closed with nothing picked
+    /// owes nothing, and a filter written with no sheet up blends as before.
+    @Test("Closing the sheet with nothing picked is no request")
+    func nothingPickedIsNoRequest() async throws {
+        let repository = BlendRepository()
+        let model = try await model(repository)
+
+        model.holdBlends()
+        model.releaseBlends()
+        await settle(hops: 100) { false }
+        #expect(repository.mixCalls == 0)
+
+        model.filters.types = ["manhwa"]
+        model.filtersDidChange()
+        await settle { repository.mixCalls == 1 }
+        #expect(repository.mixCalls == 1)
+    }
+}
+
+/// Screens F22 (2026-09-14): `MixView`'s `.task` decoded the shelf on every
+/// appearance for a row shown only while `seeds` is empty.
+@Suite("Suggested seeds")
+@MainActor
+struct MixSuggestedSeedsTests {
+    /// Expected to fail before the fix with: `suggested.isEmpty` → 24 rows
+    /// (the shelf was read regardless of the seeds).
+    @Test("With a seed picked, the shelf is not read")
+    func seedsPickedMeansNoShelfRead() async throws {
+        let shelf = try await seededShelf(saves: 30)
+        let model = MixModel(repository: BlendRepository(), shelf: shelf)
+        model.addSeed(SeriesFactory.make(id: 99, title: "Seed"))
+
+        let suggested = await model.suggestedSeeds()
+
+        #expect(suggested.isEmpty)
+    }
+
+    /// The control: with no seed, the row is the shelf's first 24 (item 52).
+    @Test("With no seed picked, the shelf's saves are suggested")
+    func noSeedsMeansShelfRead() async throws {
+        let shelf = try await seededShelf(saves: 30)
         let model = MixModel(repository: BlendRepository(), shelf: shelf)
 
         let suggested = await model.suggestedSeeds()

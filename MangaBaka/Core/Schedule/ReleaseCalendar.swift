@@ -72,7 +72,17 @@ actor ReleaseCalendar {
                 URLQueryItem(name: "page", value: String(page))
             ]
             do {
-                let batch: [UpcomingWork] = try await client.get("/v1/works/upcoming", query: query)
+                // `getLossy`, not `get`. This endpoint is where the charter's
+                // flagship defect happened: `price` was modelled as `String`,
+                // every real response threw, and the announced-releases section
+                // was empty from the day it was built (see `UpcomingWork.swift`).
+                // The *model* was fixed on 2026-09-11; the fragility was not,
+                // and one unexpected row in 246 still emptied the Schedule
+                // screen's only factual section. Dropped rows are counted in
+                // `NetworkLedger`.
+                let batch: [UpcomingWork] = try await client.getLossy(
+                    "/v1/works/upcoming", query: query
+                )
                 all.append(contentsOf: batch)
                 if batch.count < Self.perPage { break }
             } catch {
@@ -97,12 +107,22 @@ actor ReleaseCalendar {
             // Only a complete answer is ever cached — a failed page used to
             // cache whatever had arrived (an empty calendar, if it was the
             // first page) for the whole process, and the Schedule screen
-            // showed no announced dates until relaunch. `stale: nil` here:
-            // there is nothing earlier cached either, since `cached` is only
-            // ever set on a full success below — a genuinely stale value to
-            // fall back on would need a longer-lived cache than this actor
-            // keeps, which nothing has asked for yet.
+            // showed no announced dates until relaunch.
             lastFailure = failure
+            // But pages that already arrived are not thrown away. Until
+            // 2026-09-14 a failure on page 2 discarded page 1 as well and the
+            // screen showed nothing, which is the same "an error means no
+            // data" shape `Fetched` exists to stop. `isPartial: true` is the
+            // honest label and already means "do not persist this"
+            // (`Fetched.swift:26-30`), which is why the cache assignment stays
+            // below, on the success path only.
+            if !sorted.isEmpty {
+                return .loaded(sorted, fetchedAt: clock.now, isPartial: true)
+            }
+            // `stale: nil`: there is nothing earlier cached either, since
+            // `cached` is only ever set on a full success below — a genuinely
+            // stale value to fall back on would need a longer-lived cache than
+            // this actor keeps, which nothing has asked for yet.
             return .failed(failure, stale: nil)
         }
         lastFailure = nil

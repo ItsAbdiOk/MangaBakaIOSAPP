@@ -142,6 +142,11 @@ actor LibrarySnapshot {
         }
         purgedWhileSignedOut = false
         if let cached { return cached }
+        // Every awaiter of the shared task gets the *finished* result, because
+        // the task itself calls `finish`. Work-list 26: this branch used to
+        // hand back the raw walk while only the caller that created the task
+        // ran `replayPending`, so on the launch where all three callers arrive
+        // at once, which of them saw the reader's mid-walk edit was a race.
         if let inFlight { return await inFlight.value }
         // Disk before network. The answer is the same every launch and it is
         // the most expensive thing the app fetches by thirty to one.
@@ -151,21 +156,31 @@ actor LibrarySnapshot {
             return stored
         }
 
+        let myWalk = walkGeneration
         let task = Task<Result, Never> { [library, onPage] in
-            await Self.walk(library: library, onPage: onPage)
+            let walked = await Self.walk(library: library, onPage: onPage)
+            return self.finish(walked, generation: myWalk)
         }
         inFlight = task
-        let myWalk = walkGeneration
-        var result = await task.value
+        return await task.value
+    }
+
+    /// Turns a finished walk into the session's answer: replay, cache, detach.
+    ///
+    /// One place rather than two. Called from inside the shared task, so
+    /// concurrent callers all await the same committed result instead of the
+    /// creator getting one answer and the others the raw walk (work-list 26).
+    private func finish(_ walked: Result, generation: Int) -> Result {
+        var result = walked
         // Only the walk that is still the current one may commit. Work-list
-        // 16: this continuation used to cache, write to disk and nil `onPage`
+        // 16: this used to cache, write to disk and nil `onPage`
         // unconditionally, so an `invalidate()` during a sign-out — which
         // cancels the task and clears the table — was followed moments later
         // by the discarded walk writing the *previous* account's library back
         // to memory and disk, and stealing the new walk's page observer.
         // `Task` is a struct, so this is a counter rather than an identity
         // comparison on `inFlight`.
-        guard walkGeneration == myWalk else { return result }
+        guard walkGeneration == generation else { return result }
         // Work-list 15: an edit saved while the walk was in flight had no
         // cached row to patch, so `apply` recorded it here instead; it is
         // replayed onto the finished walk before anything is cached, or the
@@ -213,6 +228,15 @@ actor LibrarySnapshot {
                 let batch = try await library.libraryPage(page: page, limit: pageSize)
                 if batch.isEmpty { break }
                 result.entries += batch.filter { seen.insert($0.seriesId).inserted }
+                // Again, after the await. Work-list 25: the check at the top of
+                // the loop cannot see a cancellation that lands *during* the
+                // request, and this page is then handed to the observer that
+                // the account change installed the cancellation for — the
+                // previous account's rows drawn on the new account's screen.
+                // Contained today only by `LibraryModel`'s own generation
+                // counter, which is one caller's private defence and not this
+                // one's to rely on.
+                if Task.isCancelled { break }
                 // The screen draws what has arrived rather than waiting for
                 // all thirteen pages.
                 onPage?(result.entries)
@@ -249,11 +273,27 @@ actor LibrarySnapshot {
     var cachedResult: Result? { cached }
 
     /// Everything, for callers that do not care why it stopped.
+    ///
+    /// There turned out to be no such caller. The doc that used to sit here
+    /// said "for callers that do not care why it stopped"; the second review
+    /// found nine of them and two were writing data off the answer — see
+    /// `LibrarySnapshotResult.swift`. Deprecated rather than deleted so the
+    /// compiler names every remaining site with the replacement in the
+    /// message; `SWIFT_TREAT_WARNINGS_AS_ERRORS` makes that an error, which is
+    /// the intent. Delete both once the last call site has moved.
+    @available(*, deprecated, message: """
+        Use load(): .entries to draw what arrived, .wholeLibrary (nil, not [], \
+        on a failed or page-capped walk) to act on what is there.
+        """)
     func all() async -> [LibraryEntry] { await load().entries }
 
     /// Just the ids, for callers that only need to know what is in there.
+    @available(*, deprecated, message: """
+        Use load(): .seriesIDs to draw what arrived, .wholeLibrarySeriesIDs \
+        (nil, not [], on a failed or page-capped walk) to act on what is there.
+        """)
     func seriesIDs() async -> Set<Int> {
-        Set(await all().map(\.seriesId))
+        Set(await load().entries.map(\.seriesId))
     }
 
     /// The library as it was last written, if that was recently enough.
@@ -355,6 +395,47 @@ actor LibrarySnapshot {
         guard let payload = try? JSONEncoder().encode(entry) else { return }
         try? database.libraryWriter.write { db in
             try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).save(db)
+        }
+    }
+
+    /// Adds a row the reader has just put in their library, without a walk.
+    ///
+    /// The counterpart to `apply(seriesId:change:)`, which could only patch a
+    /// row that was already there. Asked for by the detail screen (lane E,
+    /// 2026-09-14): `LibraryControl` and `SearchEmptyState` write through
+    /// `LibraryService` and the snapshot never heard about it, so a series
+    /// added on a series page was absent from the six-hour disk cache — and
+    /// from everything derived from it — until the next walk.
+    ///
+    /// A no-op when nothing is cached yet: there is no local list to add to,
+    /// and the walk that eventually runs will fetch the row from the server
+    /// anyway. Replaces rather than duplicates when the id is already present,
+    /// because `writeCache` relies on ids being unique (`insert`, not `save`).
+    func insert(_ entry: LibraryEntry) {
+        guard var result = cached else { return }
+        if let index = result.entries.firstIndex(where: { $0.seriesId == entry.seriesId }) {
+            result.entries[index] = entry
+        } else {
+            result.entries.append(entry)
+        }
+        cached = result
+        writeSingleEntry(entry)
+    }
+
+    /// Drops a row the reader has just removed, in memory and on disk.
+    ///
+    /// The delete has to reach the disk copy as well: `writeCache` replaces the
+    /// whole table and only a full walk calls it, so a row removed here and not
+    /// there would come back from `readCache()` on the next launch inside the
+    /// six-hour window.
+    func remove(seriesId: Int) {
+        pendingChanges[seriesId] = nil
+        if var result = cached {
+            result.entries.removeAll { $0.seriesId == seriesId }
+            cached = result
+        }
+        try? database?.libraryWriter.write { db in
+            try db.execute(sql: "DELETE FROM libraryEntry WHERE seriesId = ?", arguments: [seriesId])
         }
     }
 

@@ -301,3 +301,55 @@ struct SearchContentKindTests {
         #expect(kind == .results)
     }
 }
+
+/// Screens F26 (2026-09-14): the "Show N results" count is a `limit=1`
+/// search-window request, and the year fields wrote `query` per digit — so
+/// "2020" was up to four of them, and every toggle in a picker sheet was one
+/// more under a sheet that hid the number. The panel's `scheduleCount` acts
+/// on this rule; a held source books nothing.
+@Suite("The filter panel's count is held while the reader is mid-edit")
+struct FilterPanelCountHoldTests {
+    private var narrowed: SearchQuery {
+        var query = SearchQuery()
+        query.yearFrom = 2_020
+        return query
+    }
+
+    /// Expected to fail before the fix with: `.held` did not exist — the
+    /// source was `.network` whatever the panel was doing, and each digit
+    /// booked a count.
+    @Test("A year field with the keyboard, or a picker sheet up, holds the count")
+    func heldWhileEditing() {
+        let source = FilterPanel.countSource(
+            query: narrowed, preferOffline: false, hasNetworkCounter: true, hasOfflineCounter: false,
+            isHeld: true
+        )
+        #expect(source == .held)
+        // Held wins over the offline toggle too: no count from either source.
+        let offline = FilterPanel.countSource(
+            query: narrowed, preferOffline: true, hasNetworkCounter: true, hasOfflineCounter: true,
+            isHeld: true
+        )
+        #expect(offline == .held)
+    }
+
+    /// The control: the same query with nothing held counts as before.
+    @Test("Released, the same query counts")
+    func countsWhenReleased() {
+        let source = FilterPanel.countSource(
+            query: narrowed, preferOffline: false, hasNetworkCounter: true, hasOfflineCounter: false
+        )
+        #expect(source == .network)
+    }
+
+    /// A held panel with nothing set keeps no stale number: `.none`, so the
+    /// label reads "Show results" rather than a count for filters gone.
+    @Test("A query that cannot show is .none even while held")
+    func emptyQueryIsNoneEvenWhenHeld() {
+        let source = FilterPanel.countSource(
+            query: SearchQuery(), preferOffline: false, hasNetworkCounter: true, hasOfflineCounter: false,
+            isHeld: true
+        )
+        #expect(source == .none)
+    }
+}

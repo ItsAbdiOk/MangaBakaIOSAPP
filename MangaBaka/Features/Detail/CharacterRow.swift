@@ -14,6 +14,16 @@ struct CharacterRow: View {
     /// (gap 17, FAILURES-SUMMARY.md).
     var failure: APIError?
     var retry: (() async -> Void)?
+    /// The app's own tracker clients, handed on to the profile sheet.
+    /// `CharacterProfileView` used to build a fresh `AniListClient` and
+    /// `ShikimoriClient` per open — each with its own request spacing, its
+    /// own `Retry-After` backoff and its own outage memory, none of it
+    /// known to the `CharacterService` that had just fetched this cast from
+    /// the same two hosts (review item 63, 2026-09-14; the same shape as the
+    /// two `MangaUpdatesClient`s in C4). Optional only for previews and the
+    /// row's tests, which have no service; the page always passes both.
+    var aniList: AniListClient?
+    var shikimori: ShikimoriClient?
 
     enum CastState: Equatable {
         case hidden
@@ -92,7 +102,7 @@ struct CharacterRow: View {
                     .scrollTargetBehavior(.viewAligned)
                 }
                 .sheet(item: $opened) { character in
-                    CharacterProfileView(character: character)
+                    CharacterProfileView(character: character, aniList: aniList, shikimori: shikimori)
                         .presentationBackground(.ultraThinMaterial)
                 }
                 .transition(.blurReplace)

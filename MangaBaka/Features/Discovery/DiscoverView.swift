@@ -72,21 +72,19 @@ struct DiscoverView: View {
                 // both. Pinned, it would be a permanent accusation about a
                 // screen that is working.
                 if let detail = model.staleDetail {
-                    VStack(alignment: .leading, spacing: 4) {
-                        StaleBar(headline: "Showing what you had", detail: detail) {
-                            await model.load(forceRefresh: true)
-                        }
-                        // The live half of a rate limit: `staleDetail` can
-                        // only carry a headline, frozen at render time, since
-                        // `StaleBar.detail` is a plain `String` — so a
-                        // countdown that ticks needs its own line rather than
-                        // living inside that string (gap 46).
-                        if case let .rateLimited(until, _)? = model.staleFailure, let until {
-                            Countdown(until: until)
-                                .typeSmallMeta()
-                                .foregroundStyle(Palette.textMuted)
-                                .padding(.horizontal, Metrics.gutter + 18)
-                        }
+                    // `deadline:` is the bar's own countdown, and it fires
+                    // `retry` at zero. A hand-mounted `Countdown` used to sit
+                    // under the bar instead (gap 46, written before the bar
+                    // could count) — it ticked and never retried, while
+                    // `staleDetail` stayed frozen at render. The automatic
+                    // retry is the same four requests the bar's Retry already
+                    // sends (screens §StaleBar, 2026-09-14).
+                    StaleBar(
+                        headline: "Showing what you had",
+                        detail: detail,
+                        deadline: model.staleFailure?.rateLimitDeadline
+                    ) {
+                        await model.load(forceRefresh: true)
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .animation(Motion.reduced(Motion.settle), value: model.staleDetail)
@@ -188,8 +186,7 @@ struct DiscoverView: View {
     ///
     /// A `static` slot rather than `@State`: only one Discover screen is ever
     /// on screen at a time, so one shared slot is what `@State` would have
-    /// given here anyway — the same reasoning as
-    /// `MixView.pendingFilterBlend`.
+    /// given here anyway.
     @MainActor
     private static var cachedWeekday: (day: Date, text: String)?
 
@@ -225,8 +222,10 @@ struct DiscoverView: View {
             } else if row.series.isEmpty, let failure = row.failure {
                 // This row asked and failed, rather than asking and getting
                 // nothing back — the two used to look identical (gap 13).
+                // Retries this row alone: `load(forceRefresh: true)` here
+                // re-paid all four rows for one row's failure (F11).
                 InlineFailure(error: failure) {
-                    await model.load(forceRefresh: true)
+                    await model.retryRow(row.id)
                 }
             } else if row.series.isEmpty {
                 Text("Nothing here right now.")

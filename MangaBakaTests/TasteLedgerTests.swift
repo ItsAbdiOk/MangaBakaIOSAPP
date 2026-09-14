@@ -47,7 +47,7 @@ struct TasteLedgerTests {
                 tag(10, "Regression", weight: "core"),
                 tag(11, "Cooking", weight: "incidental")
             ])
-        ])
+        ], retractingMissing: true)
 
         let favoured = try await ledger.favoured()
         #expect(favoured.first?.name == "Regression")
@@ -62,12 +62,12 @@ struct TasteLedgerTests {
         try await dropped.absorb([
             entry(1, .dropped, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .dropped, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         let finished = try ledger()
         try await finished.absorb([
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
 
         let droppedScore = try #require(try await dropped.favoured().first).score
         let finishedScore = try #require(try await finished.favoured().first).score
@@ -81,7 +81,7 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .planToRead, tags: [tag(10, "Isekai", weight: "core")]),
             entry(2, .considering, tags: [tag(10, "Isekai", weight: "core")])
-        ])
+        ], retractingMissing: true)
 
         #expect(try await ledger.favoured().isEmpty)
     }
@@ -95,7 +95,7 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .completed, tags: []),
             entry(2, .completed, tags: [tag(1, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         #expect(try await ledger.seenSeries() == 2)
         #expect(try await ledger.countedSeries() == 1)
     }
@@ -107,10 +107,10 @@ struct TasteLedgerTests {
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
         ]
-        try await ledger.absorb(entries)
+        try await ledger.absorb(entries, retractingMissing: true)
         let once = try #require(try await ledger.favoured().first).score
 
-        try await ledger.absorb(entries)
+        try await ledger.absorb(entries, retractingMissing: true)
         let twice = try #require(try await ledger.favoured().first).score
 
         #expect(once == twice)
@@ -123,7 +123,7 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         let before = try #require(try await ledger.favoured().first).score
 
         // The whole library again, as `TasteProfile` always passes it: a
@@ -131,7 +131,7 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .dropped, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         let after = try #require(try await ledger.favoured().first).score
 
         #expect(after < before, "one of the two dropped, so the tag matters less")
@@ -149,7 +149,7 @@ struct TasteLedgerTests {
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(3, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         let before = try #require(try await ledger.favoured().first { $0.name == "Murim" })
         #expect(before.seriesCount == 3)
 
@@ -158,7 +158,7 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
 
         let after = try #require(try await ledger.favoured().first { $0.name == "Murim" })
         #expect(after.seriesCount == 2, "the removed series should stop counting")
@@ -172,10 +172,10 @@ struct TasteLedgerTests {
         try await ledger.absorb([
             entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
         #expect(try await ledger.favoured().contains { $0.name == "Murim" })
 
-        try await ledger.absorb([])
+        try await ledger.absorb([], retractingMissing: true)
 
         #expect(!(try await ledger.favoured().contains { $0.name == "Murim" }))
         #expect(try await ledger.countedSeries() == 0)
@@ -191,11 +191,109 @@ struct TasteLedgerTests {
                 tag(99, "Beekeeping", weight: "core")
             ]),
             entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
-        ])
+        ], retractingMissing: true)
 
         let names = try await ledger.favoured().map(\.name)
         #expect(names.contains("Murim"))
         #expect(!names.contains("Beekeeping"))
+    }
+
+    /// Work-list 5, the one that empties the ledger.
+    ///
+    /// EXPECTED TO FAIL ON THE OLD CODE with: `absorb` took `[LibraryEntry]`
+    /// and always swept, so `absorb(failedWalk.entries)` — `[]` — matched
+    /// every `tasteSource` row (`presentIDs.contains` on an empty array is
+    /// `NOT 0` in SQL, which is true of every row), retracted all of them and
+    /// deleted them. `#expect(countedSeries() == 2)` would read **0** and
+    /// `knownTags()` would read 0 too. On Abdi's real install that is 945
+    /// sources and ~3,175 tags, thrown away by opening one series page while
+    /// offline.
+    ///
+    /// The control is `fullRemovalDropsTheTag` above: a genuinely emptied
+    /// library, passed as `retractingMissing: true`, must still sweep. Without
+    /// it a `guard !entries.isEmpty` patch would pass this test and silently
+    /// stop retraction working at all.
+    @Test("A failed library walk does not empty the ledger")
+    func aFailedWalkRetractsNothing() async throws {
+        let ledger = try ledger()
+        try await ledger.absorb([
+            entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
+        ], retractingMissing: true)
+        #expect(try await ledger.countedSeries() == 2)
+
+        // Exactly what `LibrarySnapshot.load()` answers when the reader is
+        // offline, or rate-limited, or the API 500s: no entries, and the
+        // reason why.
+        let failedWalk = LibrarySnapshot.Result(
+            entries: [], isComplete: false, failure: .offline
+        )
+        #expect(failedWalk.isWholeLibrary == false)
+        try await ledger.absorb(failedWalk)
+
+        #expect(try await ledger.countedSeries() == 2, "a failed walk retracted the whole ledger")
+        #expect(try await ledger.knownTags() == 1)
+        #expect(try await ledger.favoured().contains { $0.name == "Murim" })
+    }
+
+    /// A walk that stopped at the thirty-page cap is short, not wrong — but it
+    /// is not everything either, so it must not sweep. Same mechanism as
+    /// `aFailedWalkRetractsNothing`, different signal.
+    @Test("A page-capped walk does not retract the series it did not reach")
+    func aPageCappedWalkRetractsNothing() async throws {
+        let ledger = try ledger()
+        try await ledger.absorb([
+            entry(1, .completed, tags: [tag(10, "Murim", weight: "core")]),
+            entry(2, .completed, tags: [tag(10, "Murim", weight: "core")])
+        ], retractingMissing: true)
+
+        let short = LibrarySnapshot.Result(
+            entries: [entry(1, .completed, tags: [tag(10, "Murim", weight: "core")])],
+            isComplete: false,
+            failure: nil
+        )
+        try await ledger.absorb(short)
+
+        #expect(try await ledger.countedSeries() == 2)
+    }
+
+    /// Work-list 12.
+    ///
+    /// EXPECTED TO FAIL ON THE OLD CODE with: `clear()` deleted `tagAffinity`,
+    /// `tasteSource` and `tasteContribution` and never touched `tasteSeen`, so
+    /// `#expect(seenSeries() == 0)` would read **1**. On a real install it read
+    /// 945, and because `DataUseSection` checks `seenSeries` first, Settings
+    /// told a signed-out reader "945 series seen, and none of them carried
+    /// tags" — the previous account's count, printed as this feature's one
+    /// diagnosable failure.
+    @Test("Signing out forgets that the ledger ever saw a series")
+    func clearForgetsSeenSeriesToo() async throws {
+        let ledger = try ledger()
+        // Tagless on purpose: a series that is *seen* and never *counted* is
+        // the only one that reaches `tasteSeen` and nothing else.
+        try await ledger.absorb([entry(1, .reading, tags: [])], retractingMissing: true)
+        #expect(try await ledger.seenSeries() == 1)
+
+        try await ledger.clear()
+
+        #expect(try await ledger.seenSeries() == 0)
+        #expect(try await ledger.countedSeries() == 0)
+        #expect(try await ledger.knownTags() == 0)
+    }
+
+    /// The three hand-maintained copies of "which tables are the ledger" —
+    /// `v11_recountTaste`, `clear()`, and `salvage`'s `readerTables` — already
+    /// disagreed, which is how work-list 12 happened. A source pin rather than
+    /// a behaviour test, and it is here because the alternative is finding out
+    /// from a reader.
+    @Test("Every ledger table is one of the reader's tables")
+    func everyLedgerTableIsAReaderTable() {
+        for table in TasteLedger.tables {
+            #expect(
+                AppDatabase.readerTables.contains(table),
+                "\(table) is in the ledger but not in readerTables, so a split or a salvage drops it"
+            )
+        }
     }
 
     @Test("Favoured tags sort to the front of their group, and are marked as the reader's")

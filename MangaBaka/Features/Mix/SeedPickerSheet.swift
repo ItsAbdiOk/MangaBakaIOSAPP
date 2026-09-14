@@ -161,15 +161,25 @@ struct SeedPickerSheet: View {
     /// `nonisolated static` rather than a computed property so
     /// `MixModelTests` can drive the three branches directly — this project
     /// has no ViewInspector to render the sheet and read its text back.
-    nonisolated static func emptyCopy(message: String?, queryText: String?) -> String {
+    ///
+    /// Nil while a search is pending: the ≥300 ms between a keystroke and
+    /// the request is not an answer, and "Nothing called “x”." for it was
+    /// E F4 — fixed on `SearchView` by reading `isPending`, and not carried
+    /// here until screens F17 (2026-09-14).
+    nonisolated static func emptyCopy(
+        message: String?, queryText: String?, isPending: Bool = false
+    ) -> String? {
         if let message { return message }
+        if isPending { return nil }
         guard let queryText, !queryText.isEmpty else { return "Type a title you love." }
         return "Nothing called \u{201C}\(queryText)\u{201D}."
     }
 
     @ViewBuilder
     private var results: some View {
-        if search.isSearching && search.results.isEmpty {
+        // `isPending` as well as `isSearching`: a debounced search that has
+        // not gone out yet is still an ask in progress, not an empty answer.
+        if (search.isSearching || search.isPending) && search.results.isEmpty {
             Spacer()
             ProgressView().tint(Palette.textTertiary)
             Spacer()
@@ -178,9 +188,12 @@ struct SeedPickerSheet: View {
             // `SearchModel` that existed for this one call site is gone.
             let message = search.failure?.userFacingMessage
             let isFailure = message != nil
+            let copy = Self.emptyCopy(
+                message: message, queryText: search.query.text, isPending: search.isPending
+            )
             Spacer()
             VStack(spacing: 10) {
-                Text(Self.emptyCopy(message: message, queryText: search.query.text))
+                Text(copy ?? "")
                     .typeSmallMeta()
                     .foregroundStyle(Palette.textMuted)
                     .multilineTextAlignment(.center)

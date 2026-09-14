@@ -50,20 +50,31 @@ extension SeriesDetailView {
             aniListID: shown.aniListID,
             shikimoriID: shown.shikimoriID
         )
-        cast = result.characters
         // `.failed` is true only when every source asked came back with a
         // real error — "asked and found nobody" (both sources answering
         // empty) stays silent, same as before (gap 17).
-        castFailure = result.failed ? Self.firstCastFailure(result) : nil
+        let failure = result.failed ? Self.firstCastFailure(result) : nil
+        // Every source asked was cancelled: the reader left mid-fetch, or
+        // the pager replaced the series. Nothing is written — not the empty
+        // cast either, which would wipe a row that had already answered
+        // (item 30; `presentableFailure` says why `.cancelled` never shows).
+        if result.failed, failure == nil { return }
+        cast = result.characters
+        castFailure = failure
     }
 
     /// Which of the two sources' own `APIError` to show, when both were
     /// asked and both failed. Arbitrary when both did — no caller
     /// distinguishes between them today, same reasoning as
-    /// `SeriesRepository.combinedFailure`.
+    /// `SeriesRepository.combinedFailure`. A `.cancelled` outcome is skipped
+    /// over (`presentableFailure`): `CharacterService` reports a cancelled
+    /// `URLSession` as a failure like any other, and it used to reach the
+    /// row as "Cancelled" with a Retry (item 30). Nil when every failure
+    /// was a cancellation.
     nonisolated static func firstCastFailure(_ cast: CharacterService.CharacterCast) -> APIError? {
-        if case let .failed(error) = cast.aniList { return error }
-        if case let .failed(error) = cast.shikimori { return error }
+        for outcome in [cast.aniList, cast.shikimori] {
+            if case let .failed(error) = outcome, let shown = presentableFailure(error) { return shown }
+        }
         return nil
     }
 

@@ -73,6 +73,12 @@ extension SeriesDetailView {
         case let .success(volumes):
             appleFailure = nil
             appleVolumes = volumes
+        case .failure(.cancelled):
+            // The reader left mid-ask. Nothing is written — see
+            // `presentableFailure` — and the skeleton is put down here
+            // because the reset below is not reached (item 30).
+            isLoadingVolumes = false
+            return
         case let .failure(error):
             appleFailure = error
             appleVolumes = []

@@ -48,7 +48,12 @@ actor CatalogueService {
 
         let task = Task<Fetched<[Genre]>, Never> { [client] in
             do throws(APIError) {
-                let fetched: [Genre] = try await client.get("/v1/genres")
+                // `getLossy` for the same reason the two siblings in this file
+                // use it: this is a vocabulary endpoint on the path of several
+                // browse surfaces at once, and one malformed row emptying the
+                // whole result set is how one of them failed in production
+                // once (see `publishers()`).
+                let fetched: [Genre] = try await client.getLossy("/v1/genres")
                 return .loaded(fetched, fetchedAt: Date(), isPartial: false)
             } catch {
                 // Not cached: a dropped packet used to cache an empty

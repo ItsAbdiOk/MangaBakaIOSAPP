@@ -122,6 +122,20 @@ struct SeriesDetailView: View {
     @State var cadenceFailure: APIError?
     @State var isCadenceLoading = false
     @State private var isLoading = true
+    /// Which series `loadCore` / `loadOnward` last finished for. `.task(id:
+    /// series.id)` is cancelled on disappear and started again on appear, and
+    /// a push (a related series, a publisher) or a `fullScreenCover` (the
+    /// gallery) both take this page through that — so coming back re-ran the
+    /// whole load: `filled = nil` dropped the synopsis and chapter count to
+    /// skeletons before the six-hour cache refilled them, and the seven
+    /// onward legs were asked again, two of them behind MangaUpdates' 3 s
+    /// spacer and Open Library's up-to-36 s of HEADs, for a page the reader
+    /// had already read (review item 32, 2026-09-14). Two ids, not one: a
+    /// gallery opened while the onward legs were still out cancels them, and
+    /// only those should be re-asked on return — never the core, whose reset
+    /// is the visible flash.
+    @State private var coreLoadedID: Int?
+    @State private var onwardLoadedID: Int?
     /// How far the page has scrolled, fed to `DetailBackdrop` for its
     /// parallax and to `DetailBarTitle` for its crossfade. A reference type,
     /// not `@State var scrollOffset: CGFloat` — see `ScrollTracker`, which
@@ -268,7 +282,10 @@ struct SeriesDetailView: View {
                 }
                 CharacterRow(
                     characters: cast, isLoading: isCastLoading, failure: castFailure,
-                    retry: { await loadCast() }
+                    retry: { await loadCast() },
+                    // The service's own clients, so a profile sheet shares
+                    // their spacing and backoff (item 63).
+                    aniList: characters?.aniList, shikimori: characters?.shikimori
                 )
                 .arrives(index: Self.sectionIndex(for: .cast))
                 tagSection
@@ -482,8 +499,36 @@ extension SeriesDetailView {
         // content and stops looking empty; "complete" is when the rows a reader
         // scrolls to have filled in. Measuring only the second would report a
         // page that felt instant as three seconds slow.
-        await Signposts.measure("Detail readable") { await loadCore() }
-        await Signposts.measure("Detail complete") { await loadOnward() }
+        //
+        // Idempotent per series — see `coreLoadedID`. A core that failed is
+        // not recorded, so the next appearance asks again; the `StaleBar`'s
+        // own retry calls `loadCore()` directly and is unaffected. The
+        // signpost therefore measures first opens only, not cache hits.
+        if coreLoadedID != series.id {
+            await Signposts.measure("Detail readable") { await loadCore() }
+            guard extras.failure == nil, !Task.isCancelled else { return }
+            coreLoadedID = series.id
+        }
+        if onwardLoadedID != series.id {
+            await Signposts.measure("Detail complete") { await loadOnward() }
+            // A leg cut short by the reader leaving is re-asked on return;
+            // its cancelled answer writes nothing (item 30).
+            guard !Task.isCancelled else { return }
+            onwardLoadedID = series.id
+        }
+    }
+
+    /// A section-level failure worth a line under its header, or nil for
+    /// the one error that is never on screen: `.cancelled` means the reader
+    /// left, or the pager replaced the series, and a live page has nothing
+    /// to say about a request nobody is waiting for (`APIError.cancelled`'s
+    /// own doc comment; the cadence leg has done this since item 40). The
+    /// categories, cast and Apple legs did not, so a cover opened mid-load
+    /// came back to "Cancelled" and a Retry under three sections (review
+    /// item 30, 2026-09-14).
+    nonisolated static func presentableFailure(_ error: APIError) -> APIError? {
+        if case .cancelled = error { return nil }
+        return error
     }
 
     func loadCore() async {

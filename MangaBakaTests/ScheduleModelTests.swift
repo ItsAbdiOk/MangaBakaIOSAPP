@@ -11,7 +11,9 @@ struct ScheduleGroupingTests {
 
     private func makeService() throws -> ReleaseScheduleService {
         ReleaseScheduleService(
-            library: LibrarySnapshot(library: SilentLibrary()), database: try AppDatabase.inMemory()
+            library: LibrarySnapshot(library: SilentLibrary()),
+            mangaUpdates: MangaUpdatesClient(),
+            database: try AppDatabase.inMemory()
         )
     }
 
@@ -55,6 +57,26 @@ struct ScheduleGroupingTests {
         let model = ScheduleModel(service: try makeService())
         model.applyForTesting(snapshot)
         return model
+    }
+
+    /// Screens F19 (2026-09-14): `.task { await model.load() }` re-ran on
+    /// every pop-back, re-reading the library and replacing the snapshot.
+    /// Injected rows stand in for a read that already happened: a second
+    /// plain `load()` must leave them, a forced one must not. Expected to
+    /// fail before the fix with: `model.snapshot.dated.count == 2` → `0`
+    /// (the re-read replaced the injected snapshot with the empty service's).
+    @Test("A re-appearance keeps the snapshot already on screen; a forced load reads again")
+    func reappearanceDoesNotReread() async throws {
+        var snapshot = ScheduleSnapshot()
+        snapshot.dated = [work(1, cadence(dueIn: 1)), work(2, cadence(dueIn: 2))]
+        let model = try model(with: snapshot)
+
+        await model.load()
+        #expect(model.snapshot.dated.count == 2)
+        #expect(model.hasLoadedOnce)
+
+        await model.load(forceRefresh: true)
+        #expect(model.snapshot.dated.isEmpty, "The control: a forced load reads the (empty) service again")
     }
 
     @Test("Before the first measurement the screen says what it is about to do")

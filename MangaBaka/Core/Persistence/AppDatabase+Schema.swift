@@ -137,7 +137,16 @@ extension AppDatabase {
         }
 
         migrator.registerMigration("v12_shelfOrderIndex") { db in
-            try createShelfOrderIndex(db)
+            // `shelfEntry` is on `readerTables`, which the rule below says a
+            // cache migration must never touch. v12 does, and got away with it
+            // only because it shipped in the same build as the split: both
+            // `onDisk` and `onDiskResettingIfCorrupt` migrate the cache file
+            // before `finishOpening` calls `splitReaderTables`, so on the one
+            // launch where v12 runs the table is still there. That is a
+            // shipping coincidence, not a licence — `ifStillInCacheFile` is
+            // what the next migration copies, and `AppDatabaseSplitRuleTests`
+            // is what goes red if it does not (work-list 27).
+            try ifStillInCacheFile("shelfEntry", db, createShelfOrderIndex)
             // `feedEntry`'s primary key is (feedKey, position), so `feedKey`
             // is already the leading column of an index SQLite maintains for
             // free. `feedEntry_on_feedKey` is a second B-tree over the same
@@ -162,13 +171,59 @@ extension AppDatabase {
     /// out of it again by `splitReaderTables`, so on every device that has
     /// launched once they are simply not there: an `ALTER TABLE shelfEntry` in
     /// the cache migrator would throw on open, and `onDiskResettingIfCorrupt`
-    /// correctly declines to call that corruption. Change them in
-    /// `libraryMigrator` instead.
+    /// correctly declines to call that corruption. The device then falls all
+    /// the way through to `AppServices.makeDatabase`'s in-memory database,
+    /// which `.unopened` deliberately shows no toast for: an app that forgets
+    /// everything, on every launch, forever, and says nothing.
+    ///
+    /// Change them in `libraryMigrator` instead. If a cache-side migration
+    /// genuinely has to touch one — v12 does — put it through
+    /// `ifStillInCacheFile` so it is a no-op on a split device rather than a
+    /// throw. `AppDatabaseSplitRuleTests.migratorSurvivesTheSplit` is the
+    /// enforcement: it migrates a cache file, splits it, and runs the migrator
+    /// over it again. It goes red the day a migration breaks this rule, which
+    /// is the day it needs to (work-list 27).
     static let readerTables = [
         "shelfEntry", "viewedEntry",
         "tagAffinity", "tasteSource", "tasteSeen", "tasteContribution",
         "libraryEntry", "libraryMetadata"
     ]
+
+    /// What `salvage` carries out of a corrupt file: the reader's tables *and*
+    /// the split marker.
+    ///
+    /// A separate list because the two jobs are different, and work-list 55 is
+    /// what happens when one list does both. `librarySplit` is deliberately off
+    /// `readerTables` — `splitReaderTables` must not try to copy or drop it out
+    /// of the cache file, where it does not exist. But `salvage` reads the
+    /// *reader's own file*, and dropping the marker there means the next launch
+    /// finds `alreadyCopied == false`; if that launch is one where the cache
+    /// file still holds the reader's tables (the drop had not run yet, or this
+    /// is the same launch as the first split), the copy runs a second time and
+    /// every row the reader deleted since the first copy comes back from the
+    /// dead. `INSERT OR IGNORE` cannot help: the deleted row is not there to
+    /// be ignored.
+    ///
+    /// Harmless in the other direction: a pre-split *cache* file has no
+    /// `librarySplit` table, and `salvage` already expects and logs a missing
+    /// table per `readerTables` entry.
+    static let salvagedTables = readerTables + ["librarySplit"]
+
+    /// Runs a cache-migrator step only if the table it touches is still in the
+    /// cache file.
+    ///
+    /// The escape hatch for the rule on `readerTables`, and the only sanctioned
+    /// one. A device that has split does not have these tables here, so the
+    /// step is a no-op; a device installing for the first time before the split
+    /// does, and the step runs exactly as it always did. Every reader table a
+    /// cache migration touches goes through this, or the migrator throws on
+    /// open and the app silently falls back to an in-memory database.
+    static func ifStillInCacheFile(
+        _ table: String, _ db: Database, _ body: (Database) throws -> Void
+    ) throws {
+        guard try db.tableExists(table) else { return }
+        try body(db)
+    }
 
     /// The schema of `libraryWriter`'s file.
     ///

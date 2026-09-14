@@ -34,9 +34,21 @@ struct WidgetSnapshotTests {
         // contents can fail on it.
         #expect(widgetSide.dueThisWeek.map(\.seriesID) == [1])
         #expect(widgetSide.dueThisWeek.map(\.title) == ["Tower of God"])
-        #expect(widgetSide.dueThisWeek.map(\.subtitle) == ["Due Thursday · Webtoons"])
+        #expect(widgetSide.dueThisWeek.map(\.subtitle) == ["Webtoons"])
         #expect(widgetSide.dueThisWeek.first?.coverURL
             == URL(string: "https://example.com/cover.jpg"))
+        // `due` is the whole point of the 2026-09-14 change and was the one
+        // field neither contract test crossed the seam with: the app ships a
+        // `Date`, the widget formats the weekday freshly
+        // (`SeriesWidgetEntryBuilder.subtitle(for:)`) and drops rows whose day
+        // has passed. Rename it on the app side and every widget silently
+        // reverts to a bare subtitle with no past-due filtering — which is
+        // exactly the failure this suite exists to catch.
+        #expect(widgetSide.dueThisWeek.first?.due == Self.sampleDue)
+        // And the other half of the contract: a row with no `due` decodes to
+        // nil rather than throwing, which is what lets an old snapshot survive
+        // an app update.
+        #expect(widgetSide.pickBackUp.first?.due == nil)
         #expect(widgetSide.pickBackUp.map(\.seriesID) == [2])
         #expect(widgetSide.pickBackUp.map(\.title) == ["Solo Leveling"])
         #expect(widgetSide.pickBackUp.map(\.subtitle) == ["Ch. 88 of 200"])
@@ -61,7 +73,22 @@ struct WidgetSnapshotTests {
         let items = try #require(object["dueThisWeek"] as? [[String: Any]])
         #expect(items.count == 1)
         let firstItem = try #require(items.first)
-        #expect(Set(firstItem.keys) == ["seriesID", "title", "subtitle", "coverURL"])
+        #expect(Set(firstItem.keys) == ["seriesID", "title", "subtitle", "coverURL", "due"])
+
+        // The `pickBackUp` row has no `due` and no cover. Asserted as "no real
+        // value", not as an exact key set: whether the encoder omits an
+        // Optional or writes null is not the app's promise to the extension
+        // (see `nilCoverCrosses`), and pinning it here would fail on a change
+        // that breaks nothing.
+        let pickBackUp = try #require(object["pickBackUp"] as? [[String: Any]])
+        let pickBackUpItem = try #require(pickBackUp.first)
+        #expect(pickBackUpItem["due"] as? String == nil)
+
+        // The item date uses the same ISO-8601 strategy as `writtenAt`; a
+        // per-type strategy is not a thing `JSONEncoder` has, but a change to
+        // the encoder's would break `due` silently where it breaks `writtenAt`
+        // loudly, so both are named.
+        #expect(firstItem["due"] as? String == ISO8601DateFormatter().string(from: Self.sampleDue))
 
         // ISO-8601, not the `Double` `JSONEncoder` defaults to. The widget's
         // decoder is `.iso8601`; a strategy change on the app side alone makes
@@ -97,12 +124,27 @@ struct WidgetSnapshotTests {
         return decoder
     }
 
+    /// The Thursday after `now`'s Wednesday, as `dueThisWeekItems` would write
+    /// it: `calendar.startOfDay`, so a whole day and not a moment inside one.
+    private static let sampleDue = Date(timeIntervalSince1970: 1_789_000_000 + 86_400)
+
+    /// The `dueThisWeek` row carries a real `due`; the `pickBackUp` row
+    /// deliberately does not, so the "an older app's snapshot with no key still
+    /// decodes" promise at `WidgetSnapshotData.Item.due` is covered by the same
+    /// fixture.
+    ///
+    /// Its subtitle is what `WidgetSnapshot.dueThisWeekItems` really writes —
+    /// the feed's name alone (`:184-187`). Until 2026-09-14 it read
+    /// "Due Thursday · Webtoons", a string the app stopped producing when the
+    /// weekday moved out of `subtitle` and into `due`; a fixture that
+    /// contradicts the model it is built from cannot fail on a change to it.
     private static func sampleSnapshot(now: Date) -> WidgetSnapshot {
         WidgetSnapshot(
             dueThisWeek: [
                 WidgetSnapshot.Item(
-                    seriesID: 1, title: "Tower of God", subtitle: "Due Thursday · Webtoons",
-                    coverURL: URL(string: "https://example.com/cover.jpg")
+                    seriesID: 1, title: "Tower of God", subtitle: "Webtoons",
+                    coverURL: URL(string: "https://example.com/cover.jpg"),
+                    due: sampleDue
                 )
             ],
             pickBackUp: [
@@ -114,8 +156,12 @@ struct WidgetSnapshotTests {
         )
     }
 
-    @Test("A snapshot round-trips through its own JSON shape")
-    func roundTrips() throws {
+    /// Not a contract test, despite sitting under that heading for a day:
+    /// both sides here are `WidgetSnapshot`, so it catches a self-inconsistent
+    /// `Codable` and nothing about the extension. Named for what it does —
+    /// the suite comment above says why the distinction matters.
+    @Test("The app's own snapshot type is self-consistent through JSON")
+    func appTypeIsSelfConsistent() throws {
         let snapshot = Self.sampleSnapshot(now: now)
         let data = try Self.appEncoder.encode(snapshot)
         let decoded = try Self.widgetDecoder.decode(WidgetSnapshot.self, from: data)

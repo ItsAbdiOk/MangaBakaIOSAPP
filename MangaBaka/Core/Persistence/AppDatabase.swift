@@ -364,9 +364,9 @@ struct AppDatabase: Sendable {
     /// file that is by definition broken is the expected case, not an error
     /// to propagate, and one unreadable table must not lose the others.
     ///
-    /// It now covers all of `readerTables`, not just the shelf and the
-    /// history: the taste ledger and the library cache are in the same file
-    /// and were being left behind.
+    /// It now covers all of `salvagedTables`, not just the shelf and the
+    /// history: the taste ledger, the library cache and the split marker are
+    /// in the same file and were being left behind.
     ///
     /// `INSERT OR IGNORE`: the destination is normally empty, but the
     /// pre-split cache file salvages into the reader's file, which may not
@@ -383,7 +383,10 @@ struct AppDatabase: Sendable {
             try db.execute(sql: "ATTACH DATABASE ? AS salvage", arguments: [file.path])
             defer { try? db.execute(sql: "DETACH DATABASE salvage") }
             var rows = 0
-            for table in readerTables {
+            // `salvagedTables`, not `readerTables`: the split marker is in the
+            // reader's file too and losing it can re-run the copy (work-list
+            // 55). See that list for why the two are not the same list.
+            for table in salvagedTables {
                 do {
                     try db.execute(
                         sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"

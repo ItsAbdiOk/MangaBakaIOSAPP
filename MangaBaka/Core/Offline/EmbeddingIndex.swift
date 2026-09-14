@@ -194,6 +194,26 @@ actor EmbeddingIndex {
         // ranking uses the raw quantised dot product, no dequantisation.
         _ = Float(bitPattern: readUInt32LE(data, at: 12))
 
+        // Bounded before they are multiplied. Work-list 52: `count` and `dims`
+        // come straight out of the file's own header, and `count * dims` was
+        // computed before any check — a truncated or mis-transferred
+        // `OfflineEmbeddings.bin` can put `UInt32.max` in both, and Swift's
+        // `*` on `Int` traps on overflow, so the failure was a crash rather
+        // than the `LoadError` everything else in this file is careful to
+        // throw. `count * 4` was also allocated (`[Int32](repeating:count:)`,
+        // 16 GB at the ceiling) before `sizeMismatch` could refuse it.
+        // `Gunzip.validatedDestinationSize` was hardened against exactly this
+        // on 2026-09-14; this file parses the second bundled binary and was
+        // not.
+        //
+        // DERIVED, not guessed. READ FROM THE BUNDLED FILE 2026-09-14: the
+        // header of `Resources/OfflineEmbeddings.bin` is `MBE1`, count 19,203,
+        // dims 384, and 16 + 19203*4 + 19203*384 = 7,450,780 bytes, which is
+        // its size on disk exactly. Both ceilings therefore carry more than
+        // 50× and 10× headroom respectively.
+        guard count > 0, count <= 1_000_000, dims > 0, dims <= 4096 else {
+            throw LoadError.sizeMismatch
+        }
         let idsStart = headerSize
         let vectorsStart = idsStart + count * 4
         let expectedSize = vectorsStart + count * dims

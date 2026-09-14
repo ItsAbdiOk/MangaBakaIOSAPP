@@ -50,13 +50,14 @@ extension MixView {
         }
         .padding(.horizontal, Metrics.gutter)
         // One place, not one per control. The type and tag chips called
-        // `requestBlend` themselves and the rating segments and the tag picker
+        // the blend themselves and the rating segments and the tag picker
         // sheet did not — both write `model.filters` and neither re-blended,
         // so the grid showed 6.1-rated series under a control reading 8+, and
         // a tag picked in the sheet came back selected over results that had
-        // never required it (item 45). Debounced in `requestBlend`, so a run
-        // of taps is still one request.
-        .onChange(of: model.filters) { requestBlend() }
+        // never required it (item 45). Debounced in the model, on the same
+        // timer the strand chips use, so a run of taps is still one request
+        // and a strand tap beside a chip tap is not two (F28).
+        .onChange(of: model.filters) { model.filtersDidChange() }
     }
 
     /// Tags to require in the blend. The mockup's AND/OR mode is gone — see
@@ -141,36 +142,6 @@ extension MixView {
     var pickedBeyondDNA: [String] {
         let strands = Set(model.dna.strands.map(\.name))
         return model.filters.tags.filter { !strands.contains($0) }
-    }
-
-    /// L10: each filter chip fired its own `Task { await model.run() }` —
-    /// three quick taps were three `/v1/series/mix` requests, undebounced,
-    /// unlike the strand chips (`MixModel.blendAfterEdits`) which were given
-    /// exactly this treatment for the same reason. `MixModel.strandDebounce`
-    /// is reused rather than a second guessed number.
-    ///
-    /// A `static` slot rather than `@State`: this is a `View` extension, and
-    /// an extension cannot add a stored instance property to the type it
-    /// extends — only one Mix screen is ever on screen at a time, so one
-    /// shared slot is what `@State` would have given here anyway.
-    @MainActor
-    private static var pendingFilterBlend: Task<Void, Never>?
-
-    func requestBlend() {
-        // A filter tap before any seed is picked is not an attempt to blend.
-        // Without this it reached `MixModel.run()`, which refuses a seedless
-        // request and sets "Add at least one series to blend from." — a
-        // scolding for tapping a filter, under a Blend button that already
-        // teaches the rule by being disabled.
-        guard !model.seeds.isEmpty else { return }
-        Self.pendingFilterBlend?.cancel()
-        // The model's clock, not the global one, so a test moving time moves
-        // this debounce with the strand debounce it shares a number with.
-        Self.pendingFilterBlend = Task { [clock = model.clock] in
-            try? await clock.sleep(for: MixModel.strandDebounce)
-            guard !Task.isCancelled else { return }
-            await model.run()
-        }
     }
 
     func toggleTag(_ name: String) {

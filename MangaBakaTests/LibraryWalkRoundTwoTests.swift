@@ -81,7 +81,7 @@ struct LibraryWalkRoundTwoTests {
         await walk.value
 
         #expect(model.entries.first { $0.seriesId == 1 }?.rating == 80)
-        let cached = await snapshot.all().first { $0.seriesId == 1 }
+        let cached = await snapshot.load().entries.first { $0.seriesId == 1 }
         #expect(cached?.rating == 80, "and the six-hour cache holds the edit, not the row before it")
     }
 
@@ -147,7 +147,7 @@ struct LibraryWalkRoundTwoTests {
             Array(size...(size * 2 - 1))
         ])
         let snapshot = LibrarySnapshot(library: library)
-        let all = await snapshot.all()
+        let all = await snapshot.load().entries
 
         #expect(Set(all.map(\.seriesId)).count == all.count, "no repeated id survives the walk")
         #expect(all.count == size * 2 - 1)
@@ -196,7 +196,10 @@ struct LibraryWalkRoundTwoTests {
     // MARK: - Stubs
 
     /// A walk that stops after `gateAfterPage` until it is released.
-    private final class GatedLibrary: LibraryProviding, @unchecked Sendable {
+    /// Not `private`: `LibraryWalkRoundThreeTests` drives the same gate for
+    /// the cancellation and shared-walk findings, and duplicating a stub is
+    /// how two stubs drift apart.
+    final class GatedLibrary: LibraryProviding, @unchecked Sendable {
         struct Observation: Sendable { let entries: Int }
 
         let total: Int

@@ -198,3 +198,68 @@ struct SynopsisExpansionTests {
         #expect(source.contains("guard isTruncated || isExpanded else { return }"))
     }
 }
+
+/// Item 64 (`docs/reviews/full2/screens.md` F4): `progress` used to be
+/// `@State` on `CoverGallery`'s own root, written every scroll frame by
+/// `onScrollGeometryChange` and read by `backdrop` in that same root body —
+/// so the whole gallery body, the `LazyHStack` of `ZoomableCover`s and the
+/// two 1000pt `DetailBackdrop`s alike, re-evaluated per frame of a swipe. No
+/// ViewInspector means the re-evaluation itself cannot be measured from a
+/// test; these pin the shape the fix requires — a `ScrollTracker` and a
+/// child that alone reads it — rather than the value it isn't visible from.
+@Suite("The gallery's scroll tracker", .enabled(if: SourceTree.isAvailable))
+struct CoverGalleryScrollTrackerTests {
+    private func gallery() throws -> String {
+        try SourceTree.read("MangaBaka/Features/Detail/CoverGallery.swift")
+    }
+
+    /// Expected to fail before the fix: the root held `@State private var
+    /// progress: Double = 0` instead, with no `ScrollTracker` in the file.
+    @Test("The page position lives in a tracker, not in the root's own State")
+    func positionIsInATracker() throws {
+        let source = try gallery()
+        #expect(source.contains("@State private var tracker = ScrollTracker()"))
+        #expect(!source.contains("@State private var progress: Double"))
+        #expect(source.contains("tracker.pageProgress = position"))
+    }
+
+    /// Expected to fail before the fix: `backdrop` was a computed property on
+    /// `CoverGallery` itself, so the value it read (`progress`) and the root
+    /// body were the same invalidation scope by construction.
+    @Test("Only GalleryBackdrop reads the tracker's page progress")
+    func onlyGalleryBackdropReadsProgress() throws {
+        let source = try gallery()
+        #expect(source.contains("private struct GalleryBackdrop: View {"))
+        #expect(SourceTree.containsRun(source, "ZStack { GalleryBackdrop(pages: pages, tracker: tracker)"))
+        // The root's own body, bounded from `var body: some View {` to the
+        // `NavigationStack`'s own closing brace, never mentions pageProgress.
+        let bodyStart = try #require(source.range(of: "var body: some View {"))
+        let bodyEnd = try #require(source.range(
+            of: "\n    }\n\n    /// How far a card leans", range: bodyStart.upperBound..<source.endIndex
+        ))
+        #expect(!source[bodyStart.upperBound..<bodyEnd.lowerBound].contains("pageProgress"))
+    }
+}
+
+/// Item 69 (`docs/reviews/full2/shell-and-tests.md` S13): `InlineFailure` hand
+/// rolled the same double-tap guard `FailureState` already has as `RetryGate`
+/// — its own `@State private var isRetrying` reset from an unstructured
+/// `Task` the view may no longer be around for. Mechanical: there is no
+/// behavioural difference `RetryGate`'s own tests (`StateFamilyTests`) don't
+/// already cover, and no ViewInspector to drive this view's body from a test,
+/// so this pins the source shape instead.
+@Suite("InlineFailure's retry gate", .enabled(if: SourceTree.isAvailable))
+struct InlineFailureRetryGateTests {
+    /// Expected to fail before the fix: `isRetrying` was a private `Bool`
+    /// flipped by hand around an unstructured `Task`, not a `RetryGate`.
+    @Test("Retry goes through the shared RetryGate, not a hand-rolled flag")
+    func usesSharedRetryGate() throws {
+        let source = try SourceTree.read("MangaBaka/Features/Shared/InlineFailure.swift")
+        #expect(source.contains("@State private var gate = RetryGate()"))
+        #expect(source.contains("Task { await gate.fire(retry) }"))
+        // The hand-rolled flag was a `@State` of this view's own; `gate
+        // .isRetrying` is the shared gate's property and is what the fix
+        // reads. Pinning the bare word caught the fix as well as the bug.
+        #expect(!source.contains("@State private var isRetrying"))
+    }
+}

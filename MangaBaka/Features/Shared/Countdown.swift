@@ -28,7 +28,13 @@ struct Countdown: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = until.timeIntervalSince(context.date)
             Text(text(for: remaining))
-                .onChange(of: hasReached(remaining)) { _, reached in
+                // `initial: true`, because `onChange` does not fire for the
+                // value a view mounts with. A countdown mounted *after* its
+                // deadline — a 429 whose window lapsed while the app was in
+                // the background, or before the bar appeared — read "Retrying
+                // now…" forever and never retried: the fact never changed, so
+                // nothing was ever observed (review item 18, 2026-09-14).
+                .onChange(of: hasReached(remaining), initial: true) { _, reached in
                     guard reached, !hasFired else { return }
                     hasFired = true
                     onReachZero?()

@@ -49,6 +49,15 @@ struct RootView: View {
     let calendar: ReleaseCalendar
     let librarySnapshot: LibrarySnapshot
     let reminders: ReleaseReminders
+    /// The app's single `TokenStore`, passed rather than defaulted.
+    ///
+    /// `SettingsView` used to build its own, and `TokenStore` memoised per
+    /// instance, so the token Settings wrote was invisible to the client that
+    /// had to validate it — see `TokenStore.cache` (second-pass review S1).
+    let tokenStore: TokenStore
+    /// "Is anybody signed in" as the API client itself answers it, `MB_PAT`
+    /// included — see `AppServices.hasCredentials` (item 13).
+    let hasCredentials: @Sendable () -> Bool
     /// True when the on-disk cache had to be reset before this launch — see
     /// `AppServices.makeDatabase` and gap 3. Told to the reader once, from
     /// `startSession`, rather than shown here directly.
@@ -198,6 +207,8 @@ struct RootView: View {
         calendar: ReleaseCalendar,
         librarySnapshot: LibrarySnapshot,
         reminders: ReleaseReminders,
+        tokenStore: TokenStore,
+        hasCredentials: @escaping @Sendable () -> Bool,
         databaseWasReset: Bool,
         onboarding: OnboardingState
     ) {
@@ -227,6 +238,8 @@ struct RootView: View {
         self.calendar = calendar
         self.librarySnapshot = librarySnapshot
         self.reminders = reminders
+        self.tokenStore = tokenStore
+        self.hasCredentials = hasCredentials
         self.databaseWasReset = databaseWasReset
         self.onboarding = onboarding
         _continuations = State(initialValue: ContinuationsModel(repository: repository))
@@ -296,10 +309,17 @@ struct RootView: View {
             // A library series tapped in Spotlight. The page opens in the
             // Library tab, which is where the reader's state on it lives.
             // "Open <series>" from Siri or Shortcuts; see IntentBridge.
-            .task(id: bridge.pendingSeriesID) {
-                guard let id = bridge.pendingSeriesID else { return }
-                bridge.pendingSeriesID = nil
-                await openSeries(id: id)
+            .task(id: bridge.pending?.token) {
+                guard let request = bridge.pending else { return }
+                await openSeries(id: request.id)
+                // Cleared *after* the navigation, never before it. Clearing
+                // first wrote to the value this modifier is keyed on, which
+                // cancelled this very task before it had navigated — see
+                // `IntentBridge.pending`. Keyed on `token` rather than `id`
+                // so this clear cannot be mistaken for a new request, and
+                // guarded so a second "Open X" that arrived while the first
+                // was in flight is not thrown away by the first one finishing.
+                if bridge.pending?.token == request.token { bridge.pending = nil }
             }
             // A mangabaka.org series link. Dormant until the site hosts the
             // association file; see SeriesWebLink.
@@ -315,7 +335,7 @@ struct RootView: View {
                 // widgets and web links, and it is the one already
                 // cancelled-and-restarted by `.task(id:)` above.
                 guard let id = SeriesWebLink.seriesID(from: url) else { return }
-                bridge.pendingSeriesID = id
+                bridge.pending = IntentBridge.Open(id: id)
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 guard let id = SpotlightIndex.seriesID(from: activity) else { return }

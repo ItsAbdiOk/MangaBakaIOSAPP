@@ -174,13 +174,22 @@ actor RateLimitGate {
     /// see `recordRateLimit` — since that means the server itself has
     /// refused, and waiting out a real 429 without limit would just be a
     /// slower way of hammering it.
-    /// - Returns: the timestamp just appended to `searchTimestamps` for a
-    ///   search-family reservation, so a caller that turns out not to have
-    ///   needed the slot — a URLCache hit that never touched the network, or
-    ///   an attempt that never left the device at all — can hand it back to
-    ///   `refund(path:reservedAt:)` precisely, rather than guessing which
-    ///   entry was its own among requests running concurrently. `nil` for a
-    ///   general-family path, which never reserves anything to begin with.
+    /// - Returns: the timestamp just appended to this path's family window —
+    ///   **either family**, search or general — so a caller that turns out not
+    ///   to have needed the slot (a URLCache hit that never touched the
+    ///   network, or an attempt that never left the device at all) can hand it
+    ///   back to `refund(path:reservedAt:)` precisely, rather than guessing
+    ///   which entry was its own among requests running concurrently. Nil only
+    ///   when nothing was appended — a `.background` reservation that claimed
+    ///   no timestamp of its own.
+    ///
+    ///   Until 2026-09-14 this said the return was "the timestamp appended to
+    ///   `searchTimestamps`" and nil "for a general-family path, which never
+    ///   reserves anything to begin with". There is no `searchTimestamps` any
+    ///   more — it is `timestamps: [Family: [Date]]` — and general-family paths
+    ///   have had their own 180/min window since the same day, so the old text
+    ///   told the reader the exact opposite of what the code below does, and
+    ///   that `APIClient`'s refunds were no-ops for them.
     @discardableResult
     func reserveSlot(for path: String, priority: RequestPriority) async throws(APIError) -> Date? {
         let family = Self.family(for: path)
@@ -206,9 +215,11 @@ actor RateLimitGate {
         return try await waitForBackgroundSlot(family)
     }
 
-    /// Hands back a search-window slot `reserveSlot` reserved on this
-    /// caller's behalf, because it turned out to need none of the server's
-    /// real budget:
+    /// Hands back a slot `reserveSlot` reserved on this caller's behalf,
+    /// because it turned out to need none of the server's real budget. The
+    /// family is looked up from the path below, so this covers the general
+    /// window as well as the search one — it is not search-only, whatever the
+    /// name of `searchTimestampCountForTesting` suggests.
     ///
     /// - a URLCache hit answered the request without a network round trip
     ///   (wire review #30) — `reserveSlot` and the ledger both ran before
@@ -216,7 +227,11 @@ actor RateLimitGate {
     ///   ledger row were spent on a request MangaBaka never saw; or
     /// - the attempt never left the device at all: `.offline` or
     ///   `.cancelled` (wire review #13, folded into #30's fix since both are
-    ///   "the slot was reserved for nothing"). `recordSuccess`'s own comment
+    ///   "the slot was reserved for nothing"). Deliberately *not* the generic
+    ///   `.transport` case: a TLS or DNS failure may well have reached the
+    ///   host, so that slot stays spent.
+    ///
+    ///   `recordSuccess`'s own comment
     ///   already draws this line for *failed* requests that did reach the
     ///   server — those still count, because the local budget tracks
     ///   MangaBaka's own request count, not this app's error rate. An

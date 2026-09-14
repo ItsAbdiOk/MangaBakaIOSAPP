@@ -128,45 +128,12 @@ final class DiscoverModel {
                 // results win, and this one's are dropped rather than
                 // clobbering them out of order.
                 guard generation == loadGeneration else { continue }
-                // Navigating away cancels the `.task` that started this, and
-                // the repository answers the dead request with
-                // `.staleAfter(.cancelled)`. Written straight into the row, it
-                // drew a "Cancelled" failure card on all four rows of a screen
-                // the reader had already left — and the next appearance asked
-                // for all four again (C2, item 3). The row keeps what it had;
-                // `hasLoadedOnce` stays false below, so coming back re-asks.
-                if case .staleAfter(.cancelled) = result.origin {
+                guard apply(result, to: index) else {
                     cancelledRows += 1
                     continue
                 }
-                // A cache answer for a row that already has content says
-                // nothing the row does not already know, and rewriting it
-                // would throw away the pages the reader scrolled to (item 19).
-                if result.origin == .cache, !rows[index].series.isEmpty {
-                    rows[index].isLoading = false
-                    rows[index].failure = nil
-                    continue
-                }
-                rows[index].series = result.series
-                rows[index].isLoading = false
-                // A reload replaces the row, so paging starts over with it.
-                // Leaving these would make the next scroll to the bottom fetch
-                // page 5 of a row that currently holds page 1.
-                rows[index].page = 1
-                rows[index].hasReachedEnd = false
-                rows[index].pageFailure = nil
-                rows[index].reloads += 1
                 if case let .staleAfter(error) = result.origin {
-                    rows[index].failure = error
                     firstFailure = firstFailure ?? error
-                    // One bar for the screen, not one per row. Four rows all
-                    // failing the same refresh produced four identical banners
-                    // saying the same thing about the same network.
-                    if !result.series.isEmpty {
-                        staleSince = [staleSince, result.cachedAt].compactMap { $0 }.min()
-                    }
-                } else {
-                    rows[index].failure = nil
                 }
             }
             guard generation == loadGeneration else { return }
@@ -182,6 +149,73 @@ final class DiscoverModel {
             // the exact opposite of what the skip above was for (item 3).
             if cancelledRows == 0 { hasLoadedOnce = true }
         }
+    }
+
+    /// Writes one row's first-page answer. False when the answer was a
+    /// cancellation, which the row ignores. Shared by the four-row load and
+    /// `retryRow`, so one row's retry writes exactly what the group loop
+    /// would have.
+    private func apply(_ result: FeedResult, to index: Int) -> Bool {
+        // Navigating away cancels the `.task` that started this, and
+        // the repository answers the dead request with
+        // `.staleAfter(.cancelled)`. Written straight into the row, it
+        // drew a "Cancelled" failure card on all four rows of a screen
+        // the reader had already left — and the next appearance asked
+        // for all four again (C2, item 3). The row keeps what it had;
+        // `hasLoadedOnce` stays false in `loadRows`, so coming back re-asks.
+        if case .staleAfter(.cancelled) = result.origin {
+            return false
+        }
+        // A cache answer for a row that already has content says
+        // nothing the row does not already know, and rewriting it
+        // would throw away the pages the reader scrolled to (item 19).
+        if result.origin == .cache, !rows[index].series.isEmpty {
+            rows[index].isLoading = false
+            rows[index].failure = nil
+            return true
+        }
+        rows[index].series = result.series
+        rows[index].isLoading = false
+        // A reload replaces the row, so paging starts over with it.
+        // Leaving these would make the next scroll to the bottom fetch
+        // page 5 of a row that currently holds page 1.
+        rows[index].page = 1
+        rows[index].hasReachedEnd = false
+        rows[index].pageFailure = nil
+        rows[index].reloads += 1
+        if case let .staleAfter(error) = result.origin {
+            rows[index].failure = error
+            // One bar for the screen, not one per row. Four rows all
+            // failing the same refresh produced four identical banners
+            // saying the same thing about the same network.
+            if !result.series.isEmpty {
+                staleSince = [staleSince, result.cachedAt].compactMap { $0 }.min()
+            }
+        } else {
+            rows[index].failure = nil
+        }
+        return true
+    }
+
+    /// Asks again for one row that asked and failed — the `InlineFailure`
+    /// under an empty row. It used to call `load(forceRefresh: true)`: every
+    /// row re-fetched, two of them from the 30/min family, for one row's
+    /// failure, so a rate-limited row re-paid the whole screen on the tap
+    /// meant to retry it (screens F11, 2026-09-14). One request, one row.
+    func retryRow(_ rowID: Row.ID) async {
+        guard let index = rows.firstIndex(where: { $0.id == rowID }) else { return }
+        rows[index].isLoading = true
+        let result = await repository.feed(rows[index].kind, forceRefresh: true)
+        guard apply(result, to: index) else {
+            // Cancelled on the way out. Unlike a first load, nothing re-asks
+            // on the next appearance (`hasLoadedOnce` is set), so the row
+            // goes back to its failure rather than a skeleton nobody fills.
+            rows[index].isLoading = false
+            return
+        }
+        // The screen-wide verdict follows the rows: a row that now has
+        // content is no longer a reason for the whole-screen error.
+        failure = rows.compactMap(\.failure).first
     }
 
     /// When the oldest thing on screen was downloaded, if the last refresh
@@ -208,9 +242,14 @@ final class DiscoverModel {
     /// with the real cause — and, for a rate limit, a live countdown — rather
     /// than the generic wording this used to carry regardless of what
     /// actually happened (gap 46). Nil unless `isShowingStale`.
+    ///
+    /// The stale row's own failure, not the screen-wide `failure`: that is
+    /// whichever row's error the task group delivered first, so an empty
+    /// `.offline` row beside a rate-limited row with content read "Offline"
+    /// with the rate-limited row's age and no countdown (screens F13,
+    /// 2026-09-14). The same row `isShowingStale` counts.
     var staleFailure: APIError? {
-        guard isShowingStale else { return nil }
-        return failure
+        rows.first { $0.failure != nil && !$0.series.isEmpty }?.failure
     }
 
     /// Built once rather than per read. `staleDetail` is read from a view

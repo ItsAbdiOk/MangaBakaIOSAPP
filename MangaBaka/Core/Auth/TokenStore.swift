@@ -21,11 +21,23 @@ struct TokenStore: Sendable {
     /// on the client actor, in the critical path of every first paint that
     /// needs the network (wire review #72/#8, 2026-09-14).
     ///
-    /// A class, not a struct field: `TokenStore` is a cheap, freely-copied
-    /// value type (`ResolvingTokenProvider` holds one `let store` and reads
-    /// from it repeatedly, but nothing guarantees only one copy of
-    /// `TokenStore` ever exists), and every copy must see the same cached
-    /// value and the same lock, which only a reference type gives for free.
+    /// `static`, and a class rather than a struct field. The 2026-09-14
+    /// version of this comment reasoned about *copies of one value* and was
+    /// wrong: the app calls `TokenStore()` in three places
+    /// (`AppServices`, `ResolvingTokenProvider`, `SettingsView`), and each
+    /// call was a new value with its own memo. Settings wrote the token into
+    /// one instance while the API client went on reading a cached "no token"
+    /// from another — on a Release install (no `MB_PAT` to paper over it) a
+    /// freshly pasted token was validated unauthenticated, 401'd, and was
+    /// then deleted as rejected, so no new install could connect an account
+    /// at all (second-pass review S1, 2026-09-14).
+    ///
+    /// `service` and `account` at `:14-15` are constants, so every instance
+    /// addresses the same Keychain item and one memo is the truth. The
+    /// instances are also injected now rather than defaulted, but the memo
+    /// is static regardless: that makes the bug unreachable even if a fourth
+    /// `TokenStore()` appears, where injection alone would only make the
+    /// next one a fresh occurrence of the same failure.
     ///
     /// Invalidated by `write`/`clear`, the only two places the Keychain
     /// value can change — nothing else writes it, so nothing else needs to
@@ -61,22 +73,58 @@ struct TokenStore: Sendable {
             defer { lock.unlock() }
             value = nil
         }
+
+#if DEBUG
+        private var keychainQueries = 0
+
+        func recordKeychainQuery() {
+            lock.lock()
+            defer { lock.unlock() }
+            keychainQueries += 1
+        }
+
+        func keychainQueryCount() -> Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return keychainQueries
+        }
+
+        func setKeychainQueryCount(_ count: Int) {
+            lock.lock()
+            defer { lock.unlock() }
+            keychainQueries = count
+        }
+#endif
     }
 
-    private let cache = Cache()
+    private static let cache = Cache()
 
+#if DEBUG
     /// Test-only observability: incremented once per actual Keychain query
     /// inside `read()`, immediately before `SecItemCopyMatching` is called.
     /// Lets a test prove the cache above stops a second `read()` from
     /// paying a second Keychain round trip, without needing to intercept
     /// the Security framework itself. Never read by production code.
-    nonisolated(unsafe) static var keychainQueryCountForTesting = 0
+    ///
+    /// Lives inside `Cache`, behind the same `NSLock`. It was a
+    /// `nonisolated(unsafe) static var` incremented from production `read()`
+    /// outside that lock, reachable from the client actor and the main actor
+    /// at once — an unsynchronised read-modify-write in shipping code for a
+    /// number only tests read (second-pass review, item 29). `#if DEBUG` so
+    /// no Release build pays for it or can race on it.
+    static var keychainQueryCountForTesting: Int {
+        get { cache.keychainQueryCount() }
+        set { cache.setKeychainQueryCount(newValue) }
+    }
+#endif
 
     /// Reads the stored token, or `nil` when there is none.
     func read() -> String? {
-        if let cached = cache.cached() { return cached }
+        if let cached = Self.cache.cached() { return cached }
 
-        Self.keychainQueryCountForTesting += 1
+#if DEBUG
+        Self.cache.recordKeychainQuery()
+#endif
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -90,17 +138,17 @@ struct TokenStore: Sendable {
               let token = String(data: data, encoding: .utf8),
               !token.isEmpty
         else {
-            cache.store(nil)
+            Self.cache.store(nil)
             return nil
         }
-        cache.store(token)
+        Self.cache.store(token)
         return token
     }
 
     /// Replaces any stored token. Passing an empty string clears it.
     @discardableResult
     func write(_ token: String) -> Bool {
-        defer { cache.invalidate() }
+        defer { Self.cache.invalidate() }
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return clear() }
 
@@ -125,7 +173,7 @@ struct TokenStore: Sendable {
 
     @discardableResult
     func clear() -> Bool {
-        defer { cache.invalidate() }
+        defer { Self.cache.invalidate() }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

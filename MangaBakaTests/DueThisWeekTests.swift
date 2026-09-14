@@ -273,12 +273,61 @@ struct DueThisWeekFeedTests {
 
 @Suite("Intents are wired", .enabled(if: SourceTree.isAvailable))
 struct IntentWiringTests {
+    /// The previous version of this test pinned the bug as source text:
+    /// `"bridge.pendingSeriesID = nil await openSeries(id: id)"` — the nil
+    /// write *before* the call, which is exactly what cancelled the task
+    /// before it could navigate (S2, 2026-09-14). It was green over the
+    /// defect it was written to protect. Pinned the other way round now: the
+    /// clear must come after the open, and must be guarded by the token.
     @Test("The app hands the bridge its services and the root opens what an intent asks")
     func wiring() throws {
         let app = try SourceTree.read("MangaBaka/App/MangaBakaApp.swift")
         #expect(app.contains("IntentBridge.shared.services = services"))
         let root = try SourceTree.read("MangaBaka/App/RootView.swift")
-        #expect(root.contains(".task(id: bridge.pendingSeriesID)"))
-        #expect(SourceTree.containsRun(root, "bridge.pendingSeriesID = nil await openSeries(id: id)"))
+        #expect(root.contains(".task(id: bridge.pending?.token)"))
+        // The order is the whole fix: open, then clear.
+        #expect(SourceTree.containsRun(
+            root,
+            "await openSeries(id: request.id)"
+        ))
+        #expect(!SourceTree.containsRun(root, "bridge.pending = nil await openSeries"))
+        // The clear is guarded, so a second request arriving mid-flight is
+        // not discarded by the first one finishing.
+        #expect(root.contains("if bridge.pending?.token == request.token { bridge.pending = nil }"))
+    }
+
+    /// Every producer of an open request mints a fresh `Open`.
+    ///
+    /// The three entry points — Siri/Shortcuts, the widgets' custom scheme,
+    /// and a mangabaka.org universal link — all go through one `.task`, so if
+    /// any of them still wrote a bare id the modifier would not restart and
+    /// that door would stop working silently.
+    ///
+    /// Expected to fail before the fix with a compile error: `Open` did not
+    /// exist. The behavioural half of S2 cannot be unit tested — nothing in
+    /// this project can drive a SwiftUI `.task(id:)` — and the report's own
+    /// way to settle it is one `print(Task.isCancelled)` at the top of
+    /// `openSeries` with a Siri "Open <a series not in the library>".
+    @Test("Every deep-link entry point mints a distinct open request")
+    func everyEntryPointMintsARequest() throws {
+        let intents = try SourceTree.read("MangaBaka/Core/Intents/AppIntents.swift")
+        #expect(intents.contains("IntentBridge.Open(id: series.id)"))
+        let root = try SourceTree.read("MangaBaka/App/RootView.swift")
+        #expect(root.contains("IntentBridge.Open(id: id)"))
+        #expect(!root.contains("pendingSeriesID"))
+        #expect(!intents.contains("pendingSeriesID"))
+    }
+
+    /// The control for the test above: two requests for the *same* series are
+    /// different requests. This is what a bare `Int?` could not express, and
+    /// it is why the task no longer has to clear its own key to re-arm.
+    @Test("Two opens of the same series are distinct")
+    @MainActor
+    func sameSeriesTwiceIsTwoRequests() {
+        let first = IntentBridge.Open(id: 42)
+        let second = IntentBridge.Open(id: 42)
+
+        #expect(first != second)
+        #expect(first.id == second.id)
     }
 }

@@ -49,7 +49,20 @@ final class MixModel {
     /// enough to absorb a run of taps, short enough that a single tap still
     /// feels immediate. A guess; nobody has measured tap cadence on the chips.
     static let strandDebounce: Duration = .milliseconds(350)
+    /// The one debounce, for strand taps and filter writes alike. Filter
+    /// changes used to debounce in `MixView` (a static slot) and strand
+    /// toggles here, and neither cancelled the other: a strand tap followed
+    /// within 350 ms by a type chip was two `/v1/series/mix` requests, one
+    /// of them thrown away by the generation guard (screens F28, 2026-09-14).
     private var pendingBlend: Task<Void, Never>?
+    /// True while the tag picker covers the grid. Every toggle in the sheet
+    /// writes `filters.tags`, and each pause between taps used to be a blend
+    /// nobody could see — five tags in six seconds, five requests, each
+    /// answering with a DNA that re-ordered the chips underneath (screens
+    /// F20, 2026-09-14). Held here, blended once on dismiss.
+    private(set) var isHoldingBlends = false
+    /// A filter changed while held, so the release owes one blend.
+    private var blendOwedAfterHold = false
     /// Bumped by every run. A blend that returns for an older generation was
     /// overtaken by a later edit and must not replace the newer answer.
     private var generation = 0
@@ -114,8 +127,14 @@ final class MixModel {
     /// requests in one frame — on every appearance of the Mix screen. 24 is a
     /// guess: four screens' worth of scrolling for a row nobody is meant to
     /// scroll far (item 52).
+    ///
+    /// Nothing, without a shelf read, once a seed is picked: the row is
+    /// only shown while `seeds` is empty, and `MixView`'s `.task` asks on
+    /// every appearance — a pop-back from a blended result decoded the
+    /// shelf for a row it would not draw (screens F22, 2026-09-14).
     func suggestedSeeds() async -> [Series] {
-        Array(((try? await shelf.entries(.saved).series) ?? []).prefix(24))
+        guard seeds.isEmpty else { return [] }
+        return Array(((try? await shelf.entries(.saved).series) ?? []).prefix(24))
     }
 
     func run() async {
@@ -199,6 +218,13 @@ final class MixModel {
     /// request, and the requests raced: the screen showed whichever blend
     /// answered last, not the one for the strands actually switched off.
     private func blendAfterEdits() async {
+        await scheduleBlend().value
+    }
+
+    /// The debounce itself: cancels whatever blend was pending and books
+    /// one for when the edits stop.
+    @discardableResult
+    private func scheduleBlend() -> Task<Void, Never> {
         pendingBlend?.cancel()
         let task = Task { [clock] in
             try? await clock.sleep(for: Self.strandDebounce)
@@ -206,7 +232,37 @@ final class MixModel {
             await run()
         }
         pendingBlend = task
-        await task.value
+        return task
+    }
+
+    /// A filter written by the strip — a type chip, the rating segments, a
+    /// tag from the picker. One place, not one per control (item 45), and
+    /// the same debounce the strand chips use (F28).
+    func filtersDidChange() {
+        // A filter tap before any seed is picked is not an attempt to blend.
+        // Without this it reached `run()`, which refuses a seedless request
+        // and sets "Add at least one series to blend from." — a scolding for
+        // tapping a filter, under a Blend button that already teaches the
+        // rule by being disabled.
+        guard !seeds.isEmpty else { return }
+        if isHoldingBlends {
+            blendOwedAfterHold = true
+            return
+        }
+        scheduleBlend()
+    }
+
+    /// The tag picker is up: hold every blend until it closes (F20).
+    func holdBlends() {
+        isHoldingBlends = true
+    }
+
+    /// The tag picker closed: one blend for everything picked, if anything.
+    func releaseBlends() {
+        isHoldingBlends = false
+        guard blendOwedAfterHold else { return }
+        blendOwedAfterHold = false
+        filtersDidChange()
     }
 
     /// Back to what the seeds alone produce.

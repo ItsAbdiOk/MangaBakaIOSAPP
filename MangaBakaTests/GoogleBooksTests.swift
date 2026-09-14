@@ -206,6 +206,57 @@ struct GoogleBooksClientTests {
         #expect(result == nil)
     }
 
+    /// Item 7 / wire W3. This client was the one 429 branch of ten the shared
+    /// `RequestSpacing.backOff(retryAfterHeader:now:)` never reached: it
+    /// hard-coded a 60-second back-off and never read the header at all, in
+    /// the client its own doc comment records as the one that 429s *most*
+    /// (HTTP 429 measured 2026-09-12). Google answering `Retry-After: 3600`
+    /// was retried once a minute for the hour it asked to be left alone.
+    ///
+    /// Expected to fail on the old code with a wrong *value*, not a compile
+    /// error: `nextAllowed` was `now + 60 + minimumInterval`, so the
+    /// assertion below reads roughly 63.5 where it wants 3600 — one fiftieth
+    /// of the wait the server asked for.
+    @Test("A 429 honours Google's own Retry-After, capped")
+    func retryAfterIsHonoured() async {
+        URLProtocolStub.setHandler { _ in
+            .respond(.init(statusCode: 429, headers: ["Retry-After": "3600"]))
+        }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+
+        _ = await client.volumes(for: SeriesFactory.make(id: 3397, title: "Solo Leveling"))
+
+        let honoured = await client.nextAllowedForTesting.timeIntervalSince(clock.now)
+        // Google asked for 3600; `RateLimitGate.maxHonouredRetryAfter` is 15
+        // minutes, so the wait is capped at 900 — the whole point of routing
+        // this through the shared function rather than honouring a header
+        // that can park a client for an hour. (The test was written expecting
+        // 3600 "because it is under the cap"; it is not.)
+        // `minimumInterval` is not added on this path — `backOff` only pushes
+        // `nextAllowed` out, it does not claim a slot.
+        #expect(abs(honoured - RateLimitGate.maxHonouredRetryAfter) < 0.001)
+    }
+
+    /// The control, and the thing the fix had to preserve: with no
+    /// `Retry-After` at all the wait is still 60 seconds, because
+    /// `RequestSpacing.unstatedBackOff` is 60 — exactly the literal this
+    /// branch used to hard-code. If this goes red, the fix changed behaviour
+    /// it was only supposed to relocate.
+    @Test("Control: a 429 with no Retry-After still backs off by 60 seconds")
+    func missingRetryAfterKeepsTheOldWait() async {
+        URLProtocolStub.setHandler { _ in .respond(.init(statusCode: 429)) }
+        defer { URLProtocolStub.reset() }
+        let clock = TestClock()
+        let client = makeClient(clock: clock)
+
+        _ = await client.volumes(for: SeriesFactory.make(id: 3397, title: "Solo Leveling"))
+
+        let honoured = await client.nextAllowedForTesting.timeIntervalSince(clock.now)
+        #expect(abs(honoured - RequestSpacing.unstatedBackOff) < 0.001)
+    }
+
     /// No key is sent at all now that the app uses the anonymous pool — a
     /// stray `key=` would be an unsubstituted build setting reaching Google.
     @Test("Asks with intitle and no key; a second look inside a week costs no request")

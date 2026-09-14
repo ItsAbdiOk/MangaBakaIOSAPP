@@ -137,18 +137,39 @@ enum LibraryImport {
             entries.append(ImportedEntry(
                 seriesId: seriesId,
                 malId: nil,
-                title: field(row, "title"),
+                title: rearmed(field(row, "title")),
                 state: state,
                 progressChapter: field(row, "progressChapter").flatMap(Double.init),
                 progressVolume: field(row, "progressVolume").flatMap(Double.init),
                 rating: field(row, "rating").flatMap(Double.init),
-                note: field(row, "note"),
+                note: rearmed(field(row, "note")),
                 isPrivate: field(row, "isPrivate").map { $0 == "true" },
                 rawState: state.rawValue == rawStateText ? nil : rawStateText
             ))
         }
         guard !entries.isEmpty else { return .failure(.empty) }
         return .success(entries)
+    }
+
+    /// Undoes `LibraryExport.defused`.
+    ///
+    /// Work-list 28: the export prefixes a title or note beginning `=`, `+`,
+    /// `-` or `@` with an apostrophe so a spreadsheet does not run it as a
+    /// formula, and nothing here ever took it off. `defused`'s own comment
+    /// said the importer "sees it only in a field that could not have been a
+    /// number anyway", which is true and is not the point — `apply` sends the
+    /// note back to the server, so exporting and re-importing spent a real
+    /// PATCH writing `'=hello` into the reader's account, and doing it twice
+    /// wrote `''=hello`.
+    ///
+    /// Exactly one apostrophe, and only when the next character is one of the
+    /// four `defused` acts on: a note the reader really did begin with an
+    /// apostrophe is their text and is left alone.
+    private static func rearmed(_ field: String?) -> String? {
+        guard let field, field.first == "'" else { return field }
+        let rest = field.dropFirst()
+        guard let next = rest.first, "=+-@".contains(next) else { return field }
+        return String(rest)
     }
 
     /// A small RFC 4180 state machine, not a line-splitter — a quoted field

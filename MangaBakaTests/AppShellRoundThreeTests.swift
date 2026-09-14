@@ -41,14 +41,21 @@ struct AppShellWiringTests {
         func updateBlockedTags(_ ids: [Int]) async { blocked = ids }
     }
 
-    @MainActor
-    private func makeLibrary() -> LibraryService {
-        // Never asked for anything: `wire` only calls `updateContentRatings`
-        // and `updateFormats`, which are plain setters on the actor.
-        LibraryService(client: APIClient(
-            baseURL: URL(fileURLWithPath: "/unused"),
-            tokenProvider: UnauthenticatedTokenProvider()
-        ))
+    /// The library half of `wire`, which until item 59 nothing recorded.
+    ///
+    /// The old helper here built a *real* `LibraryService` — the only thing
+    /// `wire`'s concrete parameter would accept — and a real one remembers
+    /// nothing a test can read. So the kill criterion below was false for two
+    /// of the five lines: `updateContentRatings` and `updateFormats` on the
+    /// library could both be deleted and this suite stayed green, and those
+    /// are the two that keep the reader's own recommendations inside their
+    /// content-rating choice.
+    private actor RecordingLibrary: LibraryFiltering {
+        private(set) var ratings: [String]?
+        private(set) var formats: [String]?
+
+        func updateContentRatings(_ ratings: [String]) { self.ratings = ratings }
+        func updateFormats(_ formats: [String]) { self.formats = formats }
     }
 
     private func defaults(_ name: String) throws -> UserDefaults {
@@ -61,17 +68,23 @@ struct AppShellWiringTests {
     /// `XcconfigAssertions` names "a correct rule applied n−1 times out of n"
     /// as its characteristic defect.
     ///
-    /// Kill criterion: delete any one line from `AppServices.wire` and
-    /// exactly one of these three expectations fails.
+    /// Kill criterion: delete any one of the **five** lines in
+    /// `AppServices.wire` and exactly one of these five expectations fails.
+    /// It says five now because it said three and meant three, while `wire`
+    /// had five (item 59).
     ///
-    /// Expected to fail before the extraction with: a compile error —
-    /// `AppServices.wire` did not exist, and the three assignments were
-    /// unreachable statements inside `AppServices.init`.
-    @Test("Every preference store reaches the repository")
+    /// Expected to fail before item 59 with a compile error, not a wrong
+    /// value: `LibraryFiltering` did not exist and `wire` took a concrete
+    /// `LibraryService`, so there was no way to write the two library
+    /// expectations at all. The behavioural proof is the kill criterion
+    /// itself — delete `await library.updateContentRatings(ratings)` from
+    /// `wire` and `libraryRatings` below fails with `nil`, where before item
+    /// 59 the whole suite stayed green.
+    @Test("Every preference store reaches the repository and the library")
     @MainActor
     func everyStoreIsWired() async throws {
         let repository = RecordingRepository()
-        let library = makeLibrary()
+        let library = RecordingLibrary()
         let content = ContentPreferencesStore(defaults: try defaults("content"))
         let formats = FormatPreferencesStore(defaults: try defaults("formats"))
         let blocked = BlockedTagsStore(defaults: try defaults("blocked"))
@@ -87,6 +100,11 @@ struct AppShellWiringTests {
         #expect(await repository.ratings == content.preferences.queryValues)
         #expect(await repository.formats == formats.preferences.queryValues)
         #expect(await repository.blocked == [42])
+        // The two that had no assertion. Not a copy of the repository's
+        // values by construction: `wire` passes each store's `queryValues` to
+        // both, so if either line is deleted this one goes nil.
+        #expect(await library.ratings == content.preferences.queryValues)
+        #expect(await library.formats == formats.preferences.queryValues)
     }
 }
 
