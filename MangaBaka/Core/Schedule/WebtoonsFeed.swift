@@ -63,6 +63,40 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
     /// When the most recent episode actually landed.
     var lastEpisodeAt: Date? { episodes.map(\.published).max() }
 
+    /// Below this episode number, a feed that is also a year past its newest
+    /// item is read as oldest-first rather than trusted — see
+    /// `looksLikeStaleDailyPassFeed`. **A guess**, and the only evidence for
+    /// it is the one case measured: Lore Olympus (280 real episodes,
+    /// completed) answers with episodes 1-9 from 2018 and a `lastBuildDate`
+    /// of 2024 — 20 is comfortably above that 9 with margin for a slightly
+    /// longer stub feed, and comfortably below where a genuinely short-run
+    /// series' real total would sit. `docs/sources/webtoon-episodes.md`.
+    static let staleDailyPassEpisodeCeiling = 20
+    /// **A guess**, paired with the ceiling above: a year is long enough that
+    /// no series still actively posting would go quiet for it, and short
+    /// enough to still catch Lore Olympus (`lastBuildDate` 2024, read today
+    /// 2026-09-14 — six years past the feed's own newest item, let alone one).
+    static let staleDailyPassAge: TimeInterval = 365 * 24 * 3600
+
+    /// A Daily Pass feed that only ever answers with its *earliest* episodes.
+    ///
+    /// Webtoons' per-title RSS is the newest-twenty for an ordinary series,
+    /// but Lore Olympus — a completed Daily Pass title — measured 2026-09-14
+    /// returns exactly episodes 1-9 from 2018, with `lastBuildDate` reading
+    /// 2024: the feed itself claims to be current while carrying none of the
+    /// other 271 episodes. `latestEpisodeNumber` takes `max` over what the
+    /// feed hands back, so untreated this reports "9 of 280" and `Cadence`
+    /// estimates a weekly rhythm out of eight-year-old dates. Caught the same
+    /// way `ReleaseSummary`'s oldest-first check catches True Beauty's
+    /// feed — a low ceiling plus an old newest date — because there is no
+    /// known-chapter-count to compare against here the way that check has;
+    /// this is the feed judging itself.
+    func looksLikeStaleDailyPassFeed(asOf now: Date) -> Bool {
+        guard let highest = latestEpisodeNumber, let last = lastEpisodeAt else { return false }
+        return highest <= Self.staleDailyPassEpisodeCeiling
+            && now.timeIntervalSince(last) > Self.staleDailyPassAge
+    }
+
     /// Whether the run ended rather than stalled.
     ///
     /// A season that has finished publishes its finale and then its afterwords,

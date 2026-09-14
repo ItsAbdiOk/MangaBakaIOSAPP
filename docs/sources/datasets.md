@@ -400,6 +400,13 @@ mandatory backlink. Accept that it contributes nothing for manhwa.
 
 ## 4. Grand Comics Database — the open API, not the dump
 
+> **Decided 2026-09-14: cut.** The licence page 403s behind Cloudflare, the
+> API throttled a 33-minute session and served ban notices as HTTP 200, and
+> nothing in the app ever called it — `VolumeEdition.swift`'s doc comment
+> records why ANN covers the same English volumes in one request. No code to
+> delete; this note is the whole of the cut. Re-open only if a Western
+> comics shelf is ever wanted, and start by asking them for the terms.
+
 **Replaces:** need 1, and it is the only source measured that hit **5 of 5**.
 
 Found by a delegated agent; **independently re-verified from this session**,

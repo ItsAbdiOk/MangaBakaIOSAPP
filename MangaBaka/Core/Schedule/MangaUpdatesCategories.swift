@@ -14,6 +14,12 @@ struct MangaUpdatesSeries: Codable, Sendable, Equatable {
     let status: String?
     let licensed: Bool?
     let completed: Bool?
+    /// When MangaUpdates' editors last touched this record. Added for
+    /// `OriginalRun.editedAt` (`docs/sources/webtoon-episodes.md`) —
+    /// `decodeIfPresent` via the memberwise init below, so a payload
+    /// captured before this field existed (or a live answer that omits it)
+    /// still decodes rather than failing the whole series read.
+    let lastUpdated: LastUpdated?
 
     enum CodingKeys: String, CodingKey {
         case seriesID = "series_id"
@@ -21,6 +27,50 @@ struct MangaUpdatesSeries: Codable, Sendable, Equatable {
         case bayesianRating = "bayesian_rating"
         case ratingVotes = "rating_votes"
         case latestChapter = "latest_chapter"
+        case lastUpdated = "last_updated"
+    }
+
+    /// A memberwise init with `lastUpdated` defaulted, so every existing
+    /// call site built before this field existed keeps compiling — this
+    /// struct is also built by hand in tests, not only decoded. Does not
+    /// disable the synthesized `Decodable.init(from:)`, which is what
+    /// actually reads a live payload.
+    init(
+        seriesID: Int, categories: [CategoryVote], bayesianRating: Double?, ratingVotes: Int?,
+        latestChapter: Int?, status: String?, licensed: Bool?, completed: Bool?,
+        lastUpdated: LastUpdated? = nil
+    ) {
+        self.seriesID = seriesID
+        self.categories = categories
+        self.bayesianRating = bayesianRating
+        self.ratingVotes = ratingVotes
+        self.latestChapter = latestChapter
+        self.status = status
+        self.licensed = licensed
+        self.completed = completed
+        self.lastUpdated = lastUpdated
+    }
+
+    /// MangaUpdates' `{"as_rfc3339": "...", "as_string": "..."}` shape,
+    /// already seen on `MangaUpdatesClient.Release`'s sibling `time_added`
+    /// field (`MangaUpdatesDecodingTests`) — only `as_rfc3339` is read here.
+    struct LastUpdated: Codable, Sendable, Equatable {
+        let asRFC3339: String?
+
+        enum CodingKeys: String, CodingKey {
+            case asRFC3339 = "as_rfc3339"
+        }
+    }
+
+    /// `lastUpdated.asRFC3339`, parsed — nil when the field is absent or does
+    /// not parse. Feeds `OriginalRun.editedAt`; not a release date, an edit
+    /// timestamp.
+    /// `Date.ISO8601FormatStyle`'s default reads "2026-08-07T18:28:36-07:00"
+    /// — MangaUpdates' own measured shape, no fractional seconds — and is
+    /// a value type, so it needs none of the sharing care a
+    /// `ISO8601DateFormatter` would under strict concurrency.
+    var editedAt: Date? {
+        lastUpdated?.asRFC3339.flatMap { try? Date(($0), strategy: .iso8601) }
     }
 
     /// One community-voted category, exactly as MangaUpdates returns it.

@@ -21,6 +21,11 @@ extension SeriesDetailView {
         do {
             let series = try await mangaUpdatesCategories.series(number: number)
             categories = MangaUpdatesCategories.ranked(series)
+            // The same answer carries the human-edited original-run count
+            // ("652 Chapters (Ongoing)") — the only lawful next-episode fact
+            // for a Korean webtoon (`docs/sources/webtoon-episodes.md`). One
+            // request feeds two sections; nothing extra is asked.
+            originalRun = OriginalRun.parse(series)
             categoriesFailure = nil
         } catch {
             // Never on screen for a request the reader walked away from —

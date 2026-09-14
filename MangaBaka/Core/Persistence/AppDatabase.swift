@@ -12,21 +12,23 @@ import GRDB
 /// 17 MB of it, 82 % of which is re-downloadable.
 ///
 /// - `cacheWriter` — `mangabaka.sqlite`. Feeds, series payloads, detail pages,
-///   cadence estimates. Disposable, excluded from backup, discarded in silence
-///   if corrupt.
+///   cadence estimates, and the library cache (`libraryEntry`,
+///   `libraryMetadata`). Disposable, excluded from backup, discarded in
+///   silence if corrupt.
 /// - `libraryWriter` — `mangabaka-library.sqlite`. `shelfEntry` (the reader's
 ///   saves and skips), `viewedEntry` (their history), the taste ledger
-///   (`tagAffinity`, `tasteSource`, `tasteSeen`, `tasteContribution`) and the
-///   library cache (`libraryEntry`, `libraryMetadata`). The first six exist
-///   nowhere else — there is no account they sync to. Backed up; a corrupt one
-///   is salvaged from and the reader is told.
+///   (`tagAffinity`, `tasteSource`, `tasteSeen`, `tasteContribution`) and
+///   `ownedVolume`. Every one exists nowhere else — there is no account they
+///   sync to. Backed up; a corrupt one is salvaged from and the reader is
+///   told.
 ///
-/// `libraryEntry`/`libraryMetadata` are the one judgement call on that list:
-/// they *are* re-fetchable from the reader's MangaBaka account (939 entries,
-/// thirteen requests, 24.7 MB — see `v7_libraryCache`), so they sit on the
-/// backed-up side for their offline value rather than because losing them is
-/// unrecoverable. They are together because `LibrarySnapshot` clears both in
-/// one transaction, which two files cannot do atomically.
+/// `libraryEntry`/`libraryMetadata` sat on the backed-up side until
+/// 2026-09-14, on a judgement call about their offline value. Measured that
+/// day at 24.7 MB of a 17 MB-total device file (945 rows), every byte a copy
+/// of what the account holds on the server; Abdi's decision was that it does
+/// not belong in the backup. `moveLibraryCacheToCacheFile` carries it across
+/// once per device, and a restore from backup now shows an empty library
+/// until the next walk (see `readerTables`).
 ///
 /// Series are stored as an encoded JSON blob rather than as columns, so that
 /// adding a field to `Series` needs no schema migration — the cache is derived
@@ -43,15 +45,16 @@ import GRDB
 /// reading unmodelled fields back out of an old cache.
 struct AppDatabase: Sendable {
     /// The disposable half: `series`, `feedEntry`, `feedMetadata`,
-    /// `seriesDetail`, `cadenceEntry`. Every row in here can be fetched
-    /// again, so this file is excluded from iCloud backup and a corrupt one
-    /// is thrown away without telling anybody (Q10).
+    /// `seriesDetail`, `cadenceEntry`, and since 2026-09-14 `libraryEntry`
+    /// and `libraryMetadata`. Every row in here can be fetched again, so this
+    /// file is excluded from iCloud backup and a corrupt one is thrown away
+    /// without telling anybody (Q10).
     let cacheWriter: any DatabaseWriter
 
     /// The irreplaceable half: `shelfEntry`, `viewedEntry`, the four taste
-    /// tables, and the library cache. There is no account the first six sync
-    /// to — if this file goes they are gone, so it is backed up and a corrupt
-    /// one still takes the salvage path and still tells the reader.
+    /// tables, and `ownedVolume`. There is no account any of them sync to —
+    /// if this file goes they are gone, so it is backed up and a corrupt one
+    /// still takes the salvage path and still tells the reader.
     let libraryWriter: any DatabaseWriter
 
     /// Both roles on one file: `inMemory()`, previews, and every test that
@@ -122,19 +125,32 @@ struct AppDatabase: Sendable {
     }
 
     /// What both entry points do once the two files are open: keep the cache
-    /// out of the backup, and move the reader's tables across if they are
-    /// still in the cache file.
+    /// out of the backup, move the reader's tables across if they are still
+    /// in the cache file, and move the library cache back the other way if it
+    /// is still in the reader's file.
     private static func finishOpening(library: any DatabaseWriter, named name: String) {
         excludeFromBackup(named: name)
-        // A split that fails must not fail the open: it leaves the reader's
-        // tables where they already were (see `splitReaderTables`, which only
-        // ever drops after a verified copy), so the app runs exactly as it
-        // did before and the next launch tries again.
+        // A move that fails must not fail the open: each leaves the rows
+        // where they already were (both only ever drop after a verified
+        // copy), so the app runs exactly as it did before and the next
+        // launch tries again. Split first, so that on a pre-split device the
+        // cache file has already been settled before the move back reads it:
+        // there the reader's file holds only L1's empty pair, the move copies
+        // nothing over v7's live rows (`REPLACE`, so nothing is lost) and
+        // drops the empty pair.
+        guard let path = try? applicationSupportDirectory().appendingPathComponent(name).path else {
+            splitLogger.error("No Application Support directory; the two files stay as they are.")
+            return
+        }
         do {
-            let path = try applicationSupportDirectory().appendingPathComponent(name).path
             try splitReaderTables(cachePath: path, library: library)
         } catch let error {
             splitLogger.error("Library split failed, retrying next launch: \(error, privacy: .public)")
+        }
+        do {
+            try moveLibraryCacheToCacheFile(cachePath: path, library: library)
+        } catch let error {
+            splitLogger.error("Library cache move failed, retrying next launch: \(error, privacy: .public)")
         }
     }
 
@@ -365,8 +381,9 @@ struct AppDatabase: Sendable {
     /// to propagate, and one unreadable table must not lose the others.
     ///
     /// It now covers all of `salvagedTables`, not just the shelf and the
-    /// history: the taste ledger, the library cache and the split marker are
-    /// in the same file and were being left behind.
+    /// history: the taste ledger and the split marker are in the same file
+    /// and were being left behind. Not the library cache, since 2026-09-14:
+    /// it is in the cache file, and re-downloadable (see `salvagedTables`).
     ///
     /// `INSERT OR IGNORE`: the destination is normally empty, but the
     /// pre-split cache file salvages into the reader's file, which may not
@@ -394,7 +411,7 @@ struct AppDatabase: Sendable {
                     rows += db.changesCount
                 } catch let error as DatabaseError {
                     // Expected: the table may not exist in the broken file at
-                    // all (a pre-v7 cache file has no `libraryEntry`), or its
+                    // all (a pre-v2 cache file has no `shelfEntry`), or its
                     // pages may be the unreadable ones.
                     splitLogger.debug("Salvage skipped \(table): \(error, privacy: .public)")
                 }

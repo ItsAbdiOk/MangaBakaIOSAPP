@@ -24,26 +24,50 @@ struct DetailScheduleBlock: View {
     /// "too few dated releases" by omission (gap 18, FAILURES-SUMMARY.md).
     var failure: APIError?
     var retry: (() async -> Void)?
+    /// MangaUpdates' human-edited original-run text — Korean webtoons'
+    /// fallback, since no lawful source publishes a next-episode date for
+    /// one (`docs/sources/webtoon-episodes.md`). Nil for every series that
+    /// has a real cadence estimate; see `blockState`.
+    var originalRun: OriginalRun?
+    /// e.g. "Korean" — `OriginalLanguageName.name(for:)` over `Series
+    /// .nativeLanguage`/`impliedLanguage`. Only read alongside `originalRun`.
+    var language: String?
 
     enum State: Equatable {
         case hidden
         case loading
         case failed(APIError)
         case measured(Cadence)
+        /// No measured cadence and no feed answer — the case Korean webtoons
+        /// hit. Ranked below every other case on purpose: a labelled
+        /// approximation must never sit where a real next date, or even a
+        /// live ask, could instead. See `OriginalRun`'s own doc comment for
+        /// what it is and is not allowed to claim.
+        case approximated(OriginalRun, language: String?)
     }
 
-    /// A pure decision so the four outcomes can be pinned without building a
+    /// A pure decision so the five outcomes can be pinned without building a
     /// view. `estimate` wins over `failure` — a settled measurement from a
-    /// previous ask outranks a state a retry has not yet cleared.
-    nonisolated static func blockState(estimate: Cadence?, isLoading: Bool, failure: APIError?) -> State {
+    /// previous ask outranks a state a retry has not yet cleared. `failure`
+    /// and `isLoading` both outrank `originalRun` too: an approximation is
+    /// what this block falls back to only once a real ask has nothing left
+    /// to say, never a state a live or failed ask could still overtake.
+    nonisolated static func blockState(
+        estimate: Cadence?, isLoading: Bool, failure: APIError?,
+        originalRun: OriginalRun? = nil, language: String? = nil
+    ) -> State {
         if let estimate { return .measured(estimate) }
         if let failure { return .failed(failure) }
         if isLoading { return .loading }
+        if let originalRun { return .approximated(originalRun, language: language) }
         return .hidden
     }
 
     var body: some View {
-        switch Self.blockState(estimate: estimate, isLoading: isLoading, failure: failure) {
+        switch Self.blockState(
+            estimate: estimate, isLoading: isLoading, failure: failure,
+            originalRun: originalRun, language: language
+        ) {
         case let .measured(estimate):
             Button { onOpen?() } label: { content(estimate) }
                 .buttonStyle(.press)
@@ -54,9 +78,25 @@ struct DetailScheduleBlock: View {
             waiting
         case let .failed(error):
             InlineFailure(error: error, retry: retry)
+        case let .approximated(run, language):
+            approximation(run, language: language)
         case .hidden:
             EmptyView()
         }
+    }
+
+    /// The labelled-approximation line. Plain text, not a button dressed as
+    /// one of the confidence pills above — nothing about a chapter count is
+    /// a schedule, and the row must not read like the rest of this block's
+    /// "likely"/"loose" claims.
+    private func approximation(_ run: OriginalRun, language: String?) -> some View {
+        Text(run.summaryLine(language: language))
+            .typeSmallMeta()
+            .foregroundStyle(Palette.textMuted)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(run.summaryLine(language: language))
     }
 
     /// MangaUpdates is spaced at one request every three seconds, so this can

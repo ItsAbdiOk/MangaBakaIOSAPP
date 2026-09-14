@@ -17,6 +17,10 @@ struct DetailHero: View {
     /// Set when the schedule ask itself failed — see `DetailScheduleBlock`.
     var scheduleFailure: APIError?
     var onRetrySchedule: (() async -> Void)?
+    /// MangaUpdates' original-run count and the language word to label it
+    /// with — the schedule block's last resort, see `DetailScheduleBlock`.
+    var originalRun: OriginalRun?
+    var originalLanguage: String?
     /// The series' other covers, for the fan and the gallery.
     var otherCovers: [SeriesImage] = []
     /// Overrides the series' own cover — an English edition where one exists.
@@ -268,14 +272,16 @@ struct DetailHero: View {
     /// column's natural height.
     private func column(_ form: Form, fill: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if schedule != nil || isScheduleLoading || scheduleFailure != nil {
+            if schedule != nil || isScheduleLoading || scheduleFailure != nil || originalRun != nil {
                 DetailScheduleBlock(
                     estimate: schedule,
                     isLoading: isScheduleLoading,
                     onOpen: onOpenSchedule,
                     isExpanded: form.isExpanded,
                     failure: scheduleFailure,
-                    retry: onRetrySchedule
+                    retry: onRetrySchedule,
+                    originalRun: originalRun,
+                    language: originalLanguage
                 )
                 .padding(.bottom, form.isExpanded ? 13 : 9)
                 if fill { Spacer(minLength: 0) }

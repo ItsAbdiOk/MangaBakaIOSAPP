@@ -76,13 +76,27 @@ extension WidgetSnapshot {
     /// library". A series never opened, or opened longer ago, contributes
     /// nothing, and the widget's empty state says so rather than implying the
     /// library has nothing coming.
+    /// Which library states a "next volume" is worth a Home Screen slot for.
+    ///
+    /// Reading, rereading and paused: the reader would buy it. Completed and
+    /// dropped: they would not, and a dropped series' volume 14 on the Home
+    /// Screen is a nag. Plan-to-read and considering: not yet — they have not
+    /// started, so the *next* volume is not a concept for them. Abdi's call,
+    /// 2026-09-14 ("reading + on-hold only; dropped and completed out").
+    nonisolated static func wantsNextVolume(_ state: LibraryEntry.State) -> Bool {
+        switch state {
+        case .reading, .rereading, .paused: true
+        case .completed, .dropped, .planToRead, .considering: false
+        }
+    }
+
     static func nextVolumeCandidates(
         from entries: [LibraryEntry],
         repository: any SeriesRepositoryProtocol,
         now: Date = Date()
     ) async -> [NextVolumeEntry] {
         var candidates: [NextVolumeEntry] = []
-        for entry in entries {
+        for entry in entries where Self.wantsNextVolume(entry.state) {
             guard let series = entry.series,
                   let extras = await repository.cachedExtras(for: entry.seriesId)
             else { continue }

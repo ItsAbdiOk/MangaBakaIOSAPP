@@ -150,6 +150,12 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
             )
         }
         guard !feed.entries.isEmpty else { return .empty }
+        // A completed Daily Pass title's feed (Lore Olympus, measured
+        // 2026-09-14) answers 200 with real entries — episodes 1-9 from
+        // 2018 — that are simply not current. Same treatment as `.empty`:
+        // Webtoons answered, there is nothing usable in it, try the next
+        // candidate. See `ReleaseFeed.looksLikeStaleDailyPassFeed`.
+        guard !feed.looksLikeStaleDailyPassFeed(asOf: clock.now) else { return .empty }
         return .feed(feed)
     }
 

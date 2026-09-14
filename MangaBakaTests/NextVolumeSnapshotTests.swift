@@ -80,9 +80,11 @@ struct NextVolumeSnapshotTests {
         )
     }
 
-    private func libraryEntry(_ seriesId: Int, title: String) -> LibraryEntry {
+    private func libraryEntry(
+        _ seriesId: Int, title: String, state: LibraryEntry.State = .reading
+    ) -> LibraryEntry {
         LibraryEntry(
-            id: seriesId, seriesId: seriesId, state: .reading, progressChapter: nil,
+            id: seriesId, seriesId: seriesId, state: state, progressChapter: nil,
             progressVolume: nil, rating: nil, note: nil, startDate: nil, finishDate: nil,
             numberOfRereads: nil, priority: nil, isPrivate: nil, readLink: nil,
             series: SeriesFactory.make(id: seriesId, title: title)
@@ -113,6 +115,28 @@ struct NextVolumeSnapshotTests {
         func updateBlockedTags(_ ids: [Int]) async {}
         func cachedSeriesCount() async -> Int { 0 }
         func count(_ query: SearchQuery) async -> Int? { nil }
+    }
+
+    /// A dropped series with a dated volume is left out; a paused one is
+    /// kept. Fails before `wantsNextVolume` with `candidates.count == 2`.
+    @Test("Dropped and completed series never reach the widget; paused ones do")
+    func filtersByLibraryState() async {
+        let repo = StubCacheRepository()
+        for id in [1, 2, 3, 4] {
+            repo.extrasByID[id] = SeriesExtras(volumes: [
+                SeriesWork.Volume(number: "3", editions: [work(releaseDate: "2026-10-03")])
+            ])
+        }
+        let candidates = await WidgetSnapshot.nextVolumeCandidates(
+            from: [
+                libraryEntry(1, title: "Dropped", state: .dropped),
+                libraryEntry(2, title: "Done", state: .completed),
+                libraryEntry(3, title: "Paused", state: .paused),
+                libraryEntry(4, title: "Someday", state: .planToRead)
+            ],
+            repository: repo, now: now
+        )
+        #expect(candidates.map(\.seriesID) == [3])
     }
 
     /// Expected to fail before `nextVolumeCandidates` existed with a compile

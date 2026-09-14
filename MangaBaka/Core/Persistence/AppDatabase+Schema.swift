@@ -155,6 +155,31 @@ extension AppDatabase {
             try db.execute(sql: "DROP INDEX IF EXISTS feedEntry_on_feedKey")
         }
 
+        migrator.registerMigration("v13_libraryEntryInCache") { db in
+            // `libraryEntry` and `libraryMetadata` come back to this file
+            // (decision 2026-09-14; see `readerTables` for the measurement).
+            // v7 already created both here, but on every device that has
+            // launched the split build the split then dropped them, so the
+            // table is there on a fresh install and absent on a split one.
+            // Guarded rather than `ifNotExists` so the shared definition is
+            // reused verbatim and `schemasMatch`-style `sqlite_master` text
+            // stays byte-identical to v7's. The two are created and dropped
+            // as a pair everywhere, so one existence check covers both.
+            if try !db.tableExists("libraryEntry") {
+                try createLibraryCache(db)
+            }
+            // Where `moveLibraryCacheToCacheFile` records that the copy out of
+            // the reader's file is done and verified — the mirror of
+            // `librarySplit`, and in *this* file for the same reason that one
+            // is in the reader's: the marker lives with the destination, so
+            // losing the destination (a cache reset) loses the marker with it
+            // and the copy simply runs again against an empty table.
+            try db.create(table: "libraryMove") { table in
+                table.primaryKey("id", .integer)
+                table.column("completedAt", .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 
@@ -163,8 +188,19 @@ extension AppDatabase {
     /// `libraryMigrator` all have to agree about the list, and a table missing
     /// from one of them is a silent data loss rather than a compile error.
     ///
-    /// `libraryEntry` and `libraryMetadata` are here on a judgement call — see
-    /// `AppDatabase`'s own doc comment — not because they are irreplaceable.
+    /// `libraryEntry` and `libraryMetadata` were here until 2026-09-14, on the
+    /// judgement that their offline value earned them a place in the backup.
+    /// MEASURED on the real device file that day: 945 rows, 24.7 MB of a
+    /// 17 MB-total database — the library cache alone outweighed everything
+    /// else the app stores put together, and every byte of it is a copy of
+    /// what MangaBaka's server holds for the account, re-downloaded on the
+    /// next walk. Abdi's decision: it does not belong in the iCloud backup.
+    /// They live in the cache file again (`v13_libraryEntryInCache`,
+    /// `libraryCacheTables`, `moveLibraryCacheToCacheFile`), which means a
+    /// restore from backup now shows an empty library until the next walk —
+    /// six hours of offline value traded for 24.7 MB off every nightly backup.
+    /// `ownedVolume` is the opposite case: user data with no server copy, and
+    /// it stays in the reader's file.
     ///
     /// **A new `v…` migration must never touch a table on this list.** They
     /// are created in the cache file by v2-v9 for history's sake and dropped
@@ -185,12 +221,30 @@ extension AppDatabase {
     /// is the day it needs to (work-list 27).
     static let readerTables = [
         "shelfEntry", "viewedEntry",
-        "tagAffinity", "tasteSource", "tasteSeen", "tasteContribution",
-        "libraryEntry", "libraryMetadata"
+        "tagAffinity", "tasteSource", "tasteSeen", "tasteContribution"
     ]
+
+    /// The library cache: the two tables `moveLibraryCacheToCacheFile` carries
+    /// *out of* the reader's file, in the order they are copied and dropped.
+    ///
+    /// Both migrators still create them — v7 in the cache file, L1 in the
+    /// reader's — because neither history can be rewritten, so on a fresh
+    /// install the reader's file gets an empty pair that the move drops again
+    /// on first open. Same shape as `readerTables` in the other direction.
+    /// Together, always: `libraryMetadata` is the one-row freshness stamp for
+    /// the walk in `libraryEntry`, and `LibrarySnapshot` reads, writes and
+    /// clears the pair as one.
+    static let libraryCacheTables = ["libraryEntry", "libraryMetadata"]
 
     /// What `salvage` carries out of a corrupt file: the reader's tables *and*
     /// the split marker.
+    ///
+    /// Not the library cache. It used to be on this list by way of
+    /// `readerTables`; since 2026-09-14 it lives in the cache file (see
+    /// `readerTables`), where a corrupt file is deleted without salvage
+    /// because everything in it can be fetched again — and it is: one walk,
+    /// thirteen requests. Carrying it out of a corrupt *reader's* file would
+    /// now also put it back in the file it was just moved out of.
     ///
     /// A separate list because the two jobs are different, and work-list 55 is
     /// what happens when one list does both. `librarySplit` is deliberately off
@@ -246,6 +300,11 @@ extension AppDatabase {
             try createTasteTables(db)
             try createTasteSeen(db)
             try createTasteContribution(db)
+            // Still created here, and no longer meant to be here: the pair
+            // moved back to the cache file on 2026-09-14 (`libraryCacheTables`)
+            // and `moveLibraryCacheToCacheFile` drops them out of this file on
+            // the first open after that. Kept because existing installs have
+            // recorded L1 and a migration's body must not change under them.
             try createLibraryCache(db)
             // One row, written once `splitReaderTables` has copied and
             // verified everything. Its presence is what stops a second copy
@@ -385,12 +444,14 @@ extension AppDatabase {
         }
     }
 
-    /// The reader's own library, on disk.
+    /// The reader's own library, on disk — in the cache file.
     ///
     /// Measured on a real account: 939 entries, thirteen requests, 24.7 MB —
     /// thirty times everything else the app fetches put together. Paying that
     /// on every launch is indefensible on a cellular connection, and it is the
-    /// same answer every time.
+    /// same answer every time. Which is also why it is not backed up: the
+    /// same 24.7 MB (945 rows by 2026-09-14) was going up to iCloud nightly
+    /// for a copy the server already holds. See `readerTables`.
     static func createLibraryCache(_ db: Database) throws {
         try db.create(table: "libraryEntry") { table in
             table.primaryKey("seriesId", .integer)

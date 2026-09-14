@@ -80,6 +80,10 @@ struct SeriesDetailView: View {
     /// nobody has one" while its neighbours are still out.
     @State var openLibraryStatus = OpenLibraryProgress()
     @State var categories: [MangaUpdatesCategories.Category] = []
+    /// MangaUpdates' original-language chapter count, parsed off the same
+    /// answer as `categories`. Shown by the schedule block only when it has
+    /// no measured rhythm and no feed to name a date from.
+    @State var originalRun: OriginalRun?
     @State var isCategoriesLoading = false
     @State var categoriesFailure: APIError?
     /// Opens a publisher's or studio's page from the credits.
@@ -268,6 +272,10 @@ struct SeriesDetailView: View {
                     onOpenSchedule: onOpenSchedule,
                     scheduleFailure: cadenceFailure,
                     onRetrySchedule: { await loadCadence() },
+                    originalRun: originalRun,
+                    originalLanguage: OriginalLanguageName.name(
+                        for: shown.nativeLanguage ?? shown.impliedLanguage
+                    ),
                     otherCovers: otherCovers,
                     preferredCover: frontCover,
                     onOpenCovers: openCovers

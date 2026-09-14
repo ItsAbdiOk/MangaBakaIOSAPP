@@ -308,7 +308,10 @@ struct LibraryDiskCacheTests {
 
         // Corrupt one row directly, the way an app downgrade or a dropped
         // decodable field would: valid JSON, but not a `LibraryEntry` anymore.
-        try await database.libraryWriter.write { db in
+        // `cacheWriter`: the library cache lives in the cache file since
+        // 2026-09-14. On `inMemory()` both writers are one queue, so this is
+        // for honesty rather than behaviour.
+        try await database.cacheWriter.write { db in
             try db.execute(sql: "UPDATE libraryEntry SET payload = ? WHERE seriesId = 1", arguments: [
                 Data(#"{"not":"an entry"}"#.utf8)
             ])

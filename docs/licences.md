@@ -91,8 +91,17 @@ conditions to *use*, not just to redistribution, so they belong in this file.
 | Anime News Network Encyclopedia | `ANNClient` → `EditionShelvesSection` | **Per-entry backlink mandatory** — every volume row shown from ANN renders its own `sourceLink`, and the section names Anime News Network. A footer credit does not satisfy it. | Their API page states the condition; recorded when the client was written, 2026-09-14. **Discharged on screen since 2026-09-14**: `EditionShelvesSection.row` draws `sourceLink` per row and refuses to draw an ANN row that has none; `creditLine(for:)` names the source on the group. |
 | Open Library / Internet Archive | `OpenLibraryEditions`, `OpenLibraryCovers` → `EditionShelvesSection` | **No licence is named.** Attribution displayed by choice | Their licensing page asserts no new copyright over the database and concedes the legal issues "are, frankly, very confusing". That is not CC0 and must not be written up as CC0. The credit string lives in `BookEdition.Source.credit`: "Edition data from Open Library". |
 | NDL Search (国立国会図書館サーチ) | `NDLClient` → `EditionShelvesSection` | Credit mandatory; **commercial use needs prior application** | NDL's API help, read on 2026-09-14. See the open question below. |
+| MangaUpdates `GET /v1/series/{id}` | `MangaUpdatesClient.series(number:)` → `MangaUpdatesCategories` ("What it's actually like"), and (2026-09-14) `OriginalRun` → `DetailScheduleBlock`'s Korean-webtoon approximation line | **Credit mandatory** — no redistribution restriction stated beyond that | Their Acceptable Use Policy, fetched 2026-09-14 from `https://api.mangaupdates.com/` (`#section/Acceptable-Use-Policy`): "You will credit MangaUpdates when using data provided by this API." Not yet discharged on screen — a Settings/attribution row for MangaUpdates does not exist yet, unlike ANN's per-row backlink or NDL's mandatory credit line. Tracked as open, not closed by this entry. |
+| Webtoons per-series RSS (`/{lang}/{genre}/{slug}/rss?title_no=N`) | `WebtoonsFeedClient`, `WebtoonsFeedParser` → `ReleaseFeed`/`ReleaseSummary` (schedule section) | Official feed, linked from the site (not documented as an API, no stated terms found); `robots.txt` does not disallow `/rss`. Past episodes only — no future or unpublished data. | `docs/sources/webtoon-episodes.md`, candidate 1, measured live 2026-09-14. No licence or attribution condition stated anywhere found for the feed itself; the series page it links back to (via `onOpen`) is the closest thing to a credit this app gives it, same as it already does for a Webtoons-sourced release date. |
 
-### NEEDS ABDI — NDL's commercial-use term
+### NDL's commercial-use term — decided 2026-09-14: no application
+
+Abdi's decision, verbatim in substance: the app makes no money, carries no
+ads, no purchase, no subscription; it is a free, open-source tool. No money
+changes hands, so there is no commerce, so the use is non-commercial and no
+利用申請 is owed. The credit line stays mandatory and stays. **This reverses
+the moment any of those change** — an ad, an IAP, a tip jar — and the
+question below is kept so the reasoning is on record.
 
 NDL's API terms, in substance: **non-commercial use requires no application;
 commercial use requires prior approval from NDL and from the relevant data
@@ -104,7 +113,7 @@ Their exact published wording is Japanese and was not copied verbatim into
 this repo; the paraphrase above is what the API help page states, and the page
 itself is the authority if this ever has to be argued.
 
-**The question, and it is yours, not the code's:** an App Store app that is
+**The question as it was put (now answered above):** an App Store app that is
 free, ad-free and has no IAP is *arguably* non-commercial, and that is exactly
 what "arguably" always means here. If the app ever carries ads, a purchase or
 a subscription, the 利用申請 has to be filed first.

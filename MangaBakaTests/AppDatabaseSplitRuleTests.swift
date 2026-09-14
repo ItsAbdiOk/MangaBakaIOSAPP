@@ -133,6 +133,14 @@ struct AppDatabaseSplitRuleTests {
     /// EXPECTED TO FAIL ON THE OLD CODE with: `salvagedTables` did not exist —
     /// a compile failure, which proves nothing about behaviour, so this is
     /// recorded as a pin and not as proof.
+    ///
+    /// The last two assertions are the 2026-09-14 move of the library cache
+    /// into the cache file. EXPECTED TO FAIL BEFORE IT with:
+    /// `#expect(AppDatabase.salvagedTables.contains("libraryEntry") == false)`
+    /// reading true — `readerTables` listed `libraryEntry` and
+    /// `libraryMetadata`, so `salvagedTables` inherited both and a corrupt
+    /// reader's file was carrying 24.7 MB of re-downloadable rows back into
+    /// the file they are no longer meant to be in.
     @Test("Salvage carries the split marker that readerTables deliberately omits")
     func salvageCarriesTheSplitMarker() {
         #expect(
@@ -141,5 +149,11 @@ struct AppDatabaseSplitRuleTests {
         )
         #expect(AppDatabase.salvagedTables.contains("librarySplit"))
         #expect(AppDatabase.salvagedTables.starts(with: AppDatabase.readerTables))
+        for table in AppDatabase.libraryCacheTables {
+            #expect(
+                AppDatabase.salvagedTables.contains(table) == false,
+                "\(table) is re-downloadable and lives in the cache file; salvage must leave it"
+            )
+        }
     }
 }
