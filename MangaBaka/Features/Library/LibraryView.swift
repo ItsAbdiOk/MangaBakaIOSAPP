@@ -172,7 +172,7 @@ extension LibraryView {
                 Text("Library")
                     .typeScreenTitle()
                     .foregroundStyle(Palette.textEmphasis)
-                Text(model.subtitle)
+                Text(model.headerSubtitle)
                     .typeSubtitle()
                     .foregroundStyle(Palette.textMuted)
             }
@@ -247,6 +247,14 @@ extension LibraryView {
             StaleBar(
                 headline: "Some of your library didn't load",
                 detail: "\(model.total.formatted()) so far. \(failure.userFacingMessage)",
+                // The same omission the series page had (walk, 2026-09-14):
+                // `StaleBar` has taken a deadline since review R F9 and three
+                // of its four call sites never passed one, so a library walk
+                // stopped by a 429 sat under a bar that could not say when it
+                // would resume and would not resume itself. A correct rule
+                // applied n−1 times out of n, which is this project's own
+                // named defect.
+                deadline: failure.rateLimitDeadline,
                 retry: { await model.reload() }
             )
             .padding(.top, 16)

@@ -163,6 +163,74 @@ struct LibraryDiskCacheTests {
         #expect(library.calls == afterFirst, "nothing over the wire the second time")
     }
 
+    /// The Library header lying about a library the app does not have.
+    ///
+    /// Walked on the simulator 2026-09-14 with no token configured: the
+    /// header read "945 series · 429 dropped · 425 rated" over its own body's
+    /// "No library yet — Add a MangaBaka token in Settings", steady state,
+    /// with Settings showing "No account" and Data Used showing the same 945.
+    /// Every one of those rows came from here — the six-hour disk copy of a
+    /// library the app no longer has a credential for — and every other
+    /// consumer of the snapshot inherited it: Discover's "Pick back up", the
+    /// Spotlight index, the widget's tile.
+    ///
+    /// The gate is here rather than at the six call sites deliberately. The
+    /// review's third cross-cutting cause is that the account-change forget
+    /// list is hand-maintained and has never been complete; a library that
+    /// refuses to answer without the credential it is scoped to does not
+    /// depend on anyone having remembered to clear it.
+    @Test("No token, no library — not even the copy already on disk")
+    func signedOutIsNotServedThePreviousAccountsCache() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestClock()
+        let library = Recording(entries: entries(150))
+
+        // A session with a token: walked once, and written to disk.
+        #expect(await LibrarySnapshot(
+            library: library, database: database, clock: clock
+        ).all().count == 150)
+
+        // The token goes away. Same disk, same clock, well inside the
+        // six-hour window — which is exactly the state the walk was in.
+        let signedOut = LibrarySnapshot(
+            library: library, database: database, clock: clock, hasCredentials: { false }
+        )
+        let callsBefore = library.calls
+        let result = await signedOut.load()
+
+        #expect(result.entries.isEmpty, "someone else's 150 series are not this install's")
+        #expect(
+            result.failure?.needsAccount == true,
+            "the failure RootView.startSession reads to clear the widget tile and Spotlight"
+        )
+        #expect(library.calls == callsBefore, "and nothing was asked over the wire to find out")
+
+        // Forgotten, not merely withheld: a later launch that does have a
+        // token must walk afresh rather than pick the old rows back up.
+        let signedInAgain = LibrarySnapshot(library: library, database: database, clock: clock)
+        #expect(await signedInAgain.all().count == 150)
+        #expect(library.calls > callsBefore, "re-walked; the old account's rows are off disk")
+    }
+
+    /// The control for the test above: the gate must be about the credential
+    /// and nothing else. A snapshot that simply stopped serving its cache
+    /// would pass the assertions there and break every launch.
+    @Test("With a token the cache is served exactly as before")
+    func signedInStillReadsTheCache() async throws {
+        let database = try AppDatabase.inMemory()
+        let clock = TestClock()
+        let library = Recording(entries: entries(150))
+
+        _ = await LibrarySnapshot(library: library, database: database, clock: clock).all()
+        let afterFirst = library.calls
+
+        let second = LibrarySnapshot(
+            library: library, database: database, clock: clock, hasCredentials: { true }
+        )
+        #expect(await second.all().count == 150)
+        #expect(library.calls == afterFirst, "still nothing over the wire on a second launch")
+    }
+
     /// The cache must hand back what it was given, not a hollow copy.
     ///
     /// The existing tests all counted requests, and a count cannot see this:

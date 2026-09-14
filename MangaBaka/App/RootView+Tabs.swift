@@ -27,6 +27,30 @@ extension RootView {
         )
     }
 
+    /// **Two tab-bar behaviours the walks reported are iOS 26's, not ours,
+    /// and are deliberately not fought (2026-09-14).**
+    ///
+    /// 1. *It collapses to two circles.* Screenshots from two independent
+    ///    walks show the four-tab capsule replaced by the current tab's icon
+    ///    alone plus the search circle, in the same y-band — a different
+    ///    rendering, not a clipped or scrolled one. That is the system's
+    ///    Liquid Glass tab bar minimising on scroll. Nothing below sets
+    ///    `tabViewStyle` or `tabBarMinimizeBehavior`, so what is on screen is
+    ///    the platform default, and every other iOS 26 app does the same
+    ///    thing. `.tabBarMinimizeBehavior(.never)` would switch it off; that
+    ///    is a product call about matching the platform, not a defect, and it
+    ///    is left alone.
+    /// 2. *A scroll starting low on screen is swallowed and lands on another
+    ///    tab.* The bar is the system's own, fixed to the window with its own
+    ///    hit area, and a touch that begins inside it belongs to it. There is
+    ///    no supported way to make a system tab bar forward a drag to the
+    ///    content behind it, and a hand-drawn capsule was already tried and
+    ///    removed (see `RootView`'s doc comment) — it cost per-tab navigation
+    ///    stacks, lazy loading and state restoration.
+    ///
+    /// Recorded here rather than in a report so the next person to meet
+    /// either does not re-derive it. `Metrics.scrollBottomInset` carries the
+    /// related unresolved question about how much padding this bar needs.
     var tabs: some View {
         TabView(selection: tabSelection) {
             Tab(AppTab.discover.title, systemImage: AppTab.discover.symbol, value: AppTab.discover) {

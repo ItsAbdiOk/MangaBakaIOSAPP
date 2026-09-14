@@ -25,13 +25,6 @@ struct CommunityPulseCard: View {
                 }
             }
             .padding(.top, 14)
-
-            if let share = pulse.readerShare(chaptersRead: chaptersRead) {
-                Text(share)
-                    .typeSmallMeta()
-                    .foregroundStyle(Palette.accent)
-                    .padding(.top, 14)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(15)
@@ -59,6 +52,17 @@ struct CommunityPulseCard: View {
                     Text(change)
                         .typeGridMeta()
                         .foregroundStyle(Palette.positive)
+                }
+                // Under the figure it is a share *of*, not at the foot of the
+                // card. It sat there until 2026-09-14, three rows below the
+                // chapters count it is computed from and directly beneath
+                // "19,735 people keeping libraries", where "27,195 of them
+                // are yours" read as a subset bigger than its set.
+                if figure.id == CommunityPulse.readerShareFigureID,
+                   let share = pulse.readerShare(chaptersRead: chaptersRead) {
+                    Text(share)
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.accent)
                 }
             }
             Spacer(minLength: 0)

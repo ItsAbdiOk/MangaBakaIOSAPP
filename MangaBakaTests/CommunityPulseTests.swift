@@ -75,7 +75,31 @@ struct CommunityPulseTests {
     @Test("The reader is placed inside the big number")
     func readerShareIsTheWholePoint() {
         // 53,975,689 says nothing on its own.
-        #expect(pulse().readerShare(chaptersRead: 4_210) == "4,210 of them are yours")
+        #expect(pulse().readerShare(chaptersRead: 4_210) == "4,210 of those chapters are yours")
+    }
+
+    /// "27,195 of them are yours", read on the simulator 2026-09-14 directly
+    /// beneath "19,735 people keeping libraries" — a subset larger than the
+    /// set it claimed to be part of. The number was never wrong: it is the
+    /// reader's own chapters, and the card drew it at its foot, three rows
+    /// below the chapters figure it belongs to, where "them" picked up the
+    /// nearest antecedent instead of the right one.
+    ///
+    /// Two halves, both asserted here: the sentence names its own subject, so
+    /// it is true wherever it is drawn; and the figure it attaches to is
+    /// named rather than left to the card's layout to imply.
+    @Test("The share says what it is a share of")
+    func readerShareNamesWhatItCounts() throws {
+        let sample = pulse(users: 19_735)
+        let share = try #require(sample.readerShare(chaptersRead: 27_195))
+
+        #expect(share.contains("chapters"), "a bare 'of them' attached to whatever line was above")
+        // The control: the figure the share is computed against really is the
+        // chapters one, so `readerShareFigureID` cannot drift onto the row
+        // that caused the bug.
+        let anchor = sample.figures.first { $0.id == CommunityPulse.readerShareFigureID }
+        #expect(anchor?.label == "chapters read here")
+        #expect(anchor?.value == "53,975,689")
     }
 
     @Test("A reader who has read nothing is not told they are nothing")

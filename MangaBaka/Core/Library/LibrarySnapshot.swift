@@ -56,16 +56,60 @@ actor LibrarySnapshot {
     /// Bumped by `invalidate()`. A walk that finishes after the invalidation
     /// that discarded it must not commit; see `load()`.
     private var walkGeneration = 0
+    /// Whether there is a MangaBaka token to read a library with.
+    ///
+    /// Asked here, at the one place a library can come from, rather than at
+    /// each of the six callers. Walked on the simulator 2026-09-14 with no
+    /// token configured: the Library header read "945 series · 429 dropped ·
+    /// 425 rated" directly above its own body's "No library yet — Add a
+    /// MangaBaka token in Settings", steady state, with Settings showing "No
+    /// account". The entries behind that header came from `readCache()` —
+    /// the six-hour disk copy of a library the app no longer has a token
+    /// for. `LibraryModel.hasCredentials` already knew; this is what the
+    /// *data* did not.
+    ///
+    /// Every consumer of the snapshot inherited the same wrong answer:
+    /// Discover's "Pick back up" and its chapters-read figure, the Spotlight
+    /// index, the widget's "Pick back up" tile, the schedule, and Settings'
+    /// export. The review's third cross-cutting cause is that the
+    /// account-change forget list is hand-maintained and has never been
+    /// complete, so the fix is not a ninth entry on it — it is that the
+    /// library refuses to answer at all without the credential it is scoped
+    /// to, whether or not anyone remembered to clear it.
+    ///
+    /// Defaulted to `{ true }` so the suites that build a snapshot around a
+    /// stub provider keep their current behaviour; `AppServices` passes the
+    /// same `TokenStore` read `SessionModels` does.
+    private let hasCredentials: @Sendable () -> Bool
+    /// Set once the signed-out branch has thrown the previous account's cache
+    /// away, so `all()`/`seriesIDs()`/`load()` in a signed-out session do not
+    /// each pay two DELETEs to discard what is already gone. Cleared the
+    /// moment a credential appears again.
+    private var purgedWhileSignedOut = false
 
     init(
         library: any LibraryProviding,
         database: AppDatabase? = nil,
-        clock: any Clock = SystemClock()
+        clock: any Clock = SystemClock(),
+        hasCredentials: @escaping @Sendable () -> Bool = { true }
     ) {
         self.library = library
         self.database = database
         self.clock = clock
+        self.hasCredentials = hasCredentials
     }
+
+    /// What a signed-out ask answers with.
+    ///
+    /// A real `needsAccount` failure rather than a bare empty result: the
+    /// difference is what `RootView.startSession` reads to clear the widget's
+    /// "Pick back up" tile and the Spotlight index, and what `FailureState`
+    /// reads to offer "Open Settings" instead of "Try again". 401 with the
+    /// API's own word for it, so it is indistinguishable from the answer the
+    /// server would have given had the request been made.
+    nonisolated static let noAccount = APIError.server(
+        status: 401, message: "Unauthenticated.", party: .mangaBaka
+    )
 
     /// Called as each page lands, so a screen can draw what has arrived rather
     /// than waiting for all of it.
@@ -85,6 +129,18 @@ actor LibrarySnapshot {
     /// launch all three callers arrive at once, and without this they would
     /// each begin their own walk before any of them had finished.
     func load() async -> Result {
+        // Before the memory cache, before the disk cache, before the walk:
+        // without a token there is no library to serve from any of the three,
+        // and the previous account's copy is exactly what must not be
+        // answered with. See `hasCredentials`.
+        guard hasCredentials() else {
+            if !purgedWhileSignedOut {
+                invalidate()
+                purgedWhileSignedOut = true
+            }
+            return Result(entries: [], isComplete: true, failure: Self.noAccount)
+        }
+        purgedWhileSignedOut = false
         if let cached { return cached }
         if let inFlight { return await inFlight.value }
         // Disk before network. The answer is the same every launch and it is

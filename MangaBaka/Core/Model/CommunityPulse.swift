@@ -89,8 +89,25 @@ struct CommunityPulse: Codable, Equatable, Sendable {
     ///
     /// - Returns: nil when the reader has read nothing, because "you are 0 of
     ///   53 million" is not a welcome.
+    ///
+    /// **"chapters", not "them".** Walked on the simulator 2026-09-14: this
+    /// line rendered at the foot of the card, directly under the last figure,
+    /// as "27,195 of them are yours" beneath "19,735 people keeping
+    /// libraries" — a subset larger than the set it claimed to be part of.
+    /// The number was never wrong; the pronoun was three rows from its
+    /// antecedent (the chapters figure, which leads the card) and picked up
+    /// the nearest one instead. Both halves of that are fixed: the noun is
+    /// said outright here, and `CommunityPulseCard` now draws the line under
+    /// the chapters row rather than under the whole card, so proximity and
+    /// wording agree.
     func readerShare(chaptersRead: Int) -> String? {
         guard chaptersRead > 0, chaptersReadCount > 0 else { return nil }
-        return "\(chaptersRead.formatted()) of them are yours"
+        return "\(chaptersRead.formatted()) of those chapters are yours"
     }
+
+    /// Which figure `readerShare` belongs beneath. The share is computed from
+    /// `chaptersRead` against `chaptersReadCount`, so it attaches to the
+    /// chapters row and to no other; named rather than spelled as a literal
+    /// at the view's call site so the two cannot drift apart.
+    nonisolated static let readerShareFigureID = "chapters"
 }

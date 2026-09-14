@@ -110,6 +110,45 @@ struct LibraryModelPagingTests {
         #expect(model.screenState == .noAccount)
     }
 
+    /// The header and the body of one screen, disagreeing.
+    ///
+    /// Reproduced on the simulator 2026-09-14 and again two seconds later,
+    /// pixel-identical: "945 series · 429 dropped · 425 rated" above
+    /// "No library yet — Add a MangaBaka token in Settings", with Settings
+    /// showing "No account". `LibrarySnapshot` refusing to serve a signed-out
+    /// reader the previous account's cache is the fix for how rows got into
+    /// `entries`; this is the fix for the header being free to describe them
+    /// at all. Both halves of the screen are decided by one `screenState`
+    /// now, so no future source of rows can put the contradiction back.
+    ///
+    /// Constructed the way the walk found it: rows present, credential
+    /// absent. `subtitle` is deliberately still the count — nothing else on
+    /// the screen is wrong about the rows it has — but it is not what the
+    /// header renders.
+    @Test("The header cannot describe a library the body says is not there")
+    func headerNeverContradictsTheEmptyState() async throws {
+        let model = LibraryModel(library: PagedLibrary(total: 945), hasCredentials: { false })
+        await model.load()
+
+        #expect(model.screenState == .noAccount, "the body says no account, and it is right")
+        #expect(
+            !model.headerSubtitle.contains("945"),
+            "the header claimed a 945-series library above 'No library yet'"
+        )
+        #expect(!model.headerSubtitle.contains("rated"))
+    }
+
+    /// The control: with a credential the header is exactly what it was, so
+    /// the rule above cannot be satisfied by blanking the line for everyone.
+    @Test("With an account the header still counts the library")
+    func headerStillCountsASignedInLibrary() async throws {
+        let model = LibraryModel(library: PagedLibrary(total: 250), hasCredentials: { true })
+        await model.load()
+
+        #expect(model.headerSubtitle == model.subtitle)
+        #expect(model.headerSubtitle.contains("250"))
+    }
+
     /// The control: a rejected token is a failure to show, not a missing one
     /// — "Add a token" would be actively wrong advice for a reader who has
     /// one and it was refused.

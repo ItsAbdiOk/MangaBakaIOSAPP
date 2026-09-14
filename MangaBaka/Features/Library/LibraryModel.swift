@@ -86,10 +86,10 @@ final class LibraryModel {
         // having one. Whether there is an account to ask is its own question,
         // answered by `hasCredentials`, not guessed from what came back.
         guard hasCredentials() else { return .noAccount }
-        if entries.isEmpty {
-            if let failure { return .failed(failure) }
-            return .empty
-        }
+        // Was a nested `if let failure { return .failed(failure) }` over a
+        // `return .empty`; same decision, three fewer lines, and the type's
+        // body is at SwiftLint's 250 ceiling.
+        if entries.isEmpty { return failure.map(ScreenState.failed) ?? .empty }
         return .list
     }
 
@@ -284,6 +284,23 @@ final class LibraryModel {
     /// at least once — see `screenState`, which is what actually decides
     /// whether "Nothing here yet" belongs on screen.
     private(set) var subtitle = ""
+
+    /// What the header says — which must never contradict what the body
+    /// directly beneath it says.
+    ///
+    /// Walked on the simulator 2026-09-14, no token configured: the header
+    /// read "945 series · 429 dropped · 425 rated" above its own
+    /// "No library yet — Add a MangaBaka token in Settings", steady state
+    /// (re-screenshotted after 2 s, identical), with Settings showing
+    /// "No account". `subtitle` is built from `entries`, and `entries` had
+    /// been filled from the previous account's disk cache; `LibrarySnapshot`
+    /// now refuses to serve that without a credential, which is the actual
+    /// fix. This is the second half of it, and the half that cannot rot: the
+    /// two halves of this screen are decided by one `screenState` rather than
+    /// by two sources that were free to disagree. Whatever ever puts rows in
+    /// `entries` again, the header cannot describe a library the screen is
+    /// about to say does not exist.
+    var headerSubtitle: String { screenState == .noAccount ? "No account connected" : subtitle }
 
     private static func subtitle(of entries: [LibraryEntry], isComplete: Bool) -> String {
         guard !entries.isEmpty else { return "Nothing here yet" }

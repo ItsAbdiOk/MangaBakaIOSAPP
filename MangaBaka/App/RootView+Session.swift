@@ -240,7 +240,33 @@ extension RootView {
             // belongs to a reader who is no longer signed in. Everything else
             // (offline, a 500) leaves the last good snapshot standing, the
             // same rule the Spotlight index follows two lines down.
-            if walk.failure?.needsAccount == true { WidgetSnapshot.write(pickBackUp: []) }
+            if walk.failure?.needsAccount == true {
+                WidgetSnapshot.write(pickBackUp: [])
+                // The other surface outside the app that names the previous
+                // account's series. The widget was cleared here and the
+                // index was not, so with no token the Home Screen tile went
+                // blank while iOS search still offered "Ch. 88 of 120" for a
+                // library the app no longer has — and tapping a result still
+                // opened it (walk, 2026-09-14). `LibrarySnapshot` now
+                // answers a signed-out ask with this failure rather than
+                // with the previous account's cache, which is what makes
+                // this branch reachable at all.
+                await spotlight.clear()
+                // And the third one the walk found: Settings → Data Used
+                // read "Taste profile: 945 series counted · 3175 tags known"
+                // on an install with no account, which is the same 945 the
+                // Library header was claiming — the ledger `absorb` filled
+                // from the previous account's library and nothing removes
+                // from. `forgetEverything` is the existing clear; the point
+                // of calling it from here is that this is an invariant
+                // checked on every launch ("no credential, no
+                // account-scoped data") rather than a ninth line on a
+                // forget list that has to be remembered at each of the three
+                // ways to change account. It rebuilds from the first
+                // successful walk after a token is added, so a transient 401
+                // costs nothing but that walk.
+                await taste.forgetEverything()
+            }
             return
         }
         // Item 7: `session.library.entries` was filled only by `LibraryView`'s

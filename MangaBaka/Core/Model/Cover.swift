@@ -163,4 +163,19 @@ extension Cover {
         raw: nil, x150: nil, x250: nil, x350: nil,
         blurhash: nil, width: nil, height: nil
     )
+
+    /// Whether there is any artwork to fetch at all.
+    ///
+    /// Not `self == .empty`: a cover can carry the intrinsic dimensions the
+    /// API sends for layout and still have no image behind any of the four
+    /// variants, and that renders as the same blank box. The question a
+    /// caller is asking is "will `CoverImage` ever draw anything here", and
+    /// the answer is whether a URL exists, not whether every field is nil.
+    ///
+    /// Used by "Similar by description", whose cards are resolved from the
+    /// bundled offline index and carry titles only — see
+    /// `DetailOnwardRows.coverNote(for:)`.
+    var hasArtwork: Bool {
+        raw != nil || x350 != nil || x250 != nil || x150 != nil
+    }
 }

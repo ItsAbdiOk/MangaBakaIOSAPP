@@ -64,6 +64,30 @@ struct DetailOnwardRows: View {
         !items.isEmpty
     }
 
+    /// The line under a card whose artwork is not merely late but absent.
+    ///
+    /// These cards are built from `OfflineCatalogue`, which carries titles and
+    /// no artwork by design (a cover per neighbour would be twelve requests
+    /// for one row), so their `Cover` is `.empty` and `CoverImage` draws its
+    /// plain placeholder. Walked on the simulator 2026-09-14: three of four
+    /// cards were flat dark rectangles with nothing saying why, which reads
+    /// as the app failing to load them rather than as a state it chose — the
+    /// same complaint that produced "No cover from the publisher" over in
+    /// `MissingVolumeCover`, and the same rule applies here.
+    ///
+    /// Different words, because the fact is different: the volumes caption is
+    /// a claim about the publisher, made only once both sources have actually
+    /// answered. Nothing has been asked here at all, and the cover really does
+    /// arrive on the page the card opens — `SeriesDetailView` fetches the full
+    /// record on arrival and `shown` uses it — so this says what tapping will
+    /// do rather than asserting an absence that is not true.
+    ///
+    /// Nil for a card that has artwork, so a future source that does carry
+    /// covers for this row silently stops captioning them.
+    nonisolated static func coverNote(for series: Series) -> String? {
+        series.cover.hasArtwork ? nil : "Cover loads when you open it"
+    }
+
     var body: some View {
         relatedRow
         onwardRow(
@@ -214,7 +238,11 @@ struct DetailOnwardRows: View {
                                 zoomRoute?.neighbours = items
                                 path.append(item)
                             } label: {
-                                CoverCard(series: item, width: Metrics.coverDetailRowWidth)
+                                CoverCard(
+                                    series: item,
+                                    width: Metrics.coverDetailRowWidth,
+                                    meta: Self.coverNote(for: item)
+                                )
                             }
                             .buttonStyle(.press)
                             .zoomSource("Similar by description", item.id)

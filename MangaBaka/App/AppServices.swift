@@ -141,7 +141,15 @@ struct AppServices {
 
         // Built before anything that reads the library, because three of them
         // do and the library is the most expensive thing the app fetches.
-        let sharedLibrary = LibrarySnapshot(library: libraryService, database: database)
+        // The same Keychain read `SessionModels` gets, passed to the one
+        // place the library actually comes from: without it the snapshot
+        // served the previous account's six-hour disk cache to everything
+        // downstream — the Library header, Discover's "Pick back up", the
+        // widget tile, the Spotlight index — while the screens' own
+        // `hasCredentials` correctly said "No account" (walk, 2026-09-14).
+        let sharedLibrary = LibrarySnapshot(
+            library: libraryService, database: database, hasCredentials: { keychain.read() != nil }
+        )
         librarySnapshot = sharedLibrary
 
         // The same `mangaUpdates` the series page's category lookup uses, so

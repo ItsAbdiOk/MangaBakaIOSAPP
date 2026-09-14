@@ -232,6 +232,19 @@ struct SeriesDetailView: View {
                     StaleBar(
                         headline: pageFailure.headline,
                         detail: pageFailure.userFacingMessage,
+                        // Walked on the simulator 2026-09-14: a spinoff page
+                        // ("One Piece: Law's Story") carried this bar reading
+                        // "Too many requests, briefly" with a Retry and no
+                        // countdown, and four screenshots at t=0/1/3/6 s were
+                        // byte-identical — it never ticked and never retried
+                        // itself. `StaleBar` has taken a `deadline` since
+                        // review R F9 and `APIError` has carried the date
+                        // since the `until:` payload landed; this call site
+                        // simply never passed it, so the one bar a reader is
+                        // most likely to meet was the one that could not
+                        // count down. Nil for every non-rate-limit reason,
+                        // which leaves those exactly as they were.
+                        deadline: pageFailure.rateLimitDeadline,
                         // `loadCore`, not `load()`: every leg this bar can
                         // name is a MangaBaka-side one, and `load()` would
                         // re-pay cast, cadence, Apple, Google, Open Library,
