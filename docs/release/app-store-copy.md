@@ -87,8 +87,8 @@ https://github.com/ItsAbdiOk/MangaBakaIOSAPP/blob/main/PRIVACY.md
 
 ## Screenshots
 
-Not yet — see `docs/release/screenshots.md` once the placeholder-cover
-screenshot mode exists (tonight's item 17).
+Six 1320×2868 frames with placeholder covers, captured 2026-09-15 —
+`~/Desktop/MangaBaka-screenshots/`, how-to in `docs/release/screenshots.md`.
 
 ## Things I could not check tonight
 

@@ -4,6 +4,14 @@ Written first, before the night's work, and appended to as it goes. If this
 file stops mid-list, the session ran out of context; everything above the
 last entry is committed.
 
+## The short version
+
+Nine commits overnight, all tested (2,240 tests on iOS 27, lint, unsigned
+Release archive), pushed at the end if the last line of this file says so.
+Nothing needed a sign-in. Two things did not happen: a screenshot walk of the
+app on iOS 27 (the simulator tool crashed with the Xcode update — the XCUI
+audit ran instead), and the phone (locked by the time it was mine).
+
 ## Needs you
 
 - **Push.** Everything below is committed locally, not pushed, unless the
@@ -14,8 +22,16 @@ last entry is committed.
   Chrome saved the workflow with "Restrict Editing" on. If the morning push
   triggers a run by itself, that was a one-off miss; if not, the trigger is
   broken and needs a look at the workflow.
-- The ASC key for Xcode Cloud (so `ci_post_xcodebuild.sh` can set release
-  notes) — see the ci_scripts entry below once it exists.
+- App Store screenshots: six frames on the Desktop. Decide whether to
+  frame them (bezel + caption) or upload bare; the Search frame should be
+  re-shot showing results, the Mix frame with seeds — both are a small
+  change to `MangaBakaUITests/ScreenshotCaptureTests.swift`.
+- `docs/reviews/open-items-2026-09-15.md` has four items that are your
+  call (`.mix schema=full`, notification deferral policy, the Xcode Cloud
+  source-tree gate, four NDL wording choices).
+- The next build's TestFlight note will come from the commit subject
+  automatically (`ci_scripts/ci_post_xcodebuild.sh`) — no key needed; check
+  it worked on build 84/85 and `asc.py notes` can retire.
 
 ## Done overnight (newest last)
 
@@ -29,3 +45,4 @@ last entry is committed.
 - 04:0x Committed: widget now reads persisted edition answers (whole library, 30-day window); review ledger reconciled → docs/reviews/open-items-2026-09-15.md; `+` in queries fixed; search Save patches the Library tab; cast Retry no longer inert. 2,223 tests.
 - 04:3x Coverage (xccov, iOS 27): app 41.1% by line, **Core 90.0%** — the uncovered 59% is SwiftUI views. Only Core gap worth a test: NDLClient's network path (33.6%) — tests in progress. Open Library covers re-measured on 5 series: 2 of 6 clear 50%, three are 0% → stays unwired (docs/sources/bibliographic.md).
 - Tag tree: removed the "include sub-tags" toggle — it changed the number on the Browse button, never the search (no tag-OR on the API). Category nodes (own count 0) now say "pick a sub-tag" instead of offering a Browse that answers nothing.
+- 05:0x App Store screenshots: six 1320×2868 frames, no real art, in ~/Desktop/MangaBaka-screenshots/ (docs/release/screenshots.md says what a second pass should change). Performance scheme had been silently uncompilable since 09-14 — fixed and folded into the main test run (adds <4 s). All 14 measures fast.
