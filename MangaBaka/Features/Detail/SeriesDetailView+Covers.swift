@@ -17,6 +17,53 @@ extension SeriesDetailView {
     /// with no shared id and no reliable way to tell a true duplicate from the
     /// English and Japanese printings of the same volume; dropping a cover
     /// because it looked like another one is the worse failure here.
+    /// The MangaBaka covers leg, on its own so it can be asked again.
+    ///
+    /// `loadCore` used to await `images(for:)` inline and that was the only
+    /// ask the page ever made: a throttled first answer left the fan at one
+    /// cover for the rest of the visit, with the `StaleBar`'s Retry — which
+    /// re-runs every core leg — the only way back. Now a throttle schedules
+    /// one re-ask for when the server said to come back (`coversRetry`), and
+    /// a tap on the lone cover re-asks by hand (`openCovers`). The re-ask is
+    /// cancelled with the page, like every other leg.
+    ///
+    /// `.cancelled` writes nothing (item 30: the reader left, or the pager
+    /// replaced the series; a live page has nothing to say about it).
+    func loadCovers() async {
+        isCoversLoading = true
+        defer { isCoversLoading = false }
+        switch await repository.imagesResult(for: series.id) {
+        case let .success(images):
+            covers = images
+            coversFailure = nil
+        case .failure(.cancelled):
+            break
+        case let .failure(error):
+            coversFailure = error
+            scheduleCoversRetry(after: error)
+        }
+    }
+
+    /// One automatic re-ask, only for a throttle, only once per failure —
+    /// and only within `coversRetryCeiling`, past which the reader is more
+    /// likely to have left than to still be waiting on a fan.
+    private func scheduleCoversRetry(after error: APIError) {
+        guard let wait = error.retryAfter, wait <= Self.coversRetryCeiling else { return }
+        coversRetry?.cancel()
+        coversRetry = Task {
+            // A hair past the stated window, so the re-ask is not the first
+            // request the gate sees while it still reads as closed.
+            try? await Task.sleep(for: .seconds(wait + 0.5))
+            guard !Task.isCancelled else { return }
+            await loadCovers()
+        }
+    }
+
+    /// **A guess.** MangaBaka's `Retry-After` on the search gate is 60 s
+    /// (`RateLimitGate`); two minutes covers that and the general gate's
+    /// window without holding a task open for a reader who has moved on.
+    static let coversRetryCeiling: TimeInterval = 120
+
     var otherCovers: [SeriesImage] {
         Self.gallery(
             mangaBaka: covers,
@@ -70,5 +117,41 @@ extension SeriesDetailView {
         guard let allowed else { return true }
         guard let language = language?.lowercased(), !language.isEmpty else { return true }
         return allowed.contains { language.hasPrefix($0) }
+    }
+
+    /// True while any request this page made is still out.
+    var isAnyLegLoading: Bool {
+        isLoading || isCoversLoading || isLoadingVolumes || isLoadingEditions
+            || isCastLoading || isCadenceLoading || isCategoriesLoading || isReleasesLoading
+    }
+
+    /// Snapshots the gallery's images at the moment of the tap — see
+    /// `openCoversImages` — and refuses to open on a series with nothing to
+    /// show, where a full-screen cover over an empty pager was a dead end
+    /// with a close button and nothing else.
+    func openCovers(startingAt index: Int) {
+        let images = otherCovers
+        // A fan of one over a failed ask: the tap is the retry. The reader
+        // pressed the cover wanting more of them, and re-asking here is what
+        // "load in when I press it" means once the first ask was throttled.
+        if images.isEmpty, coversFailure != nil, !isCoversLoading {
+            Task { await loadCovers() }
+            return
+        }
+        guard !images.isEmpty else { return }
+        openCoversImages = images
+        openCoversAt = GalleryStart(value: index)
+    }
+
+    /// Covers that landed after the gallery opened join it at the end —
+    /// never in the middle, so the page under a thumb keeps its number (gap
+    /// 67's rule, kept). Apple's and Google's volumes arrive on their own
+    /// legs and MangaBaka's after a throttle wait, so this is common.
+    func appendLateCovers(_ current: [SeriesImage]) {
+        guard openCoversAt != nil else { return }
+        let seen = Set(openCoversImages.map(\.id))
+        let late = current.filter { !seen.contains($0.id) }
+        guard !late.isEmpty else { return }
+        openCoversImages += late
     }
 }

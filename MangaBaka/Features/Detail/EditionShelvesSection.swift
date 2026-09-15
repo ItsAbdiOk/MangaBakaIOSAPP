@@ -250,8 +250,12 @@ struct EditionShelvesSection: View {
             }
             .padding(.horizontal, Metrics.gutter)
 
-            ForEach(shelf.volumes) { volume in
+            // The volumes row's stagger: this shelf answers on its own leg
+            // (ANN, Open Library, NDL merged) seconds after the page is up,
+            // and a dozen rows landing as one block read as a jump.
+            ForEach(Array(shelf.volumes.enumerated()), id: \.element.id) { index, volume in
                 row(volume)
+                    .arrives(index: index)
             }
         }
     }

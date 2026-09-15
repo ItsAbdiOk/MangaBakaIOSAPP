@@ -119,6 +119,15 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// see "1 cover" instead of a failure they could retry.
     func images(for seriesId: Int) async -> [SeriesImage]?
 
+    /// `images(for:)` with the failure kept. `images(for:)` answers nil for
+    /// every failure alike, so the series page could not tell a throttle
+    /// (worth waiting out and asking again) from a dropped connection (worth
+    /// a Retry under the fan) — a reader on 2026-09-15 opened Omniscient
+    /// Reader (2060, 24 covers on the wire) to a fan of one and nothing that
+    /// would ever ask again. Defaulted in an extension so the test doubles
+    /// that only answer `images(for:)` keep compiling.
+    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError>
+
     /// A series' formal relationships: sequels, spin-offs, the source it was
     /// adapted from. Nil on failure, distinct from an empty list, which is a
     /// real answer ("no relationships").
@@ -762,20 +771,25 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// it exists to hide is a bug this app has already shipped once, on
     /// personalised recommendations.
     func images(for seriesId: Int) async -> [SeriesImage]? {
-        if let cached = cachedImages.value(for: seriesId) { return cached }
         // Nil, not swallowed: a failed fetch and a series with no covers used
         // to look identical from here, and the gallery read "1 cover" (the
         // series' own primary cover, drawn from elsewhere) for a throttled
         // reader exactly as it would for one whose series really has one
         // (gap 32).
-        guard let all: [SeriesImage] = try? await client.getLossy(
-            "/v1/series/\(seriesId)/images"
-        ) else {
-            return nil
+        try? await imagesResult(for: seriesId).get()
+    }
+
+    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError> {
+        if let cached = cachedImages.value(for: seriesId) { return .success(cached) }
+        let all: [SeriesImage]
+        do throws(APIError) {
+            all = try await client.getLossy("/v1/series/\(seriesId)/images")
+        } catch let error {
+            return .failure(error)
         }
         let presentable = all.presentable(allowedRatings: contentRatings)
         cachedImages.insert(presentable, for: seriesId)
-        return presentable
+        return .success(presentable)
     }
 
     /// Everything hanging off a series page.

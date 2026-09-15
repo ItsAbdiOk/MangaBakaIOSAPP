@@ -21,7 +21,14 @@ struct CoverGallery: View {
         _selection = State(initialValue: startAt)
         _scrolledIndex = State(initialValue: startAt)
         _tracker = State(initialValue: ScrollTracker(pageProgress: Double(startAt)))
+        _openedWith = State(initialValue: pages.count)
     }
+
+    /// How many pages there were when the gallery opened. Pages past this
+    /// landed while it was up (`SeriesDetailView.appendLateCovers`) and
+    /// rise in rather than appear; the ones the reader opened onto do not,
+    /// because a page that blurs in as it is swiped to fights the glide.
+    @State private var openedWith: Int
 
     let frontCover: Cover
 
@@ -55,6 +62,13 @@ struct CoverGallery: View {
             ZStack {
                 GalleryBackdrop(pages: pages, tracker: tracker)
                 pager
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                // A gallery of one has nothing to pick from.
+                if pages.count > 1 {
+                    CoverFilmstrip(covers: pages.map(\.cover), selection: $scrolledIndex)
+                        .padding(.bottom, 4)
+                }
             }
             .background(Palette.ground)
             // The whole screen, not the space under the navigation bar.
@@ -133,6 +147,7 @@ struct CoverGallery: View {
                         ZoomableCover(cover: page.cover, title: series.displayTitle)
                             .frame(width: outer.size.width, height: outer.size.height)
                             .id(index)
+                            .modifier(LateArrival(index: index - openedWith))
                             // The glide: a card settles as it reaches the
                             // middle and leans back as it leaves, so the stack
                             // reads as objects moving over a surface rather
@@ -173,6 +188,21 @@ struct CoverGallery: View {
         if let own = pages[safe: index]?.caption { return own }
         guard pages.count > 1 else { return "Cover" }
         return "\(index + 1) of \(pages.count)"
+    }
+}
+
+/// `.arrives(index:)` for a page that landed after the gallery opened —
+/// identity for the pages it opened with (see `CoverGallery.openedWith`).
+private struct LateArrival: ViewModifier {
+    /// Negative for a page that was there from the start.
+    let index: Int
+
+    func body(content: Content) -> some View {
+        if index >= 0 {
+            content.arrives(index: index)
+        } else {
+            content
+        }
     }
 }
 
@@ -377,6 +407,11 @@ struct CoverStack: View {
                 .copyableArtwork(image.image.raw ?? image.image.x350, noun: "cover")
                 .offset(x: 13 * step, y: 5 * step)
                 .rotationEffect(.degrees(2.2 * Double(step)), anchor: .bottomLeading)
+                // Rises into place, back card first, the same arrival the
+                // volumes row uses — the covers leg answers after the
+                // page is up (or after a throttle wait), and a fan that
+                // snapped from one card to three read as a glitch.
+                .arrives(index: peeking.count - index)
                 .accessibilityLabel("Another cover for this series")
                 .accessibilityHint("Opens the covers")
             }
@@ -403,6 +438,9 @@ struct CoverStack: View {
             height: height + (peeking.isEmpty ? 0 : 5 * CGFloat(peeking.count)),
             alignment: .topLeading
         )
+        // The frame widens for the fan; animated so the title column beside
+        // it slides over rather than jumps when the cards land.
+        .animation(Motion.reduced(Motion.settle), value: peeking.map(\.id))
     }
 }
 

@@ -147,13 +147,16 @@ struct SeriesDetailView: View {
     /// draws this line (nil vs. `[]`); this just keeps it past `loadCore`
     /// instead of collapsing both into `covers = []` (gap 32/16).
     @State var coversFailure: APIError?
-    @State private var openCoversAt: GalleryStart?
+    @State var isCoversLoading = false
+    /// The one automatic re-ask after a throttle — see `loadCovers`.
+    @State var coversRetry: Task<Void, Never>?
+    @State var openCoversAt: GalleryStart?
     /// The gallery's images, captured the moment it opens rather than read
     /// live from `otherCovers` — gap 67: Apple's volumes can still be landing
     /// after the reader has already opened the fan, and a computed property
     /// that keeps growing under an open pager reads as the page shifting
     /// under a finger mid-swipe.
-    @State private var openCoversImages: [SeriesImage] = []
+    @State var openCoversImages: [SeriesImage] = []
     @State private var favouredTags: Set<String> = []
     @State private var favouredTagIDs: Set<Int> = []
     @State var cast: [SeriesCharacter] = []
@@ -166,7 +169,7 @@ struct SeriesDetailView: View {
     /// `ReleaseScheduleService.SeriesCadence.failed`.
     @State var cadenceFailure: APIError?
     @State var isCadenceLoading = false
-    @State private var isLoading = true
+    @State var isLoading = true
     /// Which series `loadCore` / `loadOnward` last finished for. `.task(id:
     /// series.id)` is cancelled on disappear and started again on appear, and
     /// a push (a related series, a publisher) or a `fullScreenCover` (the
@@ -399,6 +402,12 @@ struct SeriesDetailView: View {
                 .ignoresSafeArea()
         }
         .scrollEdgeEffectStyle(.hard, for: .top)
+        // Every leg this page waits on, so a section arriving late is
+        // announced rather than sprung. Under the bar, not in it: the bar is
+        // the system's and the line is the page's.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LoadingLine(isActive: isAnyLegLoading)
+        }
         .detailBarTitle(
             shown.displayTitle ?? "Series", shareURL: SeriesWebLink.url(for: shown), tracker: scroll
         )
@@ -416,6 +425,9 @@ struct SeriesDetailView: View {
                 startAt: start.value
             )
         }
+        .onChange(of: otherCovers.map(\.id)) { appendLateCovers(otherCovers) }
+        // Unstructured, so `.task(id:)`'s cancellation does not reach it.
+        .onDisappear { coversRetry?.cancel() }
         .task(id: series.id) { await load() }
         .sheet(isPresented: $isScanning) {
             ISBNScanSheet(
@@ -432,17 +444,6 @@ struct SeriesDetailView: View {
 /// extension purely for the lint's 250-line body-length ceiling — `private`
 /// members stay reachable from an extension in the same file.
 extension SeriesDetailView {
-    /// Snapshots the gallery's images at the moment of the tap — see
-    /// `openCoversImages` — and refuses to open on a series with nothing to
-    /// show, where a full-screen cover over an empty pager was a dead end
-    /// with a close button and nothing else.
-    private func openCovers(startingAt index: Int) {
-        let images = otherCovers
-        guard !images.isEmpty else { return }
-        openCoversImages = images
-        openCoversAt = GalleryStart(value: index)
-    }
-
     /// The mockup pairs the primary action with "Use as seed", which is the
     /// only place in the app that sends a specific series into a blend from the
     /// screen where you decided you liked it.
@@ -603,11 +604,12 @@ extension SeriesDetailView {
         // under this view (the pager, a deep link) must never render the
         // previous series' filled-in fields while its own answer is out.
         filled = nil
+        coversRetry?.cancel()
         refreshDerived()
         async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
         async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
         async let extrasResult = repository.extras(for: series.id)
-        async let imagesResult = repository.images(for: series.id)
+        async let coversLeg: Void = loadCovers()
         let similarAnswer = await similarResult
         similar = similarAnswer.series
         similarOrigin = similarAnswer.origin
@@ -617,20 +619,9 @@ extension SeriesDetailView {
         alsoOrigin = alsoAnswer.origin
         alsoLikeFailure = alsoAnswer.blockingError
         extras = await extrasResult
-        // nil is "asked and failed" — the gallery no longer treats it like an
-        // empty answer (gap 16/32): `coversFailure` carries the reason so the
-        // fan and the gallery can tell "no covers" from "couldn't ask".
-        let imagesAnswer = await imagesResult
-        covers = imagesAnswer ?? []
-        // `images(for:)` answers `[SeriesImage]?`, not a `Fetched`, so the
-        // real `APIError` behind a nil is lost before it reaches here — a
-        // change this batch does not own (`SeriesRepository.swift`, batch 1,
-        // already landed). Recorded anyway, even without detail, so a future
-        // caller has *something* rather than reconstructing "nil happened"
-        // from `covers.isEmpty` alone the way this file used to.
-        coversFailure = imagesAnswer == nil
-            ? .transport(underlying: "images(for:) returned nil", party: .mangaBaka)
-            : nil
+        // The covers leg writes its own state — `loadCovers`, which the
+        // throttle-wait and the fan's tap both re-run on their own.
+        await coversLeg
         filled = extras.full.map { series.filling(gapsFrom: $0) }
         refreshDerived()
         isLoading = false
