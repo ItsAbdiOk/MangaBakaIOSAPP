@@ -29,12 +29,17 @@ struct SeriesExtrasTests {
     @Test("Links, news and relationships decode from real response shapes")
     func decodesExtras() async throws {
         route { path in
-            if path.hasSuffix("/links") {
+            // The links ride inside the series record (`links_v2`) since
+            // 2026-09-15; there is no `/links` leg to route any more.
+            if path.hasSuffix("/3397") {
                 return Data("""
-                {"status":200,"data":[
+                {"status":200,"data":{"id":3397,"state":"active","merged_with":null,"titles":null,
+                 "cover":{"raw":null,"x150":null,"x250":null,"x350":null,"blurhash":null,
+                          "width":null,"height":null},
+                 "links_v2":[
                   {"id":"019d","url":"https://manta.net/en/series/solo-leveling",
                    "name":"manta.net","name_display":"Manta","type":"webplatform","language":"en"}
-                ]}
+                ]}}
                 """.utf8)
             }
             if path.hasSuffix("/news") {

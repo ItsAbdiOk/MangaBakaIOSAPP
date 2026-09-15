@@ -71,6 +71,16 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// `convertFromSnakeCase` and has no explicit `CodingKeys`, so the property
     /// name is the contract. `richTags` reads it.
     let tagsV2: [SeriesTag]?
+    /// `links_v2`: the series' outbound links, inline on `/v1/series/{id}`.
+    ///
+    /// Checked against `/v1/series/{id}/links` on 2026-09-15 (series 2060):
+    /// the same 21 ids, and the six fields `SeriesLink` reads are all here —
+    /// the endpoint adds only `og_*` previews and a status history nothing
+    /// in the app reads. So `fetchExtras` no longer asks for `/links`: one
+    /// of nine requests per cold open gone, and one fewer way to earn the
+    /// throttle card. Same naming rule as `tagsV2`. Absent on v2 and on any
+    /// row cached before this landed, which decodes as nil.
+    let linksV2: [SeriesLink]?
 
     struct Publisher: Codable, Equatable, Sendable, Hashable {
         let name: String
@@ -162,6 +172,9 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
             )
         }
         tagsV2 = tagsV2Decode?.elements
+        // Lossy for the same reason as `tags_v2`: one malformed link should
+        // cost one link, not the section.
+        linksV2 = try container.decodeIfPresent(LossyArray<SeriesLink>.self, forKey: .linksV2)?.elements
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -176,7 +189,8 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         ratingCount: Int? = nil,
         tags: [String]? = nil,
         tagsV2: [SeriesTag]? = nil,
-        hasAnime: Bool? = nil
+        hasAnime: Bool? = nil,
+        linksV2: [SeriesLink]? = nil
     ) {
         self.id = id
         self.state = state
@@ -200,6 +214,7 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         self.ratingCount = ratingCount
         self.tags = tags
         self.tagsV2 = tagsV2
+        self.linksV2 = linksV2
     }
 
     /// The rich tags, or none. See `tagsV2`.

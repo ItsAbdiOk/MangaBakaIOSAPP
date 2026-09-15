@@ -1,5 +1,15 @@
 # Detail-page request budget vs. the walk's 429s
 
+> **Update 2026-09-15.** Two changes since the count below: the `/links` leg is
+> gone (the full record's `links_v2` carries the same rows — checked on series
+> 2060, same 21 ids, every field `SeriesLink` reads), and the two feeds
+> (`similar`, `readersAlsoLike`) are `.background`, joining news, relationships
+> and collections. A cold open is now **8 requests, 3 of them foreground**
+> (`full`, `works`, `images`), so the guaranteed floor under Discover prefetch
+> is **60 / 3 = 20 cold opens a minute**, from 6.6. The five background legs
+> wait at the gate instead of throwing. Not re-walked on a device; the count is
+> from the code and `LinksInlineTests`.
+
 ## 1. Every MangaBaka request on open
 
 Cold open (series never cached), all default to `.userInitiated` (`APIClient.swift:61,574`; nothing overrides it):

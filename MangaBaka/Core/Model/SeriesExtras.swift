@@ -5,7 +5,7 @@ import Foundation
 // used by that cache.
 
 /// Somewhere the series can actually be read.
-struct SeriesLink: Codable, Identifiable, Equatable, Sendable {
+struct SeriesLink: Codable, Identifiable, Equatable, Sendable, Hashable {
     let id: String
     /// The raw URL as the API gave it. Prefer `safeURL` for anything that
     /// actually opens.

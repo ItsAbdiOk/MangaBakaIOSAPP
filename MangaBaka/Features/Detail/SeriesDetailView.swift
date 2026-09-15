@@ -606,8 +606,17 @@ extension SeriesDetailView {
         filled = nil
         coversRetry?.cancel()
         refreshDerived()
-        async let similarResult = repository.feed(.similar(seriesId: series.id), forceRefresh: false)
-        async let alsoResult = repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: false)
+        // `.background`: both rows sit at the foot of the page, and a
+        // background request waits at the gate where a foreground one throws
+        // (`RateLimitGate`). Abdi, 2026-09-15: "the stuff at the bottom can
+        // wait" — the reader is looking at the hero, and a row that fills in
+        // after a pause beats a throttle card over the whole page.
+        async let similarResult = repository.feed(
+            .similar(seriesId: series.id), forceRefresh: false, priority: .background
+        )
+        async let alsoResult = repository.feed(
+            .readersAlsoLike(seriesId: series.id), forceRefresh: false, priority: .background
+        )
         async let extrasResult = repository.extras(for: series.id)
         async let coversLeg: Void = loadCovers()
         let similarAnswer = await similarResult

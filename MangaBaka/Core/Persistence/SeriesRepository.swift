@@ -870,23 +870,25 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     }
 
     private func fetchExtras(for seriesId: Int) async -> SeriesExtras {
-        // Concurrent rather than sequential: six independent reads, and the
+        // Concurrent rather than sequential: five independent reads, and the
         // detail screen should not wait for them in series.
         //
-        // Three of the six are `.background`: news, relationships and
+        // Three of the five are `.background`: news, relationships and
         // collections all render below the fold, and `.background` *waits*
         // for a slot where `.userInitiated` throws `.rateLimited` outright
         // (`RateLimitGate`). Counted 2026-09-14 (`docs/reviews/detail-page-budget.md`):
-        // a cold open is nine MangaBaka requests, all `.userInitiated`, so
+        // a cold open was nine MangaBaka requests, all `.userInitiated`, so
         // with Discover prefetching alongside the guaranteed floor was 60 / 9
         // ≈ 6.6 opens a minute before the throttle card — and a walk of six
-        // series showed it three times. Six foreground legs raise that floor
-        // to 10 a minute; `full`, `links` and `works` stay foreground because
-        // the reader is looking at what they draw.
-        async let links: Result<[SeriesLink], APIError> = Self.attempt {
-            () async throws(APIError) -> [SeriesLink] in
-            try await client.getLossy("/v1/series/\(seriesId)/links")
-        }
+        // series showed it three times. `full` and `works` stay foreground
+        // because the reader is looking at what they draw.
+        //
+        // No `/links` leg since 2026-09-15: the full record carries the same
+        // links inline (`Series.linksV2`), so the page reads them from
+        // there. Eight requests a cold open, of which the two feeds and
+        // these three wait rather than throw — the guaranteed floor is now
+        // the three foreground legs (`full`, `works`, `images`): 20 opens a
+        // minute before the throttle card, from 6.6.
         async let news: Result<[NewsItem], APIError> = Self.attempt {
             () async throws(APIError) -> [NewsItem] in
             try await client.getLossy(
@@ -917,27 +919,27 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             try await client.getLossy("/v1/series/\(seriesId)/works")
         }
 
-        let results = await (links, news, related, full, editions, works)
-        let detail = Self.value(results.3)
+        let results = await (news, related, full, editions, works)
+        let detail = Self.value(results.2)
 
         return SeriesExtras(
-            links: Self.value(results.0) ?? [],
-            news: Self.value(results.1) ?? [],
-            relationships: (Self.value(results.2) ?? []).filter(\.series.isDiscoverable),
+            links: detail?.linksV2 ?? [],
+            news: Self.value(results.0) ?? [],
+            relationships: (Self.value(results.1) ?? []).filter(\.series.isDiscoverable),
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
-            editions: (Self.value(results.4) ?? []).presentable,
-            volumes: SeriesWork.volumes(from: Self.value(results.5) ?? []),
+            editions: (Self.value(results.3) ?? []).presentable,
+            volumes: SeriesWork.volumes(from: Self.value(results.4) ?? []),
             year: detail?.year,
             full: detail,
             failure: Self.combinedFailure([
                 Self.failure(results.0), Self.failure(results.1), Self.failure(results.2),
-                Self.failure(results.3), Self.failure(results.4), Self.failure(results.5)
+                Self.failure(results.3), Self.failure(results.4)
             ])
         )
     }
 
-    /// The first real failure among the six legs, cancellation dropped:
+    /// The first real failure among the five legs, cancellation dropped:
     /// nobody still waiting on this page needs telling that a request they no
     /// longer care about didn't finish (`APIError.cancelled`'s doc comment).
     /// Which leg is named is arbitrary when more than one failed — no caller

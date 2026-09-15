@@ -18,10 +18,10 @@ struct DetailPagePriorityTests {
     private static let file = "MangaBaka/Core/Persistence/SeriesRepository.swift"
 
     private static func call(for endpoint: String, in source: String) -> String? {
-        // Only the six-way `extras` fetch: `relationships` is also fetched on
+        // Only the five-way `extras` fetch: `relationships` is also fetched on
         // its own elsewhere in the file, for a different screen.
-        guard let start = source.range(of: "// Concurrent rather than sequential: six independent reads"),
-              let stop = source.range(of: "let results = await (links, news, related, full, editions, works)")
+        guard let start = source.range(of: "// Concurrent rather than sequential: five independent reads"),
+              let stop = source.range(of: "let results = await (news, related, full, editions, works)")
         else { return nil }
         let source = String(source[start.lowerBound..<stop.lowerBound])
         guard let range = source.range(of: "/v1/series/\\(seriesId)/\(endpoint)\"") else { return nil }
@@ -42,12 +42,13 @@ struct DetailPagePriorityTests {
     }
 
     /// The legs the reader is looking at keep the foreground window: the
-    /// series itself, its links, and the volumes shelf a short series shows
-    /// above the fold.
-    @Test("the series, its links and its works stay foreground")
+    /// series itself and the volumes shelf a short series shows above the
+    /// fold. Links used to be a third; since 2026-09-15 they ride inside the
+    /// series record (`Series.linksV2`, `LinksInlineTests`).
+    @Test("the series and its works stay foreground")
     func visibleLegsStayUserInitiated() throws {
         let source = try SourceTree.read(Self.file)
-        for endpoint in ["links", "works"] {
+        for endpoint in ["works"] {
             let call = try #require(Self.call(for: endpoint, in: source), Comment(rawValue: endpoint))
             #expect(!call.contains(".background"), Comment(rawValue: "\(endpoint): \(call)"))
         }
