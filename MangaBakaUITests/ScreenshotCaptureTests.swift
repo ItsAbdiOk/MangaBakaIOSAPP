@@ -71,13 +71,26 @@ final class ScreenshotCaptureTests: XCTestCase {
     /// uses) and captures its top.
     private func captureSeriesPage(in app: XCUIApplication) {
         app.tabBars.buttons["Discover"].tap()
+        // The changelog card ("New in this build") is a button on Discover
+        // too and has no series page behind it — the second capture
+        // (2026-09-15, 15:36) tapped it and never found a hero.
         let cards = app.scrollViews.buttons.matching(
-            NSPredicate(format: "NOT (label BEGINSWITH[c] 'Open the stack')")
+            NSPredicate(
+                format: "NOT (label BEGINSWITH[c] 'Open the stack') AND NOT (label BEGINSWITH[c] 'New in this build')"
+            )
         )
         guard cards.firstMatch.waitForExistence(timeout: Self.contentTimeout) else { return }
         cards.firstMatch.tap()
         let hero = app.buttons.matching(Self.heroCover).firstMatch
         guard hero.waitForExistence(timeout: Self.contentTimeout) else { return }
+        // The fan, not just the hero: the third capture (2026-09-15, 15:39)
+        // caught the page under a throttle — "Too many requests, briefly"
+        // over a lone cover — because two capture runs in three minutes had
+        // spent MangaBaka's window. The covers leg re-asks itself when the
+        // window passes, so waiting for a fanned cover waits out the bar.
+        // Up to a minute (the gate's own window); a series with a single
+        // cover falls through after that and is captured as it is.
+        _ = app.buttons["Another cover for this series"].firstMatch.waitForExistence(timeout: 60)
         waitAndCapture(app, name: "series", index: 2)
         // Seed Mix from here, so frame 6 is a blend rather than the honest
         // empty state the first capture (2026-09-15) caught. The button
@@ -85,7 +98,16 @@ final class ScreenshotCaptureTests: XCTestCase {
         // back. UNVERIFIED on a capture run — written while the sim lane
         // was taken.
         let seed = app.buttons["Use as seed"]
-        if seed.waitForExistence(timeout: 3), seed.isHittable { seed.tap() }
+        // The pager keeps the neighbouring series page built, so there are
+        // two "Use as seed" buttons in the tree (fifth capture, 2026-09-15:
+        // "Multiple matching elements") — which is also why the fourth
+        // reported the single query not hittable. The on-screen one is the
+        // hittable one.
+        if seed.waitForExistence(timeout: Self.contentTimeout),
+           let onScreen = app.buttons.matching(identifier: "Use as seed")
+               .allElementsBoundByIndex.first(where: \.isHittable) {
+            onScreen.tap()
+        }
     }
 
     /// Types into Search's field — a search field where one exists, else the
@@ -113,9 +135,20 @@ final class ScreenshotCaptureTests: XCTestCase {
         ).firstMatch
         _ = result.waitForExistence(timeout: Self.contentTimeout)
         waitAndCapture(app, name: "search", index: 3)
-        // Leave search so the tab bar is reachable again.
+        // Leave search so the tab bar is reachable again. With a search
+        // role on the tab bar there is no Cancel: the bar collapses to one
+        // pill (label "Discover", value "Collapsed") and tapping it expands
+        // the tabs — the second capture failed on "Stack" not existing.
         let cancel = app.buttons["Cancel"]
         if cancel.exists, cancel.isHittable { cancel.tap() }
+        expandTabBar(in: app)
+    }
+
+    private func expandTabBar(in app: XCUIApplication) {
+        guard !app.tabBars.buttons["Stack"].exists else { return }
+        let collapsed = app.tabBars.buttons.firstMatch
+        if collapsed.waitForExistence(timeout: 3) { collapsed.tap() }
+        _ = app.tabBars.buttons["Stack"].waitForExistence(timeout: 3)
     }
 
     /// The six screens named in the brief: Discover top, a series page top,
@@ -143,6 +176,15 @@ final class ScreenshotCaptureTests: XCTestCase {
         waitAndCapture(app, name: "library", index: 5)
 
         app.tabBars.buttons["Mix"].tap()
+        // Blend the seed planted from the series page, so the frame is a
+        // result grid rather than one filled slot over an enabled button
+        // (sixth capture, 2026-09-15). The grid is a row of cover buttons;
+        // waiting on a second one rules out the seed tile itself.
+        let blend = app.buttons["Blend"].firstMatch
+        if blend.waitForExistence(timeout: 5), blend.isHittable {
+            blend.tap()
+            _ = app.scrollViews.buttons.element(boundBy: 3).waitForExistence(timeout: Self.contentTimeout)
+        }
         waitAndCapture(app, name: "mix", index: 6)
     }
 }

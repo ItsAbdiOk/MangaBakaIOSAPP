@@ -124,7 +124,30 @@ What each frame shows, and what to know before framing:
 Frames, captions and the device bezel are a separate step (Apple accepts
 unframed screenshots; framed ones look better in the listing).
 
-## Second pass — prepared 2026-09-15, not yet run
+## Second pass — 2026-09-15, 15:4x, seven runs
+
+Frames in `~/Desktop/MangaBaka-screenshots/` (first pass kept in `pass1/`).
+Read by Sonnet/Haiku after each run:
+- **Search is the results grid now** ("34 results" for apothecary, cards
+  with titles). Fix: wait for a card whose label contains the query.
+- **Series page shows the fan** (two covers leaning out) and no throttle
+  bar. Two runs inside three minutes had tripped MangaBaka's window and
+  the third capture caught "Too many requests, briefly" over a lone cover;
+  the test now waits up to 60 s for a fanned cover, which the covers leg's
+  own re-ask satisfies.
+- **Mix has a seed** in slot 1 and an enabled Blend button — but no result
+  grid: the Blend tap in the test did not produce one on the seventh run
+  (not diagnosed; the run budget was spent). Frame 6 is usable as "your
+  seeds" rather than "your blend".
+- Three things that broke along the way, all fixed in the test: Discover's
+  first card was the "New in this build" changelog (no series behind it);
+  the tab bar collapses to one pill while Search is up, so "Stack" did not
+  exist; the series pager keeps the neighbouring page built, so there were
+  two "Use as seed" buttons and XCUI refused to tap either — the hittable
+  one is the on-screen one.
+- Covers are still the generated placeholders by design (`-placeholder-covers`).
+
+### As prepared before the runs
 
 Two changes to `ScreenshotCaptureTests`, written while the simulator lane was
 taken and **not yet exercised**:
