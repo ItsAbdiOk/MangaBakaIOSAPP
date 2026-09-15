@@ -40,6 +40,18 @@ struct LibraryEntry: Codable, Identifiable, Sendable, Equatable {
             }
         }
 
+        /// Whether the library row says how far through — or, unstarted, how
+        /// big — the series is. Wider than `tracksProgress`: Abdi asked
+        /// (2026-09-15) for "Ch 0 / 75" on plan-to-read and considering too,
+        /// so the size of what is waiting is visible without opening it.
+        /// Completed and dropped have nothing left to count down.
+        var showsChapterCount: Bool {
+            switch self {
+            case .reading, .rereading, .paused, .planToRead, .considering: true
+            case .completed, .dropped: false
+            }
+        }
+
         /// Gap 4: a raw value this app does not recognise — a new state added
         /// on the website before this build knew its name — used to throw out
         /// of the synthesized `Decodable` conformance. That failure propagated

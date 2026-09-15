@@ -54,6 +54,19 @@ struct LibraryListTests {
         #expect(model.listed.map(\.seriesId) == [2], "asked for, it appears")
     }
 
+    /// Abdi, 2026-09-15: "in the library tab, add a pill for paused." The
+    /// pills only listed states with something in them, so a library with
+    /// nothing paused had no way to say so. Paused is offered regardless;
+    /// the shape bar (`shape`) still draws only what exists.
+    /// Expected to fail before the change with: `pills` missing `.paused`.
+    @Test("The Paused pill is offered even when nothing is paused")
+    func pausedPillIsAlwaysOffered() async throws {
+        let model = await model([entry(1, .reading), entry(2, .completed)])
+        #expect(model.pills.map(\.state) == [.reading, .paused, .completed])
+        #expect(model.pills.contains { $0.state == .paused && $0.count == .zero })
+        #expect(!model.shape.contains { $0.state == .paused }, "the bar has no band to draw")
+    }
+
     @Test("Dropped comes last among the states")
     func droppedIsLast() async throws {
         let model = await model([
@@ -158,10 +171,26 @@ struct LibraryListTests {
         #expect(LibraryList.progressLine(subject) == "Ch 12.5 / 179")
     }
 
-    @Test("A plan-to-read entry shows no progress line")
+    /// Abdi, 2026-09-15: "reading in the library shows how many chapters
+    /// are out (Ch 1 / 75) and I want that for paused and plan to read and
+    /// considering." So a series not yet started still says how much of it
+    /// there is — "Ch 0 / 75" — where the count is known, and nothing where
+    /// it is not (a bare "Ch 0" says nothing).
+    /// Expected to fail before the change with: `nil` for all three.
+    @Test("Paused, plan-to-read and considering show the chapter count too", arguments: [
+        LibraryEntry.State.paused, .planToRead, .considering
+    ])
+    func unstartedStatesShowTheCount(_ state: LibraryEntry.State) {
+        #expect(LibraryList.progressLine(entry(1, state, totalChapters: 75)) == "Ch 0 / 75")
+        let started = entry(1, state, progressChapter: 12, totalChapters: 75)
+        #expect(LibraryList.progressLine(started) == "Ch 12 / 75")
+        #expect(LibraryList.progressLine(entry(1, state)) == nil, "no count known, nothing to say")
+    }
+
+    @Test("Completed and dropped still show no progress line")
     func noProgressLineWhereNothingIsTracked() {
-        let subject = entry(1, .planToRead, progressChapter: 12)
-        #expect(LibraryList.progressLine(subject) == nil)
+        #expect(LibraryList.progressLine(entry(1, .completed, progressChapter: 12, totalChapters: 75)) == nil)
+        #expect(LibraryList.progressLine(entry(1, .dropped, progressChapter: 12, totalChapters: 75)) == nil)
     }
 
     /// L9 (decision, docs/reviews/library-discovery-ui.md): volume progress

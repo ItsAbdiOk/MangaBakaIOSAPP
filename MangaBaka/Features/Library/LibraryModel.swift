@@ -622,3 +622,18 @@ extension LibraryModel {
         }
     }
 }
+
+extension LibraryModel {
+    /// The filter pills: the shape, plus Paused whether or not anything is
+    /// paused (Abdi, 2026-09-15: "add a pill for paused" — a library with
+    /// nothing paused had no pill, so nothing to tap). The shape bar keeps
+    /// drawing only what exists; a zero-width band is not a band.
+    var pills: [(state: LibraryEntry.State, count: Int)] {
+        guard !shape.contains(where: { $0.state == .paused }) else { return shape }
+        var pills = shape
+        let after = pills.firstIndex { $0.state == .completed || $0.state == .planToRead
+            || $0.state == .considering || $0.state == .dropped } ?? pills.endIndex
+        pills.insert((.paused, 0), at: after)
+        return pills
+    }
+}

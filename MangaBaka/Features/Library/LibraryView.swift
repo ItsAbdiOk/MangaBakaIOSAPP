@@ -84,7 +84,7 @@ struct LibraryView: View {
                     emptyLibrary
                 case .list:
                     LibraryFilterRow(
-                        shape: model.shape,
+                        shape: model.pills,
                         total: model.allCount,
                         selected: $model.filter
                     )

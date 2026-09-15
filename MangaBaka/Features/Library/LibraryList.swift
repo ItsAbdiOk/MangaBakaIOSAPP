@@ -207,12 +207,12 @@ struct LibraryList: View {
         isAccessibilitySize ? 3 : 1
     }
 
-    /// "Ch 112 / 179", and only where progress means something.
-    ///
-    /// A plan-to-read entry showing "chapter 0 of 200" is noise about something
-    /// nobody has started.
+    /// "Ch 112 / 179" — and, since 2026-09-15, "Ch 0 / 179" on an entry not
+    /// started yet: Abdi wants paused, plan-to-read and considering to say how
+    /// many chapters are out, the way reading does. Completed and dropped
+    /// show nothing (`State.showsChapterCount`).
     nonisolated static func progressLine(_ entry: LibraryEntry) -> String? {
-        guard entry.state.tracksProgress else { return nil }
+        guard entry.state.showsChapterCount else { return nil }
         let volume = entry.progressVolume.flatMap { $0 > 0 ? $0 : nil }
         let chapter = entry.progressChapter.flatMap { $0 > 0 ? $0 : nil }
 
@@ -231,8 +231,10 @@ struct LibraryList: View {
         // L7: truncated the half chapter the editor takes pains to keep —
         // "Ch 12" in this list, "12.5" one tap away in the editor for the
         // same entry. `LibraryEditSheet.chapterText` is the one formatter now.
-        guard let chapter else { return nil }
         let total = entry.series?.totalChapters.map { " / \(Int(wholeOrClamped: $0))" } ?? ""
+        // Unstarted: the count is the whole point, so a bare "Ch 0" with no
+        // count known says nothing and is left out.
+        guard let chapter else { return total.isEmpty ? nil : "Ch 0\(total)" }
         return "Ch \(LibraryEditSheet.chapterText(chapter))\(total)"
     }
 
