@@ -38,9 +38,24 @@ struct CoversLegTests {
         """#.utf8)
         URLProtocolStub.setHandler { _ in .respond(.init(body: body)) }
         defer { URLProtocolStub.reset() }
-        let rows = try await makeRepository().imagesResult(for: 2060).get()
+        let rows = try await makeRepository().imagesResult(for: 2060, languages: ["ko", "en"]).get()
         #expect(rows.count == 1)
         #expect(rows.first?.language == "en")
+        // The request asks for the endpoint's whole ceiling and only the
+        // languages the fan shows, in a stable order (measured 2026-09-15:
+        // 24 of 75 came back unfiltered, 8 of them in languages the app
+        // then dropped).
+        let url = try #require(URLProtocolStub.requests.first?.url)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(items.map { "\($0.name)=\($0.value ?? "")" } == ["limit=50", "language=en", "language=ko"])
+    }
+
+    /// A novel sends no language filter (`Series.coverLanguages` is nil for
+    /// one), only the limit.
+    @Test("No languages means no language parameter")
+    func noLanguagesNoFilter() {
+        let items = SeriesRepository.imagesQuery(languages: nil)
+        #expect(items.map(\.name) == ["limit"])
     }
 
     /// The whole point: a 429 arrives as `.rateLimited` with its window, so

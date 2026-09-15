@@ -20,9 +20,16 @@ extension SeriesRepositoryProtocol {
 
     /// For a double that only answers `images(for:)`: its nil becomes a
     /// transport failure, the one kind the page retries only by hand.
-    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError> {
+    func imagesResult(
+        for seriesId: Int, languages: Set<String>?
+    ) async -> Result<[SeriesImage], APIError> {
         if let images = await images(for: seriesId) { return .success(images) }
         return .failure(.transport(underlying: "images(for:) returned nil", party: .mangaBaka))
+    }
+
+    /// No language filter — a caller with no series in hand.
+    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError> {
+        await imagesResult(for: seriesId, languages: nil)
     }
 
     /// Nil by default: a stub has nothing cached, and a repository with no

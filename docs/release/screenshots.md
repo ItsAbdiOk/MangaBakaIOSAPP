@@ -123,3 +123,18 @@ What each frame shows, and what to know before framing:
 
 Frames, captions and the device bezel are a separate step (Apple accepts
 unframed screenshots; framed ones look better in the listing).
+
+## Second pass — prepared 2026-09-15, not yet run
+
+Two changes to `ScreenshotCaptureTests`, written while the simulator lane was
+taken and **not yet exercised**:
+- Search waits for a result card whose label contains the query before
+  capturing, instead of any text + any image (which the idle page's inline
+  filter panel satisfied — that is why frame 3 was the panel).
+- The series-page step taps "Use as seed" after its capture, so Mix (frame 6)
+  shows a blend with one seed rather than the empty state.
+
+Run it the same way (`TEST_RUNNER_MB_CAPTURE_SCREENSHOTS=1 …`) once the lane
+is free; if "Use as seed" is not on the first Discover card's page, frame 6
+falls back to the empty state and nothing else changes.
+

@@ -12,6 +12,13 @@ extension SeriesDetailView {
     /// right off the front cover gets the official run of the book rather than
     /// whichever four alternates happened to be uploaded.
     ///
+    /// **That count was page one of an unfiltered request.** Re-measured
+    /// 2026-09-15: ONE PIECE (377) holds 931 covers, 465 of them English or
+    /// Japanese, and the request now asks for 50 of those at a time
+    /// (`SeriesRepository.imagesQuery`). Apple still leads — 50 in upload
+    /// order is not volumes 1–50 — but the "four alternates" reading of
+    /// MangaBaka's collection was the page size, not the collection.
+    ///
     /// Deliberately not deduplicated against MangaBaka's covers. The two
     /// sources are different scans of different editions at different sizes,
     /// with no shared id and no reliable way to tell a true duplicate from the
@@ -32,7 +39,7 @@ extension SeriesDetailView {
     func loadCovers() async {
         isCoversLoading = true
         defer { isCoversLoading = false }
-        switch await repository.imagesResult(for: series.id) {
+        switch await repository.imagesResult(for: series.id, languages: shown.coverLanguages) {
         case let .success(images):
             covers = images
             coversFailure = nil

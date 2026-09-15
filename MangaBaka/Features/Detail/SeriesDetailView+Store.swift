@@ -43,6 +43,7 @@ extension SeriesDetailView {
                 // that first and swapping it for the store's the moment it
                 // answers reads as content changing under the reader.
                 isCheckingStore: isLoadingVolumes,
+                worksTotal: extras.worksTotal,
                 openLibraryCovers: openLibraryCovers,
                 openLibraryStatus: openLibraryStatus
             )

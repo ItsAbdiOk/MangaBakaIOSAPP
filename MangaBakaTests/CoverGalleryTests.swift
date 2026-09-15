@@ -152,6 +152,17 @@ struct CoverGalleryTests {
         #expect(image(id: 1, index: 3, language: "en").caption == "Vol. 3 · EN")
     }
 
+    /// Series 2060 (2026-09-15) carries `volume_back` and `season` rows at
+    /// the same indices as its volumes; "Vol. 1 · KO" over the back of
+    /// volume one was the caption before this. Fails on the old code with
+    /// "Vol. 1 · KO" for both.
+    @Test("A back cover and a season cover are not captioned as the volume")
+    func captionFollowsType() {
+        #expect(image(id: 1, type: "volume_back", index: 1, language: "ko").caption == "Vol. 1 · back · KO")
+        #expect(image(id: 2, type: "season", index: 2, language: "ko").caption == "Season 2 · KO")
+        #expect(image(id: 3, type: "poster", index: 4, language: "ko").caption == "4 · KO")
+    }
+
     /// A caption is worth having only when it says something. An image with no
     /// volume and no language has nothing to caption.
     @Test("A cover with nothing to say has no caption")

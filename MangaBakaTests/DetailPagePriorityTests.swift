@@ -45,12 +45,18 @@ struct DetailPagePriorityTests {
     /// series itself and the volumes shelf a short series shows above the
     /// fold. Links used to be a third; since 2026-09-15 they ride inside the
     /// series record (`Series.linksV2`, `LinksInlineTests`).
-    @Test("the series and its works stay foreground")
+    ///
+    /// The works leg lives in `SeriesRepository+Works.swift` since it became
+    /// two requests (2026-09-15): the first page is what the shelf draws and
+    /// stays foreground; the last page — where a long series' forthcoming
+    /// volume sits — waits at the gate like the below-the-fold legs.
+    @Test("the works shelf's first page stays foreground; its last page waits")
     func visibleLegsStayUserInitiated() throws {
-        let source = try SourceTree.read(Self.file)
-        for endpoint in ["works"] {
-            let call = try #require(Self.call(for: endpoint, in: source), Comment(rawValue: endpoint))
-            #expect(!call.contains(".background"), Comment(rawValue: "\(endpoint): \(call)"))
-        }
+        let source = try SourceTree.read("MangaBaka/Core/Persistence/SeriesRepository+Works.swift")
+        let first = "getLossyWithPagination(path, query: Self.worksQuery(page: 1))"
+        #expect(source.contains(first), "the first-page call, with no priority argument")
+        #expect(!source.contains(first + ", priority: .background"))
+        let last = "Self.worksQuery(page: lastPage), priority: .background"
+        #expect(source.contains(last))
     }
 }

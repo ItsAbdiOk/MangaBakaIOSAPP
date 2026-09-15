@@ -34,6 +34,10 @@ struct VolumesSection: View {
     /// letting MangaBaka's own shelf flash on screen and then be replaced —
     /// gap 22, "shelf swaps content under the reader".
     var isCheckingStore: Bool = false
+    /// `SeriesExtras.worksTotal` — how many printings MangaBaka lists, so the
+    /// badge can say "113" for ONE PIECE rather than the "7" that page one
+    /// of `/works` grouped to (2026-09-15).
+    var worksTotal: Int?
     /// Covers `OpenLibraryCovers` found for a volume with none of its own,
     /// keyed by volume number — see `isbnsNeedingCovers` and
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`. Empty for a page that
@@ -56,6 +60,24 @@ struct VolumesSection: View {
         isCheckingStore || !volumes.isEmpty || failure != nil
     }
 
+    /// The count on the header, and whether the shelf is the whole list.
+    ///
+    /// Whole: the number of volumes. Partial (`worksTotal` exceeds the
+    /// printings the shelf was built from — `fetchWorks` fetched the first
+    /// and last pages only): the highest volume number seen, which is the
+    /// number a reader means by "how many volumes", not the count of the
+    /// ones that happened to be fetched. Nil when there is nothing to count.
+    nonisolated static func badge(
+        volumes: [SeriesWork.Volume], worksTotal: Int?
+    ) -> (text: String, isPartial: Bool)? {
+        guard !volumes.isEmpty else { return nil }
+        let fetched = volumes.reduce(0) { $0 + $1.editions.count }
+        guard let worksTotal, worksTotal > fetched else { return (String(volumes.count), false) }
+        let top = volumes.compactMap { $0.editions.compactMap(\.sequenceNumeric).max() }.max()
+        guard let top, top >= 1, top < 10_000 else { return (String(volumes.count), true) }
+        return (String(Int(top)), true)
+    }
+
     var body: some View {
         if Self.shows(volumes: volumes, failure: failure, isCheckingStore: isCheckingStore) {
             VStack(alignment: .leading, spacing: 11) {
@@ -63,8 +85,8 @@ struct VolumesSection: View {
                     Text("Volumes")
                         .typeDetailSectionHeader()
                         .foregroundStyle(Palette.textPrimary)
-                    if !volumes.isEmpty {
-                        Text("\(volumes.count)")
+                    if let badge = Self.badge(volumes: volumes, worksTotal: worksTotal) {
+                        Text(badge.text)
                             .typeChip()
                             .foregroundStyle(Palette.textMuted)
                     }
@@ -83,6 +105,16 @@ struct VolumesSection: View {
                 // of the page has had since gap 10 (item 60).
                 if !isCheckingStore, let failure {
                     InlineFailure(error: failure, retry: retry)
+                }
+
+                // Said once, above the row, so a reader scrolling from
+                // volume 15 to volume 112 knows the jump is the fetch, not
+                // the series.
+                if !isCheckingStore, Self.badge(volumes: volumes, worksTotal: worksTotal)?.isPartial == true {
+                    Text("Showing the first and latest volumes.")
+                        .typeGridMeta()
+                        .foregroundStyle(Palette.textMuted)
+                        .padding(.horizontal, Metrics.gutter)
                 }
 
                 if isCheckingStore {

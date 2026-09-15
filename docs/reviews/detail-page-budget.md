@@ -9,6 +9,28 @@
 > is **60 / 3 = 20 cold opens a minute**, from 6.6. The five background legs
 > wait at the gate instead of throwing. Not re-walked on a device; the count is
 > from the code and `LinksInlineTests`.
+>
+> **Later the same day, from poking the API rather than the code:**
+> - `/images` pages at 24 and caps `limit` at 50; the app took page one.
+>   Series 2060 holds 75 covers (the fan showed 16), ONE PIECE 931. Repeated
+>   `language=` filters server-side (a comma list is rejected); `content_rating`
+>   is accepted and ignored (75 of 75). Now sent: `limit=50&language=en&language=ko`
+>   (`SeriesRepository.imagesQuery`). Rows can be `volume_back` and `season`,
+>   which the caption used to call "Vol. N" — fixed in `SeriesImage.caption`.
+>   The response also carries `available_languages` / `available_types`;
+>   unused, noted for a future "other languages" toggle on the gallery.
+> - `/works` pages ascending at 25 by default, ignores `sort`/`order`, caps at
+>   50. ONE PIECE (377): 267 printings, page one grouped to "Volumes 7", and
+>   volume 113 (2026-11-10) on page 6 — never fetched, so the Next-volume
+>   widget could not see it. Now first + last page (`fetchWorks`), one extra
+>   `.background` request only when `count > 50`; the shelf badge reads the
+>   highest volume number and says it is showing first and latest.
+> - Each work carries its `collections` inline, identical in shape to
+>   `/collections`. Across six series every collection appeared via works, but
+>   a collection with no catalogued works would not, so the `/collections` leg
+>   stays. Sample too small to cut it: 0 misses of 9 collections.
+> - `/v1/series/mix` already returns the full 36-field series; `schema=full` is
+>   rejected there and was never needed (`open-items-2026-09-15.md`).
 
 ## 1. Every MangaBaka request on open
 

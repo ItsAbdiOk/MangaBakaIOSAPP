@@ -349,7 +349,9 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// Measured against the live API on 2026-09-12: Solo Leveling (3397) has
     /// 24 covers on `/v1/series/3397/images` — 10 English, 4 Korean, 7 "pt"
     /// and 3 "pt-br". This rule keeps 14 and drops 10, so well over a third of
-    /// that fan was Portuguese.
+    /// that fan was Portuguese. (That 24 was the endpoint's page size, not
+    /// the collection — re-measured 2026-09-15 with the server-side language
+    /// filter this set now also drives: 21 English/Korean of 21.)
     ///
     /// Novels are exempt, at his ask: they are the type whose editions are
     /// most often the only art there is, so narrowing them risks leaving a

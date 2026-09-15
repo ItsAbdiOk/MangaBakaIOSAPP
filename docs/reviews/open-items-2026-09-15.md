@@ -18,7 +18,7 @@ three stale comments (RemindersSection, LibraryModel, SessionTests title).
 
 | Item | Source | What | Why it waits |
 |---|---|---|---|
-| `.mix` with `schema=full` | full2 work-list 19, decision 4 | `.surprise` got it; `.mix` did not | Measured 2026-09-13: `schema=full` on `.mix` answered **400**. Needs a payload capture showing it now works, or stays off. |
+| ~~`.mix` with `schema=full`~~ | full2 work-list 19, decision 4 | Resolved 2026-09-15, no decision needed | Re-measured live: `schema` is still rejected (400, "Unrecognized key"), **but `/v1/series/mix` already answers the full 36-field series** — `description` and all — without it. There was never anything to turn on. |
 | Deferred-notification shelf life | full2 decision 6 | Defer only condition 2 (new chapter) past 14 days, never 1b (a release the reader is waiting for) | Policy, not code. `NotificationPolicy` has no per-condition deferral flag. |
 | Xcode Cloud source-tree gate | full2 work-list 60 | Source-reading tests skip silently in the cloud (no checkout in the test phase) | Either ship the sources into the test bundle (project.yml `resources`) or accept the skip and print its count. |
 | NDL 近刊 title mismatch, orphan "erase N" wording, publisher-less 近刊 shelf, `外伝　01` shelf name | `docs/reviews/night/shelf.md` "Needs Abdi" | Copy and grouping choices on the volumes shelf | Each is a wording call on real data. |
@@ -51,3 +51,28 @@ three stale comments (RemindersSection, LibraryModel, SessionTests title).
   original-run line shipped in its place.
 - Open Library covers for coverless ANN rows: 1 of 9 on Omniscient Reader;
   re-measure on five series before wiring.
+
+## The three that remain, plainly
+
+Written 2026-09-15 so each can be answered in one line.
+
+**1. Notifications that got put off — how long do they stay put off?**
+- What: a reminder the app held back (quiet hours, too many at once) — should it still fire two weeks later?
+- Two kinds: (a) "a new chapter came out" — stale news after 14 days; (b) "the volume you were waiting for is out" — never stale, you asked for it.
+- Recommendation: drop (a) after 14 days, always deliver (b). One flag on `NotificationPolicy`, ~20 lines.
+- Impact if wrong: either a pile of two-week-old chapter pings on a Monday, or a missed volume you were waiting on.
+- Answer needed: "yes 14 days for chapters" or a different number.
+
+**2. Tests that read the source files skip in Xcode Cloud.**
+- What: 55 test files check things by reading the app's own source (e.g. "is this leg `.background`?"). Xcode Cloud's test phase has no checkout, so they skip silently there and only run on your Mac and in the pre-push hook.
+- Options: (a) accept it — the hook already runs them before every push, the cloud is a second net; (b) copy the sources into the test bundle so the cloud runs them too (bigger test bundle, ~1 MB, and every new source file must be listed).
+- Recommendation: (a), plus print the skip count in the cloud log so it's visible. Zero risk today because nothing reaches `main` without the hook.
+- Answer needed: "a" or "b".
+
+**3. Four wording/grouping calls on the Japanese volumes shelf** (all on real NDL data):
+- (i) A not-yet-released volume with no ISBN can't be ticked as owned when its title is written differently from the catalogued one. Options: don't allow ticking unreleased rows / match on work title + volume number instead / accept. Recommendation: match on work + number (keeps the tick; one source only).
+- (ii) Settings' "Erase N ticks" counts ticks for volumes that no longer appear. Options: word it "N ticks (some for volumes no longer listed)" / purge after a year. Recommendation: the wording; purging deletes something you did.
+- (iii) A not-yet-released volume with no publisher sits on its own shelf beside the publisher's 1–17. Options: inherit the publisher from the sibling rows / leave. Recommendation: inherit — it's the same work on the same page; label it as inferred.
+- (iv) Solo Leveling's side story shelf is named "…外伝　01" because NDL didn't mark the 01 as a volume. Options: strip a trailing number when no volume field / leave. Recommendation: leave — stripping would mangle titles that genuinely end in a number.
+- Answer needed: four letters, or "all as recommended".
+

@@ -126,7 +126,16 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// Reader (2060, 24 covers on the wire) to a fan of one and nothing that
     /// would ever ask again. Defaulted in an extension so the test doubles
     /// that only answer `images(for:)` keep compiling.
-    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError>
+    ///
+    /// - Parameter languages: `Series.coverLanguages` — sent to the server
+    ///   as repeated `language=` parameters so the page it returns is the
+    ///   covers the fan will actually show. Measured 2026-09-15 on series
+    ///   2060: the endpoint pages at 24 of 75, and page 1 held 4 English
+    ///   and 12 Korean covers among 8 German and French ones the app then
+    ///   dropped; `limit=50&language=en&language=ko` returns all 50 the fan
+    ///   wants in one request. `limit` tops out at 50 (400 above it). Nil
+    ///   sends no language filter, which is how a novel arrives here.
+    func imagesResult(for seriesId: Int, languages: Set<String>?) async -> Result<[SeriesImage], APIError>
 
     /// A series' formal relationships: sequels, spin-offs, the source it was
     /// adapted from. Nil on failure, distinct from an empty list, which is a
@@ -195,6 +204,10 @@ struct SeriesExtras: Sendable, Equatable, Codable {
     /// Published volumes, with every edition of each gathered onto one — see
     /// `SeriesWork.Volume`.
     var volumes: [SeriesWork.Volume] = []
+    /// How many printings `/works` holds for the series, against however
+    /// many `volumes` was built from — see `SeriesRepository.fetchWorks`.
+    /// Nil on a row cached before this existed.
+    var worksTotal: Int?
     var year: Int?
     /// The whole v1 series, not just the two fields above.
     ///
@@ -219,7 +232,7 @@ struct SeriesExtras: Sendable, Equatable, Codable {
     var failure: APIError?
 
     enum CodingKeys: String, CodingKey {
-        case links, news, relationships, tags, richTags, editions, volumes, year, full
+        case links, news, relationships, tags, richTags, editions, volumes, worksTotal, year, full
     }
 }
 
@@ -779,17 +792,35 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         try? await imagesResult(for: seriesId).get()
     }
 
-    func imagesResult(for seriesId: Int) async -> Result<[SeriesImage], APIError> {
+    func imagesResult(
+        for seriesId: Int, languages: Set<String>?
+    ) async -> Result<[SeriesImage], APIError> {
         if let cached = cachedImages.value(for: seriesId) { return .success(cached) }
         let all: [SeriesImage]
         do throws(APIError) {
-            all = try await client.getLossy("/v1/series/\(seriesId)/images")
+            all = try await client.getLossy(
+                "/v1/series/\(seriesId)/images", query: Self.imagesQuery(languages: languages)
+            )
         } catch let error {
             return .failure(error)
         }
         let presentable = all.presentable(allowedRatings: contentRatings)
         cachedImages.insert(presentable, for: seriesId)
         return .success(presentable)
+    }
+
+    /// `limit=50` (the endpoint's ceiling), then one `language=` per wanted
+    /// language, sorted so the URL — and any cache keyed on it — is stable.
+    /// The endpoint ORs repeated `language=` and rejects a comma list
+    /// (measured 2026-09-15). Content rating is not sent: the endpoint
+    /// accepts the parameter and ignores it (75 of 75 either way), so the
+    /// client-side filter in `presentable` stays the one that counts.
+    nonisolated static func imagesQuery(languages: Set<String>?) -> [URLQueryItem] {
+        var query = [URLQueryItem(name: "limit", value: "50")]
+        for language in (languages ?? []).sorted() {
+            query.append(URLQueryItem(name: "language", value: language))
+        }
+        return query
     }
 
     /// Everything hanging off a series page.
@@ -914,9 +945,10 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // cover art. A sixth concurrent read rather than a lazy one, because
         // the section sits above the fold on a short series and a spinner that
         // appears after the page has settled reads as a second page load.
-        async let works: Result<[SeriesWork], APIError> = Self.attempt {
-            () async throws(APIError) -> [SeriesWork] in
-            try await client.getLossy("/v1/series/\(seriesId)/works")
+        // Two requests on a long series — see `fetchWorks`.
+        async let works: Result<(works: [SeriesWork], total: Int?), APIError> = Self.attempt {
+            () async throws(APIError) -> (works: [SeriesWork], total: Int?) in
+            try await fetchWorks(for: seriesId)
         }
 
         let results = await (news, related, full, editions, works)
@@ -929,7 +961,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             tags: detail?.tags ?? [],
             richTags: detail?.richTags ?? [],
             editions: (Self.value(results.3) ?? []).presentable,
-            volumes: SeriesWork.volumes(from: Self.value(results.4) ?? []),
+            volumes: SeriesWork.volumes(from: Self.value(results.4)?.works ?? []),
+            worksTotal: Self.value(results.4)?.total,
             year: detail?.year,
             full: detail,
             failure: Self.combinedFailure([

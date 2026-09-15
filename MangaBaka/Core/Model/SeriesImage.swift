@@ -54,11 +54,23 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
     }
 
     /// "Vol. 3 · EN", or nothing when the API said neither.
+    ///
+    /// The word follows `type`, which is not always "volume": series 2060's
+    /// page (2026-09-15) carries `volume_back` and `season` rows at the same
+    /// indices as its volumes, and "Vol. 1 · KO" over the *back* of volume
+    /// one is a caption that lies. `available_types` on the live endpoint
+    /// lists exactly `season`, `volume`, `volume_back`; anything else keeps
+    /// the index without a word rather than guessing one.
     var caption: String? {
-        let parts = [
-            index.map { "Vol. \($0)" },
-            language?.uppercased()
-        ].compactMap { $0 }
+        let numbered: String? = index.map { index in
+            switch type {
+            case "volume", nil: "Vol. \(index)"
+            case "volume_back": "Vol. \(index) · back"
+            case "season": "Season \(index)"
+            default: index
+            }
+        }
+        let parts = [numbered, language?.uppercased()].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

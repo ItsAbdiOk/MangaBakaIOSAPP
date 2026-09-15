@@ -79,6 +79,13 @@ final class ScreenshotCaptureTests: XCTestCase {
         let hero = app.buttons.matching(Self.heroCover).firstMatch
         guard hero.waitForExistence(timeout: Self.contentTimeout) else { return }
         waitAndCapture(app, name: "series", index: 2)
+        // Seed Mix from here, so frame 6 is a blend rather than the honest
+        // empty state the first capture (2026-09-15) caught. The button
+        // moves the app to the Mix tab; the tab taps that follow bring it
+        // back. UNVERIFIED on a capture run — written while the sim lane
+        // was taken.
+        let seed = app.buttons["Use as seed"]
+        if seed.waitForExistence(timeout: 3), seed.isHittable { seed.tap() }
     }
 
     /// Types into Search's field — a search field where one exists, else the
@@ -96,6 +103,15 @@ final class ScreenshotCaptureTests: XCTestCase {
         // captured the keyboard and then tapped tabs it was covering, so
         // screens 3–6 were all this one.
         _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 5)
+        // The results grid, not the idle page: the first capture fired as
+        // soon as any text and image existed, which the idle page's inline
+        // filter panel satisfies. A card whose label carries the query is
+        // the only thing that proves results are up. UNVERIFIED on a
+        // capture run.
+        let result = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'apothecary'")
+        ).firstMatch
+        _ = result.waitForExistence(timeout: Self.contentTimeout)
         waitAndCapture(app, name: "search", index: 3)
         // Leave search so the tab bar is reachable again.
         let cancel = app.buttons["Cancel"]
