@@ -11,7 +11,7 @@ options:
   # Sets LastUpgradeCheck, which is what silences Xcode's "Update to
   # recommended settings" prompt. Kept here rather than in the generated
   # project, where regeneration would discard it.
-  xcodeVersion: "2660"
+  xcodeVersion: "2700"
 
 packages:
   GRDB:
