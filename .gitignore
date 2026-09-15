@@ -66,3 +66,4 @@ Scripts/generated/
 # weekly; keeping them out of git stops a scheduled job dirtying the tree and
 # tripping the pre-push project-sync check for an unrelated reason.
 docs/api-contract-*.txt
+TestFlight/

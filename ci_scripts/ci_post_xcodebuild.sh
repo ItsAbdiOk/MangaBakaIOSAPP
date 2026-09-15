@@ -26,7 +26,11 @@ if [ -z "${CI_PRIMARY_REPOSITORY_PATH:-}" ] || [ -z "${CI_APP_STORE_SIGNED_APP_P
 fi
 
 subject=$(git -C "$CI_PRIMARY_REPOSITORY_PATH" log -1 --format=%s)
-notes_dir="$CI_APP_STORE_SIGNED_APP_PATH/../TestFlight"
+# Apple's documented location: a `TestFlight` folder at the repository root
+# (their example writes to `../TestFlight` from the `ci_scripts` cwd). The
+# first version put it beside the signed app; build 84 (2026-09-15) shipped
+# with no note and proved that wrong.
+notes_dir="$CI_PRIMARY_REPOSITORY_PATH/TestFlight"
 mkdir -p "$notes_dir"
 printf '%s\n' "$subject" > "$notes_dir/WhatToTest.en-GB.txt"
 echo "What to Test: $subject"
