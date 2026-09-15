@@ -51,6 +51,17 @@
                ReferencedContainer = "container:MangaBaka.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "CDBB8EE7A01FD043BD5AE55B"
+               BuildableName = "MangaBakaPerformanceTests.xctest"
+               BlueprintName = "MangaBakaPerformanceTests"
+               ReferencedContainer = "container:MangaBaka.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

@@ -237,6 +237,11 @@ schemes:
       gatherCoverageData: true
       targets:
         - MangaBakaTests
+        # The performance tests too: they take seconds (all fourteen ran in
+        # under 4 s on 2026-09-15), and until they were here nothing in the
+        # pre-push hook or Xcode Cloud compiled the target, so a protocol
+        # change on 2026-09-14 left it broken for a day without a word.
+        - MangaBakaPerformanceTests
     archive:
       config: Release
 

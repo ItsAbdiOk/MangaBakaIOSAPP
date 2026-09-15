@@ -180,10 +180,14 @@ final class RedrawPerformanceTests: XCTestCase {
         func library(page: Int, limit: Int) async -> [LibraryEntry] {
             (try? await libraryPage(page: page, limit: limit)) ?? []
         }
-        func recommendationStatus() async -> RecommendationStatus? { nil }
+        // The protocol's two recommendation members changed shape on
+        // 2026-09-14 (typed throw; `PersonalRecommendations`) and this
+        // target, which no scheme in the pre-push hook builds, silently
+        // stopped compiling. Caught by running the scheme on 2026-09-15.
+        func recommendationStatus() async throws(APIError) -> RecommendationStatus { throw .offline }
         func recommendations(
             limit: Int, page: Int, excluding: [Int]
-        ) async -> [PersonalRecommendation] { [] }
+        ) async -> PersonalRecommendations { PersonalRecommendations() }
         func hiddenTagIDs() async -> Set<Int>? { [] }
         func topGenres() async -> [TopGenre]? { [] }
         func update(seriesId: Int, change: LibraryChange) async throws(APIError) {}
