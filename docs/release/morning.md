@@ -16,12 +16,9 @@ audit ran instead), and the phone (locked by the time it was mine).
 
 - **Push.** Everything below is committed locally, not pushed, unless the
   last line of this file says "pushed".
-- **Start build 84** (or whichever number is next) in App Store Connect →
-  Xcode Cloud → TestFlight → Start Build, on `main`. The push of `6e9b59f`
-  at 21:38 on 2026-09-14 never triggered a run; it was the first push after
-  Chrome saved the workflow with "Restrict Editing" on. If the morning push
-  triggers a run by itself, that was a one-off miss; if not, the trigger is
-  broken and needs a look at the workflow.
+- ~~Start build 84~~ — resolved: the 05:2x push triggered run 84 on its
+  own, so the missed run for `6e9b59f` was a one-off on Apple's side, not
+  the workflow. If 84 fails, `python3 scripts/asc.py why` has the reason.
 - App Store screenshots: six frames on the Desktop. Decide whether to
   frame them (bezel + caption) or upload bare; the Search frame should be
   re-shot showing results, the Mix frame with seeds — both are a small
