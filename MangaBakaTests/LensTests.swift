@@ -119,11 +119,17 @@ struct LensTests {
     @Test("Each lens is counted once per session")
     func countsOncePerLens() async throws {
         let repository = CountingRepository()
-        let counts = LensCounts(repository: repository)
+        // An instant clock: the walk's 250 ms spacing is real time by
+        // default, and this test failed the pre-push hook on 2026-09-15
+        // while another session's simulator gate had the machine — the
+        // first walk had not finished its second count when the 600 ms wait
+        // ran out (`docs/reviews/open-items-2026-09-15.md`, "real sleeps").
+        let counts = LensCounts(repository: repository, clock: ImmediateClock())
         let lenses = [lens("a"), lens("b")]
 
         counts.load(lenses)
         await waitUntil { repository.calls == lenses.count }
+        #expect(repository.calls == 2, "the first walk must finish before the claim below means anything")
         counts.load(lenses)
         // Every lens is already asked, so this second load should start no
         // task at all (see LensCounts.load's `pending` guard). That is the
@@ -132,9 +138,10 @@ struct LensTests {
         // this test is main-actor too, so without a suspension here a
         // regression that scheduled a duplicate walk would still read 2 —
         // the duplicate could not have started yet (search review, tests
-        // finding 6). 600ms is more than twice the walk's own 250ms
-        // spacing, so a second walk would have counted at least one lens.
-        try? await Task.sleep(for: .milliseconds(600))
+        // finding 6). With the instant clock a duplicate walk counts on
+        // its first hop, so a few yields are room enough; the bound is a
+        // guess, far past what scheduling needs.
+        for _ in 0..<50 { await Task.yield() }
         #expect(repository.calls == 2, "the idle screen is returned to constantly")
     }
 
@@ -615,5 +622,16 @@ struct SaveLensButtonTapOutcomeTests {
     @Test("A query with a filter set saves")
     func tapOutcomeSavesWhenFiltered() {
         #expect(SaveLensButton.tapOutcome(query: SearchQuery(types: ["manga"])) == .save)
+    }
+}
+
+private struct ImmediateClock: _Concurrency.Clock {
+    typealias Instant = ContinuousClock.Instant
+
+    var now: Instant { ContinuousClock().now }
+    var minimumResolution: Duration { .zero }
+
+    func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+        try Task.checkCancellation()
     }
 }
