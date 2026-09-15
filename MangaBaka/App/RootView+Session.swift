@@ -265,7 +265,11 @@ extension RootView {
             // (offline, a 500) leaves the last good snapshot standing, the
             // same rule the Spotlight index follows two lines down.
             if walk.failure?.needsAccount == true {
-                WidgetSnapshot.write(pickBackUp: [])
+                // All three tiles, not one: `dueThisWeek` and `nextVolumes`
+                // are derived from the same library, and until 2026-09-15
+                // this blanked `pickBackUp` alone and left the other two
+                // naming the previous account's series (night review §2).
+                WidgetSnapshot.clear()
                 // The other surface outside the app that names the previous
                 // account's series. The widget was cleared here and the
                 // index was not, so with no token the Home Screen tile went

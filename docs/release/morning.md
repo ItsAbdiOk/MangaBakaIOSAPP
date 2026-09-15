@@ -19,3 +19,8 @@ last entry is committed.
 
 ## Done overnight (newest last)
 
+- 00:1x Xcode 27 / iOS 27 SDK: clean build, no deprecations, 2,189 tests green on an iOS 27 sim. Pin bumped.
+- Onboarding: Skip/Next were 29x16 pt tap targets (audit measured); now 44, Skip contrast raised. UI tests skip onboarding via launch argument — the whole a11y audit had been measuring the carousel.
+- Night review (persistence): retry of the library move could overwrite a fresher walk — guarded by cachedAt; signed-out launch now clears all three widget tiles; VACUUM retried if the file is bloated; schema-drift test covers the moved pair; version pair spelled once in project.yml.
+- Widget snapshot reads volumes for the whole library in one query, not one per entry.
+- `ci_scripts/ci_post_xcodebuild.sh`: What to Test = commit subject, via Apple's TestFlight/WhatToTest file — no ASC key needed after all. Drop that item from your list.

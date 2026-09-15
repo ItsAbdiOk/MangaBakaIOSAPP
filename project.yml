@@ -24,6 +24,13 @@ configs:
 
 settings:
   base:
+    # One version pair for every target. The widget's must equal its host's
+    # or iOS refuses the install, and until 2026-09-15 the pair was spelled
+    # once per target — a one-sided bump would have shipped an extension the
+    # device rejects. CI's `ci_pre_xcodebuild.sh` sed rewrites the build
+    # number on this one line.
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "1"
     # Xcode recommended setting: generates type-safe Swift symbols for strings
     # in String Catalogs, so a renamed or missing key fails to compile instead
     # of falling back to the raw key at runtime.
@@ -104,8 +111,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka
         PRODUCT_NAME: MangaBaka
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -156,8 +161,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.abdirahmanmohamed.mangabaka.widgets
         PRODUCT_NAME: MangaBakaWidgets
-        MARKETING_VERSION: "1.1.0"
-        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic

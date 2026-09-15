@@ -66,28 +66,41 @@ enum NDLRecordParser {
         /// Japanese book as Korean.
         var originalLanguage: String?
         var isbn: String?
+        /// `dcndl:edition` — the printing's own note, `特装版小冊子付き`
+        /// ("special edition, booklet included"). Nil on the plain printing.
+        ///
+        /// Measured 2026-09-15 on the 50-record 薬屋のひとりごと page: volume 13
+        /// arrives twice with the same title, imprint and publisher and two
+        /// ISBNs — 978-4-7575-9028-1 carries this note and 978-4-7575-9027-4
+        /// does not. Without this field the two are indistinguishable and a
+        /// shelf counts one volume as two.
+        var edition: String?
 
         var isEmpty: Bool { title == nil && isbn == nil }
+    }
+
+    /// One SRU page: its records, and how many NDL holds in all.
+    struct Response: Equatable, Sendable {
+        let records: [Record]
+        /// `<numberOfRecords>` off the SRU envelope — how many NDL holds, as
+        /// opposed to how many this page returned. Nil when the envelope did
+        /// not say.
+        let totalRecords: Int?
+    }
+
+    /// The page in one pass. Nil when the document is not XML at all.
+    static func parseResponse(_ data: Data) -> Response? {
+        let delegate = NDLRecordDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        guard parser.parse() else { return nil }
+        return Response(records: delegate.records, totalRecords: delegate.totalRecords)
     }
 
     /// - Returns: the records, or nil when the document is not XML at all.
     ///   An empty array is a real answer — NDL searched and matched nothing.
     static func parse(_ data: Data) -> [Record]? {
-        let delegate = NDLRecordDelegate()
-        let parser = XMLParser(data: data)
-        parser.delegate = delegate
-        guard parser.parse() else { return nil }
-        return delegate.records
-    }
-
-    /// `<numberOfRecords>` off the SRU envelope — how many NDL holds, as
-    /// opposed to how many this page returned.
-    static func totalRecords(_ data: Data) -> Int? {
-        let delegate = NDLRecordDelegate()
-        let parser = XMLParser(data: data)
-        parser.delegate = delegate
-        guard parser.parse() else { return nil }
-        return delegate.totalRecords
+        parseResponse(data)?.records
     }
 }
 
@@ -207,7 +220,8 @@ private final class NDLRecordDelegate: NSObject, XMLParserDelegate {
         "dcterms:title": \.title,
         "dcterms:issued": \.issued,
         "dcterms:language": \.language,
-        "dcndl:originalLanguage": \.originalLanguage
+        "dcndl:originalLanguage": \.originalLanguage,
+        "dcndl:edition": \.edition
     ]
 
     /// Wrappers, and the field their inner `rdf:value` or `foaf:name` fills.

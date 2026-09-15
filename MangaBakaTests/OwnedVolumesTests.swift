@@ -122,7 +122,61 @@ struct OwnedVolumesTests {
         #expect(OwnedVolumeKey(seriesID: 1, volume: row).identity == "row:\(row.id)")
     }
 
+    // MARK: - Reconciliation (`docs/reviews/night/shelf.md` §B)
+
+    /// A tick on an ISBN-less row, then the same row arrives with an ISBN:
+    /// the tick moves to the ISBN and keeps its date, and the orphan is
+    /// gone. A row whose title also changed is not touched — it is a
+    /// different string, and the doc comment on `reconcile` says why.
+    ///
+    /// EXPECTED TO FAIL before the change: `reconcile(shelves:for:)` did not
+    /// exist; with a no-op reconcile, `owned(for:)` still holds the `row:`
+    /// key, the `isbn:` key is absent, and `count()` is 2 after the second
+    /// tick rather than 1.
+    @Test("A tick taken before the row had an ISBN follows the row to its ISBN")
+    func reconcileMovesTickToISBN() async throws {
+        let clock = TestClock()
+        let database = try makeDatabase()
+        let store = OwnedVolumes(database: database, clock: clock)
+        let before = EditionVolume(
+            number: 22, title: "薬屋のひとりごと : 猫猫の後宮謎解き手帳. 22", releaseDate: nil,
+            isbn13: nil, format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        let orphanKey = OwnedVolumeKey(seriesID: 1, volume: before)
+        try await store.setOwned(orphanKey, true)
+        let tickedAt = clock.now
+
+        clock.advance(by: 7 * 86_400)
+        let after = EditionVolume(
+            number: 22, title: before.title, releaseDate: PartialDate.parse("2026-10-17"),
+            isbn13: "9784091582294", format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        let renamed = EditionVolume(
+            number: 23, title: "薬屋のひとりごと～猫猫の後宮謎解き手帳～", releaseDate: nil,
+            isbn13: "9784091582300", format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        let shelf = EditionShelf(edition: ndlEdition, volumes: [after, renamed])
+
+        let moved = try await store.reconcile(shelves: [shelf], for: 1)
+        #expect(moved == 1)
+        let owned = try await store.owned(for: 1)
+        #expect(owned == [OwnedVolumeKey(seriesID: 1, volume: after)])
+        #expect(!owned.contains(orphanKey), "The orphan must be gone, not duplicated")
+        #expect(try await store.count() == 1)
+        // The reader did not buy it again: the date is the first tick's.
+        let row = try await database.libraryWriter.read { db in try OwnedVolumeRow.fetchOne(db) }
+        #expect(row?.ownedAt == tickedAt)
+        // A second pass with nothing to move is a no-op.
+        #expect(try await store.reconcile(shelves: [shelf], for: 1) == 0)
+    }
+
     // MARK: - Helpers
+
+    private var ndlEdition: VolumeEdition {
+        VolumeEdition(
+            catalogue: .nationalDietLibrary, language: "ja", languageRole: .original, editionTitle: "小学館"
+        )
+    }
 
     private var annEdition: VolumeEdition {
         VolumeEdition(

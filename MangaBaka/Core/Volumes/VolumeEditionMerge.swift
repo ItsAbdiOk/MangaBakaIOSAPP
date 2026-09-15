@@ -57,7 +57,9 @@ enum VolumeEditions {
             rows: collect(ann: ann, openLibrary: openLibrary, ndl: ndl, series: series),
             series: series, format: format, works: works
         )
-        let shelves = group(deduplicate(candidates))
+        let shelves = group(
+            deduplicate(candidates), partial: partialCatalogues(ann: ann, openLibrary: openLibrary, ndl: ndl)
+        )
 
         var failures: [VolumeCatalogue: APIError] = [:]
         if let error = ann.error { failures[.animeNewsNetwork] = error }
@@ -234,21 +236,54 @@ enum VolumeEditions {
 
     // MARK: - Shelving
 
-    private static func group(_ rows: [EditionVolume]) -> [EditionShelf] {
-        var grouped: [VolumeEdition: [EditionVolume]] = [:]
-        for row in rows { grouped[row.edition, default: []].append(row) }
+    /// One shelf per `(edition, format)` — see `EditionShelf`'s doc comment
+    /// for why the format is part of the key and not a filter: `VolumeFormat`
+    /// says a box set and an eBook are "carried rather than dropped so a
+    /// caller can choose", and grouping is the choice that keeps both on
+    /// screen without either counting as a print volume.
+    ///
+    /// - Parameter partial: the catalogues whose leg answered with less than
+    ///   it holds. A shelf whose edition comes from one of them is marked
+    ///   partial; the rows it merged in from another source do not change
+    ///   that, because the gap is in the shelf's own catalogue's page.
+    private static func group(
+        _ rows: [EditionVolume], partial: Set<VolumeCatalogue>
+    ) -> [EditionShelf] {
+        struct Key: Hashable {
+            let edition: VolumeEdition
+            let format: VolumeFormat
+        }
+        var grouped: [Key: [EditionVolume]] = [:]
+        for row in rows {
+            grouped[Key(edition: row.edition, format: row.format), default: []].append(row)
+        }
 
         // Built in two named steps with explicit types: chaining `map` into
         // `sorted` with a ternary inside the comparator is what the type
         // checker gave up on ("unable to type-check in reasonable time",
         // 2026-09-14).
-        let unsorted: [EditionShelf] = grouped.map { edition, volumes in
-            EditionShelf(edition: edition, volumes: volumes.sorted(by: byNumber))
+        let unsorted: [EditionShelf] = grouped.map { key, volumes in
+            EditionShelf(
+                edition: key.edition, format: key.format, volumes: volumes.sorted(by: byNumber),
+                isPartial: partial.contains(key.edition.catalogue)
+            )
         }
         return unsorted.sorted { lhs, rhs in
             if lhs.volumes.count != rhs.volumes.count { return lhs.volumes.count > rhs.volumes.count }
             return lhs.id < rhs.id
         }
+    }
+
+    /// The legs that came back `isPartial` — today only NDL can, when its
+    /// one page of `NDLClient.pageSize` is fewer than NDL holds.
+    static func partialCatalogues(
+        ann: Fetched<ANNVolumes>, openLibrary: Fetched<EditionAnswer>, ndl: Fetched<EditionAnswer>
+    ) -> Set<VolumeCatalogue> {
+        var partial: Set<VolumeCatalogue> = []
+        if case .loaded(_, _, true) = ann { partial.insert(.animeNewsNetwork) }
+        if case .loaded(_, _, true) = openLibrary { partial.insert(.openLibrary) }
+        if case .loaded(_, _, true) = ndl { partial.insert(.nationalDietLibrary) }
+        return partial
     }
 
     /// Which kind of nothing an empty answer is, across three legs.

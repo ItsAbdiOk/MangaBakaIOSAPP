@@ -235,25 +235,7 @@ extension SeriesDetailView {
         let titles = await offlineCatalogue.titles(for: neighbours.map(\.id))
         similarByDescription = neighbours.compactMap { neighbour -> Series? in
             guard let title = titles[neighbour.id] else { return nil }
-            return Series(
-                id: neighbour.id,
-                state: "active",
-                mergedWith: nil,
-                titles: [SeriesTitle(language: "en", traits: ["official"], title: title, isPrimary: true)],
-                cover: .empty,
-                description: nil,
-                authors: nil,
-                artists: nil,
-                status: nil,
-                rating: nil,
-                type: nil,
-                contentRating: nil,
-                totalChapters: nil,
-                finalVolume: nil,
-                publishers: nil,
-                anime: nil,
-                source: nil
-            )
+            return Self.stub(id: neighbour.id, title: title)
         }
     }
 }

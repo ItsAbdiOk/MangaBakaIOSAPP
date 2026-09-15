@@ -38,6 +38,33 @@ struct ANNVolumesTests {
         #expect(first.sourceLink?.absoluteString.contains("releases.php?id=32917") == true)
     }
 
+    /// The feed is volunteer-edited and the view hands `href` to `openURL`.
+    /// `BookEditionShelf` routes both library sources through `SafeLink.web`
+    /// and calls it "the app's one rule"; ANN's parser bypassed it.
+    ///
+    /// EXPECTED TO FAIL before the change with `href ==
+    /// URL("javascript:alert(1)")` — `URL(string:)` accepts any scheme.
+    @Test("A release href that is not a web link is dropped, and a web link is kept")
+    func hrefGoesThroughSafeLink() throws {
+        let web = "https://www.animenewsnetwork.com/encyclopedia/releases.php?id=32918"
+        let xml = """
+        <ann><manga id="17164" name="Delicious in Dungeon">
+          <release date="2017-05-23" href="javascript:alert(1)" ean="9780316471855">GN 1</release>
+          <release date="2017-08-22" href="\(web)" ean="9780316471817">Delicious in Dungeon (GN 2)</release>
+          <release date="2017-11-14" href="file:///etc/passwd" ean="9780316471879">GN 3</release>
+        </manga></ann>
+        """
+        let entry = try #require(ANNEncyclopedia.parse(Data(xml.utf8)))
+        #expect(entry.releases.count == 3)
+        #expect(entry.releases[0].href == nil)
+        #expect(entry.releases[2].href == nil)
+        // The control, so this is not passing on a parser that drops every href.
+        #expect(entry.releases[1].href?.host() == "www.animenewsnetwork.com")
+        // And the row rule follows: no link, no ANN row.
+        let rows = ANNEncyclopedia.volumes(in: entry, role: .english)
+        #expect(rows.map(\.number) == [2])
+    }
+
     /// `9798855400359` is a real 979-prefixed ISBN-13 in the recorded answer.
     /// A 13-digit check that assumed 978 would drop volume 14.
     @Test("A 979-prefixed ISBN survives normalisation")

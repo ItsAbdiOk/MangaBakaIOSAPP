@@ -67,11 +67,12 @@ extension NDLClient {
                     .filter { $0.genre == Self.comicGenre }
                     .compactMap(\.seriesTitle)
             )
-            return candidates.compactMap { record in
+            let works = workTitles(for: candidates)
+            return zip(candidates, works).compactMap { record, work in
                 guard let evidence = evidence(for: record, comicImprints: comicImprints) else {
                     return nil
                 }
-                return row(record, evidence: evidence)
+                return row(record, evidence: evidence, workTitle: work)
             }
             .sorted(by: Self.byVolumeThenDate)
         }
@@ -127,8 +128,10 @@ extension NDLClient {
             return .imprintCorroborated(imprint: imprint)
         }
 
+        /// - Parameter workTitle: from `workTitles(for:)` — nil for the work
+        ///   that was asked for, the side story's own name otherwise.
         private func row(
-            _ record: NDLRecordParser.Record, evidence: BookEdition.FormatEvidence
+            _ record: NDLRecordParser.Record, evidence: BookEdition.FormatEvidence, workTitle: String?
         ) -> BookEdition {
             let format: BookEdition.Format = {
                 switch evidence {
@@ -155,7 +158,9 @@ extension NDLClient {
                 volume: record.volume,
                 source: .nationalDietLibrary,
                 format: format,
-                formatEvidence: evidence
+                formatEvidence: evidence,
+                edition: record.edition,
+                workTitle: workTitle
             )
         }
 
@@ -163,7 +168,10 @@ extension NDLClient {
         /// A forthcoming volume therefore sorts last, which is where a reader
         /// looking for "what's next" expects to find it.
         private static func byVolumeThenDate(_ lhs: BookEdition, _ rhs: BookEdition) -> Bool {
-            if let left = lhs.volume.flatMap(Int.init), let right = rhs.volume.flatMap(Int.init),
+            // `BookEditionShelf.number(from:)`, not `Int.init`: it folds the
+            // full-width `１３` NDL writes on some records (measured 2026-09-15).
+            if let left = lhs.volume.flatMap(BookEditionShelf.number(from:)),
+               let right = rhs.volume.flatMap(BookEditionShelf.number(from:)),
                left != right {
                 return left < right
             }

@@ -20,7 +20,8 @@ import GRDB
 /// `SQLITE_ERROR` "no such table". The page treats that as "nothing owned and
 /// nothing to tick" rather than crash — see `SeriesDetailView.loadOwned`.
 actor OwnedVolumes {
-    private let database: AppDatabase
+    // Internal, not private: `OwnedVolumes+Reconcile.swift` writes through it.
+    let database: AppDatabase
     private let clock: any Clock
 
     init(database: AppDatabase, clock: any Clock = SystemClock()) {

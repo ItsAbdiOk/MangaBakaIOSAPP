@@ -265,10 +265,18 @@ extension AppDatabase {
     /// and `LibraryCacheMoveTests.interruptionLosesNothing` walks each stop.
     ///
     /// `INSERT OR REPLACE`, unlike the split's `OR IGNORE`, because here the
-    /// *source* is the authoritative copy: until this ran, every build read
-    /// the library cache from the reader's file, and whatever the cache file's
-    /// pair holds is either empty (v13 created it) or a snapshot the split
-    /// left behind when its own drop failed. `IGNORE` in that second case
+    /// *source* is normally the authoritative copy: until this ran, every
+    /// build read the library cache from the reader's file, and whatever the
+    /// cache file's pair holds is either empty (v13 created it) or a snapshot
+    /// the split left behind when its own drop failed. **Normally** — the
+    /// night review (`docs/reviews/night/persistence.md` §1) found the case
+    /// where it is not: a copy that failed on launch 1 (a kill, `SQLITE_FULL`
+    /// mid-way) leaves the app reading the cache file, it walks and writes a
+    /// fresh library there, and launch 2's REPLACE would put the older rows
+    /// back over it — rows the reader removed on the website resurrected,
+    /// and a second 24.7 MB walk to fix it. So the copy is skipped when the
+    /// cache file's `libraryMetadata.cachedAt` is already newer than the
+    /// reader's; the move then only marks and drops. `IGNORE` in that second case
     /// would keep the stale row, fail the `EXCEPT` verification, and — since
     /// nothing is dropped after a failed verification — leave 24.7 MB in the
     /// backup on every launch, forever. `REPLACE` lets the move finish; the
@@ -292,10 +300,19 @@ extension AppDatabase {
 
             // `main`, not `cache`: the source is the reader's file this time.
             let present = try libraryCacheTables.filter { try db.tableExists($0, in: "main") }
-            guard !present.isEmpty else { return }
+            guard !present.isEmpty else {
+                // The drop committed but the VACUUM below never ran — a kill
+                // in between, or a throw — leaves the freed pages in the file
+                // for good, because this early return is every later open
+                // (night review, persistence §4). So the VACUUM has its own
+                // retry: whenever the reader's file carries more free pages
+                // than a healthy one ever would.
+                try vacuumIfBloated(db)
+                return
+            }
 
             let alreadyCopied = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM cache.libraryMove") ?? 0 > 0
-            if !alreadyCopied {
+            if !alreadyCopied, try !cacheFileIsFresher(db) {
                 let copied = try copyAndVerify(present, .libraryMove, in: db, stoppingAfter: last)
                 guard copied else { return }
                 try db.execute(
@@ -323,6 +340,31 @@ extension AppDatabase {
             let after = try Int.fetchOne(db, sql: "PRAGMA main.page_count") ?? 0
             splitLogger.info("Moved the library cache; reader's file \(before) → \(after) pages.")
         }
+    }
+
+    /// `VACUUM main` when the reader's file is mostly freelist.
+    ///
+    /// **256 pages (1 MB at 4 KB) is a guess** at "more than ordinary churn":
+    /// the measured post-drop state was 3,585 free pages, and a reader's file
+    /// in normal use frees a handful per write. Cheap to check — one pragma —
+    /// and a VACUUM that finds little to do costs a file copy of a few MB.
+    private static func vacuumIfBloated(_ db: Database) throws {
+        let free = try Int.fetchOne(db, sql: "PRAGMA main.freelist_count") ?? 0
+        guard free > 256 else { return }
+        try db.execute(sql: "VACUUM main")
+        splitLogger.info("Reclaimed \(free) free pages from the reader's file.")
+    }
+
+    /// Whether the cache file already holds a walk newer than the reader's
+    /// file — see `moveLibraryCacheToCacheFile`. Nil on either side reads as
+    /// "not fresher": an empty cache pair must still be filled.
+    private static func cacheFileIsFresher(_ db: Database) throws -> Bool {
+        let stamp = "SELECT MAX(cachedAt) FROM %@.libraryMetadata"
+        guard try db.tableExists("libraryMetadata", in: "cache"),
+              let inCache = try Date.fetchOne(db, sql: String(format: stamp, "cache"))
+        else { return false }
+        guard let inReader = try Date.fetchOne(db, sql: String(format: stamp, "main")) else { return true }
+        return inCache > inReader
     }
 
     /// Keeps the cache file out of iCloud and iTunes backups.

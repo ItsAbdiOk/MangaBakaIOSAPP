@@ -15,7 +15,7 @@ import Foundation
 /// chapters, and any copy written over it has to say *volume*.
 ///
 /// **A real format field.** `dcndl:genre` is filled in by a national library's
-/// cataloguers, not by a crowd — see `matches(_:)` for the measurement that
+/// cataloguers, not by a crowd — see `Query` for the measurement that
 /// shows it separating the Apothecary manga from the Apothecary light novel
 /// cleanly, which is the test Open Library's `form:` tags fail.
 ///
@@ -72,30 +72,64 @@ actor NDLClient {
     ///   - japaneseTitle: the series' own Japanese title, from MangaBaka's
     ///     `titles`. Searching in English finds nothing here.
     ///   - format: what MangaBaka says the series is. `.comic` turns on the
-    ///     genre filter described in `Query.matches`; `.unknown` turns it off
+    ///     genre filter described in `Query` (`evidence(for:comicImprints:)`); `.unknown` turns it off
     ///     and lets every titled record through, which on a measured query
     ///     includes an anime soundtrack.
-    /// - Returns: `.notCatalogued` when NDL answered and nothing survived the
-    ///   filter — "we asked and they hold nothing of this", not "there are no
-    ///   Japanese volumes".
+    /// - Returns: `.notCatalogued` when NDL matched nothing at all — "we
+    ///   asked and they hold nothing of this". `.editions([])` when NDL
+    ///   matched records and the filter removed every one: the catalogue
+    ///   *has* the series, and a view saying "no record of this series" over
+    ///   five light-novel records would be wrong. `BookEdition.swift` defines
+    ///   the two answers as distinct; this is where the distinction is kept.
     func volumes(
         japaneseTitle: String, format: BookEdition.Format = .comic
-    ) async throws(APIError) -> EditionAnswer {
+    ) async throws(APIError) -> Answer {
         let title = japaneseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return .notCatalogued }
-        let key = "v1-\(Self.cacheKey(title))-\(format.rawValue)"
+        // `v2`: the rows gained `edition` and `workTitle` and the file gained
+        // `isPartial` on 2026-09-15. A v1 file would decode (both are
+        // optionals) to rows with no edition note — the vol. 13 pair on one
+        // shelf again — for the day the cache lasts.
+        let key = "v2-\(Self.cacheKey(title))-\(format.rawValue)"
         if let cached = readCache(key) { return cached }
 
         guard let url = Self.requestURL(japaneseTitle: title) else { return .notCatalogued }
         let data = try await load(url)
-        guard let records = NDLRecordParser.parse(data) else {
+        guard let answer = Self.answer(title: title, format: format, from: data) else {
             throw .decoding(underlying: "NDL response did not parse.", party: .nationalDietLibrary)
         }
-
-        let rows = Query(title: title, format: format).rows(from: records)
-        let answer: EditionAnswer = rows.isEmpty ? .notCatalogued : .editions(rows)
         writeCache(key, answer)
         return answer
+    }
+
+    /// What `volumes(japaneseTitle:format:)` returns: the rows, and whether
+    /// the page they came from was the whole of NDL's answer.
+    struct Answer: Sendable, Equatable {
+        let answer: EditionAnswer
+        /// True when NDL holds more records than this page carried. **A
+        /// shelf built from a partial page must not call itself complete**:
+        /// measured 2026-09-15, page 1 of 薬屋のひとりごと (50 of 84) holds
+        /// Square Enix volumes 1 and 10–14 only, and 2–9 are on page 2 — an
+        /// owned line reading "missing vol. 2–9" to a reader holding them
+        /// would be false. `OwnedSummary.line` reads this off `EditionShelf`.
+        let isPartial: Bool
+
+        static let notCatalogued = Answer(answer: .notCatalogued, isPartial: false)
+    }
+
+    /// The page as an answer, or nil when it is not XML. Pure, so a test can
+    /// hand it a recorded page.
+    static func answer(title: String, format: BookEdition.Format, from data: Data) -> Answer? {
+        guard let page = NDLRecordParser.parseResponse(data) else { return nil }
+        let records = Query.deduplicated(page.records)
+        let rows = Query(title: title, format: format).rows(from: records)
+        // Counted after the URI dedupe, against `numberOfRecords`: NDL sends
+        // each item as two `BibResource` elements and the parser drops the
+        // empty second, so the raw element count is not the page size.
+        let isPartial = page.totalRecords.map { $0 > records.count } ?? false
+        return Answer(
+            answer: records.isEmpty ? .notCatalogued : .editions(rows), isPartial: isPartial
+        )
     }
 
     /// The SRU request, with the three parameters that were each found the
@@ -110,14 +144,21 @@ actor NDLClient {
     ///   record. The genre filter, not this parameter, is what removes it.
     /// - `title=` is a loose keyword match, not a phrase match — hence the
     ///   post-filter in `Query`.
+    ///
+    /// The title is quoted in CQL, so a `"` inside it ends the phrase early:
+    /// NDL answers a diagnostic, the parser finds zero records, and
+    /// `.notCatalogued` is cached for a day. Quotes are dropped rather than
+    /// escaped — CQL's `\"` is not documented on NDL's side, and a title's
+    /// quote marks are not what its index keys on.
     static func requestURL(japaneseTitle: String) -> URL? {
+        let phrase = japaneseTitle.filter { $0 != "\"" && $0 != "\\" }
         var components = URLComponents(string: "https://ndlsearch.ndl.go.jp/api/sru")
         components?.queryItems = [
             URLQueryItem(name: "operation", value: "searchRetrieve"),
             URLQueryItem(name: "recordSchema", value: "dcndl"),
             URLQueryItem(name: "recordPacking", value: "xml"),
             URLQueryItem(name: "maximumRecords", value: String(pageSize)),
-            URLQueryItem(name: "query", value: "title=\"\(japaneseTitle)\" AND mediatype=books")
+            URLQueryItem(name: "query", value: "title=\"\(phrase)\" AND mediatype=books")
         ]
         return components?.url
     }
@@ -183,29 +224,30 @@ actor NDLClient {
         /// Nil is the remembered `.notCatalogued`; the outer optional on
         /// `readCache` is "nothing cached at all".
         let rows: [BookEdition]?
+        let isPartial: Bool
     }
 
     private func file(_ key: String) -> URL? {
         cacheDirectory?.appendingPathComponent("\(key).json")
     }
 
-    func readCache(_ key: String) -> EditionAnswer? {
+    func readCache(_ key: String) -> Answer? {
         guard let file = file(key), let data = try? Data(contentsOf: file),
               let cached = try? JSONDecoder().decode(Cached.self, from: data),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
         guard let rows = cached.rows else { return .notCatalogued }
-        return .editions(rows)
+        return Answer(answer: .editions(rows), isPartial: cached.isPartial)
     }
 
-    private func writeCache(_ key: String, _ answer: EditionAnswer) {
+    private func writeCache(_ key: String, _ answer: Answer) {
         guard let directory = cacheDirectory, let file = file(key) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let rows: [BookEdition]? = {
-            if case let .editions(rows) = answer { return rows }
+            if case let .editions(rows) = answer.answer { return rows }
             return nil
         }()
-        let cached = Cached(storedAt: clock.now, rows: rows)
+        let cached = Cached(storedAt: clock.now, rows: rows, isPartial: answer.isPartial)
         try? JSONEncoder().encode(cached).write(to: file, options: .atomic)
     }
 }

@@ -19,6 +19,15 @@ enum OwnedSummary {
         }
         guard !ticked.isEmpty else { return nil }
 
+        // A shelf built from part of a catalogue's answer cannot say "of M"
+        // or "missing": NDL's page 1 for 薬屋のひとりごと holds Square Enix
+        // volumes 1 and 10–14 of the 14 it lists (measured 2026-09-15), and
+        // "missing vol. 2–9" to a reader holding them is a false sentence.
+        // The count is the one thing still true.
+        guard !shelf.isPartial else {
+            return "\(ticked.count) owned · \(partialNote)"
+        }
+
         // An owned volume with no number cannot be placed in the sequence,
         // so "missing" would be a guess about where it sits. Say the count
         // and nothing else — the brief's rule, and the same refusal to print
@@ -34,6 +43,10 @@ enum OwnedSummary {
         }
         return line
     }
+
+    /// What a partial shelf says instead of "of M". Public so the section's
+    /// tests can assert the wording without restating it.
+    static let partialNote = "more volumes on record than shown"
 
     /// Every number from 1 to the highest the edition lists that no ticked
     /// row carries.

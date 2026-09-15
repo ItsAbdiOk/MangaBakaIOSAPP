@@ -89,6 +89,29 @@ struct OwnedSummaryTests {
         #expect(OwnedSummary.line(for: shelf, owned: elsewhere, seriesID: seriesID) == nil)
     }
 
+    /// NDL's page 1 for 薬屋のひとりごと (measured 2026-09-15, 50 of 84 held)
+    /// carries Square Enix volumes 1 and 10–14; 2–9 are on page 2. The line
+    /// must not tell a reader holding 2–9 that they are missing.
+    ///
+    /// EXPECTED TO FAIL before the change: `EditionShelf.isPartial` did not
+    /// exist, and with the flag ignored the line read
+    /// `"You own 1 of 6 · missing vol. 2–14"`.
+    @Test("A partial shelf says how many are owned and nothing about the rest")
+    func partialShelfCountsOnly() {
+        let shelf = EditionShelf(
+            edition: edition, volumes: [1, 10, 11, 12, 13, 14].map { volume(number: $0) }, isPartial: true
+        )
+        let owned = keys(for: shelf, numbers: [1])
+        #expect(OwnedSummary.line(for: shelf, owned: owned, seriesID: seriesID)
+            == "1 owned · more volumes on record than shown")
+        // The control: the same rows on a complete shelf still say "of".
+        let complete = EditionShelf(edition: edition, volumes: shelf.volumes)
+        #expect(OwnedSummary.line(for: complete, owned: owned, seriesID: seriesID)
+            == "You own 1 of 6 · missing vol. 2–14")
+        // Nothing ticked is still nothing to say, partial or not.
+        #expect(OwnedSummary.line(for: shelf, owned: [], seriesID: seriesID) == nil)
+    }
+
     /// Consecutive numbers fold to a range; singletons stay singletons.
     @Test("Runs fold to en-dash ranges")
     func runsFold() {

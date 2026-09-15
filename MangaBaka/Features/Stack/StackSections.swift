@@ -231,6 +231,10 @@ struct StackSavedStrip: View {
             Text("Shelf ›")
                 .typeInstruction()
                 .foregroundStyle(Palette.accent)
+                // Apple's audit measured this at 40x15 — the bare text glyphs,
+                // with no room grown around them. `.tapTarget()` is the
+                // named 44pt minimum (`Metrics.tapTarget`), not a literal 44.
+                .tapTarget()
         }
         .buttonStyle(.press)
         .accessibilityLabel("Open the shelf")
@@ -261,9 +265,14 @@ struct StackSavedStrip: View {
             .padding(.bottom, 10)
 
             if saved.isEmpty {
+                // `textTertiary` measures 3.96:1 on `Palette.ground` — a mark's
+                // contrast, not running text's. This is a full sentence a
+                // reader is meant to read, so it wants `textMuted` (4.66:1),
+                // the same fix `Eyebrow` got on 2026-09-14 for the same
+                // reason. Real: the audit's "Contrast failed" here was right.
                 Text("Nothing saved yet. Skips are remembered too, and stay recoverable in the shelf.")
                     .typeInstruction()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)

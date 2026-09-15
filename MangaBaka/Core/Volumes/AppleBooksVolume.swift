@@ -264,9 +264,13 @@ enum AppleBooksMatch {
         // number (marker word or bare-before-bracket), 5 a kind bracket
         // after the number (the common case), and a trailing "[,:] subtitle"
         // dropped rather than captured — VIZ's "Naruto, Vol. 1: Uzumaki
-        // Naruto" (F3, 2026-09-13).
+        // Naruto" (F3, 2026-09-13). The bracket before the marker may be
+        // followed by a comma: Ize Press's "Omniscient Reader's Viewpoint
+        // (novel), Vol. 1" (live GB/US store, 2026-09-15) — without it the
+        // lazy title swallowed "(novel)" and the novel's own page showed no
+        // volumes at all.
         // swiftlint:disable:next line_length
-        /^(.+?)[,:]?\s+(?:\(([^)]+)\)\s+)?(?:(?:vol\.?|volume|#)\s*(\d+)|(\d+)(?=\s*\())\s*(?:\(([^)]+)\))?(?:[,:]\s*.+)?\s*$/
+        /^(.+?)[,:]?\s+(?:\(([^)]+)\)[,:]?\s+)?(?:(?:vol\.?|volume|#)\s*(\d+)|(\d+)(?=\s*\())\s*(?:\(([^)]+)\))?(?:[,:]\s*.+)?\s*$/
             .ignoresCase()
     }
 

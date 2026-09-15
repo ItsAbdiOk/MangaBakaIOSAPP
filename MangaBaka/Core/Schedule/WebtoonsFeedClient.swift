@@ -50,7 +50,14 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     /// page already has a cadence estimated from release history, and this
     /// only ever replaces it with something better when it can.
     func feed(for links: [SeriesLink], seriesID: Int) async -> FeedAnswer {
-        let candidates = links.compactMap(\.safeURL)
+        // Only the Webtoons links. Until 2026-09-15 this was every link the
+        // series had, so a series with seventeen links and no Webtoons one
+        // (The Apothecary Diaries) reached `resolveFeedURLs`, found nothing,
+        // and came back `.failed(.transport)` — "The request didn't complete"
+        // with a Retry button, on every walk of that page, for a source the
+        // series never carried. `noLinkIsNotCarried` passed the whole time
+        // because it passed an empty list.
+        let candidates = links.compactMap(\.safeURL).filter(WebtoonsFeedParser.isWebtoons)
         guard !candidates.isEmpty else { return .notCarried }
 
         // Versioned like the other caches: a parser change must not be

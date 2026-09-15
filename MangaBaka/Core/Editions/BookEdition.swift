@@ -107,6 +107,56 @@ struct BookEdition: Codable, Sendable, Equatable, Identifiable {
     let source: Source
     let format: Format
     let formatEvidence: FormatEvidence
+    /// The catalogue's own note on this printing, where it is not the plain
+    /// one — NDL's `dcndl:edition`, e.g. `特装版小冊子付き`. **Nil means the
+    /// plain printing**, and a shelf must keep a row with a note off the plain
+    /// shelf: measured 2026-09-15, 薬屋のひとりごと vol. 13 is two records with
+    /// two ISBNs (978-4-7575-9028-1 special, 978-4-7575-9027-4 regular), and
+    /// counting both as "volume 13" is how a shelf of 7 volumes said "of 9".
+    /// Open Library has no equivalent field, so its rows are always nil.
+    let edition: String?
+    /// The work this printing belongs to, **only when it is not the work that
+    /// was asked for**. Nil on every row of the queried series.
+    ///
+    /// NDL's `title=` search admits a prefix, deliberately (`NDLClient.Query.
+    /// titleMatches` — Solo Leveling's forthcoming row is `…外伝　01`), so a
+    /// side story (`薬屋のひとりごと外伝小蘭回想録. 1`) arrives beside the main
+    /// run with the same imprint and publisher. This is what keeps it off the
+    /// main run's shelf: `BookEditionShelf` folds it into the edition's name.
+    let workTitle: String?
+
+    /// `edition` and `workTitle` default to nil — the plain printing of the
+    /// queried work — because every constructor but NDL's has nothing to put
+    /// there, and a `let` with a default is left out of the synthesised init.
+    init(
+        id: String,
+        title: String,
+        isbn13: String?,
+        publisher: String?,
+        language: String?,
+        published: PartialDate?,
+        coverID: Int?,
+        volume: String?,
+        source: Source,
+        format: Format,
+        formatEvidence: FormatEvidence,
+        edition: String? = nil,
+        workTitle: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.isbn13 = isbn13
+        self.publisher = publisher
+        self.language = language
+        self.published = published
+        self.coverID = coverID
+        self.volume = volume
+        self.source = source
+        self.format = format
+        self.formatEvidence = formatEvidence
+        self.edition = edition
+        self.workTitle = workTitle
+    }
 
     /// True when the catalogue holds the record and the book is not published
     /// yet. Only NDL has ever answered true here.

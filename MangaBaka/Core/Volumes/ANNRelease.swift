@@ -193,7 +193,11 @@ enum ANNEncyclopedia {
             case "release":
                 pending = Pending(
                     date: attributes["date"],
-                    href: attributes["href"].flatMap { URL(string: $0) },
+                    // Through `SafeLink.web`, the app's one rule about what a
+                    // URL out of a third party's payload may be: the feed is
+                    // volunteer-edited and the view hands this to `openURL`,
+                    // so a `javascript:` or custom-scheme href must die here.
+                    href: SafeLink.web(attributes["href"].flatMap { URL(string: $0) }),
                     ean: attributes["ean"]
                 )
                 text = ""

@@ -328,7 +328,13 @@ struct SeriesDetailView: View {
                 }
                 CharacterRow(
                     characters: cast, isLoading: isCastLoading, failure: castFailure,
-                    retry: { await loadCast() },
+                    // Forget the outage first: `CharacterService` remembers
+                    // an AniList refusal for `outageMemory` and answers the
+                    // same failure from memory until then, so a Retry that
+                    // only re-asked was inert for that long. The method's
+                    // own doc comment named this caller; nothing called it
+                    // (dead-code sweep, 2026-09-15).
+                    retry: { await characters?.clearOutageMemory(); await loadCast() },
                     // The service's own clients, so a profile sheet shares
                     // their spacing and backoff (item 63).
                     aniList: characters?.aniList, shikimori: characters?.shikimori

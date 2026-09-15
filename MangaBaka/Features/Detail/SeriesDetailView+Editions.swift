@@ -60,6 +60,21 @@ extension SeriesDetailView {
         editions = VolumeEditions.merge(
             ann: ann, openLibrary: open, ndl: ndl, works: extras.volumes, format: format, for: shown
         )
+        await reconcileOwned(with: editions.shelves)
+    }
+
+    /// A tick taken on a row before it had an ISBN is moved to the ISBN once
+    /// the row carries one — see `OwnedVolumes.reconcile(shelves:for:)`.
+    /// Runs after every merge because the shelf is what knows both spellings
+    /// of the row, and re-reads the ticks only when something moved.
+    private func reconcileOwned(with shelves: [EditionShelf]) async {
+        guard let ownedVolumes else { return }
+        do {
+            let moved = try await ownedVolumes.reconcile(shelves: shelves, for: shown.id)
+            if moved > 0 { owned = try await ownedVolumes.owned(for: shown.id) }
+        } catch let error {
+            Self.ownedLogger.error("Owned volumes could not be reconciled: \(error, privacy: .public)")
+        }
     }
 
     // MARK: - The reader's own shelf
@@ -158,10 +173,13 @@ extension SeriesDetailView {
               let japanese = Self.japaneseTitle(of: shown)
         else { return .idle }
         do throws(APIError) {
-            let answer = try await ndl.volumes(
+            let page = try await ndl.volumes(
                 japaneseTitle: japanese, format: Self.bookFormat(format)
             )
-            return .loaded(answer, fetchedAt: Date(), isPartial: false)
+            // One SRU page of `NDLClient.pageSize`; 薬屋のひとりごと holds 84.
+            // `VolumeEditions.merge` marks the shelf, and the owned line then
+            // stops saying "of M" over a list it has not seen the end of.
+            return .loaded(page.answer, fetchedAt: Date(), isPartial: page.isPartial)
         } catch let error {
             return .failed(error, stale: nil)
         }

@@ -52,13 +52,11 @@ struct SeriesSiblingsSection: View {
                 // is exactly the inconsistency that rule exists for.
                 zoomRoute?.source = ZoomRoute.id("sibling", mangaBakaID)
                 zoomRoute?.neighbours = []
-                // A stub, not a full record — the same pattern
-                // `SeriesDetailView.loadSimilarByDescription()` uses for an
-                // id the page has never fetched: `SeriesDetailView.shown`
-                // fills the rest in once the push lands and `loadCore` runs
-                // for the new id, so nothing here needs to duplicate that
-                // fetch.
-                path.append(Self.stub(id: mangaBakaID, title: row.title))
+                // A stub, not a full record — `SeriesDetailView.stub`, the
+                // same one `loadSimilarByDescription()` uses for an id the
+                // page has never fetched: `shown` fills the rest in once the
+                // push lands and `loadCore` runs for the new id.
+                path.append(SeriesDetailView.stub(id: mangaBakaID, title: row.title))
             } label: {
                 content(row)
             }
@@ -99,20 +97,6 @@ struct SeriesSiblingsSection: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: Metrics.ctaSecondary)
-    }
-
-    /// A minimal `Series` carrying only what `SeriesSiblingRow` knows.
-    /// `loadSimilarByDescription()` in `SeriesDetailView+Store.swift` builds
-    /// the same shape for an embedding neighbour the page has not fetched —
-    /// copied rather than shared because that one is `private` to its file.
-    private static func stub(id: Int, title: String) -> Series {
-        Series(
-            id: id, state: "active", mergedWith: nil,
-            titles: [SeriesTitle(language: "en", traits: ["official"], title: title, isPrimary: true)],
-            cover: .empty, description: nil, authors: nil, artists: nil, status: nil, rating: nil,
-            type: nil, contentRating: nil, totalChapters: nil, finalVolume: nil, publishers: nil,
-            anime: nil, source: nil
-        )
     }
 }
 

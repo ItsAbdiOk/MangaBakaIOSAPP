@@ -117,6 +117,12 @@ final class AccessibilityAuditTests: XCTestCase {
     private func launchedApp() -> XCUIApplication {
         continueAfterFailure = true
         let app = XCUIApplication()
+        // A fresh simulator shows onboarding over every tab, and on
+        // 2026-09-15 the whole audit measured the carousel's Skip button
+        // five times under five screen names. `UserDefaults.standard` reads
+        // `-key value` launch arguments, so this is `OnboardingState`'s own
+        // key, set the way a reader who finished the carousel set it.
+        app.launchArguments += ["-onboarding.completed", "YES"]
         app.launch()
         return app
     }

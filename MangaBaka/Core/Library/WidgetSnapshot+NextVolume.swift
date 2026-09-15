@@ -95,12 +95,16 @@ extension WidgetSnapshot {
         repository: any SeriesRepositoryProtocol,
         now: Date = Date()
     ) async -> [NextVolumeEntry] {
+        // One hop and one query for the whole library, not one per entry:
+        // `SeriesRepository+Cache.cachedExtrasLinks` records what the
+        // per-entry version cost on the launch path (939 hops), and this
+        // walk is the same shape (night review, persistence §3).
+        let wanted = entries.filter { Self.wantsNextVolume($0.state) }
+        let volumesByID = await repository.cachedExtrasVolumes(for: wanted.map(\.seriesId))
         var candidates: [NextVolumeEntry] = []
-        for entry in entries where Self.wantsNextVolume(entry.state) {
-            guard let series = entry.series,
-                  let extras = await repository.cachedExtras(for: entry.seriesId)
-            else { continue }
-            let soonest = extras.volumes
+        for entry in wanted {
+            guard let series = entry.series, let volumes = volumesByID[entry.seriesId] else { continue }
+            let soonest = volumes
                 .compactMap { volume -> (SeriesWork.Volume, Date)? in
                     guard let date = volume.date, date > now else { return nil }
                     return (volume, date)

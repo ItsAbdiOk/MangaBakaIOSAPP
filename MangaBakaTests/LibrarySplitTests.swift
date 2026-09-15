@@ -241,7 +241,11 @@ struct LibrarySplitTests {
         let inCache = try definitions(cache)
         let inLibrary = try definitions(library)
 
-        for table in AppDatabase.readerTables {
+        // `libraryCacheTables` too: they left `readerTables` on 2026-09-14
+        // and the declaration on each side still has to match, or a
+        // one-sided `payload BLOB` → `TEXT` would pass the runtime column-set
+        // check and this test both.
+        for table in AppDatabase.readerTables + AppDatabase.libraryCacheTables {
             #expect(inLibrary[table] != nil, "\(table) missing from the reader's file")
             #expect(inCache[table] == inLibrary[table], "\(table) differs between the two files")
         }

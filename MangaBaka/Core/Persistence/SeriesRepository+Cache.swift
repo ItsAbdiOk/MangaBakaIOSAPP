@@ -43,6 +43,19 @@ extension SeriesRepository {
     /// A series with nothing cached, or a row past the six hours, is absent
     /// from the result — the same answer a nil `cachedExtras` gave.
     func cachedExtrasLinks(for ids: [Int]) async -> [Int: [SeriesLink]] {
+        await cachedExtrasField(for: ids, as: CachedLinks.self).mapValues(\.links)
+    }
+
+    /// The `volumes` of every cached series page among `ids`, in one read —
+    /// the Next-volume widget's snapshot asks this for the whole library at
+    /// launch, and per-entry `cachedExtras` would be the 939 hops above again.
+    func cachedExtrasVolumes(for ids: [Int]) async -> [Int: [SeriesWork.Volume]] {
+        await cachedExtrasField(for: ids, as: CachedVolumes.self).mapValues(\.volumes)
+    }
+
+    /// One `WHERE seriesId IN (…)` read and one partial decode per row, for
+    /// whichever single key `Field` names.
+    private func cachedExtrasField<Field: Decodable>(for ids: [Int], as _: Field.Type) async -> [Int: Field] {
         guard !ids.isEmpty else { return [:] }
         // `await`: in an async context GRDB's asynchronous `read` is the one
         // that binds, and it is the right one — the synchronous overload
@@ -51,23 +64,28 @@ extension SeriesRepository {
             try CachedDetail.filter(ids.contains(Column("seriesId"))).fetchAll(db)
         }) ?? []
         let now = clock.now
-        var links: [Int: [SeriesLink]] = [:]
+        var fields: [Int: Field] = [:]
         for row in rows {
             // Same freshness rule as `readDetailCache`, including the
             // backwards-clock case, so the two cannot drift apart.
             let age = now.timeIntervalSince(row.cachedAt)
             guard age >= 0, age < Self.detailFreshness else { continue }
-            guard let decoded = try? JSONDecoder().decode(CachedLinks.self, from: row.payload)
-            else { continue }
-            links[row.seriesId] = decoded.links
+            guard let decoded = try? JSONDecoder().decode(Field.self, from: row.payload) else { continue }
+            fields[row.seriesId] = decoded
         }
-        return links
+        return fields
     }
 
     /// Just the `links` key of an encoded `SeriesExtras`, so reading the links
     /// of a whole library does not decode a whole library of series pages.
+    /// `SeriesExtras` always encodes the key, so no `decodeIfPresent`.
     private struct CachedLinks: Decodable {
         var links: [SeriesLink] = []
+    }
+
+    /// Just the `volumes` key, same reasoning.
+    private struct CachedVolumes: Decodable {
+        var volumes: [SeriesWork.Volume] = []
     }
 
     func writeDetailCache(_ extras: SeriesExtras, for seriesId: Int) throws {

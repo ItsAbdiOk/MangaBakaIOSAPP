@@ -141,24 +141,6 @@ actor HistoryStore {
         }
     }
 
-    /// The hour of day (local time) the reader most often opens something,
-    /// going by this same history. Nil when there is too little of it to say
-    /// anything.
-    ///
-    /// The mode, not the mean: the mean of a 9am read and an 11pm read is
-    /// 4am, which is nobody's actual reading hour.
-    ///
-    /// A guess: five entries before this says anything, so one late-night
-    /// read on a fresh history does not become "your reading hour is 2am".
-    func usualReadingHour() throws -> Int? {
-        let hours = try database.libraryWriter.read { db in
-            try ViewedEntry.fetchAll(db).map { Calendar.current.component(.hour, from: $0.viewedAt) }
-        }
-        guard hours.count >= 5 else { return nil }
-        let counts = Dictionary(grouping: hours, by: { $0 }).mapValues(\.count)
-        return counts.max { $0.value < $1.value }?.key
-    }
-
     /// Keeps the newest `limit` rows and deletes the rest.
     private static func trim(_ db: Database) throws {
         try db.execute(sql: """

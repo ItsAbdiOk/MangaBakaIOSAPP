@@ -321,13 +321,31 @@ struct WebtoonsFeedClientTests {
 
     /// A series with no Webtoons-shaped link is never asked, and is not
     /// reported as a failure — it simply never carried this source.
+    ///
+    /// Two shapes: no links at all, and — the one that was wrong until
+    /// 2026-09-15 — links to other places only. The Apothecary Diaries
+    /// carries seventeen links (Square Enix, Piccoma, Kakao, Wikipedia…) and
+    /// no Webtoons one; the old test only covered the empty list, so it
+    /// agreed with the bug. Fails before the fix on the second case with
+    /// `.failed(transport("No usable Webtoons feed URL."))`.
     @Test("A series with no Webtoons link is notCarried, not failed")
     func noLinkIsNotCarried() async {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("webtoons-tests-\(UUID().uuidString)", isDirectory: true)
         let client = makeClient(clock: TestClock(), cacheDirectory: directory)
-        let answer = await client.feed(for: [], seriesID: 1)
-        #expect(answer == .notCarried)
+        #expect(await client.feed(for: [], seriesID: 1) == .notCarried)
+
+        let elsewhere = [
+            "https://magazine.jp.square-enix.com/biggangan/introduction/kusuriya/",
+            "https://piccoma.com/web/product/29915",
+            "https://en.wikipedia.org/wiki/The_Apothecary_Diaries"
+        ].enumerated().map { index, url in
+            SeriesLink(
+                id: "\(index)", url: URL(string: url), name: nil, nameDisplay: nil, type: nil, language: nil
+            )
+        }
+        let answer = await client.feed(for: elsewhere, seriesID: 222)
+        #expect(answer == .notCarried, Comment(rawValue: "\(answer)"))
     }
 
     /// A matching link that answers gets `.answered(_)`, attributed to

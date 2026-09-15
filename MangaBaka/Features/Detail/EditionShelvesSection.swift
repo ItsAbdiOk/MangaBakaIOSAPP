@@ -230,7 +230,7 @@ struct EditionShelvesSection: View {
     private func shelfBlock(_ shelf: EditionShelf) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Self.heading(for: shelf.edition))
+                Text(Self.heading(for: shelf))
                     .typeRowTitle()
                     .foregroundStyle(Palette.textPrimary)
                 // The source, named on the group. Obligation, not decoration —
@@ -274,6 +274,19 @@ struct EditionShelvesSection: View {
         }
         guard let title = edition.editionTitle, !title.isEmpty else { return language }
         return "\(language) · \(title)"
+    }
+
+    /// The edition's heading plus the format when it is not print — "English
+    /// · VIZ Media · eBook". Print says nothing extra: it is the shelf a
+    /// reader expects, and "· Print" on every heading would be noise.
+    nonisolated static func heading(for shelf: EditionShelf) -> String {
+        let base = heading(for: shelf.edition)
+        switch shelf.format {
+        case .print: return base
+        case .digital: return "\(base) · eBook"
+        case .boxSet: return "\(base) · Box sets"
+        case .other: return "\(base) · Other"
+        }
     }
 
     /// Every source standing behind this group's rows, credited.
@@ -369,21 +382,5 @@ struct EditionShelvesSection: View {
         .buttonStyle(.press)
         .accessibilityLabel(isOwned ? "Owned" : "Not owned")
         .accessibilityValue(volume.title)
-        .accessibilityAddTraits(.isButton)
     }
-}
-
-/// What the page hands the section about the reader's own shelf — see the
-/// section's doc comment for why this is an environment value.
-struct OwnedShelfControls {
-    let seriesID: Int
-    let owned: Set<OwnedVolumeKey>
-    /// Ticks or unticks one row; the page persists it and updates `owned`.
-    let toggle: (EditionVolume) -> Void
-    /// Opens the barcode sheet.
-    let scan: () -> Void
-}
-
-extension EnvironmentValues {
-    @Entry var ownedShelf: OwnedShelfControls?
 }

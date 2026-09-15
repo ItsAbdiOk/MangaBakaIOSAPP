@@ -13,6 +13,10 @@ import Testing
 /// on that type's body.
 @Suite("The reader's file gives its pages back after the move", .serialized)
 struct LibraryCacheMoveVacuumTests {
+    private func url(for name: String) throws -> URL {
+        try AppDatabase.applicationSupportDirectory().appendingPathComponent(name)
+    }
+
     private func cleanUp(_ name: String) {
         guard let directory = try? AppDatabase.applicationSupportDirectory() else { return }
         let stem = (name as NSString).deletingPathExtension
@@ -52,6 +56,83 @@ struct LibraryCacheMoveVacuumTests {
                     arguments: [Date(timeIntervalSince1970: 0)]
                 )
             }
+        }
+    }
+
+    /// Launch 1's copy failed, the app walked and wrote a fresh library into
+    /// the cache file, and launch 2 must not put the reader's older rows back
+    /// over it — night review §1. The cache file here holds rows 4 and 5
+    /// stamped now; the reader's file rows 1–3 stamped 1970.
+    ///
+    /// Fails before `cacheFileIsFresher` with `cache == [1, 2, 3]`: REPLACE
+    /// wrote the stale rows over the fresh ones and dropped nothing the
+    /// reader would notice until the next walk.
+    @Test("A fresher walk already in the cache file survives the retry")
+    func fresherCacheFileIsKept() throws {
+        let name = "cachefresh-\(UUID().uuidString).sqlite"
+        defer { cleanUp(name) }
+        try seedSplitDevice(named: name)
+        try autoreleasepool {
+            let cache = try AppDatabase.openPool(named: name, migrator: AppDatabase.migrator)
+            try cache.write { db in
+                for id in [4, 5] {
+                    try db.execute(
+                        sql: "INSERT INTO libraryEntry (seriesId, payload) VALUES (?, ?)",
+                        arguments: [id, Data("fresh-\(id)".utf8)]
+                    )
+                }
+                try db.execute(
+                    sql: "INSERT INTO libraryMetadata (id, cachedAt, isComplete) VALUES (1, ?, 1)",
+                    arguments: [Date()]
+                )
+            }
+        }
+
+        try autoreleasepool {
+            let database = try AppDatabase.onDisk(named: name)
+            let inCache = try database.cacheWriter.read { db in
+                try Int.fetchAll(db, sql: "SELECT seriesId FROM libraryEntry ORDER BY seriesId")
+            }
+            #expect(inCache == [4, 5])
+            let readerHasTable = try database.libraryWriter.read { db in try db.tableExists("libraryEntry") }
+            #expect(!readerHasTable, "the reader's stale pair is still dropped")
+        }
+    }
+
+    /// The window the review named: the drop committed, the VACUUM did not
+    /// run. Simulated by opening the moved device once more with a bloated
+    /// reader's file (a big table created and dropped by hand) — the retry
+    /// must reclaim it on an ordinary open. Fails before `vacuumIfBloated`
+    /// with `freelist == 300` or so.
+    @Test("A reader's file left bloated by an interrupted VACUUM is reclaimed on the next open")
+    func vacuumIsRetried() throws {
+        let name = "cacheretry-\(UUID().uuidString).sqlite"
+        defer { cleanUp(name) }
+        try seedSplitDevice(named: name)
+        try autoreleasepool { _ = try AppDatabase.onDisk(named: name) }
+
+        try autoreleasepool {
+            let queue = try DatabaseQueue(path: try url(for: AppDatabase.libraryName(for: name)).path)
+            try queue.write { db in
+                try db.execute(sql: "CREATE TABLE bloat (payload BLOB)")
+                for _ in 0..<20 {
+                    try db.execute(
+                        sql: "INSERT INTO bloat (payload) VALUES (?)",
+                        arguments: [Data(repeating: 0x42, count: 65_536)]
+                    )
+                }
+                try db.execute(sql: "DROP TABLE bloat")
+            }
+            let free = try queue.read { db in try Int.fetchOne(db, sql: "PRAGMA freelist_count") ?? 0 }
+            #expect(free > 256, "the fixture must bloat past the threshold, got \(free)")
+        }
+
+        try autoreleasepool {
+            let database = try AppDatabase.onDisk(named: name)
+            let free = try database.libraryWriter.read { db in
+                try Int.fetchOne(db, sql: "PRAGMA freelist_count") ?? -1
+            }
+            #expect(free == 0, "\(free) pages still on the freelist")
         }
     }
 

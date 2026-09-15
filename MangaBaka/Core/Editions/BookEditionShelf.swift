@@ -45,17 +45,48 @@ enum BookEditionShelf {
                 catalogue: catalogue(of: row.source),
                 language: language,
                 languageRole: VolumeEditions.role(of: language, in: series),
-                // The publisher, not a made-up name: it is the only thing
-                // either catalogue states that tells one printing's run from
-                // another's, and it is what the heading of a group of spines
-                // wants to say. Nil where the record did not state one — Open
-                // Library writes the literal string "unknown" for that and
-                // `EditionDocument.row` has already turned it into nil.
-                editionTitle: row.publisher
+                editionTitle: editionTitle(for: row)
             ),
             sourceLink: sourceLink(for: row)
         )
     }
+
+    /// The shelf's name, and therefore its group key (`VolumeEdition.id`):
+    /// `"<publisher> · <work> · <edition>"`, each part only when the record
+    /// stated one.
+    ///
+    /// The publisher first, not a made-up name: it is the only thing either
+    /// catalogue states that tells one printing's run from another's, and it
+    /// is what the heading of a group of spines wants to say. Nil where the
+    /// record did not state one — Open Library writes the literal string
+    /// "unknown" for that and `EditionDocument.row` has already turned it
+    /// into nil.
+    ///
+    /// The work, only when it is not the one asked for (`BookEdition.
+    /// workTitle`), so a side story admitted by the prefix match gets its own
+    /// shelf instead of a second "vol. 1" on the main run's.
+    ///
+    /// The edition note last, so the special printing of vol. 13 is a row of
+    /// its own — one the reader who owns it can still tick, with the right
+    /// ISBN — and the plain shelf counts one row per volume. Measured
+    /// 2026-09-15: all nine `dcndl:edition` notes on the 薬屋のひとりごと page
+    /// contain `特装版` and differ only in what is bundled (a booklet, a fan, a
+    /// deck of cards), so they are folded to that one word rather than left
+    /// as five one-volume shelves; a note without it is kept verbatim.
+    static func editionTitle(for row: BookEdition) -> String? {
+        let parts = [row.publisher, row.workTitle, row.edition.map(editionLabel)].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// `[マスキングテープ付特装版]` → `特装版`; `ドラマCD付き限定特装版` → `特装版`;
+    /// anything without the word, bracket-stripped and verbatim.
+    static func editionLabel(_ note: String) -> String {
+        let trimmed = note.trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+        return trimmed.contains(specialEdition) ? specialEdition : trimmed
+    }
+
+    /// "Special edition", NDL's own word for it on every note measured.
+    static let specialEdition = "特装版"
 
     private static func catalogue(of source: BookEdition.Source) -> VolumeCatalogue {
         switch source {
@@ -88,7 +119,10 @@ enum BookEditionShelf {
     /// parsing it out of two languages' punctuation is a guess), so in practice
     /// every row this numbers is an NDL one.
     static func number(from raw: String) -> Int? {
-        let digits = raw.prefix { $0.isNumber }
+        // Full-width first: NDL writes `１３` on some records (measured
+        // 2026-09-15, `薬屋のひとりごと １３`), and `Int("１３")` is nil.
+        let folded = raw.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? raw
+        let digits = folded.trimmingCharacters(in: CharacterSet(charactersIn: "[ ")).prefix { $0.isNumber }
         guard !digits.isEmpty else { return nil }
         return Int(digits)
     }

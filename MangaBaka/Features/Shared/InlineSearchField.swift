@@ -24,6 +24,15 @@ struct InlineSearchField: View {
                 .autocorrectionDisabled()
                 .typeBody()
                 .foregroundStyle(Palette.textPrimary)
+                // The row around this is `Metrics.tapTarget` tall, but a
+                // `TextField` only ever claims its own intrinsic (text)
+                // height inside an `HStack` — the audit measured that
+                // smaller frame directly (19-22pt, not 44) and flagged both
+                // a too-small hit region and clipped text at larger Dynamic
+                // Type sizes, where the glyphs can exceed that unstretched
+                // frame. Stretching it to the row's height fixes both with
+                // the one change, and centres the same way visually.
+                .frame(maxHeight: .infinity)
             SearchClearButton(text: $text)
         }
         .padding(.horizontal, 13)

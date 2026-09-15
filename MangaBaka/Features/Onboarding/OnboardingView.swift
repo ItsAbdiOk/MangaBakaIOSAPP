@@ -61,10 +61,18 @@ struct OnboardingView: View {
     @ViewBuilder
     private var controls: some View {
         if page < 2 {
+            // Both buttons padded out to `Metrics.tapTarget`: the audit on
+            // 2026-09-15 measured them at 29x16 and 31x16 — the text's own
+            // size — on every first launch, and this is the first screen a
+            // new reader touches. Skip is `textSecondary`, not `textTertiary`:
+            // the same audit flagged its contrast on the dark ground as
+            // "nearly passed", and a way out of onboarding is not decoration.
             HStack {
                 Button("Skip", action: onFinish)
                     .typeRowTitle()
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget)
+                    .contentShape(Rectangle())
 
                 Spacer(minLength: 12)
 
@@ -80,10 +88,12 @@ struct OnboardingView: View {
                 }
                 .typeRowTitle()
                 .foregroundStyle(Palette.accent)
+                .frame(minWidth: Metrics.tapTarget, minHeight: Metrics.tapTarget)
+                .contentShape(Rectangle())
             }
             .padding(.horizontal, Metrics.gutter)
-            .padding(.bottom, 20)
-            .padding(.top, 8)
+            .padding(.bottom, 6)
+            .padding(.top, 0)
         }
     }
 }

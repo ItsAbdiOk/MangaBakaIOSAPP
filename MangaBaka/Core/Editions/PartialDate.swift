@@ -44,7 +44,26 @@ struct PartialDate: Codable, Sendable, Equatable, Comparable {
     /// and the Solo Leveling side-story volume came back dated `2026-09-18`
     /// against a clock reading 2026-09-14 (measured that day). Nothing else
     /// in the bibliographic family carries an unpublished volume.
-    func isForthcoming(now: Date) -> Bool { date > now }
+    ///
+    /// Compared against the **end** of the stated period, not its start: a
+    /// month-precision `2026-10` is "some time in October", and a book due
+    /// the 25th is still forthcoming on the 2nd. Against the start it stopped
+    /// being announced at midnight on the 1st, and a year-precision `2026`
+    /// was never forthcoming after 1 January. Every NDL and ANN date measured
+    /// was day-precision, so this was found by reading, not by a reader.
+    func isForthcoming(now: Date) -> Bool { periodEnd > now }
+
+    /// The first instant *after* the stated period — the next day, month or
+    /// year. Falls back to `date` if the calendar cannot add, which it can
+    /// for any date `parse` produces.
+    var periodEnd: Date {
+        let unit: Calendar.Component = switch precision {
+        case .year: .year
+        case .month: .month
+        case .day: .day
+        }
+        return Self.utc.date(byAdding: unit, value: 1, to: date) ?? date
+    }
 
     // MARK: - Parsing
 
