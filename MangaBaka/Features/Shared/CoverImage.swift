@@ -13,6 +13,13 @@ struct CoverImage: View {
     /// What VoiceOver reads. Cover art carries the title visually, so without
     /// this a reader using VoiceOver hears nothing at all.
     var accessibilityText: String = "Cover art"
+    /// Seeds the generated placeholder's hue when `ScreenshotMode.isActive`.
+    /// Unused otherwise. Defaults to 0 so every existing call site — the
+    /// stack, the detail hero, the mix seed slots — compiles unchanged;
+    /// `CoverCard` below is the one call site that has a series id handy and
+    /// passes it, which is also the one screen (a grid) where a repeated hue
+    /// would actually be visible as a repeated grey block.
+    var seriesID: Int = 0
     /// Called once after the real artwork (not the BlurHash) has finished
     /// loading, whether that came from cache or the network. Rows use this to
     /// chain their own arrival to the cover's rather than guessing at a delay.
@@ -102,11 +109,31 @@ struct CoverImage: View {
 
     @ViewBuilder
     private var background: some View {
+        // Screenshot capture must never show real art — not the network
+        // image, and not the BlurHash either, since a BlurHash is a blur of
+        // the real cover and is exactly as licensed as the pixels it comes
+        // from. This branch is the one place that decision is made; `load()`
+        // below has the matching early-return that keeps the network image
+        // from ever being fetched in the first place. Checked first and
+        // returns its own view entirely, so the ordinary path below is
+        // untouched when the flag is off.
+        if ScreenshotMode.isActive {
+            LinearGradient(
+                colors: [
+                    Palette.imagePlaceholder,
+                    Color(
+                        hue: ScreenshotMode.placeholderHue(for: seriesID),
+                        saturation: 0.35, brightness: 0.22
+                    )
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         // The API ships a BlurHash with every cover, so the placeholder can
         // carry the artwork's real colours. A loading grid then looks like
         // the grid it is about to become rather than a wall of grey. No
         // gloss here — see the doc comment on `body`.
-        if let blur = blurPlaceholder {
+        } else if let blur = blurPlaceholder {
             Image(uiImage: blur)
                 .resizable()
                 .accessibilityIgnoresInvertColors()
@@ -125,6 +152,12 @@ struct CoverImage: View {
     /// round trip and skipped the BlurHash placeholder that exists for
     /// exactly that gap.
     private func load() async {
+        // Screenshot capture: no network art, ever. `background` already
+        // draws the generated placeholder and never falls through to the
+        // BlurHash; this is the other half of that decision — without it the
+        // real cover would still be fetched and cross-fade in over the
+        // placeholder mid-capture.
+        guard !ScreenshotMode.isActive else { return }
         isReady = false
         let cached = CoverStore.shared.cached(url)
         loaded = cached
@@ -394,7 +427,8 @@ struct CoverCard: View {
                 cover: series.cover,
                 width: scaledWidth,
                 radius: radius,
-                accessibilityText: series.displayTitle ?? "Untitled series"
+                accessibilityText: series.displayTitle ?? "Untitled series",
+                seriesID: series.id
             )
             // Hold any cover in a row or a grid and copy the artwork. On the
             // card rather than on `CoverImage` itself, because `CoverImage` is

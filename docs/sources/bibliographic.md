@@ -562,3 +562,24 @@ every manga ISBN tested. The gap for Japanese-edition covers is still open.
 - Open Library's real sustained rate ceiling. Observed resets at ~1 req/1.5 s
   contradict the documented 1 req/s; I did not characterise it further to avoid
   hammering them.
+
+## Open Library covers for coverless ANN rows — measured 2026-09-15, not wired
+
+The question from the Omniscient Reader page (13 ANN rows, no cover art):
+would Open Library's cover-by-ISBN fill them? Counted volume-like search
+docs with a `cover_i`, five series, one query each:
+
+| Series | volume-like docs | with a cover |
+|---|---|---|
+| Solo Leveling | 52 | 14 (27%) |
+| Chainsaw Man | 42 | 34 (81%) |
+| Dandadan | 4 | 0 |
+| The Apothecary Diaries | 13 | 0 |
+| Tower of God | 22 | 14 (64%) |
+| Omniscient Reader's Viewpoint (09-14) | 9 | 1 |
+
+Two of six clear 50%; three are 0–11%. A shelf with a third of its covers
+reads as broken, not as partial, so this stays unwired. Revisit if a
+per-ISBN check (`covers.openlibrary.org/b/isbn/<isbn>-M.jpg?default=false`,
+one HEAD per row) is acceptable — that would show only the covers that
+exist, at one request per volume.

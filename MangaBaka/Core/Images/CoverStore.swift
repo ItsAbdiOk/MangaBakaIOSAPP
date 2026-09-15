@@ -75,6 +75,13 @@ final class CoverStore {
     /// covers permanently blank in a scrolling list.
     func image(for url: URL?) async -> UIImage? {
         guard let url else { return nil }
+        // Every cover, portrait, backdrop and gallery page comes through
+        // here, so this is the one place the App Store screenshot mode has
+        // to say no: the first capture run (2026-09-15) showed real art
+        // through `DetailBackdrop`, which reads this directly rather than
+        // through `CoverImage`. Nil is what every caller already draws as
+        // "no art".
+        guard !ScreenshotMode.isActive else { return nil }
         if let cached = cache.object(forKey: url as NSURL) { return cached }
         if let existing = inFlight[url] { return await existing.value }
 

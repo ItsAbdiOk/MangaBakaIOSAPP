@@ -10,18 +10,8 @@ struct TagTreeLevelView: View {
     let repository: any SeriesRepositoryProtocol
     @Binding var path: [Series]
 
-    /// Whether the count beside "Browse" adds up the whole branch instead of
-    /// just this node. Default off — **a guess**, not measured: a reader who
-    /// has drilled down to one specific node most likely wants that node,
-    /// not every series scattered across everything beneath it, and a big
-    /// number that then filters down to a small one on tap would read as a
-    /// bug. See `browseCountLabel` for why the toggle only ever changes the
-    /// label, never what "Browse" actually searches.
-    @State private var includesDescendants = false
-
     private var children: [Tag] { TagTreeModel.children(of: tag.id, in: model.tags) }
     private var breadcrumb: [Tag] { TagTreeModel.path(to: tag.id, in: model.tags) }
-    private var descendantIDs: Set<Int> { TagTreeModel.descendantIDs(of: tag.id, in: model.tags) }
 
     var body: some View {
         List {
@@ -52,16 +42,24 @@ struct TagTreeLevelView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// "Browse 1,204 series" for a node with series of its own. A category
+    /// node (own count 0, children below) gets no button: the API has no
+    /// working tag-OR (`SearchQuery.tagMode`'s doc), so "browse this
+    /// category" would search the category tag alone and answer nothing.
+    ///
+    /// There was a toggle here, "Include sub-tags in the count", from the
+    /// first version on 2026-09-14. It changed the number on the button and
+    /// never what the button searched — the honest thing about it was the
+    /// word "roughly", and a control that changes a label but not the
+    /// result is the kind of thing this project's reviews call
+    /// "computed and discarded" from the reader's side. Removed 2026-09-15;
+    /// `TagTreeModel.descendantIDs` stays: its tests hold, and a future
+    /// server-side OR would want it.
     @ViewBuilder
     private var browseAction: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !descendantIDs.isEmpty {
-                Toggle("Include sub-tags in the count", isOn: $includesDescendants)
-                    .typeInstruction()
-                    .tint(Palette.accent)
-            }
+        if let count = tag.seriesCount, count > 0 {
             NavigationLink(value: TagBrowseRequest(tag: tag)) {
-                Text("Browse \(browseCountLabel)")
+                Text("Browse \(count.formatted()) series")
                     .typeInstruction()
                     .foregroundStyle(Palette.onAccent)
                     .frame(maxWidth: .infinity)
@@ -69,31 +67,13 @@ struct TagTreeLevelView: View {
                     .background(Palette.accent, in: Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Browse \(browseCountLabel)")
+            .accessibilityLabel("Browse \(count.formatted()) series")
+            .padding(.vertical, 4)
+        } else if !children.isEmpty {
+            Text("Pick a sub-tag to browse — this one is a category, not a tag on any series.")
+                .typeFootnote()
+                .foregroundStyle(Palette.textMuted)
+                .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
-    }
-
-    /// "1,204 series" for the node itself, or "roughly 8,600 series" once the
-    /// toggle adds its descendants in.
-    ///
-    /// The "roughly" is load-bearing, not decoration: this sums each
-    /// descendant's own `seriesCount` with no de-duplication for a series
-    /// that carries more than one of them — a series tagged both "Boxing"
-    /// and "Wrestling" counts twice here. `TagTreeModel.descendantIDs`'s doc
-    /// comment covers why an exact, de-duplicated number is not available at
-    /// all: the API has no working tag-OR to ask for one, so this is the
-    /// nearest honest estimate rather than a real total. What "Browse"
-    /// itself searches never changes with the toggle — see
-    /// `TagTreeSeriesModel.init`, which always searches this one tag alone.
-    private var browseCountLabel: String {
-        guard includesDescendants, !descendantIDs.isEmpty else {
-            return "\((tag.seriesCount ?? 0).formatted()) series"
-        }
-        let ids = descendantIDs.union([tag.id])
-        let total = model.tags
-            .filter { ids.contains($0.id) }
-            .reduce(0) { $0 + ($1.seriesCount ?? 0) }
-        return "roughly \(total.formatted()) series"
     }
 }
