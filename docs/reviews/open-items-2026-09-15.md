@@ -1,0 +1,53 @@
+# Open items — reconciled 2026-09-15
+
+Every finding in `docs/reviews/SUMMARY.md` (77), `docs/reviews/full/SUMMARY.md`
+(138 + Q1–Q13 + 18 do-not-fix) and `docs/reviews/full2/SUMMARY.md` (lanes
+A–E) was checked against the code at `d3821bc` by reading the file, not the
+commit message. Result: **~230 done, 8 superseded by later deletions
+(Naver, the nudge machinery, TranslationGap), and the list below still
+open.** One "still open" claim from a verifier was wrong — CSV formula
+defusing (`LibraryExport.defused`, work-list 91) has been in place since
+7a9779f with a round-trip test — so each line here was re-read before it
+was kept.
+
+Fixed tonight while reconciling (so not listed): W7 `+` in query values
+(now `%2B`, test); 72c a Save from search patches the shared library model;
+three stale comments (RemindersSection, LibraryModel, SessionTests title).
+
+## Needs a decision from Abdi
+
+| Item | Source | What | Why it waits |
+|---|---|---|---|
+| `.mix` with `schema=full` | full2 work-list 19, decision 4 | `.surprise` got it; `.mix` did not | Measured 2026-09-13: `schema=full` on `.mix` answered **400**. Needs a payload capture showing it now works, or stays off. |
+| Deferred-notification shelf life | full2 decision 6 | Defer only condition 2 (new chapter) past 14 days, never 1b (a release the reader is waiting for) | Policy, not code. `NotificationPolicy` has no per-condition deferral flag. |
+| Xcode Cloud source-tree gate | full2 work-list 60 | Source-reading tests skip silently in the cloud (no checkout in the test phase) | Either ship the sources into the test bundle (project.yml `resources`) or accept the skip and print its count. |
+| NDL 近刊 title mismatch, orphan "erase N" wording, publisher-less 近刊 shelf, `外伝　01` shelf name | `docs/reviews/night/shelf.md` "Needs Abdi" | Copy and grouping choices on the volumes shelf | Each is a wording call on real data. |
+
+## Open, no decision needed — by value
+
+| Item | Source | Effort | Note |
+|---|---|---|---|
+| Token save does not rebuild account surfaces | full2 work-list 14 | a function | `SettingsView.save()` clears the previous account and checks the token; nothing re-walks library/reminders/Spotlight for the new one until the next launch. |
+| `LibraryImport` request spacing | full2 work-list 37 | a function | Sleeps once per row, but an `add` then `update` on one row go back-to-back. |
+| `TasteRanker.rank` scores per comparison | full2 work-list 49 | a function | Decorate-sort-undecorate; unmeasured cost on 945 entries. |
+| `TasteProfile.note` scans the whole library | full2 work-list 68 | a line | A `LibrarySnapshot.entry(for:)`; mostly hits the in-memory fast path today. |
+| `OfflineCatalogue.titles(for:)` decodes the whole index | full2 work-list 76 | a function | 1.48→4.75 MB gunzip + full decode to label neighbours; an id-keyed sidecar. |
+| `appleUnreachable` blame ordering | full2 work-list 59 | a function | Home store answers `[]`, Japanese fallback fails → the failure is reported over the valid empty answer. |
+| Seven file-cache implementations | full2 work-list 115 | a file | One `VersionedFileCache`; "not urgent" in the original. |
+| Recommendations fixture | full2 work-list 128 | an hour | `RecommendationQualityTests` hand-types JSON; capture one real `/v1/my/recommendations` page (needs a token — Abdi's machine). |
+| Real sleeps in two tests | full2 work-list 129 | an hour | `TagSearchTests:144`, `RequestBudgetTests:138/141` — models take a clock; the tests don't use it. |
+| Throwing-database test for `ReleaseSchedule` | full2 work-list 136 | an hour | ~10 `try?` sites with no test that a write failure is surfaced. |
+| `Clock` → `CacheClock` rename | full2 work-list 72 | mechanical, 162 references | Collides with `_Concurrency.Clock` — every new file has to qualify it. |
+| `Metrics.scrollBottomInset` 124 / `SettingsRow` 63 | full2 work-list 101 | a measurement | Unresolved since 09-13; the a11y triage tonight hit it again ("ch NN" under the tab bar). |
+| GigaViewer back-off window untested | SUMMARY F18 (65) | an hour | The test proves a 429 fails; not that the next request waits. |
+| `tonarinoyj.rss` fixture unused | SUMMARY F11 (30) | an hour | Captured 09-13, still unreferenced; `GigaViewerFeedTests` uses a hand-shaped one. |
+| Nested `[spoiler]` in Shikimori | SUMMARY T6/F16 (49) | a function | Non-greedy regex closes at the first `[/spoiler]`. |
+| 113 raw-string assertions | SUMMARY F19 (66) | half a day | Held back on purpose 09-13; still the biggest "tests agree with the bug" surface. |
+
+## Recorded, not planned
+
+- Korean digital-first webtoons: no lawful next-episode source
+  (`docs/sources/webtoon-episodes.md`, 0 of 14). The MangaUpdates
+  original-run line shipped in its place.
+- Open Library covers for coverless ANN rows: 1 of 9 on Omniscient Reader;
+  re-measure on five series before wiring.

@@ -30,6 +30,11 @@ struct SearchView: View {
     /// Where a result's "Save" and "Mark read" write (R F3). Nil where a
     /// caller has no library to offer, and the menu shows only "Open".
     var library: (any LibraryProviding)?
+    /// The shared library model, so a Save from a results grid lists the
+    /// series on the Library tab now rather than after its next walk — the
+    /// same patch `LibraryControl` makes (item 72c). Nil where there is no
+    /// library to show.
+    var libraryStore: LibraryModel?
 
     @State private var isNamingLens = false
     @State private var showFilters = false

@@ -102,7 +102,7 @@ struct RootViewWiringTests {
     /// Expected to fail before the fix with: `mixModel?.addSeed(series)`
     /// followed unconditionally by `toasts.show("Added to the mix")`, with
     /// no branch for a nil model.
-    @Test("Use as seed does not confirm success when there is no mix model")
+    @Test("Use as seed adds unconditionally: there is no nil mix model to guard")
     func useAsSeedGuardsNilModel() throws {
         let source = try SourceTree.read("MangaBaka/App/RootView+Failures.swift")
         let function = try #require(source.range(of: "func useAsSeedTapped"))

@@ -309,7 +309,7 @@ extension RootView {
         // cache and asks the network for nothing, so a library walk costs
         // the same as before this widget existed.
         let nextVolumes = await WidgetSnapshot.nextVolumeCandidates(
-            from: walk.entries, repository: repository
+            from: walk.entries, repository: repository, editionAnswers: editionAnswers
         )
         WidgetSnapshot.write(
             pickBackUp: WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened),
@@ -488,6 +488,7 @@ extension RootView {
             ndl: ndl,
             wikidata: wikidata,
             ownedVolumes: ownedVolumes,
+            editionAnswers: editionAnswers,
             onOpenPublisher: { openPublisher = PublisherRoute(name: $0, kind: .publisher) },
             onOpenAuthor: { openPublisher = PublisherRoute(name: $0, kind: .author) },
             contentRatings: content.preferences.allowed.map(\.rawValue),

@@ -116,6 +116,15 @@ extension SearchView {
         Task {
             do throws(APIError) {
                 _ = try await library.add(seriesId: series.id, state: state)
+                // The same local patch `LibraryControl` makes on add: the
+                // Library tab used to learn about a Save from here only on
+                // its next walk (work-list 72c).
+                libraryStore?.insert(LibraryEntry(
+                    id: LibraryControlModel.placeholderID(for: series.id), seriesId: series.id, state: state,
+                    progressChapter: nil, progressVolume: nil, rating: nil, note: nil, startDate: nil,
+                    finishDate: nil, numberOfRereads: nil, priority: nil, isPrivate: nil, readLink: nil,
+                    series: series
+                ))
                 toasts?.show(said)
             } catch let error {
                 toasts?.show(error.userFacingMessage, kind: .failure)

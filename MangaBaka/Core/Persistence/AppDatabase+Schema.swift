@@ -180,6 +180,21 @@ extension AppDatabase {
             }
         }
 
+        migrator.registerMigration("v14_editionAnswer") { db in
+            // The merged ANN / Open Library / NDL answer a series page drew,
+            // keyed by series id, so the Next-volume widget can read a
+            // forthcoming volume for a page opened last week rather than
+            // only one opened in the last six hours (`EditionAnswerStore`).
+            // Cache, not reader data: every row is re-fetchable on the next
+            // page open, so it lives in this file and out of the backup.
+            // Touches nothing on `readerTables`, so no `ifStillInCacheFile`.
+            try db.create(table: "editionAnswer") { table in
+                table.primaryKey("seriesId", .integer)
+                table.column("payload", .blob).notNull()
+                table.column("fetchedAt", .datetime).notNull()
+            }
+        }
+
         return migrator
     }
 

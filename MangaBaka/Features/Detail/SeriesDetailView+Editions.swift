@@ -60,6 +60,10 @@ extension SeriesDetailView {
         editions = VolumeEditions.merge(
             ann: ann, openLibrary: open, ndl: ndl, works: extras.volumes, format: format, for: shown
         )
+        // Persisted here, where the merge happens, so the Next-volume widget
+        // can read this page's forthcoming volume for 30 days without the
+        // merge being re-derived anywhere else (`EditionAnswerStore`).
+        await editionAnswers?.write(editions, for: shown.id)
         await reconcileOwned(with: editions.shelves)
     }
 

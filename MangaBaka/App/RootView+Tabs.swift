@@ -116,7 +116,8 @@ extension RootView {
                         counts: session.counts,
                         catalogue: catalogue,
                         recents: recents.value,
-                        library: library
+                        library: library,
+                        libraryStore: session.library
                     )
                     .navigationDestination(for: Series.self) { detail($0, path: $searchPath) }
                     .navigationDestination(isPresented: $showsBrowse) {

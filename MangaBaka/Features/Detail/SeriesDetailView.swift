@@ -60,6 +60,9 @@ struct SeriesDetailView: View {
     /// page without it draws the rows with no ticks, which is what a preview
     /// and the corrupt-database fallback get.
     var ownedVolumes: OwnedVolumes?
+    /// Where a merged volumes answer is kept for the Next-volume widget,
+    /// which cannot rebuild it (`EditionAnswerStore`). Nil in previews.
+    var editionAnswers: EditionAnswerStore?
     /// What `ownedVolumes` holds for this series, read once per page by
     /// `loadOwned` and updated in place by `toggleOwned`.
     @State var owned: Set<OwnedVolumeKey> = []

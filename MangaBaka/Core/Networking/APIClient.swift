@@ -449,6 +449,11 @@ actor APIClient {
         }
         if !query.isEmpty {
             components.queryItems = query
+            // `URLComponents` leaves a literal `+` alone, and a server reads
+            // that as a space: "+Anima" arrived as " Anima". `%2B` is the
+            // only spelling a query value can carry it in (wire review W7).
+            components.percentEncodedQuery = components.percentEncodedQuery?
+                .replacingOccurrences(of: "+", with: "%2B")
         }
         guard let url = components.url else {
             throw APIError.transport(underlying: "Could not build a URL for \(path).")

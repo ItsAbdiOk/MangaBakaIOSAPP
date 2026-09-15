@@ -10,8 +10,8 @@ struct RemindersSection: View {
     let reminders: ReleaseReminders
     /// Rebuilds the pending list after a switch moves.
     let onChange: () async -> Void
-    /// Not injected from `AppServices` yet — see this feature's report for
-    /// the one line that should replace this default with a shared instance.
+    /// The app's one instance, passed in by `SettingsView`; the default only
+    /// serves previews and tests that have no `AppServices`.
     var publisherFollows: PublisherFollows = PublisherFollows()
 
     @Environment(\.openURL) private var openURL

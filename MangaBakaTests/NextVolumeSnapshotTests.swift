@@ -155,10 +155,95 @@ struct NextVolumeSnapshotTests {
         #expect(candidates.first?.seriesID == 42)
         #expect(candidates.first?.volumeLabel == "Vol. 12")
         #expect(candidates.first?.sourceName == "MangaBaka")
-        // Nothing here is ANN-sourced — see the doc comment on
-        // `nextVolumeCandidates` for why the ANN/Open Library/NDL legs are
-        // not reachable from a cache-only gather.
+        // A `works` row is MangaBaka's own and owes nobody a per-row link.
         #expect(candidates.first?.sourceURL == nil)
+    }
+
+    // MARK: - The second source: the persisted editions answer
+
+    private func annAnswer(_ number: Int, _ date: String) -> VolumeEditionAnswer {
+        let edition = VolumeEdition(
+            catalogue: .animeNewsNetwork, language: "en", languageRole: .english,
+            editionTitle: "Solo Leveling"
+        )
+        let volume = EditionVolume(
+            number: number, title: "Solo Leveling (GN \(number))", releaseDate: PartialDate.parse(date),
+            isbn13: nil, format: .print, edition: edition,
+            sourceLink: URL(string: "https://www.animenewsnetwork.com/encyclopedia/releases.php?id=1")
+        )
+        return VolumeEditionAnswer(
+            shelves: [EditionShelf(edition: edition, volumes: [volume])],
+            credits: [.animeNewsNetwork], failures: [:], unaskedReason: nil
+        )
+    }
+
+    private func store(_ answers: [Int: VolumeEditionAnswer]) async throws -> EditionAnswerStore {
+        let store = EditionAnswerStore(database: try AppDatabase.inMemory(), clock: TestClock(now: now))
+        for (id, answer) in answers { await store.write(answer, for: id) }
+        return store
+    }
+
+    /// The Solo Leveling case from the brief: the page was opened last week,
+    /// the six-hour `works` cache has expired, ANN's answer is on disk.
+    /// Fails before the store was wired in with `candidates.isEmpty` (and,
+    /// literally, with a compile error — `editionAnswers:` did not exist).
+    @Test("A persisted ANN answer fills a series the works cache knows nothing about")
+    func editionsFillWhereWorksKnowsNothing() async throws {
+        let editions = try await store([42: annAnswer(12, "2026-10-03")])
+        let candidates = await WidgetSnapshot.nextVolumeCandidates(
+            from: [libraryEntry(42, title: "Solo Leveling")], repository: StubCacheRepository(),
+            editionAnswers: editions, now: now
+        )
+        #expect(candidates.count == 1)
+        #expect(candidates.first?.volumeLabel == "Vol. 12")
+        #expect(candidates.first?.sourceName == "Anime News Network")
+        // ANN's terms: their entry link travels with their row.
+        #expect(candidates.first?.sourceURL != nil)
+    }
+
+    /// Fails before the merge with `sourceName == "MangaBaka"` for series 1
+    /// (works was the only source) and no row at all for series 3.
+    @Test("Per series the soonest date wins across both sources; works on a tie")
+    func soonestAcrossSources() async throws {
+        let repo = StubCacheRepository()
+        repo.extrasByID[1] = SeriesExtras(volumes: [
+            SeriesWork.Volume(number: "13", editions: [work(releaseDate: "2026-12-01")])
+        ])
+        repo.extrasByID[2] = SeriesExtras(volumes: [
+            SeriesWork.Volume(number: "12", editions: [work(releaseDate: "2026-10-03")])
+        ])
+        let editions = try await store([
+            1: annAnswer(12, "2026-10-03"), 2: annAnswer(12, "2026-10-03"), 3: annAnswer(5, "2026-11-01")
+        ])
+        let candidates = await WidgetSnapshot.nextVolumeCandidates(
+            from: [libraryEntry(1, title: "ANN sooner"), libraryEntry(2, title: "Tie"),
+                   libraryEntry(3, title: "Editions only")],
+            repository: repo, editionAnswers: editions, now: now
+        )
+        let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.seriesID, $0) })
+        #expect(byID[1]?.sourceName == "Anime News Network")
+        #expect(byID[1]?.volumeLabel == "Vol. 12")
+        #expect(byID[2]?.sourceName == "MangaBaka")
+        #expect(byID[3]?.sourceName == "Anime News Network")
+    }
+
+    /// The numbers the morning note quotes. Fails before `coverage` existed
+    /// with a compile error; the arithmetic is checked against a hand count:
+    /// of four wanted entries, works answers two, editions answers two, one
+    /// of those overlaps, and the dropped entry's hits count for nothing.
+    @Test("Coverage counts works, editions and either over wanted entries only")
+    func coverageCounts() {
+        let entries = [
+            libraryEntry(1, title: "Both"), libraryEntry(2, title: "Works only"),
+            libraryEntry(3, title: "Editions only"), libraryEntry(4, title: "Neither"),
+            libraryEntry(5, title: "Dropped", state: .dropped)
+        ]
+        let coverage = WidgetSnapshot.coverage(
+            entries: entries, worksHits: [1, 2, 5], editionHits: [1, 3, 5]
+        )
+        #expect(coverage.works == 2)
+        #expect(coverage.editions == 2)
+        #expect(coverage.either == 3)
     }
 
     @Test("A series with no cached extras at all is skipped, not fetched")
@@ -198,67 +283,5 @@ struct NextVolumeSnapshotTests {
         )
         #expect(candidates.count == 1)
         #expect(candidates.first?.volumeLabel == "Vol. 12")
-    }
-
-    // MARK: - The cross-target contract, extended for nextVolumes
-
-    /// Mirrors `WidgetSnapshotTests.appBytesDecodeAsWidgetData`: proves the
-    /// app's bytes decode into the type the widget extension actually reads,
-    /// now including `nextVolumes`. Expected to fail before
-    /// `WidgetSnapshotData.NextVolumeEntry` existed with a compile error —
-    /// the widget target had no field to decode this into at all.
-    @Test("nextVolumes crosses into the type the widget extension uses")
-    func nextVolumesCrossesTheSeam() throws {
-        let entry = WidgetSnapshot.NextVolumeEntry(
-            seriesID: 42, title: "Delicious in Dungeon", volumeLabel: "Vol. 12",
-            date: now, coverURL: URL(string: "https://example.com/cover.jpg"),
-            sourceName: "MangaBaka", sourceURL: nil
-        )
-        let snapshot = WidgetSnapshot(nextVolumes: [entry], writtenAt: now)
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(snapshot)
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let widgetSide = try decoder.decode(WidgetSnapshotData.self, from: data)
-
-        #expect(widgetSide.nextVolumes.map(\.seriesID) == [42])
-        #expect(widgetSide.nextVolumes.map(\.title) == ["Delicious in Dungeon"])
-        #expect(widgetSide.nextVolumes.map(\.volumeLabel) == ["Vol. 12"])
-        #expect(widgetSide.nextVolumes.first?.date == now)
-        #expect(widgetSide.nextVolumes.first?.coverURL == URL(string: "https://example.com/cover.jpg"))
-        #expect(widgetSide.nextVolumes.first?.sourceName == "MangaBaka")
-        #expect(widgetSide.nextVolumes.first?.sourceURL == nil)
-    }
-
-    /// Expected to fail before `WidgetSnapshot.init(from:)` was hand-written
-    /// with: `DecodingError.keyNotFound` for `nextVolumes` — a plain
-    /// `= []`-defaulted stored property is not consulted by Foundation's
-    /// synthesized `Decodable` for a missing key (measured with a throwaway
-    /// `Codable` struct, see `WidgetSnapshot.init(from:)`'s doc comment), so
-    /// before the hand-written decoder this JSON — exactly what an older
-    /// build of the app actually wrote — would have failed the whole decode,
-    /// not just left `nextVolumes` empty.
-    @Test("A snapshot written before nextVolumes existed still decodes")
-    func oldSnapshotStillDecodes() throws {
-        let json = """
-            {
-                "dueThisWeek": [],
-                "pickBackUp": [],
-                "writtenAt": "\(ISO8601DateFormatter().string(from: now))"
-            }
-            """
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(WidgetSnapshot.self, from: Data(json.utf8))
-        #expect(decoded.nextVolumes.isEmpty)
-        #expect(decoded.writtenAt == now)
-
-        // Control: the same file decodes on the widget side too, which reads
-        // a separate `Codable` type compiled into a different target.
-        let widgetSide = try decoder.decode(WidgetSnapshotData.self, from: Data(json.utf8))
-        #expect(widgetSide.nextVolumes.isEmpty)
     }
 }

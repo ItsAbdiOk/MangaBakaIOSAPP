@@ -122,8 +122,8 @@ final class LibraryModel {
     /// with, checked before any walk rather than inferred from what one
     /// returned. Defaulted to `true` so a test double that has no token
     /// store keeps its current behaviour; the app passes
-    /// `{ tokenStore.hasToken }` from where `session.library` is built
-    /// (work-list 86). Before that wiring, `ScreenState.noAccount` and the
+    /// `ResolvingTokenProvider.hasCredentials` through `SessionModels` from
+    /// where `session.library` is built (work-list 86). Before that wiring, `ScreenState.noAccount` and the
     /// screen behind it were dead code and a reader with no token paid a 401
     /// per Library visit to be shown the generic failure.
     private let hasCredentials: () -> Bool

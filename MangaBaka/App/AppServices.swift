@@ -27,6 +27,9 @@ struct AppServices {
     let history: HistoryStore
     /// Volumes the reader has ticked as owned — user data, in the library file.
     let ownedVolumes: OwnedVolumes
+    /// The merged volumes answer each series page drew, for the Next-volume
+    /// widget — cache, in the cache file (`EditionAnswerStore`).
+    let editionAnswers: EditionAnswerStore
     let client: APIClient
     let content: ContentPreferencesStore
     let formats: FormatPreferencesStore
@@ -129,15 +132,15 @@ struct AppServices {
     let hasCredentials: @Sendable () -> Bool
 
     init() {
-        let updates = MangaUpdatesClient()
-        mangaUpdates = updates
-        let keychain = TokenStore()
-        tokenStore = keychain
+        mangaUpdates = MangaUpdatesClient()
+        tokenStore = TokenStore()
 
         // Built here, not inside `makeClient`, because two things need it:
         // the client, to sign requests, and `hasCredentials` below, to answer
         // "is this reader signed in" with the same rule (item 13).
-        let credentials = ResolvingTokenProvider(store: keychain, infoDictionary: Bundle.main.infoDictionary)
+        let credentials = ResolvingTokenProvider(
+            store: tokenStore, infoDictionary: Bundle.main.infoDictionary
+        )
         hasCredentials = { credentials.hasCredentials }
         let apiClient = Self.makeClient(tokenProvider: credentials)
         client = apiClient
@@ -159,12 +162,10 @@ struct AppServices {
         // novels off or a tag blocked could get a Discover row that ignored
         // both and persisted. The repository never holds the empty state now,
         // so there is nothing to suppress and the guard is deleted.
-        let store = ContentPreferencesStore()
-        content = store
-        let formatStore = FormatPreferencesStore()
-        formats = formatStore
+        // Three stores on one line, for the lint's ceiling on this initialiser.
+        let (store, formatStore) = (ContentPreferencesStore(), FormatPreferencesStore())
         let blocked = BlockedTagsStore()
-        blockedTags = blocked
+        (content, formats, blockedTags) = (store, formatStore, blocked)
 
         repository = SeriesRepository(
             client: apiClient,
@@ -176,11 +177,11 @@ struct AppServices {
         shelf = ShelfStore(database: database)
         history = HistoryStore(database: database)
         ownedVolumes = OwnedVolumes(database: database)
+        editionAnswers = EditionAnswerStore(database: database)
 
         // The store owns the reader's choice; the repository owns acting on it.
         // Wiring them together here keeps the repository out of UserDefaults and
         // keeps the store from knowing anything about caches.
-        let built = repository
 
         // Reads the reader's own library and personalised data. Every call it
         // makes needs a token; without one they return nothing and the app
@@ -208,7 +209,7 @@ struct AppServices {
         // The same `mangaUpdates` the series page's category lookup uses, so
         // the two share one `RequestSpacing` (item 14).
         schedule = ReleaseScheduleService(
-            library: sharedLibrary, mangaUpdates: updates, database: database
+            library: sharedLibrary, mangaUpdates: mangaUpdates, database: database
         )
         taste = TasteProfile(
             library: libraryService, ledger: TasteLedger(database: database), snapshot: sharedLibrary
@@ -216,7 +217,9 @@ struct AppServices {
         catalogue = CatalogueService(client: apiClient)
         calendar = ReleaseCalendar(client: apiClient)
 
-        Self.wire(content: store, formats: formatStore, blocked: blocked, to: built, library: libraryService)
+        Self.wire(
+            content: store, formats: formatStore, blocked: blocked, to: repository, library: libraryService
+        )
 
         Self.applyStoredExclusion(to: repository, library: libraryService, signedIn: hasCredentials())
 

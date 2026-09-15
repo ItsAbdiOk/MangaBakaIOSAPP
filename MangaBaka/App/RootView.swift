@@ -48,6 +48,7 @@ struct RootView: View {
     /// page.
     let wikidata: WikidataIdentityTable
     let ownedVolumes: OwnedVolumes
+    let editionAnswers: EditionAnswerStore
     let taste: TasteProfile
     let catalogue: CatalogueService
     let blockedTags: BlockedTagsStore
@@ -221,6 +222,7 @@ struct RootView: View {
         ndl: NDLClient,
         wikidata: WikidataIdentityTable,
         ownedVolumes: OwnedVolumes,
+        editionAnswers: EditionAnswerStore,
         taste: TasteProfile,
         catalogue: CatalogueService,
         blockedTags: BlockedTagsStore,
@@ -257,6 +259,7 @@ struct RootView: View {
         self.ndl = ndl
         self.wikidata = wikidata
         self.ownedVolumes = ownedVolumes
+        self.editionAnswers = editionAnswers
         self.taste = taste
         self.catalogue = catalogue
         self.blockedTags = blockedTags
