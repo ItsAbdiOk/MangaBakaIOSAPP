@@ -7,10 +7,10 @@ appear in screenshots or promo material, per Abdi 2026-09-15).
 ## What this does and does not do
 
 - `ScreenshotCaptureTests` (`MangaBakaUITests/ScreenshotCaptureTests.swift`)
-  launches the app with `-mb-placeholder-covers`, walks Discover, a series
+  launches the app with `-placeholder-covers`, walks Discover, a series
   page, Search, Stack, Library and Mix, and saves one PNG per screen to
   `/tmp/mb-shots/`.
-- `-mb-placeholder-covers` flips `ScreenshotMode.isActive`
+- `-placeholder-covers` flips `ScreenshotMode.isActive`
   (`MangaBaka/Features/Shared/ScreenshotMode.swift`), which makes every
   `CoverImage` draw a generated gradient instead of fetching network art or
   drawing its BlurHash — see the comments on `CoverImage.background` and

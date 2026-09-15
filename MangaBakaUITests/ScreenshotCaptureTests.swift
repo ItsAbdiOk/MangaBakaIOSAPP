@@ -3,7 +3,7 @@ import XCTest
 /// Captures the app's six main screens for App Store screenshots, with real
 /// cover art switched off (Abdi, 2026-09-15: screenshots and promo material
 /// must never show real covers — licensing). Launches with
-/// `-mb-placeholder-covers`, which `ScreenshotMode.isActive` reads to make
+/// `-placeholder-covers`, which `ScreenshotMode.isActive` reads to make
 /// every `CoverImage` draw a generated gradient instead of network art or a
 /// BlurHash — see `CoverImage.swift`.
 ///
@@ -41,12 +41,12 @@ final class ScreenshotCaptureTests: XCTestCase {
     private static let heroCover = NSPredicate(format: "label BEGINSWITH[c] 'Cover art for'")
 
     /// `-onboarding.completed YES` skips the carousel, exactly as
-    /// `AccessibilityAuditTests.launchedApp()` does. `-mb-placeholder-covers`
+    /// `AccessibilityAuditTests.launchedApp()` does. `-placeholder-covers`
     /// is the flag this whole test exists to exercise.
     private func launchedApp() -> XCUIApplication {
         continueAfterFailure = true
         let app = XCUIApplication()
-        app.launchArguments += ["-onboarding.completed", "YES", "-mb-placeholder-covers"]
+        app.launchArguments += ["-onboarding.completed", "YES", "-placeholder-covers"]
         app.launch()
         return app
     }

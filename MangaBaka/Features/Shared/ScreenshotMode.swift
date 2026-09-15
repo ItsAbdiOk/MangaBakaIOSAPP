@@ -13,13 +13,13 @@ enum ScreenshotMode {
     /// re-checking it on every body evaluation — a `nonisolated static let`
     /// costs one scan for the whole run instead of one per cover per redraw.
     ///
-    /// `-mb-placeholder-covers` is passed only by
+    /// `-placeholder-covers` is passed only by
     /// `ScreenshotCaptureTests.launchedApp()`; the ordinary app, the
     /// accessibility audit's `AccessibilityAuditTests.launchedApp()`, and
     /// every unit test target launch without it, so this is `false`
     /// everywhere except the capture run.
     nonisolated static let isActive: Bool = ProcessInfo.processInfo.arguments.contains(
-        "-mb-placeholder-covers"
+        "-placeholder-covers"
     )
 
     /// A hue in `0..<1` for the placeholder gradient `CoverImage` draws when
