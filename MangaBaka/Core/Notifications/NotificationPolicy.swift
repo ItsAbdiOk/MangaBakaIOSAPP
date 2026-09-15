@@ -2,14 +2,16 @@ import Foundation
 
 /// What is worth telling the reader about, and nothing else.
 ///
-/// Abdi's rule (2026-09-13, verbatim intent): "We don't want to spam users
-/// with notifications for predictions that are not important. Limit
-/// notifications to: (1) release notifications for something that has just
-/// come out, confirmed; (2) a series they're reading or have paused has
-/// either completed or finished the end of a season. Those are the only
-/// conditions. I get notification fatigue very quickly." Every other kind of
-/// notification this app used to send — a cadence prediction, a monthly
-/// backlog nudge, a "you have not opened this" nudge — is gone; see
+/// Abdi's rule (2026-09-15, verbatim): "NOTIFICATIONS ONLY FOR FINISHED OR
+/// SEASON ENDING OR SERIES THAT HAVE JUST COME BACK FROM HIATUS." That
+/// replaces the 2026-09-13 rule, which also allowed confirmed releases —
+/// "(1) release notifications for something that has just come out" — and
+/// it answers the deferral question those raised (how long a held-back
+/// "Ep. 12 is out" stays worth sending): there are none to hold back now.
+/// Conditions 1a (a publisher-dated volume out today) and 1b (a newer feed
+/// episode) are deleted below, tombstoned where they stood. Everything else
+/// this app used to send — a cadence prediction, a monthly backlog nudge, a
+/// "you have not opened this" nudge — was already gone; see
 /// `ReleaseReminders` for what was removed and why.
 ///
 /// A pure function over what the app already knows, not a client of its own,
@@ -104,66 +106,25 @@ enum NotificationPolicy {
         let notifiable = Set(
             library.filter { notifiableStates.contains($0.state) }.map(\.seriesId)
         )
-        return confirmedReleases(announced: announced, now: now, notifiable: notifiable)
-            + confirmedEpisodes(
-                feeds: feeds, library: library, lastKnownEpisode: lastKnownEpisode,
-                now: now, notifiable: notifiable
-            )
-            + completions(
-                library: library, feeds: feeds, now: now,
-                previousStatus: previousStatus, lastKnownSeason: lastKnownSeason
-            )
+        // `announced` and `lastKnownEpisode` are still taken so the callers
+        // and their tests read unchanged; nothing here reads them any more.
+        _ = (announced, lastKnownEpisode, notifiable)
+        return completions(
+            library: library, feeds: feeds, now: now,
+            previousStatus: previousStatus, lastKnownSeason: lastKnownSeason
+        )
     }
 
-    /// (1a) A publisher-stated date, out today or earlier. Never a cadence
-    /// guess — see the deleted `predicted` branch this replaces.
-    /// - Parameter notifiable: series ids the reader is reading, rereading or
-    ///   has paused. A release for anything else is not a reminder — see
-    ///   `notifiableStates`. A work with no `seriesId` at all cannot be
-    ///   checked and is dropped rather than guessed at.
-    private static func confirmedReleases(
-        announced: [UpcomingWork], now: Date, notifiable: Set<Int>
-    ) -> [PlannedNotification] {
-        let today = Calendar.current.startOfDay(for: now)
-        return announced.compactMap { work -> PlannedNotification? in
-            guard let seriesId = work.seriesId, notifiable.contains(seriesId) else { return nil }
-            guard let date = work.localDay(), date <= today else { return nil }
-            let title = work.title ?? "A release you are waiting for"
-            return PlannedNotification(
-                id: "release-work-\(work.id)",
-                seriesID: work.seriesId,
-                title: title,
-                // The date is a fact, so it is stated as one — no "probably",
-                // no "roughly", the wording a prediction used to need.
-                body: [work.volume, "out now"].compactMap { $0 }.joined(separator: " · "),
-                date: date
-            )
-        }
-    }
+    // (1a) DELETED 2026-09-15, Abdi's call: a publisher-dated volume out
+    // today ("Vol. 12 · out now") no longer notifies. It read `announced`
+    // against `notifiable` and `work.localDay() <= today`.
+    //
+    // (1b) DELETED 2026-09-15, same call: a feed episode newer than
+    // `lastKnownEpisode` ("Ep. 12 of X is out") no longer notifies. The
+    // baseline it kept is still recorded by `ReleaseReminders`, so restoring
+    // either is the function back, not a data migration.
 
-    /// (1b) A feed entry newer than the last one this app knew about for that
-    /// series.
-    private static func confirmedEpisodes(
-        feeds: [Int: ReleaseFeed], library: [LibraryEntry], lastKnownEpisode: [Int: Int], now: Date,
-        notifiable: Set<Int>
-    ) -> [PlannedNotification] {
-        feeds.compactMap { seriesID, feed -> PlannedNotification? in
-            guard notifiable.contains(seriesID) else { return nil }
-            guard let episode = feed.latestEpisodeNumber else { return nil }
-            guard let previous = lastKnownEpisode[seriesID] else { return nil } // first-seen: baseline only
-            guard episode > previous else { return nil }
-            let title = Self.title(for: seriesID, in: library, fallback: feed.title)
-            return PlannedNotification(
-                id: "release-feed-\(seriesID)-\(episode)",
-                seriesID: seriesID,
-                title: title,
-                body: "Ep. \(episode) of \(title) is out",
-                date: feed.lastEpisodeAt ?? now
-            )
-        }
-    }
-
-    /// (2) Completed or season-ended, reading or paused only.
+    /// (2) Completed, season-ended or back from hiatus — reading or paused only.
     private static func completions(
         library: [LibraryEntry], feeds: [Int: ReleaseFeed], now: Date,
         previousStatus: [Int: String], lastKnownSeason: [Int: Int]
@@ -182,6 +143,24 @@ enum NotificationPolicy {
                     seriesID: seriesID,
                     title: "\(title) has finished",
                     body: "The series you were reading has completed.",
+                    date: now
+                ))
+            }
+
+            // (2d) The catalogue's status left "hiatus" for anything that is
+            // not a stop — "releasing" on MangaBaka; any status other than
+            // completed/cancelled is read as a return, since the point is
+            // "it is back", not which word the catalogue picked. Abdi,
+            // 2026-09-15: "series that have just come back from hiatus".
+            // Same baseline rule as 2a: a series first seen already back
+            // says nothing.
+            if let status = series.status, let previous = previousStatus[seriesID],
+               previous == "hiatus", Self.isBack(status) {
+                planned.append(PlannedNotification(
+                    id: "back-\(seriesID)",
+                    seriesID: seriesID,
+                    title: "\(title) is back",
+                    body: "The series you were reading has returned from hiatus.",
                     date: now
                 ))
             }
@@ -213,6 +192,14 @@ enum NotificationPolicy {
             // so there is nothing left here to restore even if it were wanted.
         }
         return planned
+    }
+
+    /// A status that means the series is producing again. Not a fixed
+    /// allow-list ("releasing") because the catalogue's vocabulary is
+    /// `SeriesStatus.label`'s to keep and a new word for "ongoing" must not
+    /// silently mute this; the two stops are the closed set.
+    nonisolated static func isBack(_ status: String) -> Bool {
+        !["hiatus", "completed", "cancelled", "canceled"].contains(status.lowercased())
     }
 
     private static func title(for seriesID: Int, in library: [LibraryEntry], fallback: String?) -> String {

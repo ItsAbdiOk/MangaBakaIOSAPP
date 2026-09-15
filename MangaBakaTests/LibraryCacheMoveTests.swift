@@ -347,7 +347,7 @@ struct LibraryCacheMoveTests {
     }
 
     /// Two entries, one page, counting the requests.
-    private final class TwoEntries: LibraryProviding, @unchecked Sendable {
+    final class TwoEntries: LibraryProviding, @unchecked Sendable {
         private let lock = NSLock()
         private var counted = 0
 

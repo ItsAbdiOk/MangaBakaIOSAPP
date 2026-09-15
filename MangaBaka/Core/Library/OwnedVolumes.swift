@@ -54,7 +54,10 @@ actor OwnedVolumes {
     }
 
     /// How many volumes are ticked across every series, for Settings to say
-    /// what erasing would remove.
+    /// what erasing would remove. **Nothing calls this yet** (2026-09-15):
+    /// no erase control exists. When one does, the count includes ticks
+    /// whose row no longer appears on any shelf, and the wording Abdi chose
+    /// is "N ticks (some may be for volumes no longer listed)".
     func count() throws -> Int {
         try database.libraryWriter.read { db in try OwnedVolumeRow.fetchCount(db) }
     }

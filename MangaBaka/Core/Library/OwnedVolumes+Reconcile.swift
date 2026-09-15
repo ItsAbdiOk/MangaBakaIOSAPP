@@ -21,9 +21,9 @@ extension OwnedVolumes {
     /// is the title-matching this family of sources was built to avoid.
     /// Measured 2026-09-15, the NDL 近刊 record is titled
     /// `薬屋のひとりごと～猫猫の後宮謎解き手帳～` and its catalogued successor
-    /// `薬屋のひとりごと : 猫猫の後宮謎解き手帳. 22`, so for that pair this
-    /// misses — recorded in `docs/reviews/night/shelf.md` as a question for
-    /// Abdi, not solved here by guessing.
+    /// `薬屋のひとりごと : 猫猫の後宮謎解き手帳. 22` — which is why an NDL row
+    /// with a number is keyed `ndl:<shelf>:<n>` instead (`OwnedVolumeKey`,
+    /// Abdi's call the same day), and this repair checks that identity too.
     ///
     /// - Returns: how many ticks moved, so the caller re-reads only when one
     ///   did.
@@ -32,8 +32,10 @@ extension OwnedVolumes {
         guard !owned.isEmpty else { return 0 }
         let moves = shelves.flatMap(\.volumes).compactMap { volume -> Move? in
             guard volume.isbn13 != nil else { return nil }
-            let orphan = OwnedVolumeKey(seriesID: seriesID, identity: Self.rowIdentity(of: volume))
-            guard owned.contains(orphan) else { return nil }
+            let orphan = Self.orphanIdentities(of: volume)
+                .map { OwnedVolumeKey(seriesID: seriesID, identity: $0) }
+                .first { owned.contains($0) }
+            guard let orphan else { return nil }
             return (orphan, OwnedVolumeKey(seriesID: seriesID, volume: volume))
         }
         guard !moves.isEmpty else { return 0 }
@@ -46,12 +48,26 @@ extension OwnedVolumes {
     /// building the same key off a copy with the ISBN removed, so the
     /// namespace prefix is still written in exactly one place.
     static func rowIdentity(of volume: EditionVolume) -> String {
-        let bare = EditionVolume(
+        OwnedVolumeKey(seriesID: 0, volume: Self.bare(volume)).identity
+    }
+
+    /// Every identity a tick on this row could have been written under
+    /// before the row had an ISBN: the ISBN-less key (`ndl:` for a numbered
+    /// NDL row, `row:` otherwise) and, for the NDL row, the `row:` form too —
+    /// a tick taken before 2026-09-15 was written that way.
+    static func orphanIdentities(of volume: EditionVolume) -> [String] {
+        let bare = Self.bare(volume)
+        var identities = [OwnedVolumeKey(seriesID: 0, volume: bare).identity]
+        if OwnedVolumeKey.ndlNumber(of: bare) != nil { identities.append("row:\(bare.id)") }
+        return identities
+    }
+
+    private static func bare(_ volume: EditionVolume) -> EditionVolume {
+        EditionVolume(
             number: volume.number, title: volume.title, releaseDate: volume.releaseDate,
             isbn13: nil, format: volume.format, edition: volume.edition,
             sourceLink: volume.sourceLink, alsoFrom: volume.alsoFrom, dateFrom: volume.dateFrom
         )
-        return OwnedVolumeKey(seriesID: 0, volume: bare).identity
     }
 
     private typealias Move = (from: OwnedVolumeKey, to: OwnedVolumeKey)

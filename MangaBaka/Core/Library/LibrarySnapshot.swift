@@ -44,6 +44,11 @@ actor LibrarySnapshot {
     /// another device, and come back within six hours. The alternative is
     /// 24.7 MB every launch.
     private static let freshness: TimeInterval = 6 * 60 * 60
+    /// How far "in the future" a stored `cachedAt` may read before it counts
+    /// as a clock that moved. One second: three orders past the half-
+    /// millisecond rounding that actually happens, and no clock adjustment a
+    /// person makes is that small. See `readCache`.
+    static let clockSlack: TimeInterval = 1
 
     private let library: any LibraryProviding
     /// Writes to `cacheWriter`'s file: `libraryEntry` and `libraryMetadata`
@@ -307,8 +312,15 @@ actor LibrarySnapshot {
             guard let meta = try LibraryMetadata.fetchOne(db, key: 1) else { return nil }
             let age = clock.now.timeIntervalSince(meta.cachedAt)
             // A negative age means the device clock moved backwards; treat that
-            // as stale rather than trusting it.
-            guard age >= 0, age < Self.freshness else { return nil }
+            // as stale rather than trusting it — past `clockSlack`. Under it
+            // is storage rounding, not a clock change: GRDB writes a `Date`
+            // to the nearest millisecond and *rounds* (`DatabaseDateComponents`,
+            // `round(nanosecond / 1e6)`), so a row read back within half a
+            // millisecond of its write reads as written in the future. That
+            // was `LibraryCacheMoveTests.snapshotWritesToTheCacheFile` failing
+            // one pre-push hook in four on 2026-09-15 — and, for a caller that
+            // ever reads disk straight after a write, a full library walk.
+            guard age >= -Self.clockSlack, age < Self.freshness else { return nil }
 
             let decoder = JSONDecoder()
             let rows = try CachedLibraryEntry.fetchAll(db)

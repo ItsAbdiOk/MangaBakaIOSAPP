@@ -65,74 +65,29 @@ struct NotificationPolicyTests {
         #expect(planned.isEmpty)
     }
 
-    // MARK: - Confirmed releases
+    // MARK: - Releases never notify (2026-09-15)
 
-    @Test("An announced work dated today is confirmed; dated tomorrow it is not, yet")
-    func announcedDateGating() throws {
-        let today = try work("a", series: 1, daysFromNow: 0)
-        let tomorrow = try work("b", series: 2, daysFromNow: 1)
-        // Both series must be in a notifiable state now — `library: []` used
-        // to be enough, which was the bug (item 34): 1a filtered by date only.
+    /// Abdi, 2026-09-15: "NOTIFICATIONS ONLY FOR FINISHED OR SEASON ENDING
+    /// OR SERIES THAT HAVE JUST COME BACK FROM HIATUS." Conditions 1a and 1b
+    /// are deleted; these stand for the negative, over the exact inputs that
+    /// used to fire them. Each fails on the 2026-09-14 code with the ids
+    /// named in its own comment.
+    @Test("A publisher-dated release out today notifies nothing, whatever the state")
+    func announcedReleaseIsSilent() throws {
+        // Used to yield ["release-work-a", "release-work-y"].
         let library = [
             entry(id: 1, state: .reading, status: "releasing"),
-            entry(id: 2, state: .reading, status: "releasing")
+            entry(id: 2, state: .paused, status: "releasing")
         ]
-
-        let planned = NotificationPolicy.decide(announced: [today, tomorrow], library: library, now: now)
-        #expect(planned.map(\.id) == ["release-work-a"])
-    }
-
-    @Test("A date already past is confirmed too — it came out and was not caught yet")
-    func announcedPastDateStillFires() throws {
-        let yesterday = try work("y", series: 1, daysFromNow: -1)
-        let library = [entry(id: 1, state: .reading, status: "releasing")]
-        let planned = NotificationPolicy.decide(announced: [yesterday], library: library, now: now)
-        #expect(planned.map(\.id) == ["release-work-y"])
-    }
-
-    /// Item 34 / Abdi's Q1 answer (2026-09-14). 1a filtered by date alone, so
-    /// the next print volume of a series the reader dropped months ago arrived
-    /// as "Vol. 12 · out now" — against this type's own "something they are
-    /// waiting for".
-    ///
-    /// Expected failure before the fix: `planned.map(\.id)` is
-    /// `["release-work-d", "release-work-p", "release-work-c"]`, so all four
-    /// `#expect`s below fail.
-    @Test("A confirmed release only notifies for reading, rereading and paused")
-    func confirmedReleaseRespectsLibraryState() throws {
-        let library = [
-            entry(id: 1, state: .dropped, status: "releasing"),
-            entry(id: 2, state: .planToRead, status: "releasing"),
-            entry(id: 3, state: .completed, status: "completed"),
-            entry(id: 4, state: .rereading, status: "releasing"),
-            entry(id: 5, state: .paused, status: "releasing")
-        ]
-        let announced = [
-            try work("d", series: 1, daysFromNow: 0),
-            try work("p", series: 2, daysFromNow: 0),
-            try work("c", series: 3, daysFromNow: 0),
-            try work("r", series: 4, daysFromNow: 0),
-            try work("z", series: 5, daysFromNow: 0)
-        ]
+        let announced = [try work("a", series: 1, daysFromNow: 0), try work("y", series: 2, daysFromNow: -1)]
         let planned = NotificationPolicy.decide(announced: announced, library: library, now: now)
-        #expect(planned.map(\.id).sorted() == ["release-work-r", "release-work-z"])
-    }
-
-    /// A series MangaBaka announces a release for that is not in the library
-    /// at all cannot be in a notifiable state, so it says nothing — there is
-    /// no reader intent to infer.
-    @Test("An announced work for a series not in the library notifies nothing")
-    func announcedOutsideTheLibraryIsSilent() throws {
-        let planned = NotificationPolicy.decide(
-            announced: [try work("a", series: 99, daysFromNow: 0)], library: [], now: now
-        )
         #expect(planned.isEmpty)
     }
 
-    /// Condition 1b, same rule. Expected failure before the fix: `["release-feed-1-11"]`.
-    @Test("A newer feed episode for a dropped series notifies nothing")
-    func feedEpisodeRespectsLibraryState() {
-        let library = [entry(id: 1, state: .dropped, status: "releasing")]
+    @Test("A newer feed episode notifies nothing, whatever the state")
+    func feedEpisodeIsSilent() {
+        // Used to yield ["release-feed-1-11"].
+        let library = [entry(id: 1, state: .reading, status: "releasing")]
         let planned = NotificationPolicy.decide(
             announced: [], feeds: [1: feed(episode: 11)], library: library, now: now,
             lastKnownEpisode: [1: 10]
@@ -140,35 +95,43 @@ struct NotificationPolicyTests {
         #expect(planned.isEmpty)
     }
 
-    // MARK: - Feed-confirmed episodes
+    // MARK: - Back from hiatus
 
-    @Test("A feed entry newer than the last one notified yields one; an older one none")
-    func feedEpisodeProgression() {
-        let library = [entry(id: 1, state: .reading, status: "releasing")]
-
-        let older = NotificationPolicy.decide(
-            announced: [], feeds: [1: feed(episode: 5)], library: library, now: now,
-            lastKnownEpisode: [1: 10]
-        )
-        #expect(older.isEmpty, "5 is not newer than the 10 already known")
-
-        let newer = NotificationPolicy.decide(
-            announced: [], feeds: [1: feed(episode: 11)], library: library, now: now,
-            lastKnownEpisode: [1: 10]
-        )
-        #expect(newer.map(\.id) == ["release-feed-1-11"])
-    }
-
-    @Test("The first time a feed is seen only sets the baseline, without notifying")
-    func feedFirstSightingIsBaselineOnly() {
-        // A guess, and a deliberate one: without a prior baseline, a series
-        // with twenty existing episodes would otherwise read as twenty new
-        // ones the moment its feed is first fetched.
+    @Test("A status flip from hiatus to releasing for a reading entry yields one notification")
+    func backFromHiatus() {
         let library = [entry(id: 1, state: .reading, status: "releasing")]
         let planned = NotificationPolicy.decide(
-            announced: [], feeds: [1: feed(episode: 40)], library: library, now: now
+            announced: [], library: library, now: now, previousStatus: [1: "hiatus"]
         )
-        #expect(planned.isEmpty)
+        #expect(planned.map(\.id) == ["back-1"])
+        #expect(planned.first?.title.hasSuffix("is back") == true)
+    }
+
+    @Test("Hiatus to completed is the finished notification, not a return")
+    func hiatusToCompletedIsFinished() {
+        let library = [entry(id: 1, state: .reading, status: "completed")]
+        let planned = NotificationPolicy.decide(
+            announced: [], library: library, now: now, previousStatus: [1: "hiatus"]
+        )
+        #expect(planned.map(\.id) == ["finished-1"])
+    }
+
+    @Test("A return is silent for a dropped entry, a still-hiatus series, and a first sighting")
+    func backFromHiatusGuards() {
+        let dropped = NotificationPolicy.decide(
+            announced: [], library: [entry(id: 1, state: .dropped, status: "releasing")], now: now,
+            previousStatus: [1: "hiatus"]
+        )
+        #expect(dropped.isEmpty)
+        let still = NotificationPolicy.decide(
+            announced: [], library: [entry(id: 1, state: .reading, status: "hiatus")], now: now,
+            previousStatus: [1: "hiatus"]
+        )
+        #expect(still.isEmpty)
+        let first = NotificationPolicy.decide(
+            announced: [], library: [entry(id: 1, state: .reading, status: "releasing")], now: now
+        )
+        #expect(first.isEmpty, "no baseline, no claim it was ever on hiatus")
     }
 
     // MARK: - Completed / season ended

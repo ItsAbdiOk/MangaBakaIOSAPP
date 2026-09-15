@@ -12,13 +12,14 @@ import UserNotifications
 @Suite("Release reminder pacing")
 @MainActor
 struct ReminderPacingTests {
-    /// Item 35. Day 0 at noon: three releases from yesterday fill the day
-    /// (dated earlier, so they are placed first), and series 7's own release
-    /// is deferred to day 1 at 09:00. Twenty-five hours later
-    /// series 7 also finishes. The cooldown used to compare `now` (day 1,
-    /// 13:00) against the *queue* time of the deferred one (day 0, noon) —
-    /// twenty-five hours, so the completion was allowed through and landed
-    /// on day 1 four hours after the release it was meant to be spaced from.
+    /// Item 35. Day 0 at noon: three series come back from hiatus and fill
+    /// the day (series 7 is last in the library array, so it is the one that
+    /// overflows), and series 7's own return is deferred to day 1 at 09:00.
+    /// Twenty-five hours later series 7 also finishes. The cooldown used to
+    /// compare `now` (day 1, 13:00) against the *queue* time of the deferred
+    /// one (day 0, noon) — twenty-five hours, so the completion was allowed
+    /// through and landed on day 1 four hours after the return it was meant
+    /// to be spaced from.
     ///
     /// Expected to fail before the fix with: `centre.added.map(\.id)`
     /// contains "finished-7" — two notifications about series 7 on day 1.
@@ -29,22 +30,30 @@ struct ReminderPacingTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
         await reminders.enable()
 
-        let fillers = try (1...3).map { try work("w\($0)", series: $0, daysFromNow: -1, from: clock.now) }
-        let seventh = try work("w7", series: 7, daysFromNow: 0, from: clock.now)
-        let releasing = entry(id: 7, state: .reading, status: "releasing")
-        let completed = entry(id: 7, state: .reading, status: "completed")
+        // Baseline: four series, all hiatus, so their return below is news.
         await reminders.reschedule(
-            announced: fillers + [seventh], library: (1...3).map { reading($0) } + [releasing]
+            announced: [], library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "hiatus") }
         )
-        let deferred = try #require(centre.added.first { $0.id == "release-work-w7" })
-        #expect(!Calendar.current.isDate(deferred.date, inSameDayAs: clock.now), "control: w7 was deferred")
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
+
+        // Three series come back from hiatus today, filling the day's cap;
+        // series 7's own return (last in the array) overflows to day 1.
+        await reminders.reschedule(
+            announced: [], library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "releasing") }
+        )
+        let deferred = try #require(centre.added.first { $0.id == "back-7" })
+        #expect(
+            !Calendar.current.isDate(deferred.date, inSameDayAs: clock.now), "control: series 7 was deferred"
+        )
 
         clock.advance(by: 25 * 60 * 60)
-        await reminders.reschedule(announced: [], library: [completed])
+        await reminders.reschedule(
+            announced: [], library: [entry(id: 7, state: .reading, status: "completed")]
+        )
 
         #expect(
             !centre.added.map(\.id).contains("finished-7"),
-            "series 7's release arrives at 09:00 on day 1; a completion four hours later is the fatigue"
+            "series 7's return arrives at 09:00 on day 1; a completion four hours later is the fatigue"
         )
         let seriesSeven = centre.added.filter { $0.id.hasSuffix("7") }
         #expect(seriesSeven.count == 1)
@@ -53,7 +62,9 @@ struct ReminderPacingTests {
         // the completion is told after all — the cooldown delays, it does
         // not drop.
         clock.advance(by: 24 * 60 * 60)
-        await reminders.reschedule(announced: [], library: [completed])
+        await reminders.reschedule(
+            announced: [], library: [entry(id: 7, state: .reading, status: "completed")]
+        )
         #expect(centre.added.map(\.id).contains("finished-7"))
     }
 
@@ -65,15 +76,15 @@ struct ReminderPacingTests {
         let store = try defaults()
         let stale = clock.now.addingTimeInterval(-90 * 24 * 60 * 60)
         let recent = clock.now.addingTimeInterval(-10 * 24 * 60 * 60)
-        store.set(["release-work-old": stale, "release-work-recent": recent], forKey: "reminders.fired")
+        store.set(["event-old": stale, "event-recent": recent], forKey: "reminders.fired")
 
         let reminders = ReleaseReminders(defaults: store, centre: FakeCentre(), now: { clock.now })
         await reminders.enable()
         await reminders.reschedule(announced: [], library: [reading(1)])
 
         let ledger = store.dictionary(forKey: "reminders.fired") ?? [:]
-        #expect(ledger["release-work-recent"] != nil, "control: ten days old is well inside the window")
-        #expect(ledger["release-work-old"] == nil, "ninety days is past the sixty-day window")
+        #expect(ledger["event-recent"] != nil, "control: ten days old is well inside the window")
+        #expect(ledger["event-old"] == nil, "ninety days is past the sixty-day window")
         let deferral = TimeInterval(ReleaseReminders.maxDeferralDays * 24 * 60 * 60)
         #expect(ReleaseReminders.firedRetention > deferral, "nothing still deferred can be pruned")
     }
@@ -83,21 +94,29 @@ struct ReminderPacingTests {
     /// as `[:]`, and every notification ever sent became eligible again.
     ///
     /// Expected to fail before the fix with: `centre.added.map(\.id) ==
-    /// ["release-work-a"]` — the already-fired release is sent a second time.
+    /// ["back-1"]` — the already-fired return from hiatus is sent a second time.
     @Test("One bad value in the ledger does not re-fire every notification")
     func oneBadLedgerValueIsNotAmnesia() async throws {
         let clock = TestClock(now: try noonToday())
         let store = try defaults()
-        store.set(["release-work-a": clock.now.addingTimeInterval(-3600), "junk": "not a date"],
-                  forKey: "reminders.fired")
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
         await reminders.enable()
 
+        // Baseline: series 1 seen hiatus, so its return below would
+        // otherwise be news.
         await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0, from: clock.now)], library: [reading(1)]
+            announced: [], library: [entry(id: 1, state: .reading, status: "hiatus")]
         )
-        #expect(centre.added.isEmpty, "release-work-a already fired an hour ago")
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
+
+        store.set(["back-1": clock.now.addingTimeInterval(-3600), "junk": "not a date"],
+                  forKey: "reminders.fired")
+
+        await reminders.reschedule(
+            announced: [], library: [entry(id: 1, state: .reading, status: "releasing")]
+        )
+        #expect(centre.added.isEmpty, "back-1 already fired an hour ago")
     }
 
     /// Item 72. Expected to fail before the fix with: `rescheduleTask != nil`
@@ -122,20 +141,6 @@ extension ReminderPacingTests {
     /// default epoch is 14:53 UTC, which is already tomorrow in Tokyo.
     private func noonToday() throws -> Date {
         try #require(Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: Date()))
-    }
-
-    /// The same recorded shape `ReminderTests.work` uses, dated in the
-    /// reader's own zone for the reason given there.
-    private func work(_ id: String, series: Int, daysFromNow: Int, from now: Date) throws -> UpcomingWork {
-        let date = Calendar.current.date(byAdding: .day, value: daysFromNow, to: now) ?? now
-        let iso = DateFormatter()
-        iso.locale = Locale(identifier: "en_US_POSIX")
-        iso.timeZone = Calendar.current.timeZone
-        iso.dateFormat = "yyyy-MM-dd"
-        return try JSONDecoder.snakeCased.decode(UpcomingWork.self, from: Data("""
-        {"id": "\(id)", "series_id": \(series), "release_date": "\(iso.string(from: date))",
-         "sequence_string": "3", "collections": [{"title": "A Series"}]}
-        """.utf8))
     }
 
     private func entry(id: Int, state: LibraryEntry.State, status: String?) -> LibraryEntry {

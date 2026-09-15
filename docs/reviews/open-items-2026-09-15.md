@@ -52,9 +52,34 @@ three stale comments (RemindersSection, LibraryModel, SessionTests title).
 - Open Library covers for coverless ANN rows: 1 of 9 on Omniscient Reader;
   re-measure on five series before wiring.
 
-## The three that remain, plainly
+## The three that remain, plainly — answered 2026-09-15
 
-Written 2026-09-15 so each can be answered in one line.
+Abdi's answers, in his words, then what was done:
+
+1. **"NOTIFICATIONS ONLY FOR FINISHED OR SEASON ENDING OR SERIES THAT HAVE
+   JUST COME BACK FROM HIATUS."** A new rule, not an answer to the deferral
+   question — it removes the release notifications that raised it. Conditions
+   1a (volume out today) and 1b (new episode) deleted from `NotificationPolicy`;
+   a "back from hiatus" condition added (status was `hiatus`, now anything but
+   hiatus/completed/cancelled, same baseline rule as "finished"). Ten
+   pacing/dedup tests that used releases as their vehicle rewritten on the
+   finished/back facts.
+2. **"I'll take your recommendations"** — (a). `ci_post_xcodebuild.sh` prints
+   the skipped-test count from the result bundle on the cloud's test action.
+3. **"I'll do all your recommendations"** —
+   - (i) done: an ISBN-less NDL row with a number is keyed `ndl:<shelf>:<n>`
+     (`OwnedVolumeKey`); `reconcile` also moves a tick written under the old
+     `row:` key.
+   - (ii) **moot**: there is no "Erase N ticks" control in Settings —
+     `OwnedVolumes.count()` exists and nothing calls it. When one is built,
+     the wording is "N ticks (some may be for volumes no longer listed)".
+   - (iii) done: `BookEditionShelf.withInheritedPublishers` — a row with no
+     publisher takes the one every other row of its work states, when they
+     agree. Not labelled on the shelf: the label would be part of the shelf's
+     name, which is the group key, and split the run again.
+   - (iv) left as is, as recommended.
+
+The questions as they were put:
 
 **1. Notifications that got put off — how long do they stay put off?**
 - What: a reminder the app held back (quiet hours, too many at once) — should it still fire two weeks later?

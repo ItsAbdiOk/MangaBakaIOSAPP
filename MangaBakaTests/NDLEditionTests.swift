@@ -140,6 +140,42 @@ struct NDLEditionTests {
         #expect(forthcoming.workTitle == catalogued.workTitle)
     }
 
+    /// Abdi's call, 2026-09-15 (shelf.md "Needs Abdi", third item): the 近刊
+    /// record states no publisher, so its shelf was named by the work alone
+    /// and sat beside Shogakukan's 1–17. Fails on the old code with the
+    /// forthcoming row's `publisher == nil` and two shelf names.
+    @Test("The forthcoming row takes the publisher every catalogued row of its work states")
+    func forthcomingInheritsPublisher() throws {
+        let raw = try rows()
+        let rawForthcoming = try #require(raw.first { $0.title == "薬屋のひとりごと～猫猫の後宮謎解き手帳～" })
+        #expect(rawForthcoming.publisher == nil, "control: NDL states none on the wire")
+
+        let rows = BookEditionShelf.withInheritedPublishers(raw)
+        let forthcoming = try #require(rows.first { $0.title == rawForthcoming.title })
+        let catalogued = try #require(rows.first { $0.title == "薬屋のひとりごと : 猫猫の後宮謎解き手帳. 1" })
+        #expect(forthcoming.publisher == catalogued.publisher)
+        let shelfName = BookEditionShelf.editionTitle(for: forthcoming)
+        #expect(shelfName == BookEditionShelf.editionTitle(for: catalogued))
+        // The rows of the queried work itself are untouched.
+        #expect(rows.count == raw.count)
+    }
+
+    /// Two publishers for one work is a guess this refuses to make.
+    @Test("A work printed by two houses leaves the publisher-less row alone")
+    func ambiguousPublisherIsNotInherited() {
+        func row(_ id: String, publisher: String?) -> BookEdition {
+            BookEdition(
+                id: id, title: "X. \(id)", isbn13: nil, publisher: publisher, language: "jpn",
+                published: nil, coverID: nil, volume: nil, source: .nationalDietLibrary,
+                format: .comic, formatEvidence: .catalogueGenre("漫画")
+            )
+        }
+        let rows = BookEditionShelf.withInheritedPublishers([
+            row("1", publisher: "A"), row("2", publisher: "B"), row("3", publisher: nil)
+        ])
+        #expect(rows[2].publisher == nil)
+    }
+
     // MARK: - Serious 2: a partial page
 
     /// EXPECTED TO FAIL before the change: `NDLClient.answer(title:format:

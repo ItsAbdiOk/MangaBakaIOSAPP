@@ -20,9 +20,9 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         #expect(!reminders.isEnabled)
 
-        await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
-        )
+        // A series that has completed — a fact that would fire were the
+        // switch on — still notifies nothing while it is off.
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "completed")])
         #expect(centre.added.isEmpty, "a notification nobody asked for is the worst kind")
     }
 
@@ -53,21 +53,21 @@ struct ReminderTests {
         #expect(!reminders.effectiveEnabled, "but iOS will not deliver anything")
     }
 
-    @Test("A confirmed release notifies once; asking again does not repeat it")
-    func confirmedReleaseNotifiesOnce() async throws {
+    @Test("A series back from hiatus notifies once; asking again does not repeat it")
+    func backFromHiatusNotifiesOnce() async throws {
         let centre = FakeCentre()
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre)
         await reminders.enable()
 
-        await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
-        )
-        #expect(centre.added.map(\.id) == ["release-work-a"])
+        // First sighting: only a baseline (hiatus) is recorded.
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "hiatus")])
+        #expect(centre.added.isEmpty, "control: first sighting only baselines")
 
-        await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
-        )
-        #expect(centre.added.map(\.id) == ["release-work-a"], "the same confirmed release is not repeated")
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "releasing")])
+        #expect(centre.added.map(\.id) == ["back-1"])
+
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "releasing")])
+        #expect(centre.added.map(\.id) == ["back-1"], "the same return from hiatus is not repeated")
     }
 
     @Test("An unreadable or incomplete library read schedules nothing this pass")
@@ -115,8 +115,11 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
         await reminders.enable()
 
-        let works = try (1...4).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
-        await reminders.reschedule(announced: works, library: (1...4).map { reading($0) })
+        // Baseline: four series, all hiatus, so their return below is news.
+        await reminders.reschedule(announced: [], library: (1...4).map { entry(id: $0, status: "hiatus") })
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
+
+        await reminders.reschedule(announced: [], library: (1...4).map { entry(id: $0, status: "releasing") })
 
         #expect(centre.added.count == 4, "all four are scheduled, just not all for today")
         let today = centre.added.filter { $0.date <= clock.now }
@@ -145,14 +148,16 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
         await reminders.enable()
 
-        // Six distinct series, all confirmed today, asked about in two passes
-        // an hour apart — the shape of "the app launched, then the reader
-        // toggled the switch".
-        let first = try (1...3).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
-        await reminders.reschedule(announced: first, library: (1...3).map { reading($0) })
+        // Baseline: six series, all hiatus, so their return is news below.
+        await reminders.reschedule(announced: [], library: (1...6).map { entry(id: $0, status: "hiatus") })
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
+
+        // Six distinct series, all back from hiatus today, asked about in two
+        // passes an hour apart — the shape of "the app launched, then the
+        // reader toggled the switch".
+        await reminders.reschedule(announced: [], library: (1...3).map { entry(id: $0, status: "releasing") })
         clock.advance(by: 60 * 60)
-        let second = try (4...6).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
-        await reminders.reschedule(announced: second, library: (4...6).map { reading($0) })
+        await reminders.reschedule(announced: [], library: (4...6).map { entry(id: $0, status: "releasing") })
 
         let sentToday = centre.added.filter { Calendar.current.isDate($0.date, inSameDayAs: clock.now) }
         #expect(sentToday.count == ReleaseReminders.dailyLimit, "the cap is per day, not per call")
@@ -170,16 +175,13 @@ struct ReminderTests {
         let store = try defaults()
         let first = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
         await first.enable()
-        await first.reschedule(
-            announced: try (1...3).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) },
-            library: (1...3).map { reading($0) }
-        )
+        await first.reschedule(announced: [], library: (1...6).map { entry(id: $0, status: "hiatus") })
+        await first.reschedule(announced: [], library: (1...3).map { entry(id: $0, status: "releasing") })
 
         let relaunched = ReleaseReminders(defaults: store, centre: centre, now: { clock.now })
         #expect(relaunched.isEnabled, "control: the switch survived the relaunch")
         await relaunched.reschedule(
-            announced: try (4...6).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) },
-            library: (4...6).map { reading($0) }
+            announced: [], library: (4...6).map { entry(id: $0, status: "releasing") }
         )
 
         let sentToday = centre.added.filter { Calendar.current.isDate($0.date, inSameDayAs: clock.now) }
@@ -201,8 +203,11 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
         await reminders.enable()
 
-        let works = try (1...7).map { try work("w\($0)", series: $0, daysFromNow: 0, from: clock.now) }
-        await reminders.reschedule(announced: works, library: (1...7).map { reading($0) })
+        // Baseline: seven series, all hiatus, so their return is news below.
+        await reminders.reschedule(announced: [], library: (1...7).map { entry(id: $0, status: "hiatus") })
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
+
+        await reminders.reschedule(announced: [], library: (1...7).map { entry(id: $0, status: "releasing") })
 
         let calendar = Calendar.current
         var perDay: [Date: Int] = [:]
@@ -233,20 +238,20 @@ struct ReminderTests {
         await reminders.enable()
         #expect(reminders.effectiveEnabled, "control: it is on and allowed")
 
+        // Baseline, while still granted: series 1 seen releasing.
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "releasing")])
+        #expect(centre.added.isEmpty, "control: first sighting only baselines")
+
         // The reader turns notifications off in iOS Settings. Nothing tells
         // the app; the next status read is the only way to find out.
         centre.grants = false
-        await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
-        )
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "completed")])
         #expect(centre.added.isEmpty, "nothing is scheduled, and nothing is recorded as fired")
 
-        // Re-granted: the release the reader never heard about still arrives.
+        // Re-granted: the completion the reader never heard about still arrives.
         centre.grants = true
-        await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0)], library: [reading(1)]
-        )
-        #expect(centre.added.map(\.id) == ["release-work-a"])
+        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "completed")])
+        #expect(centre.added.map(\.id) == ["finished-1"])
     }
 
     @Test("Two events for the same series within 24 hours: only the first is sent")
@@ -256,25 +261,36 @@ struct ReminderTests {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: centre, now: { clock.now })
         await reminders.enable()
 
-        // Series 1 gets a confirmed release today, and — on the same pass —
-        // its status also flips to completed. Both are true at once, but
-        // Abdi's fatigue guard allows only one notification per series a day.
+        // Baseline: series 1 seen hiatus, season 1 already known.
         await reminders.reschedule(
-            announced: [try work("a", series: 1, daysFromNow: 0, from: clock.now)],
-            library: [entry(id: 1, status: "releasing")]
+            announced: [], library: [entry(id: 1, status: "hiatus")],
+            feeds: [1: feed(season: 1, publishedAt: clock.now)]
         )
-        #expect(centre.added.map(\.id) == ["release-work-a"])
+        #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
 
-        clock.advance(by: 60 * 60) // one hour later, same day
+        // Series 1's feed reports season 2 has ended today.
         await reminders.reschedule(
-            announced: [],
-            library: [entry(id: 1, status: "completed")]
+            announced: [], library: [entry(id: 1, status: "hiatus")],
+            feeds: [1: feed(season: 2, publishedAt: clock.now)]
         )
-        #expect(centre.added.map(\.id) == ["release-work-a"], "series 1 already had its notification today")
+        #expect(centre.added.map(\.id) == ["season-1-2"])
+
+        // One hour later, series 1 also comes back from hiatus — a different
+        // fact about the same series, but Abdi's fatigue guard allows only
+        // one notification per series a day.
+        clock.advance(by: 60 * 60)
+        await reminders.reschedule(
+            announced: [], library: [entry(id: 1, status: "releasing")],
+            feeds: [1: feed(season: 2, publishedAt: clock.now)]
+        )
+        #expect(centre.added.map(\.id) == ["season-1-2"], "series 1 already had its notification today")
 
         clock.advance(by: 25 * 60 * 60) // now past the 24h cooldown
-        await reminders.reschedule(announced: [], library: [entry(id: 1, status: "completed")])
-        #expect(centre.added.map(\.id) == ["release-work-a", "finished-1"])
+        await reminders.reschedule(
+            announced: [], library: [entry(id: 1, status: "releasing")],
+            feeds: [1: feed(season: 2, publishedAt: clock.now)]
+        )
+        #expect(centre.added.map(\.id) == ["season-1-2", "back-1"])
     }
 
     @Test("forget() clears the ledger, so a new account's own flip can still notify")
@@ -370,6 +386,16 @@ extension ReminderTests {
     /// test here that expects a release to fire has to say who is reading it.
     private func reading(_ id: Int) -> LibraryEntry {
         entry(id: id, state: .reading, status: "releasing")
+    }
+
+    /// A one-entry feed whose finale marks a season ended — the same shape
+    /// `NotificationPolicyTests` uses to test condition 2b directly.
+    private func feed(season: Int, publishedAt: Date) -> ReleaseFeed {
+        let finale = ReleaseEntry(
+            title: "Episode \(season * 10) (Season \(season) Finale)",
+            published: publishedAt, number: season * 10, season: season
+        )
+        return ReleaseFeed(title: "Feed", entries: [finale], source: .webtoons)
     }
 
     private final class FakeCentre: NotificationScheduling, @unchecked Sendable {

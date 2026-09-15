@@ -11,9 +11,24 @@
 # app"). The locale must be one the app's TestFlight test information
 # carries; ours is en-GB only.
 #
-# Not run on the test action: there is no archive to annotate, and the file
-# would be written somewhere nothing reads.
+# On the test action it prints the skip count instead. Fifty-five test files
+# read the app's own source (`SourceTree.isAvailable`) and skip where there is
+# no checkout to read, which is here; they run on every developer Mac and in
+# the pre-push hook, so nothing reaches `main` untested. Abdi's call,
+# 2026-09-15: accept the skip and make it visible rather than ship the
+# sources inside the test bundle.
 set -eu
+
+if [ "${CI_XCODEBUILD_ACTION:-}" = "test-without-building" ] || [ "${CI_XCODEBUILD_ACTION:-}" = "test" ]; then
+    if [ -n "${CI_RESULT_BUNDLE_PATH:-}" ] && [ -e "$CI_RESULT_BUNDLE_PATH" ]; then
+        summary=$(xcrun xcresulttool get test-results summary --path "$CI_RESULT_BUNDLE_PATH" 2>/dev/null || true)
+        skipped=$(printf '%s' "$summary" | sed -n 's/.*"skippedTests" *: *\([0-9]*\).*/\1/p' | head -1)
+        echo "Skipped tests in this cloud run: ${skipped:-unknown} (source-reading tests skip without a checkout; the pre-push hook runs them)."
+    else
+        echo "No result bundle to count skips from."
+    fi
+    exit 0
+fi
 
 if [ "${CI_XCODEBUILD_ACTION:-}" != "archive" ]; then
     exit 0

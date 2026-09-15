@@ -25,7 +25,38 @@ enum BookEditionShelf {
     ///   that decides what "English plus the original" means and no source can
     ///   quietly disagree with it.
     static func editionVolumes(from rows: [BookEdition], in series: Series) -> [EditionVolume] {
-        rows.compactMap { row in editionVolume(from: row, in: series) }
+        withInheritedPublishers(rows).compactMap { row in editionVolume(from: row, in: series) }
+    }
+
+    /// A row that states no publisher takes the one every other row of the
+    /// same work on the same page states — when they all agree.
+    ///
+    /// NDL's 近刊 (forthcoming) record carries no `dc:publisher` yet, so it
+    /// sat on a shelf of its own beside Shogakukan's 1–17 (`docs/reviews/
+    /// night/shelf.md`, "Needs Abdi"): the shelf's name is its group key and
+    /// the missing word split the run. Abdi's call, 2026-09-15: inherit it.
+    /// Only when the page's other rows for that work name exactly one
+    /// publisher — a work printed by two houses leaves the row alone rather
+    /// than guess between them. Not labelled as inferred on the shelf: the
+    /// label would go into the shelf's name, which is the group key, and
+    /// split the run again; this comment and `BookEditionShelfTests` are the
+    /// record instead.
+    static func withInheritedPublishers(_ rows: [BookEdition]) -> [BookEdition] {
+        var publishers: [String?: Set<String>] = [:]
+        for row in rows {
+            if let publisher = row.publisher { publishers[row.workTitle, default: []].insert(publisher) }
+        }
+        return rows.map { row in
+            guard row.publisher == nil, let stated = publishers[row.workTitle], stated.count == 1,
+                  let publisher = stated.first
+            else { return row }
+            return BookEdition(
+                id: row.id, title: row.title, isbn13: row.isbn13, publisher: publisher,
+                language: row.language, published: row.published, coverID: row.coverID,
+                volume: row.volume, source: row.source, format: row.format,
+                formatEvidence: row.formatEvidence, edition: row.edition, workTitle: row.workTitle
+            )
+        }
     }
 
     /// - Returns: nil for a row with no title at all. Open Library's `title` is

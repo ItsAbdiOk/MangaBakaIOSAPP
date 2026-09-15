@@ -122,6 +122,64 @@ struct OwnedVolumesTests {
         #expect(OwnedVolumeKey(seriesID: 1, volume: row).identity == "row:\(row.id)")
     }
 
+    /// Abdi's call, 2026-09-15 (shelf.md "Needs Abdi", first item): an
+    /// ISBN-less NDL row with a number is keyed on its shelf and number, so
+    /// the 近刊 row and the catalogued row that replaces it — titled
+    /// differently — share a tick. Fails on the old code with `row:…`.
+    @Test("An ISBN-less NDL row with a number is keyed on shelf and number; without one, on the row")
+    func ndlRowIsKeyedOnNumber() {
+        let numbered = EditionVolume(
+            number: 22, title: "薬屋のひとりごと～猫猫の後宮謎解き手帳～", releaseDate: nil,
+            isbn13: nil, format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        #expect(OwnedVolumeKey(seriesID: 1, volume: numbered).identity == "ndl:\(ndlEdition.id):22")
+        let unnumbered = EditionVolume(
+            number: nil, title: "俺だけレベルアップな件外伝　01", releaseDate: nil,
+            isbn13: nil, format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        #expect(OwnedVolumeKey(seriesID: 1, volume: unnumbered).identity == "row:\(unnumbered.id)")
+        // Other catalogues are untouched: ANN's ISBN-less row stays on the row key.
+        let ann = EditionVolume(
+            number: 2, title: "Delicious in Dungeon (GN 2)", releaseDate: nil,
+            isbn13: nil, format: .print, edition: annEdition, sourceLink: nil
+        )
+        #expect(OwnedVolumeKey(seriesID: 1, volume: ann).identity == "row:\(ann.id)")
+    }
+
+    /// The pair `reconcile`'s own doc comment said it missed: the tick on the
+    /// 近刊 spelling follows the catalogued spelling once it has an ISBN, and
+    /// a tick written under the pre-2026-09-15 `row:` key does too.
+    @Test("A tick on the forthcoming spelling follows the catalogued one, and so does a legacy row: tick")
+    func reconcileBridgesTheRenamedNDLRow() async throws {
+        let database = try makeDatabase()
+        let store = OwnedVolumes(database: database, clock: TestClock())
+        let forthcoming = EditionVolume(
+            number: 22, title: "薬屋のひとりごと～猫猫の後宮謎解き手帳～", releaseDate: nil,
+            isbn13: nil, format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        try await store.setOwned(OwnedVolumeKey(seriesID: 1, volume: forthcoming), true)
+        let legacy = EditionVolume(
+            number: 23, title: "薬屋のひとりごと : 猫猫の後宮謎解き手帳. 23", releaseDate: nil,
+            isbn13: nil, format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        try await store.setOwned(OwnedVolumeKey(seriesID: 1, identity: "row:\(legacy.id)"), true)
+
+        let catalogued22 = EditionVolume(
+            number: 22, title: "薬屋のひとりごと : 猫猫の後宮謎解き手帳. 22", releaseDate: nil,
+            isbn13: "9784091582294", format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        let catalogued23 = EditionVolume(
+            number: 23, title: legacy.title, releaseDate: nil,
+            isbn13: "9784091582300", format: .print, edition: ndlEdition, sourceLink: nil
+        )
+        let shelf = EditionShelf(edition: ndlEdition, volumes: [catalogued22, catalogued23])
+        #expect(try await store.reconcile(shelves: [shelf], for: 1) == 2)
+        let owned = try await store.owned(for: 1)
+        let expected = [catalogued22, catalogued23].map { OwnedVolumeKey(seriesID: 1, volume: $0) }
+        #expect(owned == Set(expected))
+        #expect(try await store.count() == 2)
+    }
+
     // MARK: - Reconciliation (`docs/reviews/night/shelf.md` §B)
 
     /// A tick on an ISBN-less row, then the same row arrives with an ISBN:
