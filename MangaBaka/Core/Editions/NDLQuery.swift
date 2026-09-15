@@ -60,8 +60,13 @@ extension NDLClient {
         /// record in both measured responses.
         static let comicGenre = "漫画"
 
+        // `records` arrives already deduplicated — `NDLClient.answer(title:
+        // format:from:)` calls `Self.deduplicated` once, before counting
+        // `records.count` against `numberOfRecords` for `isPartial`. A
+        // second pass here cost nothing wrong, only a reader of `rows`
+        // unable to tell which call was load-bearing (item P12).
         func rows(from records: [NDLRecordParser.Record]) -> [BookEdition] {
-            let candidates = Self.deduplicated(records).filter(titleMatches)
+            let candidates = records.filter(titleMatches)
             let comicImprints = Set(
                 candidates
                     .filter { $0.genre == Self.comicGenre }

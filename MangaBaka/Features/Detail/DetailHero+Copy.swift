@@ -31,8 +31,20 @@ extension DetailHero {
     /// separator with nothing before it.
     var byline: String? { Self.byline(for: series) }
 
+    /// P18, 2026-09-15: this used to derive a native title from `titles`
+    /// (trait `"native"`, filtered against `displayTitle`) — a guess from
+    /// before the v1 record carried `native_title` itself. The "Also known
+    /// as" sheet (`AlternativeTitlesButton`, below) already reads
+    /// `series.nativeTitle`, the API field; the byline now reads the same
+    /// field rather than a second, independently-derived answer to the same
+    /// question, which could diverge whenever the API's `native_title` is
+    /// not itself tagged `native` in `titles`. `series.nativeTitle` is
+    /// authoritative: it is what the API states the native title to be,
+    /// where the trait search was only ever an inference from the title
+    /// list.
     nonisolated static func byline(for series: Series) -> String? {
-        let parts = [nativeTitle(of: series), series.authors?.joined(separator: ", ")]
+        let native = series.nativeTitle.flatMap { $0 != series.displayTitle ? $0 : nil }
+        let parts = [native, series.authors?.joined(separator: ", ")]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -46,12 +58,5 @@ extension DetailHero {
         guard let chapters = series.totalChapters, chapters > 0 else { return nil }
         let whole = Int(wholeOrClamped: chapters)
         return "\(whole) \(whole == 1 ? "chapter" : "chapters")"
-    }
-
-    nonisolated static func nativeTitle(of series: Series) -> String? {
-        guard let displayed = series.displayTitle else { return nil }
-        return series.titles?
-            .first { $0.traits.contains("native") && $0.title != displayed }?
-            .title
     }
 }

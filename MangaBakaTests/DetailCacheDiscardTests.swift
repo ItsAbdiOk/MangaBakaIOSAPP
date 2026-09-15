@@ -3,14 +3,13 @@ import GRDB
 import Testing
 @testable import MangaBaka
 
-/// The detail cache holds rating- and tag-filtered content — a series page's
-/// tag rows, its editions, its images — so a filter change has to throw it
-/// away. Until 2026-09-14 `apply` spent `try?` on that discard: a rating
-/// change whose detail discard failed kept showing, for six hours, the tags
-/// the rating was set to hide, with nothing logged. That is the exact failure
-/// `SeriesRepository+Cache.swift:45-50`'s doc comment was written for, and the
-/// feeds half of the same function had already grown the `-> Bool` shape for
-/// it (gap 74). Review item 32.
+/// The detail cache holds the *unfiltered* series record — the page applies
+/// the reader's rating to `richTags` at display time — so a rating or
+/// blocked-tag change leaves it standing (review perf PS1, 2026-09-15; the
+/// premise this suite carried until then, "the cache holds rating-filtered
+/// tags, editions and images", was wrong on all three counts). The discard
+/// path itself — `apply` reporting a failed discard rather than swallowing it
+/// (item 32, gap 74) — is still pinned below through `apply` directly.
 @Suite("Detail cache discard", .serialized)
 struct DetailCacheDiscardTests {
     private let baseURL = URL(string: "https://api.example.invalid").unsafeTestURL
@@ -27,11 +26,11 @@ struct DetailCacheDiscardTests {
         )
     }
 
-    /// The behaviour the whole thing is for. Expected to fail before item 32's
-    /// fix only in the second test; this one pins the working path so the
-    /// second cannot pass by the discard never running at all.
-    @Test("A rating change throws away the cached series page")
-    func ratingChangeDiscardsDetail() async throws {
+    /// Fails on the pre-2026-09-15 code with `readDetailCache(42) == nil`:
+    /// the toggle used to delete every cached page (up to 200, ~40 MB) and
+    /// make each re-open pay eight requests again.
+    @Test("A rating change and a blocked-tag change leave the cached series page standing")
+    func ratingAndBlockedTagChangesKeepDetail() async throws {
         let database = try AppDatabase.inMemory()
         let repository = makeRepository(database: database)
 
@@ -41,8 +40,9 @@ struct DetailCacheDiscardTests {
         #expect(try await repository.readDetailCache(42) != nil, "control: it was cached")
 
         await repository.updateContentRatings(["safe"])
-
-        #expect(try await repository.readDetailCache(42) == nil)
+        #expect(try await repository.readDetailCache(42) != nil, "the page filters tags at display time")
+        await repository.updateBlockedTags([7])
+        #expect(try await repository.readDetailCache(42) != nil, "nothing on the page reads blocked tags")
     }
 
     /// The control for the one above: a change that invalidates only feeds

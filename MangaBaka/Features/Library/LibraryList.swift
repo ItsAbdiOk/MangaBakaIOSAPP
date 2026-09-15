@@ -40,11 +40,7 @@ struct LibraryList: View {
                 .padding(.top, 20)
             }
             ForEach(Array(model.listed.enumerated()), id: \.element.id) { index, entry in
-                row(entry)
-                    // Capped at 6 (`Motion.stagger`'s own cap) so a 900-row
-                    // library assembles rather than queuing its last rows
-                    // seconds behind its first.
-                    .arrives(index: index)
+                arrivingRow(entry, index: index)
                     .transition(.blurReplace)
             }
         }
@@ -93,6 +89,33 @@ struct LibraryList: View {
             .contentShape(Rectangle())
         }
         .accessibilityLabel("Sort by \(model.sort.label)")
+    }
+
+    /// How many rows count as "the first screen" for `arrivingRow(_:index:)`
+    /// below. **A guess** — big enough to cover a tall phone's first paint
+    /// with margin, not measured against a real device's actual row count.
+    private static let firstScreenRowCap = 12
+
+    /// `row(_:)`, staggered in only for the rows that were actually part of
+    /// the list's first appearance (S8/library-ui).
+    ///
+    /// `.arrives(index:)` hides a row (opacity 0, blurred) until its own
+    /// `onAppear` fires, and for a `LazyVStack` that is whenever the row is
+    /// first created — not only when the whole list first assembles. Applied
+    /// to every row unconditionally, a reader scrolling down into rows the
+    /// initial screen never rendered saw each one hide and fade back in as
+    /// it scrolled into view, every time it was created for the first time —
+    /// the "list assembling" treatment repeating on ordinary scrolling
+    /// instead of only happening once, at launch. Rows past
+    /// `firstScreenRowCap` just render; only the ones on screen when the
+    /// list first appears get the staggered reveal.
+    @ViewBuilder
+    private func arrivingRow(_ entry: LibraryEntry, index: Int) -> some View {
+        if index < Self.firstScreenRowCap {
+            row(entry).arrives(index: index)
+        } else {
+            row(entry)
+        }
     }
 
     private func row(_ entry: LibraryEntry) -> some View {

@@ -158,16 +158,27 @@ enum AppleBooksMatch {
     ) -> [Matched<Item>] {
         let wanted = Set(titles.map(normalise).filter { !$0.isEmpty })
         guard !wanted.isEmpty else { return [] }
+        // Decorated once (item P7): `split` builds and runs a `Regex` per
+        // call — not `static let`, since a `Regex` is not `Sendable` — and
+        // the old shape called it once per comparison inside the sort *and*
+        // again per item in the loop below, ~3,000 builds for a 200-name
+        // store answer (~1,500 comparisons in an O(n log n) sort, plus 200 in
+        // the loop) rather than 200. Splitting here and carrying the result
+        // through both passes is the same fix `TasteRanker.rank` needed for
+        // "scores per comparison".
+        let decorated = items.enumerated().map { offset, item in
+            (offset: offset, item: item, parts: split(nameOf(item), numbering: numbering))
+        }
         // Two passes, tagged editions first. Store relevance order put "The
         // Apothecary Diaries: Volume 1" (the light novel, untagged) ahead of
         // "The Apothecary Diaries 01 (Manga)", so first-seen-wins showed the
         // novel's cover on the comic's shelf (Abdi's phone, 2026-09-13). An
         // edition that says what it is outranks one that does not.
-        let ranked = items.enumerated().sorted { lhs, rhs in
-            let lhsTagged = isTagged(nameOf(lhs.element), numbering)
-            let rhsTagged = isTagged(nameOf(rhs.element), numbering)
+        let ranked = decorated.sorted { lhs, rhs in
+            let lhsTagged = lhs.parts?.tag != nil
+            let rhsTagged = rhs.parts?.tag != nil
             return lhsTagged != rhsTagged ? lhsTagged : lhs.offset < rhs.offset
-        }.map(\.element)
+        }
         var byNumber: [Int: Matched<Item>] = [:]
         // Set only while building the comic shelf (`isNovel == false`): an
         // untagged row is normally a light novel's own bare early numbering
@@ -180,10 +191,9 @@ enum AppleBooksMatch {
         // word (モノクロ版), and "ONE PIECE 2" without one is the same comic,
         // not a novel leaking in.
         var comicShelfHasTaggedEdition = false
-        for item in ranked {
-            let name = nameOf(item)
-            guard let parts = split(name, numbering: numbering), wanted.contains(normalise(parts.title))
-            else { continue }
+        for entry in ranked {
+            guard let parts = entry.parts, wanted.contains(normalise(parts.title)) else { continue }
+            let item = entry.item
             if let tag = parts.tag {
                 guard isNovelTag(tag) == isNovel else { continue }
                 if !isNovel { comicShelfHasTaggedEdition = true }
@@ -195,10 +205,6 @@ enum AppleBooksMatch {
             byNumber[parts.number] = Matched(item: item, parts: parts)
         }
         return byNumber.values.sorted { $0.parts.number < $1.parts.number }
-    }
-
-    private static func isTagged(_ name: String, _ numbering: Numbering) -> Bool {
-        split(name, numbering: numbering)?.tag != nil
     }
 
     /// "(novel)", "(Light Novel)" → a novel; "(comic)", "(Manga)",
@@ -248,7 +254,12 @@ enum AppleBooksMatch {
     }
 
     // Built per call: a Regex is not Sendable, so it cannot be a static
-    // constant. Cheap enough — the store answers at most 200 names.
+    // constant. `matchedVolumes` above decorates each item with `split`
+    // exactly once now (item P7) — before 2026-09-15 this ran roughly 3,000
+    // times per 200-name store answer (~1,500 sort comparisons calling
+    // `isTagged`, itself a `split`, plus 200 more in the main loop); the
+    // wrong count, "Cheap enough — the store answers at most 200 names", is
+    // the comment that was here.
     // swiftlint:disable:next large_tuple
     private static var barePattern: Regex<(Substring, Substring, Substring?, Substring?, Substring?)> {
         // Title, an optional edition word (モノクロ版 monochrome, カラー版

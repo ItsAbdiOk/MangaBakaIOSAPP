@@ -158,7 +158,12 @@ struct PartialDate: Codable, Sendable, Equatable, Comparable {
     /// not an instant in the reader's timezone, and building these against
     /// `Calendar.current` would shift a Tokyo release by a day for a reader
     /// in Los Angeles.
-    private static var utc: Calendar {
+    ///
+    /// `static let`, not `static var` (item P15): nothing here depends on
+    /// when it runs, so a computed property was rebuilding the same
+    /// `Calendar` on every parsed date and every `isForthcoming` check for no
+    /// reason — µs each, low value, but a `let` is the same code and free.
+    private static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         // A locale-independent calendar: `TimeZone(identifier:)` is optional
         // and `!` is banned here, so the failure falls back to the device's
@@ -166,5 +171,5 @@ struct PartialDate: Codable, Sendable, Equatable, Comparable {
         // fallback is unreachable in practice.
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
         return calendar
-    }
+    }()
 }

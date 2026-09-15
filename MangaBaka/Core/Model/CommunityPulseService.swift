@@ -32,6 +32,12 @@ final class CommunityPulseService {
 
     private let client: APIClient
     private let clock: any Clock
+    /// Holds the one request in flight so a second `load()` — two Discover
+    /// appearances inside one round trip is the normal case, not an edge
+    /// case — joins it instead of firing a second
+    /// `/v0/frontpage/community-pulse`. `CatalogueService.genres()` guards
+    /// the same way; this had nothing (W16/P16, 2026-09-15).
+    private var loadTask: Task<Void, Never>?
 
     init(client: APIClient, clock: any Clock = SystemClock()) {
         self.client = client
@@ -56,13 +62,28 @@ final class CommunityPulseService {
         guard pulse == nil else { return }
         let now = clock.now
         if let failedAt, now.timeIntervalSince(failedAt) <= Self.retryInterval { return }
-        do {
-            pulse = try await client.getRoot("/v0/frontpage/community-pulse", as: CommunityPulse.self)
-            didFail = false
-            self.failedAt = nil
-        } catch {
-            didFail = true
-            self.failedAt = now
+        // Two Discover appearances inside one round trip used to fire two
+        // requests; join whichever is already out instead (W16/P16,
+        // 2026-09-15).
+        if let loadTask { return await loadTask.value }
+
+        let task = Task {
+            do {
+                // D1: this is a grace note, never something a tap is waiting on —
+                // `.background` waits for a slot instead of taking one from a
+                // foreground request racing it at launch.
+                pulse = try await client.getRoot(
+                    "/v0/frontpage/community-pulse", priority: .background, as: CommunityPulse.self
+                )
+                didFail = false
+                self.failedAt = nil
+            } catch {
+                didFail = true
+                self.failedAt = now
+            }
         }
+        loadTask = task
+        await task.value
+        if loadTask == task { loadTask = nil }
     }
 }

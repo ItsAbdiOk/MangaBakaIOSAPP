@@ -328,6 +328,7 @@ struct StackSourceTests {
 
         // One skip drops the queue to two, which is the refill threshold.
         await model.react(.skipped)
+        await settleRefill(of: model)
 
         #expect(library.requestedPages == [1, 2])
         let secondCall = try #require(library.sentExclusions.last)
@@ -354,9 +355,19 @@ struct StackSourceTests {
         )
         await model.loadIfNeeded()
         await model.react(.skipped)
+        await settleRefill(of: model)
 
         // 2 unseen kept + 2 new, not 2 new alone.
         #expect(await model.queue.map(\.id) == [2, 3, 4, 5])
+    }
+
+    /// `react` no longer awaits the top-up it triggers (review perf D2,
+    /// 2026-09-15) — it hands it to a task and returns. Yield so that task
+    /// registers itself as the refill in flight, then join it through
+    /// `refill()`'s own de-duplication rather than starting a second one.
+    private func settleRefill(of model: StackModel) async {
+        await Task.yield()
+        await model.refill()
     }
 
     /// The recommender explains each pick. Showing that is the difference

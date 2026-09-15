@@ -33,6 +33,15 @@ actor NetworkLedger {
         /// `PublisherRecord`); after `LossyArray` they will instead be short
         /// by one, which is better and also harder to notice.
         var droppedRows = 0
+        /// The most recent dropped row's own `DecodingError` description —
+        /// names the coding path and the key that changed, rather than just
+        /// a count with no way to tell a `tags_v2` rename from a `works`
+        /// rename (wire review W10/P10, 2026-09-15). The latest rather than
+        /// the first across the entry's whole lifetime, on the same logic
+        /// `slowestSeconds`/`averageSeconds` use elsewhere in this type:
+        /// this is a running tally for the session, and the most recent
+        /// shape change is the one still worth reading.
+        var lastDropReason: String?
 
         var averageSeconds: Double { requests > 0 ? totalSeconds / Double(requests) : 0 }
     }
@@ -54,13 +63,33 @@ actor NetworkLedger {
 
     /// Counts rows a lenient array decode dropped. No request is implied —
     /// this is called after one whose count is already recorded.
-    func recordDropped(path: String, count: Int) {
+    ///
+    /// - Parameter reason: the first dropped row's `DecodingError`
+    ///   description this batch, or nil when the caller has none (a decode
+    ///   loss recorded some other way). Optional with a default so existing
+    ///   call sites keep compiling; `LossyArray`'s own callers always have
+    ///   one to give (W10/P10, 2026-09-15).
+    func recordDropped(path: String, count: Int, reason: String? = nil) {
         guard count > 0 else { return }
         let key = Self.shape(path)
         var entry = byPath[key] ?? Entry()
         entry.droppedRows += count
+        if let reason { entry.lastDropReason = reason }
         byPath[key] = entry
     }
+
+    /// What the gate did this session (review perf W11/S18, 2026-09-15):
+    /// the three numbers that make a throttle card attributable from
+    /// Settings — refused here before sending, refused by the server, and
+    /// how long background legs waited instead. `DataUseSection` reads them
+    /// through `GateDiagnosticsProviding`.
+    private(set) var localRefusalCount = 0
+    private(set) var serverRateLimitCount = 0
+    private(set) var backgroundWaitTotal: Double = 0
+
+    func recordLocalRefusal() { localRefusalCount += 1 }
+    func recordServerRateLimit() { serverRateLimitCount += 1 }
+    func recordBackgroundWait(seconds: Double) { backgroundWaitTotal += max(0, seconds) }
 
     func recordImage(bytes: Int) {
         imageBytes += bytes

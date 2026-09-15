@@ -181,7 +181,7 @@ struct PartialDataTests {
         await model.load()
 
         #expect(model.entries.isEmpty)
-        #expect(model.hasAccount, "an unreachable library is not an absent account")
+        #expect(model.screenState != .noAccount, "an unreachable library is not an absent account")
         #expect(!model.isComplete)
         #expect(model.failure != nil)
         // The failure was stored and read by no view: a reader offline with 937

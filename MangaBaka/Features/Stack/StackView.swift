@@ -93,6 +93,7 @@ struct StackView: View {
                         warning: model.warning(for: current)
                     )
                     actions
+                    lowQueueStatus
                     StackSavedStrip(saved: model.saved, path: $path, onOpenShelf: onOpenShelf)
                 }
             }
@@ -463,6 +464,30 @@ extension StackView {
             .accessibilityLabel("Save")
         }
         .padding(.top, 14)
+    }
+
+    /// D7 (discovery-ui review, 2026-09-15): a refill under a full gate with
+    /// one or two cards still in hand used to show nothing at all — the
+    /// disabled state only ever appeared once the queue was completely
+    /// empty (`emptyState`, below), so a stalled or failed top-up while the
+    /// reader still had a card to look at read as the app having simply
+    /// stopped, with no visible cause. Mirrors the pattern Discover already
+    /// uses for a row-level throttle: content stays up, a small line
+    /// underneath says why nothing new has arrived yet.
+    @ViewBuilder
+    private var lowQueueStatus: some View {
+        if model.queue.count <= 2 {
+            if let failure = model.failure {
+                InlineFailure(error: failure, retry: { await model.refill() })
+                    .padding(.top, 10)
+            } else if model.isLoading {
+                Text("Finding more…")
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .padding(.top, 10)
+                    .padding(.horizontal, Metrics.gutter)
+            }
+        }
     }
 
     /// Run out, or failed to load. Two different things, said differently:

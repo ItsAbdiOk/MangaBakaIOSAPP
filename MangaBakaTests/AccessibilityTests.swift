@@ -599,7 +599,9 @@ struct DetailAccessibilityLayoutTests {
         "Side-by-side layouts stack at accessibility sizes",
         arguments: [
             "MangaBaka/Features/Detail/DetailHero.swift",
-            "MangaBaka/Features/Detail/SeriesDetailView.swift",
+            // The action row ("Add to library" / "Use as seed") lives in
+            // `+Actions.swift` since 2026-09-15.
+            "MangaBaka/Features/Detail/SeriesDetailView+Actions.swift",
             "MangaBaka/Features/Detail/DetailCredits.swift",
             "MangaBaka/Features/Detail/DetailStatsStrip.swift"
         ]

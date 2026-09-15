@@ -58,6 +58,21 @@ struct ReadingInsightsView: View {
     /// changed library and a walk finishing.
     private var revision: String { "\(entries.count)-\(isComplete)-\(libraryRevision)" }
 
+    /// `ReadingInsights.hasAnythingToSay(entries)`, but read off `derived`
+    /// instead of re-running `waiting`/`nearlyFinished`/`verdicts` a second
+    /// time (R10/P10). `body` re-evaluates far more often than the library
+    /// changes — a scroll-driven `StaleBar` change, a `revision` bump — and
+    /// `recompute()` already produced these three results off the main actor
+    /// moments earlier. Equivalent to the original: `derived`'s fields are
+    /// all empty/zero whenever `entries` is empty, so there is no need to
+    /// special-case that here the way `hasAnythingToSay` does.
+    private var hasAnythingToSay: Bool {
+        derived.chapters > 0
+            || !derived.waiting.isEmpty
+            || !derived.nearly.isEmpty
+            || !derived.verdicts.isEmpty
+    }
+
     private struct Derived {
         var waiting: [ReadingInsights.Behind] = []
         var nearly: [ReadingInsights.Behind] = []
@@ -84,7 +99,7 @@ struct ReadingInsightsView: View {
                 }
                 if !hasComputed {
                     loading
-                } else if !ReadingInsights.hasAnythingToSay(entries) {
+                } else if !hasAnythingToSay {
                     EmptyState(
                         title: "Nothing to say yet",
                         message: """

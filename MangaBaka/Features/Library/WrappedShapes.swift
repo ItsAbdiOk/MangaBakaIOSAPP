@@ -152,6 +152,14 @@ private struct CountUpNumber: View {
     private static let duration: TimeInterval = 0.45
 
     @State private var start: Date?
+    /// L1/P1-libraryui: without this, `TimelineView(.animation)` keeps
+    /// scheduling a redraw at the display's refresh rate (60-120Hz) for as
+    /// long as this view is on screen, even though `countUp` clamps to
+    /// `target` after 0.45s and every frame after that draws the exact same
+    /// text. Two `Text` views doing nothing, at display rate, for as long as
+    /// `WrappedView` stays open. Sets `paused` on the schedule itself once
+    /// the count-up is done, rather than only clamping the value it produces.
+    @State private var finished = false
 
     var body: some View {
         if Motion.isReduced {
@@ -160,13 +168,14 @@ private struct CountUpNumber: View {
             // less of, not just its duration.
             Text("\(target)")
         } else {
-            TimelineView(.animation) { timeline in
+            TimelineView(.animation(paused: finished)) { timeline in
                 let began = start ?? timeline.date
                 let elapsed = timeline.date.timeIntervalSince(began) - Motion.stagger(index)
                 let progress = elapsed / Self.duration
                 Text("\(WrappedView.countUp(progress: progress, target: target))")
                     .countsNotCuts()
                     .onAppear { if start == nil { start = timeline.date } }
+                    .onChange(of: progress >= 1) { _, done in if done { finished = true } }
             }
         }
     }

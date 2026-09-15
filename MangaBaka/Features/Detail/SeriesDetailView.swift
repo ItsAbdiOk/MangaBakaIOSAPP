@@ -172,6 +172,10 @@ struct SeriesDetailView: View {
     @State var cadenceFailure: APIError?
     @State var isCadenceLoading = false
     @State var isLoading = true
+    /// True from the hero's arrival until the tail (news, relationships,
+    /// collections, the works last page) and the two feeds have landed —
+    /// what `LoadingLine` shows after `isLoading` clears.
+    @State var isTailLoading = false
     /// Which series `loadCore` / `loadOnward` last finished for. `.task(id:
     /// series.id)` is cancelled on disappear and started again on appear, and
     /// a push (a related series, a publisher) or a `fullScreenCover` (the
@@ -179,7 +183,7 @@ struct SeriesDetailView: View {
     /// whole load: `filled = nil` dropped the synopsis and chapter count to
     /// skeletons before the six-hour cache refilled them, and the seven
     /// onward legs were asked again, two of them behind MangaUpdates' 3 s
-    /// spacer and Open Library's up-to-36 s of HEADs, for a page the reader
+    /// spacer and Open Library's up-to-48 s of HEADs (4 s gate), for a page the reader
     /// had already read (review item 32, 2026-09-14). Two ids, not one: a
     /// gallery opened while the onward legs were still out cancels them, and
     /// only those should be re-asked on return — never the core, whose reset
@@ -253,7 +257,7 @@ struct SeriesDetailView: View {
     /// while the same series opened from Search had all three. The reader is
     /// looking at one series; it should not matter which door they came in by.
     var shown: Series { filled ?? series }
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dynamicTypeSize) var typeSize
 
     var body: some View {
         ScrollView {
@@ -436,64 +440,6 @@ struct SeriesDetailView: View {
 /// extension purely for the lint's 250-line body-length ceiling — `private`
 /// members stay reachable from an extension in the same file.
 extension SeriesDetailView {
-    /// The mockup pairs the primary action with "Use as seed", which is the
-    /// only place in the app that sends a specific series into a blend from the
-    /// screen where you decided you liked it.
-    private var actions: some View {
-        // Side by side normally; stacked at accessibility text sizes, where
-        // two fixed-height buttons sharing a row truncated into "Add to li…"
-        // and "Use as…" — both unreadable, and the primary action of the page
-        // among them.
-        Group {
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: Metrics.gapStrip) {
-                    libraryAction
-                    seedAction
-                }
-                .padding(.leading, Metrics.gutter)
-            } else {
-                HStack(spacing: Metrics.gapStrip) {
-                    libraryAction
-                        .padding(.leading, Metrics.gutter)
-                    seedAction
-                }
-            }
-        }
-        .padding(.trailing, Metrics.gutter)
-    }
-
-    private var libraryAction: some View {
-        LibraryControl(series: shown, library: library, store: libraryStore)
-    }
-
-    @ViewBuilder
-    private var seedAction: some View {
-        if onUseAsSeed != nil {
-            Button { onUseAsSeed?(shown) } label: {
-                Text("Use as seed")
-                    .typeChip()
-                    .lineLimit(1)
-                    .padding(.horizontal, 16)
-                    // minHeight, not height: at accessibility text sizes a
-                    // fixed 52pt button clips its own label.
-                    .frame(minHeight: Metrics.ctaPrimary)
-                    .foregroundStyle(Palette.textPrimary)
-                    .background(
-                        Palette.surfaceChip,
-                        in: RoundedRectangle(
-                            cornerRadius: Metrics.radiusCard, style: .continuous
-                        )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Metrics.radiusCard, style: .continuous)
-                            .strokeBorder(Palette.border, lineWidth: 0.5)
-                    )
-            }
-            .buttonStyle(.press)
-            .accessibilityHint("Adds this series to the Mix and opens it")
-        }
-    }
-
     /// A licence obligation, not a nicety: CC BY-NC-SA requires attribution to
     /// MangaBaka and to the upstream sources the data came from.
     private var provenance: some View {
@@ -590,12 +536,23 @@ extension SeriesDetailView {
         return error
     }
 
+    /// The optional form, for the two feeds' `blockingError` (review perf
+    /// DT6, 2026-09-15: item 30 came back when the feeds went `.background`
+    /// — a cancelled wait wrote "Cancelled" and a Retry under both rows).
+    nonisolated static func presentableFailure(_ error: APIError?) -> APIError? {
+        error.flatMap { presentableFailure($0) }
+    }
+
     func loadCore() async {
         isLoading = true
         // Reset before the first await, not after: a `series` that changed
         // under this view (the pager, a deep link) must never render the
         // previous series' filled-in fields while its own answer is out.
         filled = nil
+        // And the extras, for the same reason (review perf DT19): with only
+        // `filled` reset, `refreshDerived` below grouped the *previous*
+        // page's tags under the new page's title until the hero arrived.
+        extras = SeriesExtras()
         coversRetry?.cancel()
         refreshDerived()
         // `.background`: both rows sit at the foot of the page, and a
@@ -609,25 +566,46 @@ extension SeriesDetailView {
         async let alsoResult = repository.feed(
             .readersAlsoLike(seriesId: series.id), forceRefresh: false, priority: .background
         )
-        async let extrasResult = repository.extras(for: series.id)
+        // The hero draws from the first phase of `extras` — the full record
+        // and the first works page — the moment those two foreground legs
+        // return (review perf DT1, 2026-09-15). Before this the page awaited
+        // all five legs, and from 120 requests held the synopsis, stats and
+        // tags stalled behind three `.background` legs the reader had not
+        // scrolled to: the throttle Abdi asked to hide, on the part he looks
+        // at. `isLoading` clears here; the tail and the two feeds fill in
+        // under `LoadingLine`.
+        let pageID = series.id
+        isTailLoading = true
+        async let extrasResult = repository.extras(for: series.id) { [self] hero in
+            await MainActor.run {
+                guard self.series.id == pageID else { return }
+                self.extras = hero
+                self.filled = hero.full.map { self.series.filling(gapsFrom: $0) }
+                self.refreshDerived()
+                self.isLoading = false
+            }
+        }
         async let coversLeg: Void = loadCovers()
         let similarAnswer = await similarResult
         similar = similarAnswer.series
         similarNotes = similarAnswer.notes
         similarOrigin = similarAnswer.origin
-        similarFailure = similarAnswer.blockingError
+        similarFailure = Self.presentableFailure(similarAnswer.blockingError)
         let alsoAnswer = await alsoResult
         alsoLike = alsoAnswer.series
         alsoLikeNotes = alsoAnswer.notes
         alsoOrigin = alsoAnswer.origin
-        alsoLikeFailure = alsoAnswer.blockingError
-        extras = await extrasResult
+        alsoLikeFailure = Self.presentableFailure(alsoAnswer.blockingError)
+        let whole = await extrasResult
+        guard series.id == pageID else { return }
+        extras = whole
         // The covers leg writes its own state — `loadCovers`, which the
         // throttle-wait and the fan's tap both re-run on their own.
         await coversLeg
-        filled = extras.full.map { series.filling(gapsFrom: $0) }
+        filled = whole.full.map { series.filling(gapsFrom: $0) }
         refreshDerived()
         isLoading = false
+        isTailLoading = false
     }
 
     /// The three values `body` used to recompute on every pass: the filled-in

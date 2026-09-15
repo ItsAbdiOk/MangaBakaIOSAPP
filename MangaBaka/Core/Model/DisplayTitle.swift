@@ -7,6 +7,44 @@ import Foundation
 /// in it is flagged `is_primary`. See the note on `SeriesTitle.isPrimary` for
 /// the measurement behind that claim.
 enum DisplayTitle {
+    /// `Locale.preferredLanguages`, normalised the same way `choose` itself
+    /// normalises every language tag, cached for the process.
+    ///
+    /// `Series.displayTitle` has 68 call sites (`Series.swift:337-339`),
+    /// most inside row bodies — `LibrarySort.swift:26-32` measured and fixed
+    /// the cost at its own one caller ("~18k `Locale.preferredLanguages`
+    /// reads … per keystroke"), but the other 67 still paid a fresh
+    /// CFPreferences read per access. Fixed at the source instead of at one
+    /// more consumer, per CLAUDE.md's rule against duplicating a fix rather
+    /// than exposing it where the cost actually is (wire review W13/P13,
+    /// 2026-09-15).
+    private static let preferredLanguagesLock = NSLock()
+    nonisolated(unsafe) private static var cachedPreferredLanguageCodes: [String]?
+
+    /// Drops the cache so the next `choose` re-reads `Locale.preferredLanguages`.
+    /// Call this from wherever the app observes
+    /// `NSLocale.currentLocaleDidChangeNotification` (App/AppServices, not
+    /// this file — this type has no lifecycle of its own to hook one), and
+    /// from a test that changes the process's preferred languages mid-run.
+    static func invalidatePreferredLanguagesCache() {
+        preferredLanguagesLock.lock()
+        cachedPreferredLanguageCodes = nil
+        preferredLanguagesLock.unlock()
+    }
+
+    /// Internal, not `private`: it is used as `choose`'s default argument
+    /// value, and a default argument expression must be at least as visible
+    /// as the function it defaults for — every call site across the module
+    /// evaluates it.
+    static func cachedPreferredLanguages() -> [String] {
+        preferredLanguagesLock.lock()
+        defer { preferredLanguagesLock.unlock() }
+        if let cachedPreferredLanguageCodes { return cachedPreferredLanguageCodes }
+        let codes = Locale.preferredLanguages.map(languageCode(of:))
+        cachedPreferredLanguageCodes = codes
+        return codes
+    }
+
     /// Preference order, most preferred first:
     ///
     /// 1. the reader's own preferred languages, in their order
@@ -22,13 +60,16 @@ enum DisplayTitle {
     ///   handle that rather than force-unwrapping.
     static func choose(
         from titles: [SeriesTitle]?,
-        preferredLanguages: [String] = Locale.preferredLanguages,
+        preferredLanguages: [String] = DisplayTitle.cachedPreferredLanguages(),
         preference: TitlePreference = TitleSettings.preference
     ) -> String? {
         guard let titles, !titles.isEmpty else { return nil }
 
         if let chosen = matching(preference, in: titles) { return chosen }
 
+        // Already normalised when it came from the cache; re-normalising an
+        // explicitly-passed (test) value is idempotent — `languageCode(of:)`
+        // on an already-normalised code returns it unchanged.
         let normalizedPreferred = preferredLanguages.map(languageCode(of:))
 
         for preferred in normalizedPreferred {

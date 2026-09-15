@@ -78,18 +78,31 @@ struct VolumesSection: View {
         let fetched = volumes.reduce(0) { $0 + $1.editions.count }
         guard let worksTotal, worksTotal > fetched else { return (String(volumes.count), false) }
         let top = volumes.compactMap { $0.editions.compactMap(\.sequenceNumeric).max() }.max()
-        guard let top, top >= 1, top < 10_000 else { return (String(volumes.count), true) }
+        // A GUESS, not a derivation: no real series has ever numbered a
+        // volume in the thousands, so a `sequenceNumeric` at or past this is
+        // read as a data glitch (a misparsed ISBN suffix, say) rather than a
+        // real volume count — the plain volume count is shown instead.
+        guard let top, top >= 1, top < Self.plausibleVolumeCeiling else {
+            return (String(volumes.count), true)
+        }
         return (String(Int(top)), true)
     }
 
+    /// See the guard in `badge(volumes:worksTotal:)` above.
+    nonisolated private static let plausibleVolumeCeiling: Double = 10_000
+
     var body: some View {
         if Self.shows(volumes: volumes, failure: failure, isCheckingStore: isCheckingStore) {
+            // Read once per pass rather than the two separate calls this
+            // file used to make — one for the chip, one for the "Showing
+            // the first and latest volumes" line below (P14).
+            let badge = Self.badge(volumes: volumes, worksTotal: worksTotal)
             VStack(alignment: .leading, spacing: 11) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Volumes")
                         .typeDetailSectionHeader()
                         .foregroundStyle(Palette.textPrimary)
-                    if let badge = Self.badge(volumes: volumes, worksTotal: worksTotal) {
+                    if let badge {
                         Text(badge.text)
                             .typeChip()
                             .foregroundStyle(Palette.textMuted)
@@ -114,7 +127,7 @@ struct VolumesSection: View {
                 // Said once, above the row, so a reader scrolling from
                 // volume 15 to volume 112 knows the jump is the fetch, not
                 // the series.
-                if !isCheckingStore, Self.badge(volumes: volumes, worksTotal: worksTotal)?.isPartial == true {
+                if !isCheckingStore, badge?.isPartial == true {
                     Text("Showing the first and latest volumes.")
                         .typeGridMeta()
                         .foregroundStyle(Palette.textMuted)

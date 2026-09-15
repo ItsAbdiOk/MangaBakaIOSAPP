@@ -213,10 +213,10 @@ final class StackModel {
 
     /// Whether the reader is actually looking at the Stack tab right now.
     ///
-    /// Set by the view (an `.onAppear`/tab-selection observer — not yet
-    /// wired; see the 2026-09-13 rate-limit report). Defaults to `true` so a
-    /// view that never sets this keeps today's behaviour — always
-    /// `.userInitiated` — rather than silently degrading to background.
+    /// Set by the view (`StackView.swift:110-111`'s `.onAppear`/`.onDisappear`
+    /// pair). Defaults to `true` so a view that never sets this keeps today's
+    /// behaviour — always `.userInitiated` — rather than silently degrading
+    /// to background.
     /// `fetchBatch` reads this to decide whether a catalogue deal is
     /// something the reader is watching happen or work this app started on
     /// its own while they are elsewhere (Discover, say) — the latter must not
@@ -329,7 +329,19 @@ final class StackModel {
         // it; clearing it here would end the newer one's loading state early.
         defer { if !Task.isCancelled { isLoading = false } }
 
-        reacted = (try? await shelf.reactedIDs()) ?? []
+        do {
+            reacted = try await shelf.reactedIDs()
+        } catch {
+            // D5: a throw here used to leave `reacted` at whatever it was
+            // before (empty, on a fresh launch) with nothing logged — every
+            // series the reader had already skipped or saved became eligible
+            // to resurface in the deck, and "I swear I already skipped this
+            // one" had no trace to diagnose it from.
+            Self.discoveryLogger.error(
+                "reactedIDs failed, refill will not exclude past reactions: \(error, privacy: .public)"
+            )
+            reacted = []
+        }
         // Checked after every await, not left to `URLSession`: a cached feed
         // answers with no suspension at all, so cancellation is only ever
         // seen by asking. Without these a refill cancelled by `resetStack`
@@ -489,7 +501,20 @@ final class StackModel {
         // or not it also reached the library.
         await refreshTodayProgress()
 
-        if queue.count <= 2 { await refill() }
+        // D2 (discovery-ui review, 2026-09-15): a low queue used to `await`
+        // the top-up right here, and `StackView.react(_:)`'s `isReacting`
+        // gate — which disables Save/Skip and drops a released drag — does
+        // not clear until this whole function returns. On a slow connection
+        // the *next* swipe was silently ignored for as long as the refill's
+        // network request took, with no spinner to explain why (the loading
+        // skeleton only shows once the queue is fully empty). `refill()`
+        // already de-dupes overlapping callers via `refillTask`, and
+        // `append(_:)` is the only place series join the queue, so nothing
+        // here needs this call's own completion — starting it and moving on
+        // is enough for the top-up to still happen.
+        if queue.count <= 2 {
+            Task { await refill() }
+        }
     }
 
     /// A save on the stack also puts the series in the reader's real library.
@@ -650,7 +675,18 @@ extension StackModel {
         guard seedPool.isEmpty else { return }
         seedCursor = 0
 
-        let saved = ((try? await shelf.entries(.saved).series) ?? []).map(\.id)
+        let saved: [Int]
+        do {
+            saved = try await shelf.entries(.saved).series.map(\.id)
+        } catch {
+            // D5: same swallow as `performRefill`'s `reactedIDs` above — a
+            // throw here silently fell through to the library/random seed
+            // paths as if the reader had saved nothing at all.
+            Self.discoveryLogger.error(
+                "shelf.entries(.saved) failed while building the seed pool: \(error, privacy: .public)"
+            )
+            saved = []
+        }
         if !saved.isEmpty {
             seedPool = saved
             source = .yourSaves
@@ -688,6 +724,15 @@ extension StackModel {
         // 107/108, K6/K7).
         source = profileFailure.map(Source.unavailable) ?? .random
     }
+
+    /// D4-D6 (discovery-ui review, 2026-09-15): the file had no `Logger` at
+    /// all, so every one of the several `try?`s below that quietly fall back
+    /// to an empty array or `nil` had nothing to say when they actually threw.
+    /// Not `#if DEBUG` like the ranker logger above — these are the failures
+    /// that would otherwise only ever be seen in production.
+    private static let discoveryLogger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "discovery"
+    )
 
     /// Debug builds only: how many of a dealt batch the ranker could score
     /// at all, and the spread, so "the stack is ordered by your tags" can
@@ -731,13 +776,50 @@ extension StackModel {
         // mix rejects a seedless request outright ("At least one seed series
         // or one include tag is required", HTTP 400), so an empty pool has to
         // take the random path rather than fail.
-        let feed: FeedKind = seeds.isEmpty ? .surprise : .mix(seeds: seeds)
+        guard !seeds.isEmpty else { return await fetchSurpriseBatch() }
+        return await fetchMixBatch(seeds: seeds)
+    }
+
+    /// PS7 (persistence review, 2026-09-15): this used to go through
+    /// `repository.feed(.mix(seeds:), …)`, which builds its query with
+    /// `filterQuery()`'s *default* `blockedTagParam`, `"tag_not"`. Mix's own
+    /// repository path (`SeriesRepository+Mix.swift`'s `mix(seeds:filters:
+    /// excludedTags:)`) insists on `"blocked_tag"` instead, with a comment
+    /// citing it as the key verified live against `/v1/series/mix` for a
+    /// standing block; `"tag_not"` is what search, discovery and count
+    /// accept, not what this endpoint's spec lists. One preference under two
+    /// names on one endpoint meant a reader's blocked tags were honoured on
+    /// the Mix screen and silently ignored in the stack's own blend.
+    ///
+    /// `SeriesRepository+Mix.swift` and `SeriesRepository.swift` are not this
+    /// slice's to edit, so rather than duplicate the correct key here (the
+    /// exact "one rule in N copies" shape PS7 flags), the stack now calls the
+    /// same repository path the Mix screen already calls — the fix lives in
+    /// one place, and it is the place that is already proven right.
+    ///
+    /// `priority:` follows `isVisible`, as the surprise deal does: a deal
+    /// made while the reader is elsewhere waits at the gate. Not cached the
+    /// way `feed(.mix)` was (`FeedKind.mix`'s 1h freshness no longer applies
+    /// to this path), which brings the stack in line with the Mix screen.
+    private func fetchMixBatch(seeds: [Int]) async -> [Series] {
+        let blended = await repository.mix(
+            seeds: seeds, filters: SearchQuery(), excludedTags: [], tagIDs: [],
+            priority: isVisible ? .userInitiated : .background
+        )
+        let fresh = blended.recommendations.map(\.series).filter { !reacted.contains($0.id) }
+        // `MixResult.failure` already distinguishes "the request failed" from
+        // "nothing matched" (gap 11) — nothing else to derive here.
+        failure = blended.failure
+        return fresh
+    }
+
+    private func fetchSurpriseBatch() async -> [Series] {
         // A deal the reader is watching happen (they're on this tab) keeps
         // the whole search window; a deal dealt while they're elsewhere is
         // this app filling the stack ahead of a visit that may not even
         // happen, and must not compete with a foreground search for it.
         let priority: RequestPriority = isVisible ? .userInitiated : .background
-        let result = await repository.feed(feed, forceRefresh: queue.isEmpty, priority: priority)
+        let result = await repository.feed(.surprise, forceRefresh: queue.isEmpty, priority: priority)
         let fresh = result.series.filter { !reacted.contains($0.id) }
         if let blocking = result.blockingError {
             failure = blocking

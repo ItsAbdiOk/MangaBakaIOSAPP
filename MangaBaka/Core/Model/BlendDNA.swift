@@ -29,7 +29,19 @@ struct BlendDNA: Equatable, Sendable {
     /// How a strand's weight moved between two blends, for the change summary.
     /// Only strands present in both, and only where the weight actually moved.
     static func moves(from before: BlendDNA, to after: BlendDNA) -> [Move] {
-        let previous = Dictionary(uniqueKeysWithValues: before.strands.map { ($0.tagId, $0.weight) })
+        // `uniqueKeysWithValues` traps the instant two strands share a
+        // `tag_id` — decoded straight off `/v1/series/mix`'s `dna` array
+        // with no guarantee against it. `TagTaxonomy.swift:116` already
+        // records finding exactly such twins in the bundled data, so the
+        // API sending two strands for one tag is not implausible, just
+        // unobserved on `mix.json` (09-09, 10 unique ids) — a negative
+        // result, not a proof it cannot happen (wire review W8/P8,
+        // 2026-09-15). First strand for a duplicated id wins, same as
+        // `TagTaxonomy.merge`'s own duplicate handling.
+        let previous = Dictionary(
+            before.strands.map { ($0.tagId, $0.weight) },
+            uniquingKeysWith: { first, _ in first }
+        )
         return after.strands.compactMap { strand in
             guard let was = previous[strand.tagId],
                   abs(was - strand.weight) >= 0.005

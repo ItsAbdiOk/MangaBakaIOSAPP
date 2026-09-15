@@ -433,12 +433,21 @@ actor OfflineCatalogue {
     /// same names for the wire — see `SearchQuery.wireTagIDs`.
     nonisolated static func tagIDs(named names: [String]) -> [Int] {
         guard !names.isEmpty else { return [] }
-        let byName = Dictionary(
-            TagTaxonomy.bundled().map { ($0.name.lowercased(), $0.id) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return names.compactMap { byName[$0.lowercased()] }
+        return names.compactMap { nameToID[$0.lowercased()] }
     }
+
+    /// Built once. Both were rebuilt from the 2,686-entry taxonomy on every
+    /// call — once per tag per query on the search path (review perf W14,
+    /// 2026-09-15).
+    nonisolated private static let nameToID: [String: Int] = Dictionary(
+        TagTaxonomy.bundled().map { ($0.name.lowercased(), $0.id) },
+        uniquingKeysWith: { first, _ in first }
+    )
+
+    nonisolated private static let genreValueToID: [String: Int] = Dictionary(
+        TagTaxonomy.bundled().map { (OfflineCatalogue.genreValue(for: $0.name), $0.id) },
+        uniquingKeysWith: { first, _ in first }
+    )
 
     /// Genre *values* (`slice_of_life`, `sci-fi`), as `/v1/genres` and
     /// `SearchQuery.genres` spell them, resolved to the bundled tag whose
@@ -450,11 +459,7 @@ actor OfflineCatalogue {
     /// `nonisolated static` so the test can ask without an actor hop.
     nonisolated static func tagIDs(forGenres values: [String]) -> [Int] {
         guard !values.isEmpty else { return [] }
-        let byValue = Dictionary(
-            TagTaxonomy.bundled().map { (Self.genreValue(for: $0.name), $0.id) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return values.compactMap { byValue[$0.lowercased()] }
+        return values.compactMap { genreValueToID[$0.lowercased()] }
     }
 
     nonisolated private static func genreValue(for tagName: String) -> String {

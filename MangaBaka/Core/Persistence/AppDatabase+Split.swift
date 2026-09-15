@@ -87,7 +87,15 @@ extension AppDatabase {
             // database within transaction"), so the transactions below are
             // opened by hand rather than by wrapping this whole block.
             try db.execute(sql: "ATTACH DATABASE ? AS cache", arguments: [cachePath])
-            defer { try? db.execute(sql: "DETACH DATABASE cache") }
+            defer {
+                do {
+                    try db.execute(sql: "DETACH DATABASE cache")
+                } catch {
+                    // D1: best-effort by design (the step's own work is
+                    // already committed by here), but silent until now.
+                    splitLogger.debug("DETACH DATABASE cache failed: \(error, privacy: .public)")
+                }
+            }
 
             let present = try readerTables.filter { try db.tableExists($0, in: "cache") }
             guard !present.isEmpty else {
@@ -296,7 +304,15 @@ extension AppDatabase {
     ) throws {
         try library.writeWithoutTransaction { db in
             try db.execute(sql: "ATTACH DATABASE ? AS cache", arguments: [cachePath])
-            defer { try? db.execute(sql: "DETACH DATABASE cache") }
+            defer {
+                do {
+                    try db.execute(sql: "DETACH DATABASE cache")
+                } catch {
+                    // D1: same as `splitReaderTables`'s detach — best-effort
+                    // by design, silent until now.
+                    splitLogger.debug("DETACH DATABASE cache failed: \(error, privacy: .public)")
+                }
+            }
 
             // `main`, not `cache`: the source is the reader's file this time.
             let present = try libraryCacheTables.filter { try db.tableExists($0, in: "main") }
@@ -351,7 +367,17 @@ extension AppDatabase {
     private static func vacuumIfBloated(_ db: Database) throws {
         let free = try Int.fetchOne(db, sql: "PRAGMA main.freelist_count") ?? 0
         guard free > 256 else { return }
-        try db.execute(sql: "VACUUM main")
+        // PS9 (measure first, no behaviour change): this runs on the main
+        // thread at every launch that reaches here, and triggers on *any*
+        // large delete, not only the one-time move — sign-out, a history
+        // trim, `v11_recountTaste`. A VACUUM is a full file copy; how long it
+        // actually takes on a reader's file is not on record anywhere
+        // ("**GUESS** 20–100 ms on device", persistence.md P9). This signpost
+        // is how that guess gets replaced with a number from one Instruments
+        // run at a real sign-out, without changing what the code does.
+        try Signposts.measure("Reader file VACUUM") {
+            try db.execute(sql: "VACUUM main")
+        }
         splitLogger.info("Reclaimed \(free) free pages from the reader's file.")
     }
 

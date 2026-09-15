@@ -1,5 +1,48 @@
 import SwiftUI
 
+/// S18/W11: nothing today counts local refusals, server 429s, or background
+/// wait seconds, so "was I throttled this session?" can only be answered
+/// live in a debugger (`docs/reviews/perf/SUMMARY.md` §6, §8 #14). The
+/// counters belong beside `NetworkLedger`'s per-endpoint tallies and are
+/// wire's to add, not this file's — `NetworkLedger` is outside this agent's
+/// files. This protocol is the seam: the default below answers `nil` ("not
+/// counted yet"), so `DataUseSection` compiles today and the throttle row
+/// stays hidden; a stored or computed property added to `NetworkLedger`
+/// under one of these three exact names and types satisfies the requirement
+/// directly and wins over the default automatically, with nothing to change
+/// here when it lands. `async` on every requirement because `NetworkLedger`
+/// is an actor and a real property there can only be read that way; the
+/// default below is not actor-isolated and returns at once.
+protocol GateDiagnosticsProviding {
+    var localRefusals: Int? { get async }
+    var serverRateLimits: Int? { get async }
+    var backgroundWaitSeconds: Double? { get async }
+}
+
+extension GateDiagnosticsProviding {
+    var localRefusals: Int? {
+        get async { nil }
+    }
+    var serverRateLimits: Int? {
+        get async { nil }
+    }
+    var backgroundWaitSeconds: Double? {
+        get async { nil }
+    }
+}
+
+extension NetworkLedger: GateDiagnosticsProviding {
+    var localRefusals: Int? {
+        get async { localRefusalCount }
+    }
+    var serverRateLimits: Int? {
+        get async { serverRateLimitCount }
+    }
+    var backgroundWaitSeconds: Double? {
+        get async { backgroundWaitTotal }
+    }
+}
+
 /// What this session has cost, in bytes and in milliseconds.
 ///
 /// **Not analytics.** Nothing here is uploaded, nothing is stored, and it is
@@ -27,6 +70,11 @@ struct DataUseSection: View {
     @State private var droppedRows = 0
     @State private var slowest: [(path: String, entry: NetworkLedger.Entry)] = []
     @State private var isExpanded = false
+    /// S18/W11. `nil` until `NetworkLedger` actually counts one of these —
+    /// see `GateDiagnosticsProviding` above.
+    @State private var localRefusals: Int?
+    @State private var serverRateLimits: Int?
+    @State private var backgroundWaitSeconds: Double?
 
     var body: some View {
         SettingsSection(title: "Data used", caption: caption) {
@@ -46,6 +94,19 @@ struct DataUseSection: View {
                         Text("\(knownTags)")
                             .typeRowTitle()
                             .foregroundStyle(knownTags > 0 ? Palette.accent : Palette.textTertiary)
+                    }
+                }
+
+                // S18/W11: shown only once something has actually been
+                // counted, so an unthrottled session (or a build without the
+                // ledger fields yet) draws nothing extra here.
+                if let throttleCaption = Self.throttleCaption(
+                    localRefusals: localRefusals,
+                    serverRateLimits: serverRateLimits,
+                    backgroundWaitSeconds: backgroundWaitSeconds
+                ) {
+                    SettingsCard {
+                        SettingsRow(title: "Throttling this session", caption: throttleCaption) {}
                     }
                 }
 
@@ -123,7 +184,8 @@ struct DataUseSection: View {
             caption: Self.endpointCaption(
                 calls: row.entry.requests,
                 bytes: format(row.entry.bytes),
-                droppedRows: row.entry.droppedRows
+                droppedRows: row.entry.droppedRows,
+                failures: row.entry.failures
             )
         ) {
             VStack(alignment: .trailing, spacing: 1) {
@@ -145,10 +207,43 @@ struct DataUseSection: View {
     /// something counts the drops out loud. This is the only place that does.
     ///
     /// `nonisolated static` so the string is testable without a view.
-    nonisolated static func endpointCaption(calls: Int, bytes: String, droppedRows: Int) -> String {
-        let base = "\(calls) calls · \(bytes)"
-        guard droppedRows > 0 else { return base }
-        return base + " · \(droppedRows) row\(droppedRows == 1 ? "" : "s") dropped"
+    ///
+    /// S17: `failures` (`NetworkLedger.Entry.failures`) was written at every
+    /// `record(path:bytes:seconds:failed:)` call and read by nothing — the
+    /// one number that says "this endpoint is being refused" was the one
+    /// this screen omitted. Same shape as `droppedRows` above it.
+    nonisolated static func endpointCaption(
+        calls: Int, bytes: String, droppedRows: Int, failures: Int = 0
+    ) -> String {
+        var caption = "\(calls) calls · \(bytes)"
+        if droppedRows > 0 {
+            caption += " · \(droppedRows) row\(droppedRows == 1 ? "" : "s") dropped"
+        }
+        if failures > 0 {
+            caption += " · \(failures) failed"
+        }
+        return caption
+    }
+
+    /// S18/W11. `nil` when nothing has been counted, so a session with no
+    /// throttling (or a build ahead of the ledger fields) draws no row at
+    /// all — see `GateDiagnosticsProviding` above `DataUseSection`.
+    /// `nonisolated static` so the string is testable without a view.
+    nonisolated static func throttleCaption(
+        localRefusals: Int?, serverRateLimits: Int?, backgroundWaitSeconds: Double?
+    ) -> String? {
+        var parts: [String] = []
+        if let localRefusals, localRefusals > 0 {
+            parts.append("\(localRefusals) refused locally")
+        }
+        if let serverRateLimits, serverRateLimits > 0 {
+            parts.append("\(serverRateLimits) server 429\(serverRateLimits == 1 ? "" : "s")")
+        }
+        if let backgroundWaitSeconds, backgroundWaitSeconds > 0 {
+            parts.append("\(Int(backgroundWaitSeconds.rounded()))s waited in the background")
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ")
     }
 
     private func format(_ bytes: Int) -> String {
@@ -173,5 +268,8 @@ struct DataUseSection: View {
         images = await NetworkLedger.shared.imageBytes
         slowest = await NetworkLedger.shared.slowest()
         droppedRows = await NetworkLedger.shared.byPath.values.reduce(0) { $0 + $1.droppedRows }
+        localRefusals = await NetworkLedger.shared.localRefusals
+        serverRateLimits = await NetworkLedger.shared.serverRateLimits
+        backgroundWaitSeconds = await NetworkLedger.shared.backgroundWaitSeconds
     }
 }

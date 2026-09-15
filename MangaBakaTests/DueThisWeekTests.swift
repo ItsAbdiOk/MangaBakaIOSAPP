@@ -102,7 +102,7 @@ private struct StubFeedProvider: ReleaseFeedProvider {
 final class Counter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
-    func bump() { lock.lock(); value += 1; lock.unlock() }
+    func bump() { lock.withLock { value += 1 } }
     var calls: Int { lock.lock(); defer { lock.unlock() }; return value }
 }
 

@@ -15,6 +15,16 @@ struct ContinuationsRow: View {
     /// `Fetched<T>` draws everywhere else a section asks and gets nothing
     /// back versus asks and fails.
     var hasFailure = false
+    /// The real cause, when the caller has one. L2/P-libraryui: today
+    /// `SeriesRepositoryProtocol.relationships(for:)` returns `[SeriesRelationship]?`
+    /// — the underlying `APIError` (429 vs offline vs 500) is thrown away
+    /// before `ContinuationsModel` sees it, so this is always nil in
+    /// production and the row falls back to the generic `.transport` copy
+    /// below. Kept as a real parameter, not deleted, so the row is already
+    /// able to show a countdown the moment that signature threads the error
+    /// through (see the fix report) — the alternative was writing this
+    /// exact code again once that lands.
+    var failure: APIError?
     var onRetry: (() async -> Void)?
     @Binding var path: [Series]
     @Environment(\.zoomRoute) private var zoomRoute
@@ -32,17 +42,22 @@ struct ContinuationsRow: View {
         } else if items.isEmpty && hasFailure {
             VStack(alignment: .leading, spacing: 11) {
                 header
-                // `ContinuationsModel` only knows that at least one
-                // `relationships(for:)` call failed, not why —
-                // `SeriesRepositoryProtocol` swallows the real `APIError`
-                // before it gets here. `.transport` is the one case whose
-                // copy ("The request didn't complete.") claims no specific
-                // cause, so this does not assert "offline" for a failure
-                // that might have been a rate limit or a server error.
-                InlineFailure(
-                    error: .transport(underlying: "continuations", party: .mangaBaka),
-                    retry: onRetry
-                )
+                // `.transport`'s copy ("The request didn't complete.") is the
+                // fallback for when `failure` is nil — see its doc comment.
+                let shown = failure ?? .transport(underlying: "continuations", party: .mangaBaka)
+                if let deadline = shown.rateLimitDeadline {
+                    // A real rate limit: count down instead of a bare Retry,
+                    // the same "here is what we had" treatment `StaleBar`
+                    // gives the library walk itself.
+                    Countdown(until: deadline) {
+                        Task { await onRetry?() }
+                    }
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+                    .padding(.horizontal, Metrics.gutter)
+                } else {
+                    InlineFailure(error: shown, retry: onRetry)
+                }
             }
             .padding(.top, Metrics.sectionGap)
         } else if !items.isEmpty {

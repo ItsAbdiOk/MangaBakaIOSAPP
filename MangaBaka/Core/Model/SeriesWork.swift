@@ -34,9 +34,31 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     /// `146.049…× 209.549…`, i.e. 5.75 × 8.25 inches, a standard manga
     /// paperback trim — so the two-decimal noise is a unit-conversion
     /// artifact upstream, not per-volume precision worth keeping.
+    ///
+    /// UNSURE: typed from three rows of one series, all identical. Both
+    /// fields optional and decoded leniently — `try?` per field rather than
+    /// the synthesised decoder — so a row from a different series that sends
+    /// `null` or an unexpected shape for one of them costs that one
+    /// dimension, not the whole edition via `LossyArray` (wire review
+    /// W9/W12/P9/P12, 2026-09-15). `trimLine` already handles either being
+    /// nil.
     struct Trim: Codable, Sendable, Equatable {
-        let wMm: Double
-        let hMm: Double
+        let wMm: Double?
+        let hMm: Double?
+
+        private enum CodingKeys: String, CodingKey { case wMm, hMm }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            wMm = try? container.decodeIfPresent(Double.self, forKey: .wMm)
+            hMm = try? container.decodeIfPresent(Double.self, forKey: .hMm)
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(wMm, forKey: .wMm)
+            try container.encodeIfPresent(hMm, forKey: .hMm)
+        }
     }
 
     struct Link: Codable, Sendable, Equatable {
@@ -46,9 +68,37 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
 
     /// A cover for this edition. The `image` object is the same shape `Cover`
     /// already decodes from `/v1/my/*`, so it needs no second decoder.
+    ///
+    /// UNSURE: `series-2060-works-2026-09-15.json` has `images: []` on all
+    /// three sampled rows, so no live payload has actually exercised this
+    /// decode. `image` is decoded leniently — `try?`, not the synthesised
+    /// decoder — so a row whose `image` object `Cover.init(from:)` cannot
+    /// parse drops just that field to nil rather than the whole edition
+    /// (wire review W12/P12, 2026-09-15).
     struct Image: Codable, Sendable, Equatable {
         let image: Cover?
         let type: String?
+
+        /// Memberwise, because the hand-written `init(from:)` below replaces
+        /// the synthesised one and the test factories build images directly.
+        init(image: Cover?, type: String?) {
+            self.image = image
+            self.type = type
+        }
+
+        private enum CodingKeys: String, CodingKey { case image, type }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            image = try? container.decodeIfPresent(Cover.self, forKey: .image)
+            type = try? container.decodeIfPresent(String.self, forKey: .type)
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(image, forKey: .image)
+            try container.encodeIfPresent(type, forKey: .type)
+        }
     }
 
     /// `inc_chapters` is `null` in every row of
@@ -164,9 +214,15 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     /// "146 × 210 mm", rounded to whole millimetres — the fixture's own
     /// `146.049… × 209.549…` printed to two decimals would read as false
     /// precision nobody asked for.
+    ///
+    /// `Int(_:)` traps outside roughly ±9.2e18; a server value that large
+    /// for a millimetre trim is absurd but not something the wire type
+    /// guards against, and `Int(wholeOrClamped:)` is the same belt-and-
+    /// braces fix already applied to the identical pattern in
+    /// `CommunityPulse.swift:75` (wire review W9/P9, 2026-09-15).
     var trimLine: String? {
-        guard let trim else { return nil }
-        return "\(Int(trim.wMm.rounded())) × \(Int(trim.hMm.rounded())) mm"
+        guard let trim, let wMm = trim.wMm, let hMm = trim.hMm else { return nil }
+        return "\(Int(wholeOrClamped: wMm.rounded())) × \(Int(wholeOrClamped: hMm.rounded())) mm"
     }
 
     var cover: Cover? { images?.compactMap(\.image).first }

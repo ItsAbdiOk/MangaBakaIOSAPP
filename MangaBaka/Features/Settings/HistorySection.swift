@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 /// The recently-viewed history, and the control that erases it.
 ///
@@ -27,6 +28,11 @@ struct HistorySection: View {
     /// preview or a future host that never sets the environment value must
     /// not crash reaching for it.
     @Environment(ToastCentre.self) private var toasts: ToastCentre?
+
+    /// S19: this slice had no `Logger` at all. A disk read failure here
+    /// renders as the (already handled) "couldn't be read" state, but was
+    /// otherwise invisible — nothing a production report could point at.
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "settings")
 
     var body: some View {
         SettingsSection(title: "Recently viewed", caption: caption) {
@@ -120,6 +126,11 @@ struct HistorySection: View {
     }
 
     private func refresh() async {
-        held = try? await history.count()
+        do {
+            held = try await history.count()
+        } catch {
+            held = nil
+            Self.logger.error("history.count() failed: \(error, privacy: .public)")
+        }
     }
 }

@@ -7,7 +7,10 @@ import SwiftUI
 struct CoverGallery: View {
     let series: Series
     let images: [SeriesImage]
-    @State private var selection: Int
+    /// `scrolledIndex` is seeded to `startAt` in `init` below, same as this
+    /// used to be — so the `selection ?? scrolledIndex` fallback `caption`
+    /// read never actually reached `selection`: `scrolledIndex` is only
+    /// `nil` before `init` runs. Removed rather than kept "for safety" (P17).
     @State private var scrolledIndex: Int?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -18,7 +21,6 @@ struct CoverGallery: View {
         self.frontCover = frontCover
         self.images = images
         self.pages = [(nil, frontCover)] + images.map { ($0.caption, $0.image) }
-        _selection = State(initialValue: startAt)
         _scrolledIndex = State(initialValue: startAt)
         _tracker = State(initialValue: ScrollTracker(pageProgress: Double(startAt)))
         _openedWith = State(initialValue: pages.count)
@@ -125,11 +127,20 @@ struct CoverGallery: View {
         var degrees: Double
     }
 
+    /// Fade rate: a card one full page away is 65% opaque. A GUESS, tuned by
+    /// eye — see the file doc for the rest of the glide's numbers.
+    nonisolated private static let fadePerPage = 0.35
+    /// Shrink rate: a card one full page away is scaled to 90%.
+    nonisolated private static let shrinkPerPage = 0.10
+    /// Lean: a card one full page away is rotated 14° around the Y axis.
+    nonisolated private static let leanDegreesPerPage = 14.0
+
     nonisolated static func glide(phase: Double, isReduced: Bool) -> Glide {
         let distance = abs(phase)
-        let opacity = 1 - distance * 0.35
+        let opacity = 1 - distance * fadePerPage
         guard !isReduced else { return Glide(scale: 1, opacity: opacity, degrees: 0) }
-        return Glide(scale: 1 - distance * 0.10, opacity: opacity, degrees: phase * -14)
+        let degrees = phase * -leanDegreesPerPage
+        return Glide(scale: 1 - distance * shrinkPerPage, opacity: opacity, degrees: degrees)
     }
 
     /// A paged scroll view rather than a `TabView`.
@@ -184,7 +195,7 @@ struct CoverGallery: View {
     /// "Vol. 3 · EN", or the count when the cover has nothing to say about
     /// itself. Never "1 of 1" — a gallery of one has nothing to count.
     private var caption: String {
-        let index = scrolledIndex ?? selection
+        let index = scrolledIndex ?? 0
         if let own = pages[safe: index]?.caption { return own }
         guard pages.count > 1 else { return "Cover" }
         return "\(index + 1) of \(pages.count)"
@@ -280,6 +291,14 @@ private struct ZoomableCover: View {
 
     @State private var scale: CGFloat = 1
     @State private var committed: CGFloat = 1
+    /// Over `CoverStore`, not `AsyncImage` — see `load(url:)` (P9).
+    @State private var loaded: UIImage?
+    @State private var isReady = false
+    /// Set only when `CoverStore.image(for:)` itself returned nil, so the
+    /// photo glyph shows for a genuine failure and never for "still in
+    /// flight" — the same distinction `CoverImage`'s phases kept and
+    /// `AsyncImage` here was throwing away by remembering it per identity.
+    @State private var failed = false
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -288,13 +307,40 @@ private struct ZoomableCover: View {
                 width: proxy.size.width - Self.inset * 2,
                 height: proxy.size.height - Self.inset * 2
             )
+            let url = cover.url(forHeight: available.height, scale: displayScale)
             card(fitting: available)
                 .frame(width: proxy.size.width, height: proxy.size.height)
                 // The original, not the rendering on screen: someone pasting a
                 // cover into a message wants the artwork at its own size.
                 .copyableArtwork(cover.raw ?? cover.x350, noun: "cover")
+                // Keyed on the URL, the same `CoverImage`/`PortraitImage`
+                // pattern: a recycled page loads its own artwork and a page
+                // that lost the network race on a fast swipe retries on
+                // scroll-back instead of staying the "photo" glyph for the
+                // life of the screen. Also drops this from a third
+                // independent fetch of the front cover down to a
+                // `CoverStore` lookup the hero (`CoverImage`) and the wash
+                // (`DetailBackdrop`) already populate.
+                .task(id: url) { await load(url: url) }
         }
         .accessibilityLabel(title.map { "Cover art for \($0)" } ?? "Cover art")
+    }
+
+    private func load(url: URL?) async {
+        isReady = false
+        failed = false
+        if let cached = CoverStore.shared.cached(url) {
+            loaded = cached
+            isReady = true
+            return
+        }
+        guard let image = await CoverStore.shared.image(for: url) else {
+            failed = true
+            return
+        }
+        guard !Task.isCancelled else { return }
+        loaded = image
+        isReady = true
     }
 
     /// The card is sized to the artwork, not to the space around it.
@@ -320,20 +366,19 @@ private struct ZoomableCover: View {
     private func card(fitting available: CGSize) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         let size = fitted(in: available)
-        return AsyncImage(
-            url: cover.url(forHeight: available.height, scale: displayScale)
-        ) { phase in
-            switch phase {
-            case let .success(image):
-                image.resizable().scaledToFit()
+        return ZStack {
+            if let loaded {
+                Image(uiImage: loaded)
+                    .resizable().scaledToFit()
                     // Cover art is a photograph, not UI: Smart Invert must
                     // leave it alone rather than show a negative.
                     .accessibilityIgnoresInvertColors()
-            case .failure:
+                    .appearsSoftly(when: isReady)
+            } else if failed {
                 Image(systemName: "photo")
                     .typeSymbol(size: 40, weight: .regular, relativeTo: .largeTitle)
                     .foregroundStyle(Palette.textTertiary)
-            default:
+            } else {
                 ProgressView().tint(Palette.textTertiary)
             }
         }

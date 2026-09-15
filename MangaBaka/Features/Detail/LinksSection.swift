@@ -121,7 +121,25 @@ struct NewsSection: View {
     /// often that happens, so prefer passing this when possible.
     var currentSeriesID: Int?
 
+    /// How many of the fetched items are shown before the rest are dropped —
+    /// same shape as `DetailEditions.collapsedLimit`, just never labelled
+    /// (P16). There is no "show more" here, unlike editions: `/news` is
+    /// already the tail of the page (P1), so a longer list would cost more
+    /// than it is worth reading.
+    private static let shownLimit = 4
+
     @Environment(\.openURL) private var openURL
+
+    /// One formatter, reused for every item and every pass, instead of a
+    /// fresh one behind `.formatted(.relative(presentation:))` per item per
+    /// body pass — the pattern `ScheduleModel` was fixed for once already
+    /// (P14). Static rather than an `@State`: it holds no per-instance state
+    /// of its own, so every `NewsSection` on screen shares it.
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .named
+        return formatter
+    }()
 
     /// "Also mentions 2 other series", or nothing for an article that only
     /// mentions the one series already on screen. Not `private`: exercised
@@ -161,7 +179,7 @@ struct NewsSection: View {
             parts.append(author)
         }
         if let date = item.publishedAt {
-            parts.append(date.formatted(.relative(presentation: .named)))
+            parts.append(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
         }
         return parts.joined(separator: " · ")
     }
@@ -182,7 +200,7 @@ struct NewsSection: View {
                     .typeDetailSectionHeader()
                     .foregroundStyle(Palette.textPrimary)
 
-                ForEach(shown.prefix(4)) { item in
+                ForEach(shown.prefix(Self.shownLimit)) { item in
                     Button {
                         if let url = item.safeURL { openURL(url) }
                     } label: {

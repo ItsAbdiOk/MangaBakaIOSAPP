@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// The reader's whole library, fetched once and shared.
 ///
@@ -22,6 +23,11 @@ actor LibrarySnapshot {
     /// Not private: `DetailFidelityTests` holds these values rather than
     /// grepping this file for the loop that uses them.
     nonisolated static let pageSize = 100
+    /// **A guess** ("far past any real library"), not a derived number
+    /// (PS13) — the largest library measured against this app is the
+    /// 939-entry account the rest of this file cites, which is page 10.
+    /// Nothing has settled what the real ceiling should be; this just
+    /// labels the guess it already was.
     nonisolated static let pageCap = 30
 
     /// What one walk produced, including why it stopped.
@@ -91,9 +97,9 @@ actor LibrarySnapshot {
     /// same `TokenStore` read `SessionModels` does.
     private let hasCredentials: @Sendable () -> Bool
     /// Set once the signed-out branch has thrown the previous account's cache
-    /// away, so `all()`/`seriesIDs()`/`load()` in a signed-out session do not
-    /// each pay two DELETEs to discard what is already gone. Cleared the
-    /// moment a credential appears again.
+    /// away, so repeated `load()` calls in a signed-out session do not each
+    /// pay two DELETEs to discard what is already gone. Cleared the moment a
+    /// credential appears again.
     private var purgedWhileSignedOut = false
 
     init(
@@ -162,6 +168,12 @@ actor LibrarySnapshot {
         if let stored = readCache(), !stored.entries.isEmpty {
             cached = stored
             onPage?(stored.entries)
+            // PS8: only `finish` used to clear this, so the disk-cache-hit
+            // path — the common one, per the "Disk before network" comment
+            // above — left the last screen's `onPage` closure (and whatever
+            // it captured) alive for the life of the app, which is exactly
+            // the leak `finish`'s own comment says this exists to avoid.
+            onPage = nil
             return stored
         }
 
@@ -281,61 +293,73 @@ actor LibrarySnapshot {
     /// is exactly the thing under test in `discardedWalkDoesNotCommit`.
     var cachedResult: Result? { cached }
 
-    /// Everything, for callers that do not care why it stopped.
-    ///
-    /// There turned out to be no such caller. The doc that used to sit here
-    /// said "for callers that do not care why it stopped"; the second review
-    /// found nine of them and two were writing data off the answer — see
-    /// `LibrarySnapshotResult.swift`. Deprecated rather than deleted so the
-    /// compiler names every remaining site with the replacement in the
-    /// message; `SWIFT_TREAT_WARNINGS_AS_ERRORS` makes that an error, which is
-    /// the intent. Delete both once the last call site has moved.
-    @available(*, deprecated, message: """
-        Use load(): .entries to draw what arrived, .wholeLibrary (nil, not [], \
-        on a failed or page-capped walk) to act on what is there.
-        """)
-    func all() async -> [LibraryEntry] { await load().entries }
+    // PS11: `all()` / `seriesIDs()` used to live here — "for callers that do
+    // not care why it stopped". There turned out to be no such caller (the
+    // second review found nine, two writing data off the answer); both were
+    // deprecated so `SWIFT_TREAT_WARNINGS_AS_ERRORS` would name every
+    // remaining call site, and grep now finds none left outside a comment
+    // (`TasteLedger.swift:92`, `ScheduleModel.swift:312`,
+    // `SessionTests.swift:84`). Deleted rather than kept as a deprecated
+    // shim nothing calls. Use `load()`: `.entries` for what arrived,
+    // `.wholeLibrary` / `.wholeLibrarySeriesIDs` (nil, not `[]`, on a failed
+    // or page-capped walk) for callers that need to act on the whole thing.
 
-    /// Just the ids, for callers that only need to know what is in there.
-    @available(*, deprecated, message: """
-        Use load(): .seriesIDs to draw what arrived, .wholeLibrarySeriesIDs \
-        (nil, not [], on a failed or page-capped walk) to act on what is there.
-        """)
-    func seriesIDs() async -> Set<Int> {
-        Set(await load().entries.map(\.seriesId))
-    }
+    private static let cacheLogger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "library-cache"
+    )
 
     /// The library as it was last written, if that was recently enough.
     private func readCache() -> Result? {
         guard let database else { return nil }
-        return try? database.cacheWriter.read { db in
-            guard let meta = try LibraryMetadata.fetchOne(db, key: 1) else { return nil }
-            let age = clock.now.timeIntervalSince(meta.cachedAt)
-            // A negative age means the device clock moved backwards; treat that
-            // as stale rather than trusting it — past `clockSlack`. Under it
-            // is storage rounding, not a clock change: GRDB writes a `Date`
-            // to the nearest millisecond and *rounds* (`DatabaseDateComponents`,
-            // `round(nanosecond / 1e6)`), so a row read back within half a
-            // millisecond of its write reads as written in the future. That
-            // was `LibraryCacheMoveTests.snapshotWritesToTheCacheFile` failing
-            // one pre-push hook in four on 2026-09-15 — and, for a caller that
-            // ever reads disk straight after a write, a full library walk.
-            guard age >= -Self.clockSlack, age < Self.freshness else { return nil }
+        do {
+            return try database.cacheWriter.read { db in
+                guard let meta = try LibraryMetadata.fetchOne(db, key: 1) else { return nil }
+                let age = clock.now.timeIntervalSince(meta.cachedAt)
+                // A negative age means the device clock moved backwards; treat that
+                // as stale rather than trusting it — past `clockSlack`. Under it
+                // is storage rounding, not a clock change: GRDB writes a `Date`
+                // to the nearest millisecond and *rounds* (`DatabaseDateComponents`,
+                // `round(nanosecond / 1e6)`), so a row read back within half a
+                // millisecond of its write reads as written in the future. That
+                // was `LibraryCacheMoveTests.snapshotWritesToTheCacheFile` failing
+                // one pre-push hook in four on 2026-09-15 — and, for a caller that
+                // ever reads disk straight after a write, a full library walk.
+                guard age >= -Self.clockSlack, age < Self.freshness else { return nil }
 
-            let decoder = JSONDecoder()
-            let rows = try CachedLibraryEntry.fetchAll(db)
-            let entries = rows.compactMap {
-                try? decoder.decode(LibraryEntry.self, from: $0.payload)
+                let decoder = JSONDecoder()
+                let rows = try CachedLibraryEntry.fetchAll(db)
+                let entries = rows.compactMap {
+                    try? decoder.decode(LibraryEntry.self, from: $0.payload)
+                }
+                guard !entries.isEmpty else { return nil }
+                // Gap 116: a row that no longer decodes — an app downgrade, a
+                // format this build dropped — was silently left out, and the
+                // walk that wrote 939 rows quietly read back as complete with
+                // 938. Falling through to the network here means one bad row
+                // costs a re-fetch rather than a permanently shrunk library that
+                // never shows as anything but whole.
+                guard entries.count == rows.count else {
+                    // D1: count-guarded already, so the reader is never shown
+                    // a shrunk library — but a walk that follows this said
+                    // nothing about *why*, and "an app downgrade or a dropped
+                    // format" is a guess worth being able to check.
+                    Self.cacheLogger.error("""
+                        library cache row(s) failed to decode: \(rows.count, privacy: .public) rows, \
+                        \(entries.count, privacy: .public) decoded
+                        """)
+                    return nil
+                }
+                return Result(entries: entries, isComplete: meta.isComplete, failure: nil)
             }
-            guard !entries.isEmpty else { return nil }
-            // Gap 116: a row that no longer decodes — an app downgrade, a
-            // format this build dropped — was silently left out, and the
-            // walk that wrote 939 rows quietly read back as complete with
-            // 938. Falling through to the network here means one bad row
-            // costs a re-fetch rather than a permanently shrunk library that
-            // never shows as anything but whole.
-            guard entries.count == rows.count else { return nil }
-            return Result(entries: entries, isComplete: meta.isComplete, failure: nil)
+        } catch {
+            // D1: this used to be `try?` → nil, which reads as "nothing
+            // cached" exactly like the disk genuinely holding nothing —
+            // the caller falls through to a full walk either way, but only
+            // one of those is actually a disk-read failure.
+            Self.cacheLogger.error("""
+                library cache read failed: \(String(describing: error), privacy: .public)
+                """)
+            return nil
         }
     }
 
@@ -351,22 +375,46 @@ actor LibrarySnapshot {
     private func writeCache(_ result: Result) {
         guard let database, !result.entries.isEmpty else { return }
         let encoder = JSONEncoder()
-        try? database.cacheWriter.write { db in
-            // Replaced wholesale rather than merged: an entry removed on the
-            // website would otherwise survive here forever.
-            try db.execute(sql: "DELETE FROM libraryEntry")
-            for entry in result.entries {
-                guard let payload = try? encoder.encode(entry) else { continue }
-                // `insert`, not `save`: the table was emptied one statement
-                // ago, so GRDB's `save` spends an UPDATE that matches nothing
-                // before every INSERT — ~1,900 statements for 945 rows, once
-                // per walk (work-list 92). The dedupe in `load()` is what
-                // makes this safe: `insert` would throw on a repeated id.
-                try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).insert(db)
+        do {
+            try database.cacheWriter.write { db in
+                // Replaced wholesale rather than merged: an entry removed on the
+                // website would otherwise survive here forever.
+                try db.execute(sql: "DELETE FROM libraryEntry")
+                for entry in result.entries {
+                    // PS12: this used to be `guard let payload = try?
+                    // encoder.encode(entry) else { continue }` — a row that
+                    // failed to encode (the realistic case is a non-finite
+                    // `Double`) was silently dropped, and `readCache`'s
+                    // completeness check compares decoded count to *row*
+                    // count, so a table written short of the walk it claims
+                    // to hold reads back as complete. Throwing here instead
+                    // aborts the whole write (rolling back the `DELETE`
+                    // too), so a bad row costs a re-fetch on the next
+                    // `load()` rather than a permanently shrunk library that
+                    // never shows as anything but whole.
+                    let payload = try encoder.encode(entry)
+                    // `insert`, not `save`: the table was emptied one statement
+                    // ago, so GRDB's `save` spends an UPDATE that matches nothing
+                    // before every INSERT — ~1,900 statements for 945 rows, once
+                    // per walk (work-list 92). The dedupe in `load()` is what
+                    // makes this safe: `insert` would throw on a repeated id.
+                    try CachedLibraryEntry(seriesId: entry.seriesId, payload: payload).insert(db)
+                }
+                try LibraryMetadata(
+                    cachedAt: clock.now, isComplete: result.isComplete
+                ).save(db)
             }
-            try LibraryMetadata(
-                cachedAt: clock.now, isComplete: result.isComplete
-            ).save(db)
+        } catch {
+            // PS5: this used to be `try?`, converting a disk error (full
+            // disk, a locked file) into a permanent network cost — every
+            // launch re-walks 24.7 MB instead of reading it back, forever,
+            // with nothing on record to say why. Logged; the caller already
+            // treats an unwritten cache exactly like a fresh one (the next
+            // `readCache()` finds nothing and walks again), so no behaviour
+            // changes here besides the log line.
+            Self.cacheLogger.error("""
+                library cache write failed: \(String(describing: error), privacy: .public)
+                """)
         }
     }
 

@@ -60,17 +60,43 @@ struct DetailStatsStrip: View {
         if let volumes = series.finalVolume, volumes > 0 {
             out.append(Stat(id: "Volumes", value: String(Int(wholeOrClamped: volumes))))
         }
-        // `published.rangeLine` ("2020 – ongoing") answers a question the
-        // bare year never could — whether the series has ended — so it wins
-        // whenever the v1 record carries it. `year` is the fallback for
-        // every payload recorded before `published` existed.
-        if let range = series.published?.rangeLine {
-            out.append(Stat(id: "Started", value: range))
-        } else if let year = year ?? series.year, year > 0 {
-            out.append(Stat(id: "Started", value: String(year)))
+        // The column only ever holds the start year: it is one of six equal
+        // segments on a 361pt strip (~60pt each, `.lineLimit(1)`), and
+        // `published.rangeLine` ("c. 2018 – c. 2023", up to 17 characters)
+        // truncated there even at 0.7 `minimumScaleFactor` on any five- or
+        // six-stat series — losing the one fact (ended or ongoing) the range
+        // exists to show. The full range still gets shown, just on
+        // `footerLine` where a sentence has the width for it (P8,
+        // 2026-09-15). `year` is the fallback for payloads recorded before
+        // `published` existed.
+        if let startedYear {
+            out.append(Stat(id: "Started", value: String(startedYear)))
         }
         return out
     }
+
+    /// The leading year of `published.startDate`, or the plain `year` field
+    /// when there is no `published` record at all. Deliberately not
+    /// `published?.rangeLine`'s year half — that string can carry a "c. "
+    /// prefix this column has no room to keep, so the column always reads a
+    /// bare year and the "c." (and the end date) live in `publishedRangeLine`.
+    private var startedYear: Int? {
+        if let startDate = series.published?.startDate,
+           startDate.count >= 4,
+           let year = Int(startDate.prefix(4)) {
+            return year
+        }
+        if let year = year ?? series.year, year > 0 { return year }
+        return nil
+    }
+
+    /// "c. 2018 – ongoing" — the full range `published` can state, shown as
+    /// its own footer line since P8 rather than squeezed into the stats
+    /// column. Nil for a payload with no `published` record (pre-v1, or v2).
+    /// Not `private`: `DetailFixTests` reads it directly rather than
+    /// screen-scraping the footer, the same reasoning `popularityLine`'s
+    /// neighbour tests already lean on for this file.
+    var publishedRangeLine: String? { series.published?.rangeLine }
 
     /// "#14 overall · #2 among manhwa — was #18 a year ago", from `popularity`.
     /// Shown as its own line under the number strip rather than folded into
@@ -84,10 +110,14 @@ struct DetailStatsStrip: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var hasFooterLine: Bool {
-        series.isLicensed == true || popularityLine != nil
+        series.isLicensed == true || popularityLine != nil || publishedRangeLine != nil
     }
 
     var body: some View {
+        // Read once per pass rather than the four separate `stats` reads
+        // this file used to have (P14) — each walked every optional on
+        // `series` again for a value that cannot change mid-body.
+        let stats = stats
         if !stats.isEmpty || hasFooterLine {
             VStack(alignment: .leading, spacing: 0) {
                 if !stats.isEmpty {
@@ -102,9 +132,9 @@ struct DetailStatsStrip: View {
                     // short words and 70% of small is still readable.
                     Group {
                         if typeSize.isAccessibilitySize {
-                            FlowLayout(spacing: 0) { segments(fillsWidth: false) }
+                            FlowLayout(spacing: 0) { segments(stats, fillsWidth: false) }
                         } else {
-                            HStack(spacing: 0) { segments(fillsWidth: true) }
+                            HStack(spacing: 0) { segments(stats, fillsWidth: true) }
                         }
                     }
                 }
@@ -139,6 +169,11 @@ struct DetailStatsStrip: View {
                     .padding(.vertical, 3)
                     .background(Palette.surfaceChip, in: Capsule())
             }
+            if let publishedRangeLine {
+                Text(publishedRangeLine)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+            }
             if let popularityLine {
                 Text(popularityLine)
                     .typeSmallMeta()
@@ -150,7 +185,7 @@ struct DetailStatsStrip: View {
         .padding(.vertical, 12)
     }
 
-    private func segments(fillsWidth: Bool) -> some View {
+    private func segments(_ stats: [Stat], fillsWidth: Bool) -> some View {
         ForEach(Array(stats.enumerated()), id: \.element.id) { index, stat in
             VStack(spacing: 3) {
                 Text(stat.value)

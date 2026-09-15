@@ -62,9 +62,14 @@ struct RateLimitFallbackTests {
     }
 
     /// The thrown deadline must be *the gate's* deadline, not a second one
-    /// computed alongside it: the next request is refused locally against
-    /// `blockedUntil`, and the two dates being equal is what proves there is
-    /// one source. A copied value would drift by however long the throw took.
+    /// computed alongside it: the date the gate holds in `blockedUntil` and
+    /// the date the error carries being equal is what proves there is one
+    /// source. A copied value would drift by however long the throw took.
+    ///
+    /// Until 2026-09-15 this sent a second request and compared the two
+    /// throws; a foreground request now *waits out* a 2 s back-off instead
+    /// of throwing it (review perf W2), so the second call went to the
+    /// server. The gate's own record is read directly instead.
     @Test("The thrown deadline is the same date the gate then refuses against")
     func thrownDeadlineMatchesLocalRefusal() async throws {
         URLProtocolStub.setHandler { _ in
@@ -72,21 +77,21 @@ struct RateLimitFallbackTests {
         }
         defer { URLProtocolStub.reset() }
 
-        let client = makeClient()
+        let gate = RateLimitGate()
+        let client = APIClient(
+            baseURL: baseURL,
+            session: URLProtocolStub.makeSession(),
+            tokenProvider: UnauthenticatedTokenProvider(),
+            limiter: gate
+        )
         let first = await thrownRateLimit { let _: [Series] = try await client.get("/v2/series/search") }
-        let sent = URLProtocolStub.requests.count
-        let second = await thrownRateLimit { let _: [Series] = try await client.get("/v2/series/search") }
 
-        #expect(URLProtocolStub.requests.count == sent, "The second call must be refused locally")
-        guard case let .rateLimited(fromServer, _) = first,
-              case let .rateLimited(fromGate, _) = second
-        else {
-            let got = "\(String(describing: first)) / \(String(describing: second))"
-            Issue.record("Expected two rate limits, got \(got)")
+        guard case let .rateLimited(fromServer, _) = first else {
+            Issue.record("Expected a rate limit, got \(String(describing: first))")
             return
         }
         #expect(fromServer != nil)
-        #expect(fromServer == fromGate, "One deadline, owned by the gate")
+        #expect(await gate.blockedUntilForTesting(.search) == fromServer, "One deadline, owned by the gate")
     }
 
     /// Control: when the server does say, the server wins over the fallback,

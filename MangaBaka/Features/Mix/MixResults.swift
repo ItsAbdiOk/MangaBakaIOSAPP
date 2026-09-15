@@ -109,6 +109,12 @@ struct MixResults: View {
                 }
                 .buttonStyle(.press)
                 .zoomSource("mix", recommendation.series.id)
+                // discovery-ui review, 2026-09-15: `ScreenshotCaptureTests`
+                // used to wait on a positional index into
+                // `scrollViews.buttons` to find a result card, which the
+                // review showed actually lands on a filter chip. A stable
+                // identifier on the card itself is what it waits for now.
+                .accessibilityIdentifier("mix.resultCard")
             }
         }
         // 0.6, not the 0.45 a plain disabled fade would use: a re-blend

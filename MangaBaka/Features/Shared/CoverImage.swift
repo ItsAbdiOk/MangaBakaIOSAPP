@@ -20,10 +20,6 @@ struct CoverImage: View {
     /// passes it, which is also the one screen (a grid) where a repeated hue
     /// would actually be visible as a repeated grey block.
     var seriesID: Int = 0
-    /// Called once after the real artwork (not the BlurHash) has finished
-    /// loading, whether that came from cache or the network. Rows use this to
-    /// chain their own arrival to the cover's rather than guessing at a delay.
-    var onLoaded: (() -> Void)?
 
     @Environment(\.displayScale) private var displayScale
 
@@ -46,6 +42,12 @@ struct CoverImage: View {
     private var url: URL? { cover.url(forHeight: height, scale: displayScale) }
 
     var body: some View {
+        // S6: `url` rebuilds six `URL`s (`Cover.url(forHeight:scale:)`) every
+        // time it is read, and it used to be read three times a body pass —
+        // here and twice more inside `load()` — so `loaded`/`isReady`/the
+        // yield's three internal re-renders each paid for it three times
+        // over. Computed once per body pass and threaded through instead.
+        let resolvedURL = url
         ZStack {
             background
             if let loaded {
@@ -82,8 +84,8 @@ struct CoverImage: View {
         // than keeping the old one. `.task` also re-runs when the view
         // reappears, which is what makes a failed cover retry on scroll-back
         // instead of staying broken for the life of the screen.
-        .task(id: url) {
-            await load()
+        .task(id: resolvedURL) {
+            await load(url: resolvedURL)
         }
         // Scrolled off screen: give the decoded bitmap back.
         //
@@ -151,7 +153,7 @@ struct CoverImage: View {
     /// handed a new series every swipe — drew the old artwork for a whole
     /// round trip and skipped the BlurHash placeholder that exists for
     /// exactly that gap.
-    private func load() async {
+    private func load(url: URL?) async {
         // Screenshot capture: no network art, ever. `background` already
         // draws the generated placeholder and never falls through to the
         // BlurHash; this is the other half of that decision — without it the
@@ -166,7 +168,6 @@ struct CoverImage: View {
             // shortcut. A fade on a cache hit while scrolling reads as
             // flicker, not polish — see `arrival(wasCached:loadDuration:)`.
             isReady = true
-            onLoaded?()
             return
         }
 
@@ -184,7 +185,6 @@ struct CoverImage: View {
         // re-reads them synchronously through `cached(_:)` when it returns.
         guard !Task.isCancelled else { return }
         loaded = image
-        onLoaded?()
 
         guard Self.arrival(
             wasCached: false, loadDuration: Date().timeIntervalSince(start)

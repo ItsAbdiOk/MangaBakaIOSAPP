@@ -41,13 +41,23 @@ enum BookEditionShelf {
     /// label would go into the shelf's name, which is the group key, and
     /// split the run again; this comment and `BookEditionShelfTests` are the
     /// record instead.
+    ///
+    /// **NDL rows only, and keyed by `workTitle` alone was the bug (item
+    /// P5).** Open Library returns English plus the original language in one
+    /// answer (`OpenLibraryEditions.isShown`), and every Open Library row's
+    /// `workTitle` is nil — so a Japanese row missing a publisher inherited
+    /// whatever the English rows on the same page stated, which is a
+    /// Japanese shelf headed with an English publisher's name. Abdi's call
+    /// this was asked for (2026-09-15) was NDL's 近刊 case specifically; Open
+    /// Library rows keep their own "did not say" nil.
     static func withInheritedPublishers(_ rows: [BookEdition]) -> [BookEdition] {
         var publishers: [String?: Set<String>] = [:]
-        for row in rows {
+        for row in rows where row.source == .nationalDietLibrary {
             if let publisher = row.publisher { publishers[row.workTitle, default: []].insert(publisher) }
         }
         return rows.map { row in
-            guard row.publisher == nil, let stated = publishers[row.workTitle], stated.count == 1,
+            guard row.source == .nationalDietLibrary, row.publisher == nil,
+                  let stated = publishers[row.workTitle], stated.count == 1,
                   let publisher = stated.first
             else { return row }
             return BookEdition(

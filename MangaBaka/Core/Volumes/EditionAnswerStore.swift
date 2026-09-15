@@ -82,6 +82,31 @@ actor EditionAnswerStore {
 
     // MARK: - Read
 
+    /// The stored answer for one series, and when it was written — read
+    /// before any leg runs, the same shape `readDetailCache` uses for the
+    /// series page itself, so the shelf can draw last time's rows at once
+    /// instead of a skeleton over a merge that has not run yet (item P2).
+    ///
+    /// Nil for no stored row, and for one past `freshness` — the same
+    /// backwards-clock-is-stale rule `forthcoming(for:)` applies, so a
+    /// device whose clock jumped back does not trust a "row" that is really
+    /// from the future.
+    func answer(for seriesId: Int) async -> (answer: VolumeEditionAnswer, fetchedAt: Date)? {
+        guard let row = try? await database.cacheWriter.read({ db in
+            try StoredRow.fetchOne(
+                db, sql: "SELECT seriesId, payload, fetchedAt FROM editionAnswer WHERE seriesId = ?",
+                arguments: [seriesId]
+            )
+        })
+        else { return nil }
+        let age = clock.now.timeIntervalSince(row.fetchedAt)
+        guard age >= 0, age < Self.freshness else { return nil }
+        guard let decoded = try? JSONDecoder().decode(StoredEditionAnswer.self, from: row.payload) else {
+            return nil
+        }
+        return (decoded.answer, row.fetchedAt)
+    }
+
     /// One forthcoming volume as the widget needs it, and nothing the widget
     /// does not.
     struct Forthcoming: Sendable, Equatable {
@@ -198,6 +223,21 @@ struct StoredEditionAnswer: Codable, Sendable, Equatable {
         let format: VolumeFormat
         let volumes: [EditionVolume]
         let isPartial: Bool
+        /// Mirrors `EditionShelf.totalRecords` — see there. Decoded
+        /// tolerantly (absent on a row stored before this field existed)
+        /// the same way `EditionVolume`'s two merge fields are.
+        let totalRecords: Int?
+
+        init(
+            edition: VolumeEdition, format: VolumeFormat, volumes: [EditionVolume], isPartial: Bool,
+            totalRecords: Int? = nil
+        ) {
+            self.edition = edition
+            self.format = format
+            self.volumes = volumes
+            self.isPartial = isPartial
+            self.totalRecords = totalRecords
+        }
     }
 
     let shelves: [Shelf]
@@ -205,12 +245,17 @@ struct StoredEditionAnswer: Codable, Sendable, Equatable {
 
     init(_ answer: VolumeEditionAnswer) {
         shelves = answer.shelves.map {
-            Shelf(edition: $0.edition, format: $0.format, volumes: $0.volumes, isPartial: $0.isPartial)
+            Shelf(
+                edition: $0.edition, format: $0.format, volumes: $0.volumes, isPartial: $0.isPartial,
+                totalRecords: $0.totalRecords
+            )
         }
         credits = answer.credits
     }
 
-    /// Back to the type the shelf view reads. `failures` is empty by
+    /// Back to the type the shelf view reads — and, since 2026-09-15, the
+    /// type `EditionAnswerStore.answer(for:)` hands the page at time zero,
+    /// before any leg has run (item P2). `failures` is empty by
     /// construction; `unaskedReason` is nil when there is a shelf and
     /// `.noneListed` when there is not, which is the only honest reading of a
     /// stored answer with no rows.
@@ -218,7 +263,8 @@ struct StoredEditionAnswer: Codable, Sendable, Equatable {
         VolumeEditionAnswer(
             shelves: shelves.map {
                 EditionShelf(
-                    edition: $0.edition, format: $0.format, volumes: $0.volumes, isPartial: $0.isPartial
+                    edition: $0.edition, format: $0.format, volumes: $0.volumes, isPartial: $0.isPartial,
+                    totalRecords: $0.totalRecords
                 )
             },
             credits: credits,

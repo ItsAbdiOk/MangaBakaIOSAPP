@@ -205,6 +205,21 @@ extension AppDatabase {
             }
         }
 
+        migrator.registerMigration("v16_feedEntrySeriesIndex") { db in
+            // Perf review P2: `SeriesRepository+Cache.trimOrphans` runs
+            // `DELETE FROM series WHERE id NOT IN (SELECT seriesId FROM
+            // feedEntry)` after every feed write and every feed discard —
+            // including every `.surprise` deal, which never caches
+            // (`FeedKind.freshness == 0`) and so writes here on every single
+            // deal. `feedEntry`'s primary key is `(feedKey, position)`, which
+            // does not serve a lookup keyed on `seriesId`, so that subquery
+            // built a temp b-tree over the whole table each time. This index
+            // is what `feedEntry_on_feedKey` (dropped in v12 as redundant
+            // with the primary key) was not: the primary key covers `feedKey`
+            // lookups, nothing before this covered `seriesId` ones.
+            try db.create(index: "feedEntry_on_seriesId", on: "feedEntry", columns: ["seriesId"])
+        }
+
         return migrator
     }
 

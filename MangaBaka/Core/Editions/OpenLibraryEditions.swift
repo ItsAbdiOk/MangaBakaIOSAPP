@@ -151,28 +151,67 @@ actor OpenLibraryEditions {
         originalLanguage: String? = nil,
         knownFormat: BookEdition.Format = .unknown
     ) async throws(APIError) -> EditionAnswer {
+        try await editionsWithFetchedAt(
+            anchorISBN: anchorISBN, originalLanguage: originalLanguage, knownFormat: knownFormat
+        ).answer
+    }
+
+    /// What `editionsWithFetchedAt` returns. A named type rather than a
+    /// three-member tuple (`large_tuple`'s limit is two) and rather than
+    /// widening `EditionAnswer` itself, which `EditionAnswerStore` and
+    /// `VolumeEditionMerge` also construct and would then have to carry two
+    /// fields they do not use.
+    struct TimedAnswer: Sendable, Equatable {
+        let answer: EditionAnswer
+        let fetchedAt: Date
+        let isPartial: Bool
+    }
+
+    /// Same answer as `editions(anchorISBN:originalLanguage:knownFormat:)`,
+    /// plus when it was obtained.
+    ///
+    /// Its own method rather than a changed return type on the one above:
+    /// that one is exercised directly, field-for-field, by
+    /// `OpenLibraryEditionsTests`, and widening its return would have
+    /// rewritten every assertion there for no reason a caller needs — only
+    /// `+Editions.swift` wants `fetchedAt`, so only it calls this one (item
+    /// P13: a cache hit and a fresh fetch were both stamped `Date()` at the
+    /// call site and were indistinguishable).
+    func editionsWithFetchedAt(
+        anchorISBN: String,
+        originalLanguage: String? = nil,
+        knownFormat: BookEdition.Format = .unknown
+    ) async throws(APIError) -> TimedAnswer {
         let isbn = Self.normalise(anchorISBN)
-        guard !isbn.isEmpty else { return .notCatalogued }
+        guard !isbn.isEmpty else {
+            return TimedAnswer(answer: .notCatalogued, fetchedAt: clock.now, isPartial: false)
+        }
         let key = "v2-\(isbn)-\(originalLanguage ?? "none")-\(knownFormat.rawValue)"
         if let cached = readCache(key) { return cached }
 
         guard let workKey = try await workKey(isbn: isbn) else {
-            writeCache(key, .notCatalogued)
-            return .notCatalogued
+            writeCache(key, .notCatalogued, isPartial: false)
+            return TimedAnswer(answer: .notCatalogued, fetchedAt: clock.now, isPartial: false)
         }
-        guard let entries = try await entries(workKey: workKey) else {
-            writeCache(key, .notCatalogued)
-            return .notCatalogued
+        guard let page = try await entries(workKey: workKey) else {
+            writeCache(key, .notCatalogued, isPartial: false)
+            return TimedAnswer(answer: .notCatalogued, fetchedAt: clock.now, isPartial: false)
         }
 
         let evidence: BookEdition.FormatEvidence =
             knownFormat == .unknown ? .unstated : .anchorISBN(isbn)
-        let rows = entries
+        let rows = page.entries
             .map { $0.row(format: knownFormat, evidence: evidence) }
             .filter { Self.isShown($0, originalLanguage: originalLanguage) }
         let answer = EditionAnswer.editions(rows)
-        writeCache(key, answer)
-        return answer
+        // `size` is Open Library's own count of how many editions the work
+        // holds; `entries` is this one page of at most `pageSize`. A `size`
+        // larger than the page means there are rows this request never saw
+        // (item P6 — the same "a view must not present the list as
+        // exhaustive" rule NDL's `isPartial` already keeps).
+        let isPartial = page.size.map { $0 > page.entries.count } ?? false
+        writeCache(key, answer, isPartial: isPartial)
+        return TimedAnswer(answer: answer, fetchedAt: clock.now, isPartial: isPartial)
     }
 
     /// English, or the series' own language. Everything else goes.
@@ -216,8 +255,12 @@ actor OpenLibraryEditions {
         return edition.works?.first?.key
     }
 
-    /// `/works/{id}/editions.json` → the sibling printings.
-    private func entries(workKey: String) async throws(APIError) -> [EditionDocument]? {
+    /// `/works/{id}/editions.json` → the sibling printings, and `size` — Open
+    /// Library's own count of how many editions the work holds, read so
+    /// `isPartial` can say the request only saw the first `pageSize` of them.
+    private func entries(
+        workKey: String
+    ) async throws(APIError) -> (entries: [EditionDocument], size: Int?)? {
         let trimmed = workKey.hasPrefix("/") ? String(workKey.dropFirst()) : workKey
         var components = URLComponents(string: "https://openlibrary.org/\(trimmed)/editions.json")
         components?.queryItems = [URLQueryItem(name: "limit", value: String(Self.pageSize))]
@@ -226,7 +269,7 @@ actor OpenLibraryEditions {
         guard let list = try? JSONDecoder().decode(EditionList.self, from: data) else {
             throw .decoding(underlying: "Open Library editions did not parse.", party: .openLibrary)
         }
-        return list.entries
+        return (list.entries ?? [], list.size)
     }
 
     /// - Returns: the body, or nil for a 404 — which is an answer here, not a
@@ -274,6 +317,11 @@ actor OpenLibraryEditions {
 
     private struct EditionList: Decodable {
         let entries: [EditionDocument]?
+        /// Open Library's own count of how many editions this work holds —
+        /// "size 3" on the measured Solo Leveling response. Not the same
+        /// number as `entries.count` on a work with more printings than
+        /// `pageSize`; see `isPartial` in `editionsWithFetchedAt`.
+        let size: Int?
     }
 
     /// The fields of an Open Library edition document this app reads. The
@@ -341,29 +389,33 @@ actor OpenLibraryEditions {
         /// on `readCache` is "nothing cached at all" — the same two-level
         /// distinction `OpenLibraryCovers` draws, for the same reason.
         let rows: [BookEdition]?
+        /// Decoded tolerantly: absent on a file written before `isPartial`
+        /// existed here, which reads as `false` — the same "was not known to
+        /// be partial" default the type carried before.
+        let isPartial: Bool?
     }
 
     private func file(_ key: String) -> URL? {
         cacheDirectory?.appendingPathComponent("\(key).json")
     }
 
-    func readCache(_ key: String) -> EditionAnswer? {
+    func readCache(_ key: String) -> TimedAnswer? {
         guard let file = file(key), let data = try? Data(contentsOf: file),
               let cached = try? JSONDecoder().decode(Cached.self, from: data),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
-        guard let rows = cached.rows else { return .notCatalogued }
-        return .editions(rows)
+        let answer: EditionAnswer = cached.rows.map { .editions($0) } ?? .notCatalogued
+        return TimedAnswer(answer: answer, fetchedAt: cached.storedAt, isPartial: cached.isPartial ?? false)
     }
 
-    private func writeCache(_ key: String, _ answer: EditionAnswer) {
+    private func writeCache(_ key: String, _ answer: EditionAnswer, isPartial: Bool) {
         guard let directory = cacheDirectory, let file = file(key) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let rows: [BookEdition]? = {
             if case let .editions(rows) = answer { return rows }
             return nil
         }()
-        let cached = Cached(storedAt: clock.now, rows: rows)
+        let cached = Cached(storedAt: clock.now, rows: rows, isPartial: isPartial)
         try? JSONEncoder().encode(cached).write(to: file, options: .atomic)
     }
 }

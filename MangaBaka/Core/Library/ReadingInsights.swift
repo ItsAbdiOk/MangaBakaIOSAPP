@@ -55,6 +55,8 @@ enum ReadingInsights {
     /// belongs in `waiting`.
     ///
     /// - Parameter within: how close to the end still counts as "nearly".
+    ///   **A guess** — no derivation, chosen as "about a volume" with nothing
+    ///   to check it against.
     static func nearlyFinished(in entries: [LibraryEntry], within: Int = 12) -> [Behind] {
         entries
             .filter { $0.state == .reading || $0.state == .rereading || $0.state == .paused }
@@ -187,7 +189,8 @@ enum ReadingInsights {
     ///
     /// - Parameter minimum: how many read series a tag needs before it is worth
     ///   a verdict. Two is a coincidence; three is the smallest number that can
-    ///   be called a pattern without embarrassment.
+    ///   be called a pattern without embarrassment. **A guess** — reasoned,
+    ///   not checked against how verdicts at 3 actually read to a reader.
     static func verdicts(in entries: [LibraryEntry], minimum: Int = 3) -> [TagVerdict] {
         struct Tally {
             var read = 0
@@ -237,6 +240,9 @@ enum ReadingInsights {
     static func droppedLine(in entries: [LibraryEntry]) -> String? {
         let started = readAtAll(entries)
         let dropped = started.filter { $0.state == .dropped }.count
+        // 10 is **a guess** — enough started series that a percentage reads
+        // as a pattern rather than "1 of 3", nothing measured against how the
+        // sentence lands below that.
         guard started.count >= 10, dropped > 0 else { return nil }
         let share = Int((Double(dropped) * 100 / Double(started.count)).rounded())
         return "\(share)% of what you have started is dropped. This is what it has in common."

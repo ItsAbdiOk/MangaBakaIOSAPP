@@ -106,9 +106,21 @@ actor CatalogueService {
         let result = await task.value
         if case .loaded = result {
             tagsState = result
-            cachedTagLimit = limit
+            // Grow, never shrink: caller A (200) can land after caller B
+            // (500) started and is still in flight, and A's own completion
+            // must not shrink `cachedTagLimit` back down under B's request —
+            // that used to make the very next 500-ask look uncached and
+            // refetch (W15/P15, 2026-09-15).
+            cachedTagLimit = max(cachedTagLimit, limit)
         }
-        tagsInFlight = nil
+        // Only clear the registration if it is still *this* task. A bigger
+        // ask from another caller can have already replaced `tagsInFlight`
+        // with its own task while this one was in flight; clearing it here
+        // unconditionally used to erase that caller's in-progress
+        // registration, so a third caller asking for the same bigger limit
+        // found nothing to join and started a duplicate `/v1/tags` request
+        // (W15/P15, 2026-09-15).
+        if tagsInFlight == task { tagsInFlight = nil }
         return result
     }
 

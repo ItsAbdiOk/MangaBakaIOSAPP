@@ -19,7 +19,7 @@ actor APIClient {
     /// also means they can contact us rather than silently blocking us.
     static let userAgent = "MangaBakaIOS/1.0 (+https://github.com/ItsAbdiOk/MangaBakaIOSAPP)"
 
-    private let limiter = RateLimitGate()
+    private let limiter: RateLimitGate
 
     /// The configuration every default session for this client is built with.
     ///
@@ -44,10 +44,17 @@ actor APIClient {
     /// old default silently kept the old, untimed behaviour.
     static let defaultSession = URLSession(configuration: defaultSessionConfiguration)
 
-    init(baseURL: URL, session: URLSession = APIClient.defaultSession, tokenProvider: TokenProvider) {
+    /// - Parameter limiter: the gate this client reserves slots from. Its
+    ///   own by default; injectable so a test can read the gate's window
+    ///   after a request the client handled (review perf W3, 2026-09-15).
+    init(
+        baseURL: URL, session: URLSession = APIClient.defaultSession, tokenProvider: TokenProvider,
+        limiter: RateLimitGate = RateLimitGate()
+    ) {
         self.baseURL = baseURL
         self.session = session
         self.tokenProvider = tokenProvider
+        self.limiter = limiter
         self.decoder = Self.makeDecoder()
     }
 
@@ -167,9 +174,14 @@ actor APIClient {
             // which told the kit to hide cached content
             // (`staleContentRemainsUseful == false` for `.transport`) over a
             // screen the reader simply isn't looking at anymore (gap 26).
-            // Same "never reached the network" reasoning as `.offline` above:
-            // the slot goes back (wire review #13/#30).
-            await limiter.refund(path: path, reservedAt: reservedAt)
+            //
+            // The slot is NOT refunded (review perf W3, 2026-09-15). It used
+            // to be, on the "never reached the network" reasoning `.offline`
+            // gets — but a request cancelled mid-flight almost always did
+            // reach it: `SearchModel` cancels the in-flight search on every
+            // keystroke, each one counted by the server, and refunding them
+            // made the local 30/min search window under-count until the
+            // reader earned the real 429 the window exists to prevent.
             throw APIError.cancelled
         } catch {
             throw APIError.transport(underlying: error.localizedDescription)
@@ -376,9 +388,10 @@ actor APIClient {
     func getRoot<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
+        priority: RequestPriority = .userInitiated,
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
-        let data = try await rawData(path: path, query: query)
+        let data = try await rawData(path: path, query: query, priority: priority)
         do {
             return try decoder.decode(Payload.self, from: data)
         } catch {
@@ -392,9 +405,10 @@ actor APIClient {
     func getResults<Payload: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
+        priority: RequestPriority = .userInitiated,
         as _: Payload.Type = Payload.self
     ) async throws(APIError) -> Payload {
-        let data = try await rawData(path: path, query: query)
+        let data = try await rawData(path: path, query: query, priority: priority)
         do {
             let envelope = try decoder.decode(ResultsEnvelope<Payload>.self, from: data)
             guard let results = envelope.results else {

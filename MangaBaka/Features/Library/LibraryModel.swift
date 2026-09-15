@@ -93,12 +93,6 @@ final class LibraryModel {
         return .list
     }
 
-    /// Deprecated alias kept only so call sites outside this batch that still
-    /// read `hasAccount` keep compiling; `screenState` is the real decision
-    /// now. See the report accompanying this change for the two assertions in
-    /// `NonsenseGuardTests.swift` this inverts.
-    var hasAccount: Bool { screenState != .noAccount }
-
     /// Set only once the walk has stopped short without emptying the screen —
     /// `!entries.isEmpty && !isComplete`. Distinct from `failure` alone: a
     /// walk still in flight is also incomplete, and a `StaleBar` drawn while

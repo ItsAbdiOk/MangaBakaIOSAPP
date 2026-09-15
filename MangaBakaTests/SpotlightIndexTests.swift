@@ -114,7 +114,10 @@ struct SpotlightWiringTests {
         // with nothing. It now reads `.load()` and skips the reindex outright
         // when `.failure` is set, leaving yesterday's index standing.
         let reindex = try #require(source.range(of: "await spotlight.reindex(walk.entries)"))
-        #expect(reminders.upperBound < reindex.lowerBound)
+        // Since 2026-09-15 (review perf S12) the reminders run *after* the
+        // walk and its consumers: with reminders on they used to queue the
+        // library behind up to six calendar requests waiting at the gate.
+        #expect(reindex.upperBound < reminders.lowerBound)
     }
 
     /// Gap 104: a failed walk must not wipe yesterday's index.

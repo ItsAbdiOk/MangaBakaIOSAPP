@@ -32,14 +32,14 @@ struct ReminderPacingTests {
 
         // Baseline: four series, all hiatus, so their return below is news.
         await reminders.reschedule(
-            announced: [], library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "hiatus") }
+            library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "hiatus") }
         )
         #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
 
         // Three series come back from hiatus today, filling the day's cap;
         // series 7's own return (last in the array) overflows to day 1.
         await reminders.reschedule(
-            announced: [], library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "releasing") }
+            library: [1, 2, 3, 7].map { entry(id: $0, state: .reading, status: "releasing") }
         )
         let deferred = try #require(centre.added.first { $0.id == "back-7" })
         #expect(
@@ -47,8 +47,7 @@ struct ReminderPacingTests {
         )
 
         clock.advance(by: 25 * 60 * 60)
-        await reminders.reschedule(
-            announced: [], library: [entry(id: 7, state: .reading, status: "completed")]
+        await reminders.reschedule(library: [entry(id: 7, state: .reading, status: "completed")]
         )
 
         #expect(
@@ -62,8 +61,7 @@ struct ReminderPacingTests {
         // the completion is told after all — the cooldown delays, it does
         // not drop.
         clock.advance(by: 24 * 60 * 60)
-        await reminders.reschedule(
-            announced: [], library: [entry(id: 7, state: .reading, status: "completed")]
+        await reminders.reschedule(library: [entry(id: 7, state: .reading, status: "completed")]
         )
         #expect(centre.added.map(\.id).contains("finished-7"))
     }
@@ -80,7 +78,7 @@ struct ReminderPacingTests {
 
         let reminders = ReleaseReminders(defaults: store, centre: FakeCentre(), now: { clock.now })
         await reminders.enable()
-        await reminders.reschedule(announced: [], library: [reading(1)])
+        await reminders.reschedule(library: [reading(1)])
 
         let ledger = store.dictionary(forKey: "reminders.fired") ?? [:]
         #expect(ledger["event-recent"] != nil, "control: ten days old is well inside the window")
@@ -105,16 +103,14 @@ struct ReminderPacingTests {
 
         // Baseline: series 1 seen hiatus, so its return below would
         // otherwise be news.
-        await reminders.reschedule(
-            announced: [], library: [entry(id: 1, state: .reading, status: "hiatus")]
+        await reminders.reschedule(library: [entry(id: 1, state: .reading, status: "hiatus")]
         )
         #expect(centre.added.isEmpty, "control: baseline pass fires nothing")
 
         store.set(["back-1": clock.now.addingTimeInterval(-3600), "junk": "not a date"],
                   forKey: "reminders.fired")
 
-        await reminders.reschedule(
-            announced: [], library: [entry(id: 1, state: .reading, status: "releasing")]
+        await reminders.reschedule(library: [entry(id: 1, state: .reading, status: "releasing")]
         )
         #expect(centre.added.isEmpty, "back-1 already fired an hour ago")
     }
@@ -126,7 +122,7 @@ struct ReminderPacingTests {
     func taskHandleIsReleased() async throws {
         let reminders = ReleaseReminders(defaults: try defaults(), centre: FakeCentre())
         await reminders.enable()
-        await reminders.reschedule(announced: [], library: [reading(1)])
+        await reminders.reschedule(library: [reading(1)])
         #expect(reminders.rescheduleTask == nil)
     }
 }

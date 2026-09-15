@@ -17,29 +17,20 @@ import SwiftUI
 /// the screen.
 /// The line in the hero. One tap, one sheet.
 struct AlternativeTitlesButton: View {
-    let titles: [SeriesTitle]
-    /// The one already on screen, which should not be counted or repeated.
-    let shown: String?
-    /// `romanized_title` / `native_title` / `secondary_titles` from
-    /// `/v1/series/{id}` — three more places names live, outside the
-    /// `titles` array itself. Optional and defaulted so an existing caller
-    /// that only knows about `titles` keeps compiling; a caller wanting
-    /// these shown passes them explicitly. See `SeriesRecordFieldsTests`.
-    var romanizedTitle: String?
-    var nativeTitle: String?
-    var secondaryTitles: [String: [SecondaryTitle]]?
+    /// The merged, deduplicated list this button shows a count of and opens
+    /// a sheet onto — see `AlternativeTitlesButton.rows(titles:shown:
+    /// romanizedTitle:nativeTitle:secondaryTitles:)`.
+    ///
+    /// Precomputed by the caller rather than derived here from `titles` plus
+    /// the three optional fields (P15, 2026-09-15): `DetailHero` mounts up
+    /// to four of these at once — three hidden measurers plus the visible
+    /// column — while `measuredFor != key`, and each used to run its own
+    /// merge-and-lowercase pass over 25+ titles independently. `DetailHero`
+    /// now computes this once per body pass and hands every instance the
+    /// same array.
+    let rows: [SeriesTitle.Alternative]
 
     @State private var isOpen = false
-
-    private var others: [SeriesTitle.Alternative] {
-        SeriesTitle.alternatives(
-            in: Self.merging(
-                romanizedTitle: romanizedTitle, nativeTitle: nativeTitle,
-                secondaryTitles: secondaryTitles, into: titles, shown: shown
-            ),
-            excluding: shown
-        )
-    }
 
     /// `titles` plus whatever `romanizedTitle`/`nativeTitle`/`secondaryTitles`
     /// name that is not already in there — case-insensitively, since the
@@ -84,8 +75,24 @@ struct AlternativeTitlesButton: View {
         return merged
     }
 
+    /// `titles` merged with the three optional fields, then deduplicated and
+    /// stripped of `shown` — the whole computation `rows` above used to redo
+    /// per mounted instance. Callers compute this once and pass the result
+    /// as `rows` to every instance sharing the same series.
+    nonisolated static func rows(
+        titles: [SeriesTitle], shown: String?,
+        romanizedTitle: String?, nativeTitle: String?, secondaryTitles: [String: [SecondaryTitle]]?
+    ) -> [SeriesTitle.Alternative] {
+        SeriesTitle.alternatives(
+            in: merging(
+                romanizedTitle: romanizedTitle, nativeTitle: nativeTitle,
+                secondaryTitles: secondaryTitles, into: titles, shown: shown
+            ),
+            excluding: shown
+        )
+    }
+
     var body: some View {
-        let rows = others
         if !rows.isEmpty {
             Button { isOpen = true } label: {
                 HStack(spacing: 5) {

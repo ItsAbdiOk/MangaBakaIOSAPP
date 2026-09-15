@@ -81,6 +81,11 @@ struct DetailEditions: View {
                         Text("Publisher page")
                             .typeFootnote()
                             .foregroundStyle(Palette.accent)
+                            // ~14pt tall otherwise — every other new control
+                            // in this slice got this (P12; `VolumeSheet.swift`,
+                            // `EditionShelvesSection.swift`), this one was
+                            // missed.
+                            .tapTarget()
                     }
                     .buttonStyle(.press)
                 }

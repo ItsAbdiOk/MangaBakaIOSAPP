@@ -60,7 +60,9 @@ struct APIErrorPresentationTests {
         #expect(APIError.rateLimited(retryAfter: nil).staleContentRemainsUseful)
         #expect(APIError.server(status: 500, message: "x").staleContentRemainsUseful)
         #expect(!APIError.decoding(underlying: "x").staleContentRemainsUseful)
-        #expect(!APIError.transport(underlying: "x").staleContentRemainsUseful)
+        // `.transport` joined the "still useful" set on 2026-09-15 (wire fix
+        // batch): a dropped connection says nothing about the cache.
+        #expect(APIError.transport(underlying: "x").staleContentRemainsUseful)
     }
 
     @Test("Technical detail never reaches the reader")

@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 /// The covers the reader most recently opened.
 ///
@@ -17,6 +18,14 @@ final class RecentlyViewedModel {
     /// next load rather than the next launch.
     private let allowedFormats: () -> [String]
     private let blockedTags: () -> [Int]
+
+    /// D4 (discovery-ui review, 2026-09-15): `load()` and `record()` used to
+    /// swallow every `HistoryStore` failure with `try?` and nothing logged —
+    /// a corrupt local store left this row silently empty (or frozen) forever
+    /// with no trace of why. `StackModel.react` handles the same class of
+    /// failure with a logged warning; this row had no `Logger` in the file at
+    /// all to do the same.
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "discovery")
 
     init(
         history: HistoryStore,
@@ -39,13 +48,24 @@ final class RecentlyViewedModel {
 
     func load() async {
         let ratings = allowedRatings()
-        series = (try? await history.entries(
-            allowedRatings: ratings, allowedFormats: allowedFormats(), blockedTags: blockedTags()
-        )) ?? []
+        do {
+            series = try await history.entries(
+                allowedRatings: ratings, allowedFormats: allowedFormats(), blockedTags: blockedTags()
+            )
+        } catch {
+            Self.logger.error("recently-viewed load failed, row stays empty: \(error, privacy: .public)")
+            series = []
+        }
     }
 
     func record(_ opened: Series) async {
-        try? await history.record(opened)
+        do {
+            try await history.record(opened)
+        } catch {
+            Self.logger.error(
+                "recently-viewed record failed for \(opened.id, privacy: .public): \(error, privacy: .public)"
+            )
+        }
         await load()
     }
 }

@@ -43,9 +43,14 @@ enum Palette {
     // each is from the system colour it resembles (measured against the iOS
     // 26.5 dark resolutions, 2026-09-14).
 
-    static let textPrimary = Color.white.opacity(0.96)
+    // S16: within 4% of `.label`'s dark resolution (white @ 1.0, measured
+    // 2026-09-14) — the same reasoning `textSecondary` below already applies
+    // to itself. Taking the semantic token costs the mockup nothing anyone
+    // can see and gains Increase Contrast and Smart Invert on every primary
+    // and emphasis text in the app, same as `textSecondary`.
+    static let textPrimary = Color(.label)
     /// Detail hero title only.
-    static let textEmphasis = Color.white.opacity(0.98)
+    static let textEmphasis = Color(.label)
     static let textBody = Color(hex: 0xEBEBF5).opacity(0.75)
     /// `#EBEBF5` @ 0.60 — `secondaryLabel`'s dark resolution exactly, so this
     /// is the system token rather than a copy of its numbers.

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A saved search, shown on the search screen before anything is typed.
 ///
@@ -54,12 +55,46 @@ final class SearchLensStore {
     private(set) var replaced: String?
     private let defaults: UserDefaults
 
+    /// D6 (discovery-ui review, 2026-09-15): decoding the whole stored array
+    /// in one shot meant one lens whose shape changed under it (a schema
+    /// change, corrupted data) failed the entire array and every other saved
+    /// lens vanished with it — silently, indistinguishable from "never saved
+    /// one". `decodeLenient` decodes each lens on its own so the ones that
+    /// still decode survive, and logs the ones that don't rather than
+    /// dropping them without a trace.
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "discovery")
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.key),
-           let stored = try? JSONDecoder().decode([SearchLens].self, from: data) {
-            own = stored
+        if let data = defaults.data(forKey: Self.key) {
+            own = Self.decodeLenient(data)
         }
+    }
+
+    /// Parses the stored array as loose JSON first so a single bad element
+    /// does not fail every other one alongside it — `JSONDecoder` decoding
+    /// `[SearchLens]` directly throws on the first element that doesn't
+    /// match, discarding everything.
+    private static func decodeLenient(_ data: Data) -> [SearchLens] {
+        guard let rawArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            logger.error("saved lenses: stored data isn't a JSON array of objects — every lens lost")
+            return []
+        }
+        var decoded: [SearchLens] = []
+        for (index, raw) in rawArray.enumerated() {
+            do {
+                let itemData = try JSONSerialization.data(withJSONObject: raw)
+                decoded.append(try JSONDecoder().decode(SearchLens.self, from: itemData))
+            } catch {
+                logger.error(
+                    """
+                    saved lens at index \(index, privacy: .public) failed to decode, dropped: \
+                    \(error, privacy: .public)
+                    """
+                )
+            }
+        }
+        return decoded
     }
 
     /// Saves the current filter under a name.

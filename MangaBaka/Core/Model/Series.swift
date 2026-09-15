@@ -187,8 +187,17 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         // cannot do.
         let decodedID = id
         if let dropped = tagsV2Decode?.dropped, dropped > 0 {
+            // The reason is `LossyArray`'s own addition (wire review
+            // W10/P10, 2026-09-15) — the `DecodingError`'s description
+            // names the coding path and the key that changed, rather than
+            // leaving this line to say "3 rows dropped" with nothing to
+            // grep for.
+            let reason = tagsV2Decode?.firstDropReason ?? "unknown"
             Self.logger.error(
-                "tags_v2 dropped \(dropped, privacy: .public) rows for series \(decodedID, privacy: .public)"
+                """
+                tags_v2 dropped \(dropped, privacy: .public) rows for series \
+                \(decodedID, privacy: .public): \(reason, privacy: .public)
+                """
             )
         }
         tagsV2 = tagsV2Decode?.elements

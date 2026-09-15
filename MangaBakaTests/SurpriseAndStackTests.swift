@@ -58,6 +58,11 @@ struct SurpriseTests {
 struct StackPersonalisationTests {
     private final class SeedRecordingRepository: StubRepositoryBase, @unchecked Sendable {
         private(set) var feeds: [FeedKind] = []
+        /// PS7 (persistence review, 2026-09-15): a seeded blend now goes
+        /// through `repository.mix`, not `feed(.mix)` — see `StackModel
+        /// .fetchMixBatch`'s own doc comment. `feeds` still records the
+        /// `.surprise` path, which is unchanged.
+        private(set) var mixCalls: [[Int]] = []
         /// id ranges keyed by seed, so a rotated blend returns different series.
         var offset = 0
 
@@ -68,6 +73,21 @@ struct StackPersonalisationTests {
                 series: (start..<(start + 5)).map { SeriesFactory.make(id: $0, title: "S\($0)") },
                 origin: .network
             )
+        }
+
+        override func mix(
+            seeds: [Int], filters: SearchQuery, excludedTags: [Int]
+        ) async -> MixResult {
+            mixCalls.append(seeds)
+            let start = offset + mixCalls.count * 100
+            let recommendations = (start..<(start + 5)).map {
+                Recommendation(
+                    series: SeriesFactory.make(id: $0, title: "S\($0)"),
+                    score: nil, sharedTags: nil, sharedTagsTotal: nil,
+                    matchedAuthor: nil, matchedRelated: nil, sharedUsers: nil, rank: nil
+                )
+            }
+            return MixResult(recommendations: recommendations)
         }
     }
 
@@ -160,12 +180,12 @@ struct StackPersonalisationTests {
         let model = await StackModel(repository: repository, shelf: shelf)
         await model.loadIfNeeded()
 
-        #expect(repository.feeds.count == 1)
-        if case let .mix(seeds) = repository.feeds[0] {
-            #expect(Set(seeds) == [7, 8])
-        } else {
-            Issue.record("Expected a seeded mix, got \(repository.feeds[0])")
-        }
+        // PS7: the seeded blend goes through `repository.mix`, the same path
+        // Mix's own screen calls — not `feed(.mix)`, which sends blocked
+        // tags under the wrong key for this endpoint.
+        #expect(repository.feeds.isEmpty, "a seeded blend must not go through feed(.mix)")
+        #expect(repository.mixCalls.count == 1)
+        #expect(Set(repository.mixCalls.first ?? []) == [7, 8])
         #expect(await model.source == .yourSaves)
     }
 
@@ -194,20 +214,24 @@ struct StackPersonalisationTests {
         }
 
         // Everything the first blend returns has already been reacted to.
+        // PS7: a seeded blend goes through `repository.mix`, not `feed(.mix)`.
         final class ExhaustedFirstBlend: StubRepositoryBase, @unchecked Sendable {
             private(set) var seedGroups: [[Int]] = []
 
-            override func feed(_ feed: FeedKind, forceRefresh: Bool) async -> FeedResult {
-                guard case let .mix(seeds) = feed else {
-                    return FeedResult(series: [], origin: .network)
-                }
+            override func mix(
+                seeds: [Int], filters: SearchQuery, excludedTags: [Int]
+            ) async -> MixResult {
                 seedGroups.append(seeds)
                 // The first blend returns only series already on the shelf.
                 let ids = seedGroups.count == 1 ? [1, 2, 3] : [90, 91, 92]
-                return FeedResult(
-                    series: ids.map { SeriesFactory.make(id: $0, title: "S\($0)") },
-                    origin: .network
-                )
+                let recommendations = ids.map {
+                    Recommendation(
+                        series: SeriesFactory.make(id: $0, title: "S\($0)"),
+                        score: nil, sharedTags: nil, sharedTagsTotal: nil,
+                        matchedAuthor: nil, matchedRelated: nil, sharedUsers: nil, rank: nil
+                    )
+                }
+                return MixResult(recommendations: recommendations)
             }
         }
 

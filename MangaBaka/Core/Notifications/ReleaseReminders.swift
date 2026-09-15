@@ -163,7 +163,6 @@ final class ReleaseReminders {
     ///     finished. A walk cut short at the page cap is not a fresh answer
     ///     either; see `libraryFailure`.
     func reschedule(
-        announced: [UpcomingWork],
         library: [LibraryEntry] = [],
         feeds: [Int: ReleaseFeed] = [:],
         libraryFailure: APIError? = nil,
@@ -180,7 +179,7 @@ final class ReleaseReminders {
         let task = Task { @MainActor [weak self] in
             await previous?.value
             await self?.performReschedule(
-                announced: announced, library: library, feeds: feeds,
+                library: library, feeds: feeds,
                 libraryFailure: libraryFailure, isComplete: isComplete
             )
         }
@@ -200,7 +199,6 @@ final class ReleaseReminders {
     private(set) var rescheduleTask: Task<Void, Never>?
 
     private func performReschedule(
-        announced: [UpcomingWork],
         library: [LibraryEntry],
         feeds: [Int: ReleaseFeed],
         libraryFailure: APIError?,
@@ -218,8 +216,8 @@ final class ReleaseReminders {
 
         let now = now()
         let candidates = NotificationPolicy.decide(
-            announced: announced, feeds: feeds, library: library, now: now,
-            previousStatus: seriesStatus, lastKnownEpisode: knownEpisode, lastKnownSeason: knownSeason
+            feeds: feeds, library: library, now: now,
+            previousStatus: seriesStatus, lastKnownSeason: knownSeason
         )
 
         // A series/feed never observed before gets its baseline recorded
@@ -244,8 +242,19 @@ final class ReleaseReminders {
         var updatedFired = firedLedger
         var updatedSeriesLastNotified = seriesLastNotified
         var updatedStatus = seriesStatus
-        var updatedEpisode = knownEpisode
         var updatedSeason = knownSeason
+        // Every series with *no* candidate this pass has its status
+        // recorded now (review perf R1, 2026-09-15). The baseline used to
+        // advance only when a `finished-` was sent, so a series that went
+        // `releasing → hiatus` after first sighting was never seen on hiatus
+        // and "back from hiatus" could not fire for it — the common case.
+        // A series *with* a candidate keeps its old baseline until that
+        // candidate is sent (below), so a flip the fatigue guard held back
+        // is still a flip next pass.
+        let withCandidates = Set(candidates.compactMap(\.seriesID))
+        for entry in library where !withCandidates.contains(entry.seriesId) {
+            if let status = entry.series?.status { updatedStatus[entry.seriesId] = status }
+        }
         for item in scheduled {
             await notify(id: item.id, title: item.title, body: item.body, at: item.date)
             updatedFired[item.id] = item.date
@@ -260,11 +269,17 @@ final class ReleaseReminders {
             // stamped at midnight and actually fires a minute from now; the
             // guard above measures against this same value.
             updatedSeriesLastNotified[seriesID] = ReminderRequest.triggerDate(for: item.date, now: now)
-            if item.id.hasPrefix("finished-"), let status = library.first(where: { $0.seriesId == seriesID })?
-                .series?.status {
+            // `back-` advances the baseline too (review perf R2): a sent
+            // return used to leave `previous == "hiatus"` in place and fire
+            // again the day its `fired` entry aged out of the ledger.
+            if item.id.hasPrefix("finished-") || item.id.hasPrefix("back-"),
+               let status = library.first(where: { $0.seriesId == seriesID })?.series?.status {
                 updatedStatus[seriesID] = status
-            } else if item.id.hasPrefix("release-feed-"), let episode = feeds[seriesID]?.latestEpisodeNumber {
-                updatedEpisode[seriesID] = episode
+            } else if item.id.hasPrefix("finale-") {
+                // A numberless finale is said once: the baseline reads as
+                // finished from here, which also keeps a later catalogue
+                // flip to "completed" from saying it a second time.
+                updatedStatus[seriesID] = "completed"
             } else if item.id.hasPrefix("season-"), let season = feeds[seriesID]?.endedSeason {
                 updatedSeason[seriesID] = season
             }
@@ -272,7 +287,6 @@ final class ReleaseReminders {
         defaults.set(Self.pruned(updatedFired, now: now), forKey: Self.firedKey)
         defaults.set(Self.encodeIntKeys(updatedSeriesLastNotified), forKey: Self.seriesLastNotifiedKey)
         defaults.set(Self.encodeIntKeys(updatedStatus), forKey: Self.statusKey)
-        defaults.set(Self.encodeIntKeys(updatedEpisode), forKey: Self.episodeKey)
         defaults.set(Self.encodeIntKeys(updatedSeason), forKey: Self.seasonKey)
     }
 }
@@ -406,6 +420,8 @@ extension ReleaseReminders {
     private static let firedKey = "reminders.fired"
     private static let seriesLastNotifiedKey = "reminders.seriesLastNotified"
     private static let statusKey = "reminders.seriesStatus"
+    /// Retired with condition 1b (2026-09-15); kept only so `forget()` can
+    /// clear the key an older build wrote.
     private static let episodeKey = "reminders.knownEpisode"
     private static let seasonKey = "reminders.knownSeason"
 
@@ -427,11 +443,6 @@ extension ReleaseReminders {
             .map(Self.decodeIntKeys) ?? [:]
     }
 
-    private var knownEpisode: [Int: Int] {
-        (defaults.dictionary(forKey: Self.episodeKey) as? [String: Int])
-            .map(Self.decodeIntKeys) ?? [:]
-    }
-
     private var knownSeason: [Int: Int] {
         (defaults.dictionary(forKey: Self.seasonKey) as? [String: Int])
             .map(Self.decodeIntKeys) ?? [:]
@@ -448,17 +459,10 @@ extension ReleaseReminders {
         }
         defaults.set(Self.encodeIntKeys(statuses), forKey: Self.statusKey)
 
-        var episodes = knownEpisode
         var seasons = knownSeason
-        for (seriesID, feed) in feeds {
-            if episodes[seriesID] == nil, let episode = feed.latestEpisodeNumber {
-                episodes[seriesID] = episode
-            }
-            if seasons[seriesID] == nil, let season = feed.endedSeason {
-                seasons[seriesID] = season
-            }
+        for (seriesID, feed) in feeds where seasons[seriesID] == nil {
+            if let season = feed.endedSeason { seasons[seriesID] = season }
         }
-        defaults.set(Self.encodeIntKeys(episodes), forKey: Self.episodeKey)
         defaults.set(Self.encodeIntKeys(seasons), forKey: Self.seasonKey)
     }
 

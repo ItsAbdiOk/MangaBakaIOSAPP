@@ -122,9 +122,17 @@ actor RateLimitGate {
     /// neither.
     private let clock: Clock
 
-    init(clock: Clock = SystemClock()) {
+    /// - Parameter window: the sliding window both limits are expressed
+    ///   over. Sixty seconds in the app (`Family.window`); injectable so a
+    ///   test of the *wait* paths — which sleep on the wall clock, not the
+    ///   injected one — can use a window of a few hundred milliseconds
+    ///   instead of a real minute.
+    init(clock: Clock = SystemClock(), window: TimeInterval = Family.search.window) {
         self.clock = clock
+        self.window = window
     }
+
+    private let window: TimeInterval
 
     /// A ceiling on how long the server's own `Retry-After` is honoured for.
     ///
@@ -193,26 +201,79 @@ actor RateLimitGate {
     @discardableResult
     func reserveSlot(for path: String, priority: RequestPriority) async throws(APIError) -> Date? {
         let family = Self.family(for: path)
-        try throwIfBlocked(family)
+        guard priority == .userInitiated else { return try await waitForBackgroundSlot(family) }
 
-        if priority == .userInitiated {
-            prune(family)
-            var held = timestamps[family] ?? []
-            guard held.count >= family.limit else {
-                let reservedAt = clock.now
-                held.append(reservedAt)
-                timestamps[family] = held
-                return reservedAt
+        // A foreground request waits out a short deadline rather than
+        // throwing it at the reader (review perf W2, 2026-09-15): the
+        // deadline it used to throw — the oldest slot's expiry, or the tail
+        // of a 429 back-off — is usually seconds away, and a card saying
+        // "too many requests, retrying in 4 s" is worse than a 4 s spinner.
+        // Past `foregroundWaitCeiling` it still throws, so a long back-off is
+        // still said out loud and never a hang.
+        // `sleep(for:)` is the wall clock; the deadline is the injected one.
+        // Seeing the same deadline twice means the injected clock did not
+        // move while we slept — only possible under a frozen test clock —
+        // and the loop would otherwise never end (it hung a full test run
+        // for 40 minutes on 2026-09-15). Throw the deadline instead.
+        var lastDeadline: Date?
+        while true {
+            if Task.isCancelled { throw APIError.cancelled }
+            let deadline: Date
+            if let blocked = blockedUntil[family], blocked > clock.now {
+                deadline = blocked
+            } else {
+                blockedUntil[family] = nil
+                prune(family)
+                var held = timestamps[family] ?? []
+                guard held.count >= family.limit else {
+                    let reservedAt = clock.now
+                    held.append(reservedAt)
+                    timestamps[family] = held
+                    return reservedAt
+                }
+                // The oldest request in the window is the one whose expiry
+                // frees the next slot, so that is when this family reopens.
+                deadline = held[0].addingTimeInterval(window)
             }
-            // The oldest request in the window is the one whose expiry frees
-            // the next slot, so that is when this family reopens.
-            throw APIError.rateLimited(
-                until: held[0].addingTimeInterval(family.window),
-                party: family.party
-            )
+            let wait = deadline.timeIntervalSince(clock.now)
+            guard wait <= Self.foregroundWaitCeiling, deadline != lastDeadline else {
+                await NetworkLedger.shared.recordLocalRefusal()
+                throw APIError.rateLimited(until: deadline, party: family.party)
+            }
+            lastDeadline = deadline
+            try await sleep(for: max(wait, 0) + Self.reopenSlack)
         }
+    }
 
-        return try await waitForBackgroundSlot(family)
+    /// How long a foreground request will quietly wait for its family to
+    /// reopen before the wait becomes a thrown deadline. **A guess** (review
+    /// perf W2): ten seconds is about the longest a spinner reads as "still
+    /// loading" rather than "stuck", and comfortably above the local window's
+    /// usual reopen (one slot expires every 60 / 180 ≈ 0.3 s under steady
+    /// load). Not measured against readers.
+    static let foregroundWaitCeiling: TimeInterval = 10
+
+    /// The longest a background request will wait — through a 429 back-off
+    /// included — before giving up with the deadline it was waiting on. **A
+    /// guess**: past the exponential fallback's cap (`recordRateLimit`), so
+    /// a waiter always outlives one back-off, and short enough that a
+    /// background leg cannot hold a page's "still loading" line forever.
+    static let maxBackgroundWait: TimeInterval = 90
+
+    /// A hair past the computed reopen, so the retry is not the first request
+    /// the window sees while its oldest slot is still inside it by rounding.
+    private static let reopenSlack: TimeInterval = 0.05
+
+    /// `Task.sleep` on the wall clock, mapped to `.cancelled` — the injected
+    /// `clock` cannot be slept on, so tests that exercise a wait use a
+    /// `minimumInterval`-style short window rather than fast-forwarding.
+    private func sleep(for seconds: TimeInterval) async throws(APIError) {
+        do {
+            try await Task.sleep(for: .seconds(seconds))
+        } catch {
+            // `Task.sleep` throws on cancellation only.
+            throw APIError.cancelled
+        }
     }
 
     /// Hands back a slot `reserveSlot` reserved on this caller's behalf,
@@ -225,9 +286,10 @@ actor RateLimitGate {
     ///   (wire review #30) — `reserveSlot` and the ledger both ran before
     ///   `APIClient.perform` could know that, so both a search slot and a
     ///   ledger row were spent on a request MangaBaka never saw; or
-    /// - the attempt never left the device at all: `.offline` or
-    ///   `.cancelled` (wire review #13, folded into #30's fix since both are
-    ///   "the slot was reserved for nothing"). Deliberately *not* the generic
+    /// - the attempt never left the device at all: `.offline` (wire review
+    ///   #13, folded into #30's fix). `.cancelled` used to be refunded too and
+    ///   is not since 2026-09-15 (review perf W3): a request cancelled
+    ///   mid-flight usually did reach the server. Deliberately *not* the broad
     ///   `.transport` case: a TLS or DNS failure may well have reached the
     ///   host, so that slot stays spent.
     ///
@@ -262,21 +324,10 @@ actor RateLimitGate {
     /// Test-only: the same count for either family, so the general window
     /// item 31 added can be asserted the same way the search one is.
     func timestampCountForTesting(_ family: Family) -> Int { (timestamps[family] ?? []).count }
-
-    /// The 429-backoff half of `reserveSlot`, split out only so `reserveSlot`
-    /// itself stays a single, readable sequence of "is this refused, is there room,
-    /// otherwise wait".
-    private func throwIfBlocked(_ family: Family) throws(APIError) {
-        guard let until = blockedUntil[family] else { return }
-        guard until > clock.now else {
-            blockedUntil[family] = nil
-            return
-        }
-        throw APIError.rateLimited(until: until, party: family.party)
-    }
+    func blockedUntilForTesting(_ family: Family) -> Date? { blockedUntil[family] }
 
     private func prune(_ family: Family) {
-        let cutoff = clock.now.addingTimeInterval(-family.window)
+        let cutoff = clock.now.addingTimeInterval(-window)
         timestamps[family]?.removeAll { $0 <= cutoff }
     }
 
@@ -290,18 +341,34 @@ actor RateLimitGate {
         let ticket = UUID()
         backgroundQueue[family, default: []].append(ticket)
         defer { backgroundQueue[family]?.removeAll { $0 == ticket } }
+        let startedWaiting = clock.now
 
         while true {
             if Task.isCancelled { throw APIError.cancelled }
             // A 429 earned by someone else's request (the limits are per-IP,
-            // not per-request) while this one was waiting must still stop it.
-            try throwIfBlocked(family)
+            // not per-request) while this one was waiting used to *throw*
+            // here, which put an `InlineFailure` card on every section a
+            // `.background` leg draws — the exact card the priority exists
+            // to avoid (review perf W1, 2026-09-15). A waiter sends nothing,
+            // so waiting through the back-off is not hammering; it sleeps
+            // until the deadline and tries again, up to `maxBackgroundWait`.
+            if let blocked = blockedUntil[family], blocked > clock.now {
+                guard clock.now.timeIntervalSince(startedWaiting) < Self.maxBackgroundWait else {
+                    await NetworkLedger.shared.recordLocalRefusal()
+                    throw APIError.rateLimited(until: blocked, party: family.party)
+                }
+                try await sleep(for: blocked.timeIntervalSince(clock.now) + Self.reopenSlack)
+                continue
+            }
+            blockedUntil[family] = nil
             prune(family)
             let held = timestamps[family] ?? []
             if backgroundQueue[family]?.first == ticket,
                held.count < family.limit - family.reserve {
                 let reservedAt = clock.now
                 timestamps[family] = held + [reservedAt]
+                let waited = reservedAt.timeIntervalSince(startedWaiting)
+                if waited > 0 { await NetworkLedger.shared.recordBackgroundWait(seconds: waited) }
                 return reservedAt
             }
             do {
@@ -332,6 +399,7 @@ actor RateLimitGate {
     ///   this gate had already worked out exactly when it would reopen.
     @discardableResult
     func recordRateLimit(retryAfter: TimeInterval?, path: String) -> Date {
+        Task { await NetworkLedger.shared.recordServerRateLimit() }
         let family = Self.family(for: path)
         let count = (consecutiveRateLimits[family] ?? 0) + 1
         consecutiveRateLimits[family] = count

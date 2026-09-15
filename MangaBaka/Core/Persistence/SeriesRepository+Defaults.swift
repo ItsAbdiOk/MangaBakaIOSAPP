@@ -14,6 +14,30 @@ extension SeriesRepositoryProtocol {
         await mix(seeds: seeds, filters: filters, excludedTags: excludedTags)
     }
 
+    /// A double's nil is a transport failure, as `imagesResult` does.
+    func relationships(
+        for seriesId: Int, priority: RequestPriority
+    ) async -> Result<[SeriesRelationship], APIError> {
+        if let rows = await relationships(for: seriesId) { return .success(rows) }
+        return .failure(.transport(underlying: "relationships(for:) returned nil", party: .mangaBaka))
+    }
+
+    /// A double ignores the priority.
+    func mix(
+        seeds: [Int], filters: SearchQuery, excludedTags: [Int], tagIDs: [Int], priority: RequestPriority
+    ) async -> MixResult {
+        await mix(seeds: seeds, filters: filters, excludedTags: excludedTags, tagIDs: tagIDs)
+    }
+
+    /// A double answers `extras(for:)` and hands the whole thing to `hero`.
+    func extras(
+        for seriesId: Int, hero: @escaping @Sendable (SeriesExtras) async -> Void
+    ) async -> SeriesExtras {
+        let whole = await extras(for: seriesId)
+        await hero(whole)
+        return whole
+    }
+
     /// Stubs and any repository without a cheaper path fall back to the
     /// full record `extras` fetches.
     func series(id: Int) async -> Series? { await extras(for: id).full }

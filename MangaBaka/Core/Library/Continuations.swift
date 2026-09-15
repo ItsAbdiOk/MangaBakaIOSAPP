@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// "More of what you finished": sequels, spin-offs and side stories of series
 /// the reader has completed, that are not already in their library.
@@ -97,10 +98,16 @@ final class ContinuationsModel {
     /// header instead of vanishing when this is set and `items` is empty —
     /// see `ContinuationsRow`.
     private(set) var hasFailure = false
+    /// The last leg's error, so the row can count down a throttle (L2).
+    private(set) var failure: APIError?
     /// The finished entries' own ids `items` was last built from. A second
     /// `load` with the same set is a no-op — the library screen re-appears
     /// far more often than the reader finishes a new series.
     private var loadedFor: Set<Int>?
+
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "library"
+    )
 
     init(repository: any SeriesRepositoryProtocol) {
         self.repository = repository
@@ -131,12 +138,36 @@ final class ContinuationsModel {
 
         var relations: [Continuations.RelationSource] = []
         var anyFailed = false
+        failure = nil
         for entry in finished {
             guard !Task.isCancelled else { return }
             guard let seriesId = entry.series?.id else { continue }
-            guard let fetched = await repository.relationships(for: seriesId) else {
-                anyFailed = true
-                continue
+            // R11/P11: the series page already caches this same endpoint to
+            // disk for 6 hours as one of `extras`' six legs — `cachedExtras`
+            // reads that cache and nothing else, so a series whose page was
+            // opened recently costs this row zero requests instead of one.
+            // Only a cache miss falls through to `relationships(for:)`,
+            // which still asks the network (and, undocumented here: it has
+            // no `priority:` parameter to pass `.background` to — see the
+            // fix report).
+            let fetched: [SeriesRelationship]
+            if let cached = await repository.cachedExtras(for: seriesId) {
+                fetched = cached.relationships
+            } else {
+                // `.background`: a row on the Library tab, not the thing the
+                // reader tapped; it waits at the gate rather than throwing.
+                switch await repository.relationships(for: seriesId, priority: .background) {
+                case let .success(rows):
+                    fetched = rows
+                case let .failure(error):
+                    anyFailed = true
+                    failure = error
+                    let reason = String(describing: error)
+                    Self.logger.error(
+                        "Continuations: \(seriesId, privacy: .public) failed: \(reason, privacy: .public)"
+                    )
+                    continue
+                }
             }
             relations.append(contentsOf: fetched.map {
                 Continuations.RelationSource(from: entry, relation: $0)

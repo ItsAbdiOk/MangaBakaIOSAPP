@@ -81,10 +81,10 @@ struct DetailHeroMeasurementTests {
     @Test("The full column is a hidden background, so its height never lays out")
     func measurerIsBackground() throws {
         let source = try SourceTree.read("MangaBaka/Features/Detail/DetailHero.swift")
-        #expect(SourceTree.containsRun(source, ".background { measurers }"))
-        #expect(SourceTree.containsRun(source, "column(.full, fill: false) .hidden()"))
-        #expect(SourceTree.containsRun(source, "column(.byline, fill: false) .hidden()"))
-        #expect(SourceTree.containsRun(source, "column(.chapters, fill: false) .hidden()"))
+        #expect(SourceTree.containsRun(source, ".background { measurers(rows: rows) }"))
+        #expect(SourceTree.containsRun(source, "column(.full, fill: false, rows: rows) .hidden()"))
+        #expect(SourceTree.containsRun(source, "column(.byline, fill: false, rows: rows) .hidden()"))
+        #expect(SourceTree.containsRun(source, "column(.chapters, fill: false, rows: rows) .hidden()"))
         // The measurers are mounted behind a key, so a settled hero stops
         // re-measuring. The key has to carry everything that changes the
         // answer, or a swipe to the next series would keep the old heights.

@@ -81,12 +81,19 @@ struct DueThisWeekIntent: AppIntent {
         feeds: ReleaseFeedService,
         repository: any SeriesRepositoryProtocol
     ) async -> [DueThisWeek.FeedDueWork] {
+        // PS4: this used to `cachedExtras(for:)` once per work — one actor
+        // hop and one full `SeriesExtras` decode (204 KB median) per series,
+        // to read only `.links` off the result. `cachedExtrasLinks` exists
+        // for exactly this one-hop, partial-decode read (see +Cache.swift's
+        // doc on the 939-hop launch-path fix this generalizes); one batched
+        // call replaces the whole loop.
+        let linksByID = await repository.cachedExtrasLinks(for: works.map(\.series.id))
         var candidates: [(series: Series, links: [SeriesLink])] = []
         for work in works {
-            guard let extras = await repository.cachedExtras(for: work.series.id) else { continue }
-            let hasFeedLink = extras.links.contains { ReleaseSource.serving($0.safeURL) != nil }
+            guard let links = linksByID[work.series.id] else { continue }
+            let hasFeedLink = links.contains { ReleaseSource.serving($0.safeURL) != nil }
             guard hasFeedLink else { continue }
-            candidates.append((work.series, extras.links))
+            candidates.append((work.series, links))
         }
         guard !candidates.isEmpty else { return [] }
 

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A publisher, studio, or creator the reader wants to hear about again.
 ///
@@ -46,6 +47,13 @@ final class PublisherFollows {
     private(set) var follows: [Follow] = []
     private let fileURL: URL
     private let now: () -> Date
+
+    /// R20/P20: `load`/`save` were bare `try?` — a follow that silently
+    /// failed to persist looked, from outside, identical to one that was
+    /// never taken.
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "reader"
+    )
 
     /// Where the app's own data normally lives; falls back to a temporary
     /// directory only if that location cannot be found, so a follow taken
@@ -150,15 +158,31 @@ final class PublisherFollows {
     }
 
     private static func load(from url: URL) -> [Follow] {
+        // A missing file is the ordinary first-launch case and is not
+        // logged; a file that exists but fails to decode is worth a line.
         guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([Follow].self, from: data)) ?? []
+        do {
+            return try JSONDecoder().decode([Follow].self, from: data)
+        } catch {
+            let description = String(describing: error)
+            logger.error("Publisher follows decode failed: \(description, privacy: .public)")
+            return []
+        }
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(follows) else { return }
-        try? FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true
-        )
-        try? data.write(to: fileURL, options: .atomic)
+        guard let data = try? JSONEncoder().encode(follows) else {
+            Self.logger.error("Publisher follows encode failed")
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true
+            )
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            let description = String(describing: error)
+            Self.logger.error("Publisher follows write failed: \(description, privacy: .public)")
+        }
     }
 }

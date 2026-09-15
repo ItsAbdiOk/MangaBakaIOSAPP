@@ -1,5 +1,6 @@
 import Foundation
 import WidgetKit
+import os
 
 /// Everything a Home Screen widget shows, written to the App Group container
 /// so the widget extension — a separate process with no access to the app's
@@ -146,6 +147,14 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
 
     private static let fileName = "widget-snapshot.json"
 
+    /// S19/S14: this file had no `Logger` at all — a write refused (App Group
+    /// entitlement missing, disk full) or a corrupt file on disk left the
+    /// Home Screen tile stale for up to 7 days with nothing to find in a
+    /// production report. `.error` only on the failures that mean something
+    /// is actually wrong; a missing file on a fresh install is not logged
+    /// below, since that is the expected first-launch case.
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "widget")
+
     private static var containerURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)
     }
@@ -197,8 +206,15 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         // age into the "Open MangaBaka to refresh" placeholder. A few KB to
         // the App Group container costs nothing.
         snapshot.writtenAt = clock.now
-        guard let data = try? encoder.encode(snapshot) else { return }
-        try? data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
+        guard let data = try? encoder.encode(snapshot) else {
+            logger.error("encode failed: \(snapshot.dueThisWeek.count + snapshot.pickBackUp.count) rows")
+            return
+        }
+        do {
+            try data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
+        } catch {
+            logger.error("write failed: \(error, privacy: .public)")
+        }
 
         // The reload is the part that is rationed. WidgetKit documents a
         // budget of roughly 40-70 reloads per widget per day, and this asked
@@ -224,8 +240,15 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     static func clear(clock: any Clock = SystemClock()) {
         guard let containerURL else { return }
         let empty = WidgetSnapshot(dueThisWeek: [], pickBackUp: [], nextVolumes: [], writtenAt: clock.now)
-        guard let data = try? encoder.encode(empty) else { return }
-        try? data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
+        guard let data = try? encoder.encode(empty) else {
+            logger.error("clear: encode of the empty snapshot failed")
+            return
+        }
+        do {
+            try data.write(to: containerURL.appendingPathComponent(fileName), options: .atomic)
+        } catch {
+            logger.error("clear: write failed: \(error, privacy: .public)")
+        }
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -234,10 +257,18 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// the provider shows as the placeholder rather than an error, since a
     /// widget has no way to retry on its own.
     static func read() -> WidgetSnapshot? {
+        // A missing container or file is the expected fresh-install case and
+        // is not logged; a file that exists but fails to decode is a real
+        // corruption and is the one worth a line.
         guard let containerURL,
               let data = try? Data(contentsOf: containerURL.appendingPathComponent(fileName))
         else { return nil }
-        return try? decoder.decode(WidgetSnapshot.self, from: data)
+        do {
+            return try decoder.decode(WidgetSnapshot.self, from: data)
+        } catch {
+            logger.error("decode failed: \(error, privacy: .public)")
+            return nil
+        }
     }
 
     // MARK: - Building the two lists

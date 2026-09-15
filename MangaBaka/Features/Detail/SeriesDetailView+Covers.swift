@@ -62,6 +62,7 @@ extension SeriesDetailView {
             // request the gate sees while it still reads as closed.
             try? await Task.sleep(for: .seconds(wait + 0.5))
             guard !Task.isCancelled else { return }
+            coversRetry = nil
             await loadCovers()
         }
     }
@@ -128,8 +129,12 @@ extension SeriesDetailView {
 
     /// True while any request this page made is still out.
     var isAnyLegLoading: Bool {
-        isLoading || isCoversLoading || isLoadingVolumes || isLoadingEditions
-            || isCastLoading || isCadenceLoading || isCategoriesLoading || isReleasesLoading
+        // `coversRetry` counts: a throttled covers leg waiting out its window
+        // is still a request this page is waiting on (review perf DT2,
+        // 2026-09-15 — the line used to say "done" with a re-ask pending).
+        isLoading || isTailLoading || isCoversLoading || coversRetry != nil || isLoadingVolumes
+            || isLoadingEditions || isCastLoading || isCadenceLoading || isCategoriesLoading
+            || isReleasesLoading
     }
 
     /// Snapshots the gallery's images at the moment of the tap — see

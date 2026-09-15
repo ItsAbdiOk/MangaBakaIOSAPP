@@ -83,6 +83,7 @@ struct RootView: View {
     @State var whatsNew = WhatsNewState()
     /// "More of what you finished" on the Library screen; see Continuations.
     @State var continuations: ContinuationsModel
+    @State var binge: BingeModel
     /// A publisher or studio page, pushed from any series page. See
     /// `PublisherRoute`: the paths are [Series], so this rides beside them.
     @State var openPublisher: PublisherRoute?
@@ -274,6 +275,9 @@ struct RootView: View {
         self.databaseWasReset = databaseWasReset
         self.onboarding = onboarding
         _continuations = State(initialValue: ContinuationsModel(repository: repository))
+        _binge = State(initialValue: BingeModel(
+            repository: repository, releaseFeeds: releaseFeeds, history: history
+        ))
         _searchModel = State(initialValue: SearchModel(
             repository: repository,
             offline: offlineCatalogue,

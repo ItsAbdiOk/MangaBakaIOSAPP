@@ -17,6 +17,15 @@ extension SeriesRepository {
         excludedTags: [Int],
         tagIDs: [Int]
     ) async -> MixResult {
+        await mix(
+            seeds: seeds, filters: filters, excludedTags: excludedTags, tagIDs: tagIDs,
+            priority: .userInitiated
+        )
+    }
+
+    func mix(
+        seeds: [Int], filters: SearchQuery, excludedTags: [Int], tagIDs: [Int], priority: RequestPriority
+    ) async -> MixResult {
         guard !seeds.isEmpty else { return .empty }
         // `random_seed` only means something beside `sort_by=random`, which is
         // dropped here too; mix would otherwise receive a seed for nothing.
@@ -37,7 +46,9 @@ extension SeriesRepository {
         })
 
         do {
-            let envelope: MixEnvelope = try await client.getRoot("/v1/series/mix", query: items)
+            let envelope: MixEnvelope = try await client.getRoot(
+                "/v1/series/mix", query: items, priority: priority
+            )
             return MixResult(
                 recommendations: (envelope.data ?? [])
                     .filter { $0.series.isDiscoverable && allowsFormat($0.series) },

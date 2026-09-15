@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// A work in the schedule, with its estimate if it has one.
 struct ScheduledWork: Identifiable, Equatable, Sendable {
@@ -93,6 +94,14 @@ actor ReleaseScheduleService {
     /// from MangaUpdates and can be measured again (Q10).
     private let database: AppDatabase
     private let clock: any Clock
+
+    /// R20/P20: `write(seriesId:cadence:failure:)` is called through `try?`
+    /// at four sites — a cadence write that throws was invisible, and every
+    /// later open of that series page re-asked MangaUpdates (3 s spaced)
+    /// because the write it thought had landed never did.
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "reader"
+    )
 
     /// A cadence built from release history a fortnight old has probably missed
     /// a release since. **A guess** — a fortnight is a round number chosen to
@@ -382,7 +391,7 @@ actor ReleaseScheduleService {
         do {
             let releases = try await mangaUpdates.releases(seriesNumber: number)
             let cadence = Self.measuredCadence(from: releases)
-            try? write(seriesId: series.id, cadence: cadence, failure: nil)
+            logWrite(seriesId: series.id, cadence: cadence, failure: nil)
             progress.done += 1
             return true
         } catch {
@@ -394,7 +403,7 @@ actor ReleaseScheduleService {
             }
             // Recorded as a failure so the next build retries it, rather than
             // a null cadence, which would read as a settled answer.
-            try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
+            logWrite(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
             progress.failure = error
             progress.done += 1
             if case .offline = error { return false }
@@ -429,21 +438,29 @@ actor ReleaseScheduleService {
     ///
     /// A settled answer is never re-fetched, including a settled "not enough
     /// history": that is a fact about the series, not a failure. A recorded
-    /// failure is retried, because it is a fact about the network.
+    /// failure is retried, because it is a fact about the network. A settled
+    /// answer older than `staleAfter` (R7/P7) is re-measured instead of kept
+    /// forever: before this, a row written once by a full build never aged,
+    /// so "next chapter — 47 days late" could keep growing on a series that
+    /// had shipped since, for any reader who never opens the Schedule tab's
+    /// refresh. `staleAfter` is already used to *count* stale rows for the
+    /// Schedule header (`snapshot()` above); this is the same threshold
+    /// applied to the one row actually on screen.
     func cadence(for series: Series) async -> SeriesCadence {
         guard Self.canPredict(status: series.status) else { return .unavailable }
         guard let raw = series.mangaUpdatesID,
               let number = MangaUpdatesID.number(from: raw)
         else { return .unavailable }
 
-        if let row = try? readCache(seriesId: series.id), row.failure == nil {
+        if let row = try? readCache(seriesId: series.id), row.failure == nil,
+           clock.now.timeIntervalSince(row.fetchedAt) <= Self.staleAfter {
             return row.cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
         }
 
         do {
             let releases = try await mangaUpdates.releases(seriesNumber: number)
             let cadence = Self.measuredCadence(from: releases)
-            try? write(seriesId: series.id, cadence: cadence, failure: nil)
+            logWrite(seriesId: series.id, cadence: cadence, failure: nil)
             return cadence.map(SeriesCadence.measured) ?? SeriesCadence.none
         } catch {
             guard error != .cancelled else {
@@ -462,7 +479,7 @@ actor ReleaseScheduleService {
             }
             // Recorded as a failure rather than a null cadence, so the next
             // open retries instead of treating an outage as an answer.
-            try? write(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
+            logWrite(seriesId: series.id, cadence: nil, failure: error.userFacingMessage)
             return .failed(error)
         }
     }
@@ -540,6 +557,23 @@ extension ReleaseScheduleService {
             try db.execute(
                 sql: "DELETE FROM cadenceEntry WHERE seriesId NOT IN (\(placeholders))",
                 arguments: StatementArguments(Array(inScope))
+            )
+        }
+    }
+
+    /// `write(seriesId:cadence:failure:)`, logged on failure instead of
+    /// silently dropped (R20/P20) — the one place all four call sites route
+    /// through, so there is one log line to add rather than four.
+    private func logWrite(seriesId: Int, cadence: Cadence?, failure: String?) {
+        do {
+            try write(seriesId: seriesId, cadence: cadence, failure: failure)
+        } catch {
+            let description = String(describing: error)
+            Self.logger.error(
+                """
+                Cadence write failed for series \(seriesId, privacy: .public): \
+                \(description, privacy: .public)
+                """
             )
         }
     }

@@ -252,7 +252,7 @@ struct RequestPriorityBudgetTests {
         private let lock = NSLock()
         private var isDone = false
         var done: Bool { lock.lock(); defer { lock.unlock() }; return isDone }
-        func markDone() { lock.lock(); isDone = true; lock.unlock() }
+        func markDone() { lock.withLock { isDone = true } }
     }
 
     /// Expected to fail before the fix: the old `RateLimitGate` had no

@@ -174,7 +174,6 @@ struct ReadingWrappedTests: WrappedFixtures {
 
         #expect(ReadingWrapped.signatures(in: entries, catalogueSize: 300_000).isEmpty)
         #expect(ReadingWrapped.formats(in: entries).map(\.label) == ["Manhwa"])
-        #expect(ReadingWrapped.decades(in: entries).map(\.label) == ["2020s"])
         #expect(ReadingWrapped.creators(in: entries).map(\.label) == ["Chugong"])
     }
 
@@ -193,12 +192,6 @@ struct ReadingWrappedTests: WrappedFixtures {
     func formatsAreTallied() {
         let entries = (1...3).map { libraryEntry($0, type: "manhwa") } + [libraryEntry(4, type: "manga")]
         #expect(ReadingWrapped.formats(in: entries).map(\.label) == ["Manhwa", "Manga"])
-    }
-
-    @Test("Decades run in time order, not by size")
-    func decadesAreChronological() {
-        let entries = [libraryEntry(1, year: 2021), libraryEntry(2, year: 1998), libraryEntry(3, year: 2023)]
-        #expect(ReadingWrapped.decades(in: entries).map(\.label) == ["1990s", "2020s"])
     }
 
     @Test("A creator you read once is not a creator you follow")

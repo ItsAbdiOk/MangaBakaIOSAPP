@@ -79,6 +79,13 @@ protocol SeriesRepositoryProtocol: Sendable {
         excludedTags: [Int],
         tagIDs: [Int]
     ) async -> MixResult
+    /// The same, with a priority: the Stack deals from this endpoint while
+    /// the reader is on another tab and must wait at the gate rather than
+    /// throw (review perf PS7 / D-batch, 2026-09-15). Defaulted below to the
+    /// four-argument form at `.userInitiated`, so stubs need no change.
+    func mix(
+        seeds: [Int], filters: SearchQuery, excludedTags: [Int], tagIDs: [Int], priority: RequestPriority
+    ) async -> MixResult
 
     /// Everything the detail screen shows beyond the series itself. Fetched
     /// together so one slow endpoint does not stagger the screen into place.
@@ -87,6 +94,17 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// it rather than assuming an empty section means there was nothing to
     /// show (gap 9, FAILURES-SUMMARY.md).
     func extras(for seriesId: Int) async -> SeriesExtras
+    /// `extras(for:)` in two phases: `hero` is called with the part of the
+    /// answer the top of the page draws (the full record, the first works
+    /// page) as soon as those two foreground legs return, and the whole
+    /// answer — news, relationships, collections, the works last page, all
+    /// `.background` — is returned when it lands. Review perf DT1
+    /// (2026-09-15): awaiting all five legs before drawing meant the hero
+    /// waited at the gate for legs the reader had not scrolled to. Defaulted
+    /// for doubles: `hero` gets the whole answer.
+    func extras(
+        for seriesId: Int, hero: @escaping @Sendable (SeriesExtras) async -> Void
+    ) async -> SeriesExtras
     /// The series-page extras already sitting in the six-hour detail cache,
     /// with no network call and no six-leg `extras(for:)` fetch — only what a
     /// previous visit to the page already paid for and cached.
@@ -141,6 +159,13 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// adapted from. Nil on failure, distinct from an empty list, which is a
     /// real answer ("no relationships").
     func relationships(for seriesId: Int) async -> [SeriesRelationship]?
+    /// The same, keeping the failure and taking a priority (review perf
+    /// L2/R11, 2026-09-15): the Library tab's continuations row fires up to
+    /// eight of these and must both wait at the gate and show a countdown
+    /// when it cannot. Defaulted for doubles.
+    func relationships(
+        for seriesId: Int, priority: RequestPriority
+    ) async -> Result<[SeriesRelationship], APIError>
 
     /// Replaces the content filter and discards every cached feed.
     ///
@@ -177,63 +202,6 @@ protocol SeriesRepositoryProtocol: Sendable {
     /// search they go on to type needs.
     func count(_ query: SearchQuery, priority: RequestPriority) async -> Int?
 
-}
-
-/// The onward paths from a series. Every field is independently optional: a
-/// series with no news is ordinary, and one failing endpoint must not empty
-/// the rest of the screen.
-struct SeriesExtras: Sendable, Equatable, Codable {
-    var links: [SeriesLink] = []
-    var news: [NewsItem] = []
-    var relationships: [SeriesRelationship] = []
-    /// Tags, and a year, from `/v1/series/{id}`.
-    ///
-    /// Measured against the live API on 2026-09-09: v2 returns neither, on the
-    /// feed endpoints *or* on `/v2/series/{id}` — its keys are identical in
-    /// both, and `tags` and `year` are not among them. v1 carries `tags`,
-    /// `genres` and `year`. So the series page's tag row and its "Started"
-    /// stat are only ever populated from v1, and a series page built from a
-    /// feed's own copy shows neither.
-    var tags: [String] = []
-    /// The same tags with their group, weight, spoiler flag and implications —
-    /// see `SeriesTag`. v1's flat `tags` is kept only as a fallback for a
-    /// series whose payload has no `tags_v2`.
-    var richTags: [SeriesTag] = []
-    /// Published editions — see `SeriesEdition`.
-    var editions: [SeriesEdition] = []
-    /// Published volumes, with every edition of each gathered onto one — see
-    /// `SeriesWork.Volume`.
-    var volumes: [SeriesWork.Volume] = []
-    /// How many printings `/works` holds for the series, against however
-    /// many `volumes` was built from — see `SeriesRepository.fetchWorks`.
-    /// Nil on a row cached before this existed.
-    var worksTotal: Int?
-    var year: Int?
-    /// The whole v1 series, not just the two fields above.
-    ///
-    /// A series page is built from whatever copy of the series the reader
-    /// arrived with, and those copies are not equal. The swipe stack's queue
-    /// carries v2 payloads, which have no description, no chapter count, no
-    /// status and no `source` — so "More info" from the stack showed a page
-    /// with no synopsis, no length, and no next-chapter estimate, because the
-    /// estimate needs the MangaUpdates id that lives in `source`. The v1 series
-    /// was already being fetched here for its tags; everything else it carried
-    /// was thrown away. Kept now, and merged in by `Series.filling(gapsFrom:)`.
-    var full: Series?
-    /// Set when at least one of the six concurrent legs `fetchExtras` runs
-    /// failed — cancellation excluded, since nobody left waiting on this
-    /// answer needs to be told it didn't finish (`APIError.cancelled`).
-    ///
-    /// Excluded from `Codable` on purpose: `extras(for:)` refuses to persist a
-    /// result this is set on (gap 9), so a cached row never actually carries
-    /// one, and giving `APIError` a `Codable` conformance it does not
-    /// otherwise need — just so a value nothing writes to disk can round-trip
-    /// through JSON — is not worth doing.
-    var failure: APIError?
-
-    enum CodingKeys: String, CodingKey {
-        case links, news, relationships, tags, richTags, editions, volumes, worksTotal, year, full
-    }
 }
 
 /// The API's sort keys, and what to call them in front of a reader.
@@ -552,7 +520,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         // back as `If-Modified-Since` gets a 304 with a zero-byte body. Nil
         // here — no prior cache, or one written before this shipped — makes
         // the request below unconditional, i.e. today's behaviour exactly.
-        let existing = (try? readCacheWithDate(feed, requireFresh: false)) ?? CachedFeed()
+        let existing = (try? readCacheWithDate(feed)) ?? CachedFeed()
 
         if !forceRefresh, let cachedAt = existing.cachedAt {
             // A negative age means the device clock moved backwards; treat
@@ -609,7 +577,18 @@ actor SeriesRepository: SeriesRepositoryProtocol {
                 return FeedResult(series: existing.series, origin: .cache, notes: existing.notes)
             case let .fresh(page, lastModified):
                 let discoverable = page.series.filter { $0.isDiscoverable && allowsFormat($0) }
-                try? write(discoverable, for: feed, lastModified: lastModified, notes: page.notes)
+                do {
+                    try write(discoverable, for: feed, lastModified: lastModified, notes: page.notes)
+                } catch {
+                    // A feed that cannot be written is refetched every visit
+                    // for the life of the fault — worth a line (review perf
+                    // PS5): a full disk or a locked file reads the same as
+                    // "the cache never hits" without one.
+                    let reason = String(describing: error)
+                    Self.cacheLogger.error(
+                        "feed write failed, \(feed.cacheKey, privacy: .public): \(reason, privacy: .public)"
+                    )
+                }
                 return FeedResult(series: discoverable, origin: .network, notes: page.notes)
             }
         } catch {
@@ -639,8 +618,15 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     func updateContentRatings(_ ratings: [String]) async {
         let changed = ratings != contentRatings
         contentRatings = ratings
-        // Ratings filter images per image and tags per tag, so all three.
-        apply("ratings", changed: changed, invalidating: .everythingDerived)
+        // Feeds and images: the API filters both by rating on the way in.
+        // NOT the detail cache (review perf PS1, 2026-09-15): the `full`
+        // leg sends no rating filter, so a cached row's `richTags` are the
+        // whole set and the page narrows them at display time with the
+        // current rating (`SeriesDetailView.refreshDerived` →
+        // `TagGrouping.groups(allowedRatings:)`); editions are sorted, not
+        // filtered; images are not in the row. Discarding it cost up to 200
+        // pages (~40 MB) and 8 requests per re-open for every toggle.
+        apply("ratings", changed: changed, invalidating: [.feeds, .images])
     }
 
     func updateFormats(_ formats: [String]) async {
@@ -653,9 +639,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     func updateBlockedTags(_ ids: [Int]) async {
         let changed = ids != blockedTags
         blockedTags = ids
-        // Blocked tags are filtered out of a series page's tag rows too, and
-        // those live in the detail cache.
-        apply("blockedTags", changed: changed, invalidating: [.feeds, .detail])
+        // Feeds only. The claim that a page's tag rows "live in the detail
+        // cache" filtered was wrong (review perf PS1, 2026-09-15): nothing
+        // under `Features/Detail` reads blocked tags, and the cached row is
+        // the unfiltered record.
+        apply("blockedTags", changed: changed, invalidating: .feeds)
     }
 
     /// The reader's own MangaBaka id, used to keep series they already track
@@ -853,19 +841,34 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     }
 
     func extras(for seriesId: Int) async -> SeriesExtras {
-        if let cached = try? readDetailCache(seriesId) { return cached }
-        let fresh = await fetchExtras(for: seriesId)
-        // Cached only when every leg answered. Used to skip caching only an
-        // all-empty result, on the theory that an empty struct was a dropped
-        // connection wearing the same clothes as a series with nothing to
-        // show — but five legs succeeding and a sixth 429'ing produced a
-        // *non-empty* struct missing one section, and that was cached whole
-        // for six hours (gap 9). `failure` now says directly whether this is
-        // the whole answer; a partial one is never persisted at all, so the
-        // next open retries instead of the missing section staying missing
-        // for the rest of the cache's life.
-        if fresh.failure == nil, fresh != SeriesExtras() {
-            try? writeDetailCache(fresh, for: seriesId)
+        await extras(for: seriesId, hero: { _ in })
+    }
+
+    func extras(
+        for seriesId: Int, hero: @escaping @Sendable (SeriesExtras) async -> Void
+    ) async -> SeriesExtras {
+        if let cached = try? readDetailCache(seriesId) {
+            await hero(cached)
+            guard !cached.missingLegs.isEmpty else { return cached }
+            // A partial row: draw it, then ask only for what it lacks.
+            return await refetchMissingLegs(of: cached, for: seriesId)
+        }
+        let fresh = await fetchExtras(for: seriesId, hero: hero)
+        // Cached when the hero legs answered, with `missingLegs` naming any
+        // tail leg that did not — the next open draws the page from disk and
+        // re-asks for those alone. Gap 9 (2026-09-14) had it that a partial
+        // answer was never persisted, so five good legs and one 429 cost all
+        // eight requests again; the row now says which section is missing
+        // instead of hiding it (review perf PS "missing 2", 2026-09-15).
+        if fresh.isCacheable {
+            do {
+                try writeDetailCache(fresh, for: seriesId)
+            } catch {
+                let reason = String(describing: error)
+                Self.cacheLogger.error(
+                    "detail write failed for \(seriesId, privacy: .public): \(reason, privacy: .public)"
+                )
+            }
         }
         return fresh
     }
@@ -875,12 +878,21 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// asks for it for up to eight finished series and does not want the
     /// other five requests each time.
     func relationships(for seriesId: Int) async -> [SeriesRelationship]? {
-        if let cached = cachedRelationships.value(for: seriesId) { return cached }
-        guard let fetched: [SeriesRelationship] = try? await client.getLossy(
-            "/v1/series/\(seriesId)/relationships"
-        ) else { return nil }
+        try? await relationships(for: seriesId, priority: .userInitiated).get()
+    }
+
+    func relationships(
+        for seriesId: Int, priority: RequestPriority
+    ) async -> Result<[SeriesRelationship], APIError> {
+        if let cached = cachedRelationships.value(for: seriesId) { return .success(cached) }
+        let fetched: [SeriesRelationship]
+        do throws(APIError) {
+            fetched = try await client.getLossy("/v1/series/\(seriesId)/relationships", priority: priority)
+        } catch let error {
+            return .failure(error)
+        }
         cachedRelationships.insert(fetched, for: seriesId)
-        return fetched
+        return .success(fetched)
     }
 
     /// Runs one leg of `fetchExtras`, turning its typed throw into a `Result`
@@ -888,7 +900,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// one missing needs to say which one failed and why, so the section can
     /// offer Retry instead of quietly looking like a series with nothing
     /// there (gap 9, FAILURES-SUMMARY.md).
-    private static func attempt<T>(
+    static func attempt<T>(
         _ operation: () async throws(APIError) -> T
     ) async -> Result<T, APIError> {
         do {
@@ -898,83 +910,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
         }
     }
 
-    private static func value<T>(_ result: Result<T, APIError>) -> T? { try? result.get() }
+    static func value<T>(_ result: Result<T, APIError>) -> T? { try? result.get() }
 
-    private static func failure<T>(_ result: Result<T, APIError>) -> APIError? {
+    static func failure<T>(_ result: Result<T, APIError>) -> APIError? {
         if case let .failure(error) = result { return error }
         return nil
-    }
-
-    private func fetchExtras(for seriesId: Int) async -> SeriesExtras {
-        // Concurrent rather than sequential: five independent reads, and the
-        // detail screen should not wait for them in series.
-        //
-        // Three of the five are `.background`: news, relationships and
-        // collections all render below the fold, and `.background` *waits*
-        // for a slot where `.userInitiated` throws `.rateLimited` outright
-        // (`RateLimitGate`). Counted 2026-09-14 (`docs/reviews/detail-page-budget.md`):
-        // a cold open was nine MangaBaka requests, all `.userInitiated`, so
-        // with Discover prefetching alongside the guaranteed floor was 60 / 9
-        // ≈ 6.6 opens a minute before the throttle card — and a walk of six
-        // series showed it three times. `full` and `works` stay foreground
-        // because the reader is looking at what they draw.
-        //
-        // No `/links` leg since 2026-09-15: the full record carries the same
-        // links inline (`Series.linksV2`), so the page reads them from
-        // there. Eight requests a cold open, of which the two feeds and
-        // these three wait rather than throw — the guaranteed floor is now
-        // the three foreground legs (`full`, `works`, `images`): 20 opens a
-        // minute before the throttle card, from 6.6.
-        async let news: Result<[NewsItem], APIError> = Self.attempt {
-            () async throws(APIError) -> [NewsItem] in
-            try await client.getLossy(
-                "/v1/series/\(seriesId)/news",
-                query: [URLQueryItem(name: "limit", value: "6")],
-                priority: .background
-            )
-        }
-        async let related: Result<[SeriesRelationship], APIError> = Self.attempt {
-            () async throws(APIError) -> [SeriesRelationship] in
-            try await client.getLossy("/v1/series/\(seriesId)/relationships", priority: .background)
-        }
-        // The only source of tags and year — see SeriesExtras.
-        async let full: Result<Series, APIError> = Self.attempt {
-            () async throws(APIError) -> Series in
-            try await client.get("/v1/series/\(seriesId)")
-        }
-        async let editions: Result<[SeriesEdition], APIError> = Self.attempt {
-            () async throws(APIError) -> [SeriesEdition] in
-            try await client.getLossy("/v1/series/\(seriesId)/collections", priority: .background)
-        }
-        // Published volumes: dates, prices, page counts, ISBNs and per-volume
-        // cover art. A sixth concurrent read rather than a lazy one, because
-        // the section sits above the fold on a short series and a spinner that
-        // appears after the page has settled reads as a second page load.
-        // Two requests on a long series — see `fetchWorks`.
-        async let works: Result<(works: [SeriesWork], total: Int?), APIError> = Self.attempt {
-            () async throws(APIError) -> (works: [SeriesWork], total: Int?) in
-            try await fetchWorks(for: seriesId)
-        }
-
-        let results = await (news, related, full, editions, works)
-        let detail = Self.value(results.2)
-
-        return SeriesExtras(
-            links: detail?.linksV2 ?? [],
-            news: Self.value(results.0) ?? [],
-            relationships: (Self.value(results.1) ?? []).filter(\.series.isDiscoverable),
-            tags: detail?.tags ?? [],
-            richTags: detail?.richTags ?? [],
-            editions: (Self.value(results.3) ?? []).presentable,
-            volumes: SeriesWork.volumes(from: Self.value(results.4)?.works ?? []),
-            worksTotal: Self.value(results.4)?.total,
-            year: detail?.year,
-            full: detail,
-            failure: Self.combinedFailure([
-                Self.failure(results.0), Self.failure(results.1), Self.failure(results.2),
-                Self.failure(results.3), Self.failure(results.4)
-            ])
-        )
     }
 
     /// The first real failure among the five legs, cancellation dropped:
@@ -983,7 +923,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
     /// Which leg is named is arbitrary when more than one failed — no caller
     /// distinguishes among them today — but a single `APIError` is what
     /// `SeriesExtras.failure` and every test written against it expect.
-    private static func combinedFailure(_ perLeg: [APIError?]) -> APIError? {
+    static func combinedFailure(_ perLeg: [APIError?]) -> APIError? {
         perLeg.compactMap { $0 }.first { $0 != .cancelled }
     }
 }

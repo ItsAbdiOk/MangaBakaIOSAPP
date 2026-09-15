@@ -297,7 +297,7 @@ struct LibraryControlTests {
 struct LibraryControlReachabilityTests {
     @Test("The detail screen carries the control")
     func detailShowsIt() throws {
-        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView.swift")
+        let source = try SourceTree.read("MangaBaka/Features/Detail/SeriesDetailView+Actions.swift")
         // `shown`, not `series`: the merged series — see SeriesMergeTests. A
         // control handed a lean copy would offer to add a series whose chapter
         // count and status it does not know.

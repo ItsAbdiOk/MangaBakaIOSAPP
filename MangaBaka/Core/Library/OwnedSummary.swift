@@ -25,7 +25,15 @@ enum OwnedSummary {
         // "missing vol. 2–9" to a reader holding them is a false sentence.
         // The count is the one thing still true.
         guard !shelf.isPartial else {
-            return "\(ticked.count) owned · \(partialNote)"
+            // A total the catalogue actually stated reads as "still more to
+            // come", which is the honest version of this sentence — see
+            // `EditionShelf.totalRecords`. Falls back to the vaguer note
+            // when the catalogue that answered (Open Library, today) does
+            // not carry a total this far.
+            guard let total = shelf.totalRecords else {
+                return "\(ticked.count) owned · \(partialNote)"
+            }
+            return "\(ticked.count) owned · first \(shelf.volumes.count) of \(total) on record"
         }
 
         // An owned volume with no number cannot be placed in the sequence,

@@ -1,4 +1,5 @@
 import UIKit
+import os
 
 /// Fetches cover art for a timeline entry before it is handed to WidgetKit.
 ///
@@ -7,6 +8,11 @@ import UIKit
 /// that render is captured, so it draws its placeholder forever. Every cover
 /// a widget shows has to already be in hand by the time the entry is built.
 enum CoverLoader {
+    /// S19: no `Logger` existed anywhere in the widget target — a cover
+    /// fetch failing here (timeout, a 403, a bad image) was invisible, with
+    /// nothing a production report could point at.
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "widget")
+
     /// Matches how many rows either widget ever draws (`systemMedium`'s three
     /// plus one to spare) — nothing here needs to fetch a cover for a row that
     /// will never be shown.
@@ -48,12 +54,38 @@ enum CoverLoader {
     /// The header is set anyway: it is what `AppUserAgent` exists for, the
     /// blocklist is someone else's to change, and a `try?`-swallowed cover is
     /// the one failure here nobody would ever see.
+    /// S15: the extension process is short-lived, so `.ephemeral`'s in-memory
+    /// `URLCache` died with it, and the same four covers (~30 KB each) were
+    /// downloaded again on every hourly reload — up to 288 downloads a day
+    /// for pixels the phone already had, per the review's arithmetic. A disk
+    /// cache in the App Group container survives across the extension's
+    /// process launches the way an in-memory one cannot, and
+    /// `.useProtocolCachePolicy` (the default policy, restored explicitly
+    /// here since `.ephemeral`'s own default is `.reloadIgnoringLocalCacheData`)
+    /// lets the CDN's own cache headers decide when a cover is still good,
+    /// rather than the app choosing a duplicate freshness window. Cheaper
+    /// than the alternative the review also names — the app writing four
+    /// thumbnails beside the snapshot — because it needs no new write path
+    /// and no second copy of "which four covers", only a cache the session
+    /// already knows how to fill.
+    private static let diskCacheDirectory: URL? = FileManager.default
+        .containerURL(forSecurityApplicationGroupIdentifier: WidgetSnapshotData.appGroupID)?
+        .appendingPathComponent("CoverCache", isDirectory: true)
+
     private static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpAdditionalHeaders = ["User-Agent": AppUserAgent.value]
+        configuration.requestCachePolicy = .useProtocolCachePolicy
+        // 8 MB disk / 2 MB memory: a handful of thumbnails at ~30 KB each,
+        // generously rounded — not a general-purpose cache.
+        configuration.urlCache = URLCache(
+            memoryCapacity: 2 * 1024 * 1024,
+            diskCapacity: 8 * 1024 * 1024,
+            directory: diskCacheDirectory
+        )
         return URLSession(configuration: configuration)
     }()
 
@@ -69,7 +101,11 @@ enum CoverLoader {
                 // non-Sendable.
                 let seriesID = item.seriesID
                 group.addTask {
-                    guard let (data, _) = try? await session.data(from: url) else {
+                    let data: Data
+                    do {
+                        (data, _) = try await session.data(from: url)
+                    } catch {
+                        logger.error("cover \(seriesID, privacy: .public) failed: \(error, privacy: .public)")
                         return (seriesID, nil)
                     }
                     let full = UIImage(data: data)

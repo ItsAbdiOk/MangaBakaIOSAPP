@@ -19,6 +19,7 @@ struct LibraryView: View {
     // (it talks to `LibraryProviding`, not `SeriesRepositoryProtocol`), so the
     // caller builds one and hands it in. The row hides itself when this is nil.
     private let continuations: ContinuationsModel?
+    private let binge: BingeModel?
     @State private var editing: LibraryEntry?
 
     init(
@@ -31,7 +32,8 @@ struct LibraryView: View {
         onOpenSettings: @escaping () -> Void,
         onOpenStack: @escaping () -> Void,
         onSave: @escaping (Int, LibraryChange) async -> String? = { _, _ in nil },
-        continuations: ContinuationsModel? = nil
+        continuations: ContinuationsModel? = nil,
+        binge: BingeModel? = nil
     ) {
         self.model = model
         _path = path
@@ -43,6 +45,7 @@ struct LibraryView: View {
         self.onOpenStack = onOpenStack
         self.onSave = onSave
         self.continuations = continuations
+        self.binge = binge
     }
 
     var body: some View {
@@ -111,11 +114,19 @@ struct LibraryView: View {
                         tasteCard
                         wrappedCard
                         PickBackUp(entries: model.inProgress, path: $path)
+                        if let binge {
+                            BingeRow(candidates: binge.candidates, path: $path)
+                                .task(id: model.isComplete) {
+                                    guard model.isComplete else { return }
+                                    await binge.load(entries: model.entries)
+                                }
+                        }
                         if let continuations {
                             ContinuationsRow(
                                 items: continuations.items,
                                 isLoading: continuations.isLoading,
                                 hasFailure: continuations.hasFailure,
+                                failure: continuations.failure,
                                 onRetry: { await continuations.retry(entries: model.entries) },
                                 path: $path
                             )

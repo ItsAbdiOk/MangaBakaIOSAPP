@@ -66,9 +66,18 @@ struct EditionShelvesSection: View {
                 header
                 forthcomingLine
                 failures
-                if isLoading {
-                    CoverSkeletonRow(count: 2, width: Metrics.coverSeedWidth)
-                        .transition(.blurReplace)
+                // Rows draw the moment there are any — ANN answers in under a
+                // second and used to sit behind Open Library's 4–12 s gated
+                // requests for no reason (item P1). The skeleton is only for
+                // the true "nothing to show yet" case; once one leg has
+                // landed, `isLoading` becomes the small "Checking
+                // catalogues…" caption in `header`, not a curtain over rows
+                // that are already on the phone.
+                if answer.isEmpty {
+                    if isLoading {
+                        CoverSkeletonRow(count: 2, width: Metrics.coverSeedWidth)
+                            .transition(.blurReplace)
+                    }
                 } else {
                     ForEach(answer.shelves) { shelf in
                         shelfBlock(shelf)
@@ -301,10 +310,17 @@ struct EditionShelvesSection: View {
     /// the winner would be using the loser's data under someone else's name.
     nonisolated static func creditLine(for shelf: EditionShelf) -> String {
         let present = Set(shelf.volumes.flatMap(\.contributors))
-        return VolumeCatalogue.allCases
+        let credit = VolumeCatalogue.allCases
             .filter { present.contains($0) }
             .map(\.credit)
             .joined(separator: " · ")
+        // Said here, not only in `OwnedSummary.line`, because that line is
+        // nil until the reader has ticked something (item P3) — a partial
+        // shelf must read as partial before a single row is owned, not
+        // after.
+        guard shelf.isPartial, let total = shelf.totalRecords else { return credit }
+        let partialNote = "first \(shelf.volumes.count) of \(total) on record"
+        return credit.isEmpty ? partialNote : "\(credit) · \(partialNote)"
     }
 
     /// One catalogue row: its number, its title, its date at the precision the

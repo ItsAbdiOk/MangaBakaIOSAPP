@@ -95,9 +95,17 @@ actor NDLClient {
 
         guard let url = Self.requestURL(japaneseTitle: title) else { return .notCatalogued }
         let data = try await load(url)
-        guard let answer = Self.answer(title: title, format: format, from: data) else {
+        guard let parsed = Self.answer(title: title, format: format, from: data) else {
             throw .decoding(underlying: "NDL response did not parse.", party: .nationalDietLibrary)
         }
+        // `Self.answer` is pure and knows no clock — stamped here, once, with
+        // the read that actually happened (item P13: a cache hit and a fresh
+        // fetch used to both read `Date()` at the caller and be
+        // indistinguishable).
+        let answer = Answer(
+            answer: parsed.answer, isPartial: parsed.isPartial, totalRecords: parsed.totalRecords,
+            storedAt: clock.now
+        )
         writeCache(key, answer)
         return answer
     }
@@ -113,8 +121,21 @@ actor NDLClient {
         /// owned line reading "missing vol. 2–9" to a reader holding them
         /// would be false. `OwnedSummary.line` reads this off `EditionShelf`.
         let isPartial: Bool
+        /// `<numberOfRecords>` off the SRU envelope, carried through to
+        /// `EditionShelf.totalRecords` so a partial shelf can say "first 50
+        /// of 84 on record" instead of only "more on record than shown".
+        /// Nil when the envelope did not state one.
+        let totalRecords: Int?
+        /// When this answer was obtained — a fresh fetch's own clock reading,
+        /// or the cache's `storedAt` on a hit. Lets a screen say "volumes
+        /// from N days ago" the way `ANNClient.readCache` already lets it for
+        /// ANN (item P13) — before this, `+Editions.swift` stamped every NDL
+        /// answer `Date()` at the call site, cache hit or not.
+        let storedAt: Date
 
-        static let notCatalogued = Answer(answer: .notCatalogued, isPartial: false)
+        static let notCatalogued = Answer(
+            answer: .notCatalogued, isPartial: false, totalRecords: nil, storedAt: .distantPast
+        )
     }
 
     /// The page as an answer, or nil when it is not XML. Pure, so a test can
@@ -127,8 +148,12 @@ actor NDLClient {
         // each item as two `BibResource` elements and the parser drops the
         // empty second, so the raw element count is not the page size.
         let isPartial = page.totalRecords.map { $0 > records.count } ?? false
+        // `storedAt` is not this function's to state — it is pure and reads
+        // no clock, called directly by tests that hand it a fixture. The
+        // caller (`volumes(japaneseTitle:format:)`) stamps the real value.
         return Answer(
-            answer: records.isEmpty ? .notCatalogued : .editions(rows), isPartial: isPartial
+            answer: records.isEmpty ? .notCatalogued : .editions(rows), isPartial: isPartial,
+            totalRecords: page.totalRecords, storedAt: .distantPast
         )
     }
 
@@ -225,6 +250,9 @@ actor NDLClient {
         /// `readCache` is "nothing cached at all".
         let rows: [BookEdition]?
         let isPartial: Bool
+        /// Decoded tolerantly: a cache file written before this field
+        /// existed still reads, just with no total to report.
+        let totalRecords: Int?
     }
 
     private func file(_ key: String) -> URL? {
@@ -236,8 +264,15 @@ actor NDLClient {
               let cached = try? JSONDecoder().decode(Cached.self, from: data),
               clock.now.timeIntervalSince(cached.storedAt) < Self.cacheLife
         else { return nil }
-        guard let rows = cached.rows else { return .notCatalogued }
-        return Answer(answer: .editions(rows), isPartial: cached.isPartial)
+        guard let rows = cached.rows else {
+            return Answer(
+                answer: .notCatalogued, isPartial: false, totalRecords: nil, storedAt: cached.storedAt
+            )
+        }
+        return Answer(
+            answer: .editions(rows), isPartial: cached.isPartial, totalRecords: cached.totalRecords,
+            storedAt: cached.storedAt
+        )
     }
 
     private func writeCache(_ key: String, _ answer: Answer) {
@@ -247,7 +282,9 @@ actor NDLClient {
             if case let .editions(rows) = answer.answer { return rows }
             return nil
         }()
-        let cached = Cached(storedAt: clock.now, rows: rows, isPartial: answer.isPartial)
+        let cached = Cached(
+            storedAt: clock.now, rows: rows, isPartial: answer.isPartial, totalRecords: answer.totalRecords
+        )
         try? JSONEncoder().encode(cached).write(to: file, options: .atomic)
     }
 }

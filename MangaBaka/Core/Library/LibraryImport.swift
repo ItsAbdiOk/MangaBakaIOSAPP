@@ -374,6 +374,14 @@ struct ImportReport: Sendable, Equatable {
     /// Rows `apply` could not act on at all — today, always a MyAnimeList row
     /// with no MangaBaka id. See `LibraryImport.parseMALXML`.
     var unresolved = 0
+    /// R21/P21: the index into the entries this run was given, of the first
+    /// row not attempted because a real server rate limit was hit — nil when
+    /// every row was attempted. Before this, hitting the 180/min window
+    /// partway through a 939-row restore made every remaining row count as a
+    /// `failures`, one per second, with nothing marking where a retry should
+    /// pick back up. A caller can slice `entries` from this index and call
+    /// `apply` again once the window has cleared.
+    var stoppedAt: Int?
 }
 
 /// Progress for one `LibraryImport.apply` run, observed by the import sheet.
@@ -437,7 +445,7 @@ extension LibraryImport {
         )
         progress?.begin(total: entries.count)
 
-        for (index, entry) in entries.enumerated() {
+        entryLoop: for (index, entry) in entries.enumerated() {
             if progress?.isCancelled == true { break }
 
             defer { progress?.advance() }
@@ -455,24 +463,23 @@ extension LibraryImport {
             }
 
             let change = changeSet(for: entry, comparedTo: current)
-            do {
-                if current == nil {
-                    try await library.add(
-                        seriesId: seriesId, state: entry.state, rawState: entry.rawState
-                    )
-                }
-                if !change.isEmpty {
-                    try await library.update(seriesId: seriesId, change: change)
-                }
-                if current == nil {
-                    report.added += 1
-                } else if !change.isEmpty {
-                    report.updated += 1
-                } else {
-                    report.skipped += 1
-                }
-            } catch {
-                report.failures += 1
+            let outcome = await sendOne(
+                seriesId: seriesId, entry: entry, isNew: current == nil, change: change, to: library
+            )
+            switch outcome {
+            case .added: report.added += 1
+            case .updated: report.updated += 1
+            case .skipped: report.skipped += 1
+            case .failed: report.failures += 1
+            case .rateLimited:
+                // A real 429 means the window is full — every remaining row
+                // would earn the same refusal, one per `requestSpacing`, and
+                // used to be recorded as `failures` that way for up to 939
+                // rows with nothing marking where to pick back up. Stop here
+                // instead, and say where, so a caller can retry `entries`
+                // from `stoppedAt` once the window clears.
+                report.stoppedAt = index
+                break entryLoop
             }
 
             // No point spacing the request that just went out from one that
@@ -483,6 +490,43 @@ extension LibraryImport {
         }
 
         return report
+    }
+
+    /// What sending one row did. Factored out of `apply` to keep its
+    /// cyclomatic complexity under SwiftLint's cap — the branching below is
+    /// the whole point of the function, not something to compress further.
+    private enum SendOutcome {
+        case added, updated, skipped, failed, rateLimited
+    }
+
+    private static func sendOne(
+        seriesId: Int, entry: ImportedEntry, isNew: Bool, change: LibraryChange,
+        to library: any LibraryProviding
+    ) async -> SendOutcome {
+        do {
+            if isNew {
+                try await library.add(
+                    seriesId: seriesId, state: entry.state, rawState: entry.rawState
+                )
+                // R21/P21: `add` and `update` are two real requests for one
+                // new row, and the loop used to space only *between*
+                // entries — so a new row spent two requests back to back
+                // with no gap, at up to double `requestSpacing`'s intended
+                // rate (~240/min against MangaBaka's 180/min general limit,
+                // not the 120/min the comment above claims). Spaced here
+                // too, only when a second request is actually about to be
+                // sent.
+                if !change.isEmpty { try? await Task.sleep(for: requestSpacing) }
+            }
+            if !change.isEmpty {
+                try await library.update(seriesId: seriesId, change: change)
+            }
+            if isNew { return .added }
+            return change.isEmpty ? .skipped : .updated
+        } catch {
+            if case .rateLimited = error { return .rateLimited }
+            return .failed
+        }
     }
 
     /// The write `apply` sends for one row, on top of whatever `add` already

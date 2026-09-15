@@ -51,7 +51,7 @@ struct DetailHero: View {
 
     /// What a set of measured heights is true for.
     ///
-    /// Everything `column(_:fill:)` lays out from, not only the series id:
+    /// Everything `column(_:fill:rows:)` lays out from, not only the series id:
     /// the kicker, the byline, the chapter line, the "Also known as" count
     /// and the schedule block's shape all arrive *after* the first layout —
     /// `extras` fills in the chapter count and status a v2 feed payload
@@ -75,13 +75,21 @@ struct DetailHero: View {
     }
 
     /// Which `DetailScheduleBlock` the column carries, if any — see
-    /// `MeasureKey.scheduleShape`. The same test `column(_:fill:)` makes,
-    /// with the estimate winning: `isLoading` is only read there when
-    /// nothing has answered.
-    nonisolated static func scheduleShape(hasSchedule: Bool, isLoading: Bool, failed: Bool) -> Int {
+    /// `MeasureKey.scheduleShape`. The same precedence `DetailScheduleBlock
+    /// .blockState` decides with: a settled estimate wins, then a failure,
+    /// then a live ask, and only once none of those has anything does the
+    /// approximated original-run line get a shape of its own (4) — added
+    /// after item 66 came back, 2026-09-15: `originalRun` mounts the block
+    /// (`column(_:fill:rows:)`) but had no representation here, so the column
+    /// was measured without its line and the gap reopened once MangaUpdates'
+    /// categories leg landed the run several seconds later.
+    nonisolated static func scheduleShape(
+        hasSchedule: Bool, isLoading: Bool, failed: Bool, hasOriginalRun: Bool = false
+    ) -> Int {
         if hasSchedule { return 3 }
         if failed { return 2 }
-        return isLoading ? 1 : 0
+        if isLoading { return 1 }
+        return hasOriginalRun ? 4 : 0
     }
 
     /// The key for the column as it would be laid out right now. Pure and
@@ -106,18 +114,27 @@ struct DetailHero: View {
     /// title the full width, which is the only thing that fixes it: shrinking
     /// the cover far enough would leave a thumbnail.
     var body: some View {
+        // Computed once per body pass and threaded down to every `column(_:
+        // fill:rows:)` call — up to four while the measurers are mounted
+        // (P15) — rather than each one re-running its own merge over
+        // `titles` plus the three optional fields.
+        let alternativeTitleRows = AlternativeTitlesButton.rows(
+            titles: series.titles ?? [], shown: series.displayTitle,
+            romanizedTitle: series.romanizedTitle, nativeTitle: series.nativeTitle,
+            secondaryTitles: series.secondaryTitles
+        )
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: Metrics.gapHero) {
                 cover
                 // Stacked, the column has the whole width and nothing beside
                 // it to leave a gap under, so it is always the full form.
-                column(.full, fill: false)
+                column(.full, fill: false, rows: alternativeTitleRows)
             }
             .padding(.horizontal, Metrics.gutter)
             .padding(.top, 24)
             .padding(.bottom, Metrics.gutter)
         } else {
-            wide
+            wide(rows: alternativeTitleRows)
         }
     }
 
@@ -131,7 +148,7 @@ struct DetailHero: View {
         )
     }
 
-    private var wide: some View {
+    private func wide(rows: [SeriesTitle.Alternative]) -> some View {
         // Top-aligned, not bottom. Bottom-aligning a 150pt cover against a
         // taller column pushed the artwork half way down the screen, so the
         // page opened on a gap.
@@ -139,7 +156,7 @@ struct DetailHero: View {
         // The column is as full as the cover's height allows; see `text`.
         HStack(alignment: .top, spacing: Metrics.gapHero) {
             cover
-            text
+            text(rows: rows)
         }
         .padding(.horizontal, Metrics.gutter)
         .padding(.top, 12)
@@ -207,7 +224,7 @@ struct DetailHero: View {
     /// space that reads as a gap is the one below the front cover.
     private var coverHeight: CGFloat { Metrics.coverDetailHeroWidth / Metrics.coverAspect }
 
-    private var text: some View {
+    private func text(rows: [SeriesTitle.Alternative]) -> some View {
         let form = Self.form(
             chaptersHeight: chaptersHeight,
             fullHeight: fullHeight,
@@ -218,39 +235,40 @@ struct DetailHero: View {
         // in the gaps between its blocks — schedule, name, other names — so
         // the column ends where the cover ends instead of some way above
         // it. A column taller than the cover is left alone.
-        return column(form, fill: true)
+        return column(form, fill: true, rows: rows)
             .frame(minHeight: coverHeight, alignment: .top)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
             // The measurers are a background: proposed the visible column's
             // width, which is what decides the wrapping, and their own
             // heights cannot grow the column — the whole point.
-            .background { measurers }
+            .background { measurers(rows: rows) }
     }
 
     /// The three off-screen columns, mounted only while their answer for the
     /// current series, width and type size is not already known.
     @ViewBuilder
-    private var measurers: some View {
+    private func measurers(rows: [SeriesTitle.Alternative]) -> some View {
         let key = Self.measureKey(
             series: series,
             scheduleShape: Self.scheduleShape(
-                hasSchedule: schedule != nil, isLoading: isScheduleLoading, failed: scheduleFailure != nil
+                hasSchedule: schedule != nil, isLoading: isScheduleLoading, failed: scheduleFailure != nil,
+                hasOriginalRun: originalRun != nil
             ),
             width: columnWidth, typeSize: typeSize
         )
         if columnWidth > 0, measuredFor != key {
             ZStack {
-                column(.chapters, fill: false)
+                column(.chapters, fill: false, rows: rows)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         chaptersHeight = $0
                     }
-                column(.full, fill: false)
+                column(.full, fill: false, rows: rows)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         fullHeight = $0
                     }
-                column(.byline, fill: false)
+                column(.byline, fill: false, rows: rows)
                     .hidden()
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         bylineHeight = $0
@@ -269,8 +287,10 @@ struct DetailHero: View {
 
     /// `fill` puts spacers between the blocks, which is what lets the
     /// column stretch; the measurers leave them out so they report the
-    /// column's natural height.
-    private func column(_ form: Form, fill: Bool) -> some View {
+    /// column's natural height. `rows` is `AlternativeTitlesButton`'s
+    /// already-merged list — computed once in `body`, not re-derived by
+    /// each of up to four columns (P15).
+    private func column(_ form: Form, fill: Bool, rows: [SeriesTitle.Alternative]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if schedule != nil || isScheduleLoading || scheduleFailure != nil || originalRun != nil {
                 DetailScheduleBlock(
@@ -312,13 +332,7 @@ struct DetailHero: View {
             // screens down. A line and a count; the list itself is a
             // sheet, since twenty-five names inline would push the
             // synopsis off the screen.
-            AlternativeTitlesButton(
-                titles: series.titles ?? [],
-                shown: series.displayTitle,
-                romanizedTitle: series.romanizedTitle,
-                nativeTitle: series.nativeTitle,
-                secondaryTitles: series.secondaryTitles
-            )
+            AlternativeTitlesButton(rows: rows)
         }
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)

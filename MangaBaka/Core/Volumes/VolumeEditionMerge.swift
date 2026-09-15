@@ -45,10 +45,16 @@ enum VolumeEditions {
     ///     original" rule) and for the native language the roles are tagged
     ///     against. Passing the series rather than two strings keeps that
     ///     rule in one place.
+    ///   - ndlTotalRecords: NDL's own `<numberOfRecords>` for this page, when
+    ///     the `ndl` leg is `.loaded` — carried separately because
+    ///     `EditionAnswer` has no field for it. Attached to the NDL shelf only
+    ///     when that shelf is partial, so `EditionShelf.totalRecords` can say
+    ///     "first 50 of 84 on record" instead of only "partial" (item P3).
     static func merge(
         ann: Fetched<ANNVolumes> = .idle,
         openLibrary: Fetched<EditionAnswer> = .idle,
         ndl: Fetched<EditionAnswer> = .idle,
+        ndlTotalRecords: Int? = nil,
         works: [SeriesWork.Volume] = [],
         format: WikidataFormat? = nil,
         for series: Series
@@ -58,7 +64,9 @@ enum VolumeEditions {
             series: series, format: format, works: works
         )
         let shelves = group(
-            deduplicate(candidates), partial: partialCatalogues(ann: ann, openLibrary: openLibrary, ndl: ndl)
+            deduplicate(candidates),
+            partial: partialCatalogues(ann: ann, openLibrary: openLibrary, ndl: ndl),
+            ndlTotalRecords: ndlTotalRecords
         )
 
         var failures: [VolumeCatalogue: APIError] = [:]
@@ -139,10 +147,41 @@ enum VolumeEditions {
         for volume in works where volume.date != nil {
             for edition in volume.editions {
                 guard let isbn = edition.isbn else { continue }
-                found.insert(OpenLibraryEditions.normalise(isbn))
+                let normalised = OpenLibraryEditions.normalise(isbn)
+                found.insert(normalised)
+                // Item P18: a MangaBaka work carrying an ISBN-10 used to
+                // suppress nothing, because every third-party row's
+                // `isbn13` is 13 digits — so the same dated volume showed
+                // once on MangaBaka's own shelf and again, undeduplicated,
+                // on ANN's or a library catalogue's. Both forms go in the
+                // set so a row keyed on either matches.
+                if let thirteen = Self.isbn13(fromISBN10: normalised) { found.insert(thirteen) }
             }
         }
         return found
+    }
+
+    /// ISBN-10 → ISBN-13 by the standard's own arithmetic (ISO 2108): drop
+    /// the 10-digit check character, prefix `978`, recompute the check digit
+    /// over the new 12 digits. Every ISBN-13 ever assigned to a book
+    /// previously published as ISBN-10 uses the `978` prefix, so this is not
+    /// a guess about which prefix to use — it is the only one in use.
+    ///
+    /// Nil for anything that is not exactly 10 characters after
+    /// `OpenLibraryEditions.normalise` (digits and a possible trailing `X`),
+    /// so a malformed value is left alone rather than "converted" into a
+    /// 13-digit string nobody's catalogue would recognise.
+    static func isbn13(fromISBN10 isbn10: String) -> String? {
+        guard isbn10.count == 10 else { return nil }
+        let core = "978" + isbn10.prefix(9)
+        guard core.allSatisfy(\.isNumber) else { return nil }
+        var sum = 0
+        for (index, character) in core.enumerated() {
+            guard let digit = character.wholeNumberValue else { return nil }
+            sum += index.isMultiple(of: 2) ? digit : digit * 3
+        }
+        let check = (10 - sum % 10) % 10
+        return core + String(check)
     }
 
     // MARK: - Dedupe
@@ -247,7 +286,7 @@ enum VolumeEditions {
     ///   partial; the rows it merged in from another source do not change
     ///   that, because the gap is in the shelf's own catalogue's page.
     private static func group(
-        _ rows: [EditionVolume], partial: Set<VolumeCatalogue>
+        _ rows: [EditionVolume], partial: Set<VolumeCatalogue>, ndlTotalRecords: Int? = nil
     ) -> [EditionShelf] {
         struct Key: Hashable {
             let edition: VolumeEdition
@@ -263,9 +302,12 @@ enum VolumeEditions {
         // checker gave up on ("unable to type-check in reasonable time",
         // 2026-09-14).
         let unsorted: [EditionShelf] = grouped.map { key, volumes in
-            EditionShelf(
+            let isPartial = partial.contains(key.edition.catalogue)
+            return EditionShelf(
                 edition: key.edition, format: key.format, volumes: volumes.sorted(by: byNumber),
-                isPartial: partial.contains(key.edition.catalogue)
+                isPartial: isPartial,
+                totalRecords: (isPartial && key.edition.catalogue == .nationalDietLibrary)
+                    ? ndlTotalRecords : nil
             )
         }
         return unsorted.sorted { lhs, rhs in

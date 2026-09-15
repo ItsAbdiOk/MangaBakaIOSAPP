@@ -37,7 +37,10 @@ actor TasteLedger {
     ///
     /// Straight from `tags_v2`'s own weighting, which is the API saying how
     /// central the tag is to *that* series. A core tag describes the book; an
-    /// incidental one happens in it.
+    /// incidental one happens in it. The *order* (core > defining > recurrent
+    /// > incidental) is the API's; the specific ratio 4:3:2:1 is **a guess** —
+    /// nothing checks that a core tag should count exactly twice an
+    /// incidental one rather than three times or 1.5.
     private static func weight(_ importance: SeriesTag.Weight) -> Double {
         switch importance {
         case .core: 4
@@ -57,7 +60,10 @@ actor TasteLedger {
     /// none.
     ///
     /// Plan-to-read and considering score zero. Nothing has been read, so
-    /// counting them would measure ambition rather than habit.
+    /// counting them would measure ambition rather than habit. The *order*
+    /// (finished ≥ paused > dropped > not started) is reasoned above; the
+    /// specific 3:2:1 ratio is **a guess** — "a third" is Abdi's own word for
+    /// dropped, not a derived number.
     private static func weight(_ state: LibraryEntry.State) -> Double {
         switch state {
         case .reading, .rereading, .completed: 3
@@ -159,15 +165,16 @@ actor TasteLedger {
 
     /// The reader's own tags, strongest first.
     ///
-    /// - Parameter limit: how many to treat as theirs. Thirty is enough to
-    ///   reach into most groups on a series page without the highlight
-    ///   becoming meaningless by covering everything.
+    /// - Parameter limit: how many to treat as theirs. **A guess** — thirty is
+    ///   reasoned as "enough to reach into most groups on a series page
+    ///   without the highlight becoming meaningless by covering everything",
+    ///   not measured against how many groups a real page actually has.
     func favoured(limit: Int = 30) throws -> [TagAffinity] {
         try database.libraryWriter.read { db in
             try TagAffinity
                 // Two series minimum. One is a coincidence — every library has
                 // a single series carrying some tag nobody would claim as a
-                // taste.
+                // taste. **A guess** that two is enough to stop being one.
                 .filter(Column("seriesCount") >= 2)
                 .order(Column("score").desc, Column("seriesCount").desc)
                 .limit(limit)

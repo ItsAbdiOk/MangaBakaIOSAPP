@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Fetches a Japanese publisher's magazine-wide RSS feed and filters it down
 /// to one series.
@@ -25,10 +26,25 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
 
     nonisolated let source: ReleaseSource = .gigaViewer
 
+    /// R20/P20: same shape as `WebtoonsFeedClient`'s logger — the request
+    /// failure below was a bare `try?`, so offline vs. DNS vs. timeout was
+    /// indistinguishable from the outside.
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "reader"
+    )
+
     private let session: URLSession
     private let clock: any Clock
     private let cacheDirectory: URL?
     private var spacing = RequestSpacing(minimumInterval: GigaViewerFeedClient.minimumInterval)
+    /// In-memory mirror of the on-disk cache, keyed the same way. R13/P13:
+    /// `cachedFeeds` (launch) calls `cachedFeed(for:links:)` once per library
+    /// entry, and every entry on the same magazine used to re-read and
+    /// XML-decode the same file from disk — ten Jump+ series is ten decodes
+    /// of one 100-item feed. This actor instance lives for the app's life
+    /// (one `ReleaseFeedService` per session), so a plain dictionary is
+    /// enough: no eviction needed for at most seven hosts.
+    private var memo: [String: Cached] = [:]
 
     init(
         session: URLSession = ThirdPartySession.shared,
@@ -135,7 +151,15 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
             guard !Task.isCancelled else { return (nil, .cancelled) }
         }
 
-        guard let (data, response) = try? await session.data(from: url) else {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            let description = String(describing: error)
+            Self.logger.error(
+                "GigaViewer request failed for \(host, privacy: .public): \(description, privacy: .public)"
+            )
             return (nil, .transport(underlying: "GigaViewer request failed.", party: .gigaViewer))
         }
         guard let http = response as? HTTPURLResponse else {
@@ -192,14 +216,18 @@ actor GigaViewerFeedClient: ReleaseFeedProvider {
     /// `readCache` without the freshness gate — see the `WebtoonsFeedClient`
     /// sibling of the same name for why `cachedFeed` needs this.
     private func readCacheIgnoringAge(_ key: String) -> Cached? {
+        if let cached = memo[key] { return cached }
         guard let file = file(key), let data = try? Data(contentsOf: file) else { return nil }
-        return try? JSONDecoder().decode(Cached.self, from: data)
+        guard let cached = try? JSONDecoder().decode(Cached.self, from: data) else { return nil }
+        memo[key] = cached
+        return cached
     }
 
     private func writeCache(_ key: String, _ items: [Item]) {
         guard let directory = cacheDirectory, let file = file(key) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let cached = Cached(storedAt: clock.now, items: items)
+        memo[key] = cached
         try? JSONEncoder().encode(cached).write(to: file, options: .atomic)
     }
 }

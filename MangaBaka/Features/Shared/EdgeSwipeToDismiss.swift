@@ -69,9 +69,16 @@ struct EdgeSwipeToDismiss: ViewModifier {
                             guard isFromLeadingEdge(value, in: width), isSideways(value) else { return }
                             isTrackingEdgeDrag = true
                         }
-                        Motion.run(Motion.glide) {
-                            dragOffset = Self.clampedOffset(horizontal(value.translation.width), width: width)
-                        }
+                        // S10: a drag-follow should assign directly, 1:1 with
+                        // the finger. Wrapping every `onChanged` sample in
+                        // `Motion.run(Motion.glide)` restarted a 0.7s spring
+                        // toward the new offset 60-120 times a second, so the
+                        // sheet lagged the finger by the spring's response
+                        // and every sample opened its own animation
+                        // transaction. `Motion.glide` still finishes the
+                        // gesture correctly below — `onEnded` is the one
+                        // place an answered gesture, not a live one.
+                        dragOffset = Self.clampedOffset(horizontal(value.translation.width), width: width)
                     }
                     .onEnded { value in
                         defer { isTrackingEdgeDrag = false }

@@ -27,7 +27,8 @@ extension RootView {
                             onOpenSettings: { showsSettings = true },
                             onOpenStack: { selection = .stack },
                             onSave: saveLibraryChange,
-                            continuations: continuations
+                            continuations: continuations,
+                            binge: binge
                         )
                             .navigationDestination(for: Series.self) { detail($0, path: $shelfPath) }
                             .navigationDestination(isPresented: $showsWrapped) {
@@ -124,6 +125,12 @@ extension RootView {
                                     // it validates the token.
                                     store: tokenStore
                                 )
+                                // One visit's worth of focus: set by
+                                // onboarding's "Connect an account" and, until
+                                // 2026-09-15 (review perf S13), never cleared —
+                                // so every later Settings visit raised the
+                                // keyboard on the token field.
+                                .onDisappear { wantsAccountFocus = false }
                             }
                     }
                 }
@@ -244,12 +251,12 @@ extension RootView {
         // genuinely failed, or because onboarding was already finished and
         // nothing was asked for — only once this has actually run.
         isLoadingCovers = false
-        // Dates move and series leave the library, and iOS holds the pending
-        // list between launches — so it is corrected on return rather than kept
-        // alive by anything running in the background.
-        await refreshReminders()
-        // After the reminders, which already walked the library: the snapshot
-        // is cached now, so this costs no request.
+        // The walk first, then the zero-request consumers of it — Discover's
+        // "Pick back up", Spotlight, the widget — and the reminders last
+        // (review perf S12, 2026-09-15: they used to run first, and with
+        // reminders on they queued the library behind up to six calendar
+        // requests waiting at the gate). The reminders' own walk below is a
+        // cache hit either way.
         //
         // Gap 104: a walk that failed used to still wipe and rebuild the
         // index from whatever partial (or empty) result it produced — a
@@ -311,10 +318,17 @@ extension RootView {
         let nextVolumes = await WidgetSnapshot.nextVolumeCandidates(
             from: walk.entries, repository: repository, editionAnswers: editionAnswers
         )
-        WidgetSnapshot.write(
-            pickBackUp: WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened),
-            nextVolumes: WidgetSnapshot.nextVolumeItems(candidates: nextVolumes)
-        )
+        // Off the main actor (review perf S14): the write encodes and saves
+        // a file the widget reads; nothing on screen waits for it.
+        let pickBackUp = WidgetSnapshot.pickBackUpItems(from: walk.entries, lastOpened: lastOpened)
+        let nextVolumeItems = WidgetSnapshot.nextVolumeItems(candidates: nextVolumes)
+        Task.detached(priority: .utility) {
+            WidgetSnapshot.write(pickBackUp: pickBackUp, nextVolumes: nextVolumeItems)
+        }
+        // Dates move and series leave the library, and iOS holds the pending
+        // list between launches — so it is corrected on return rather than kept
+        // alive by anything running in the background.
+        await refreshReminders()
     }
 
     /// Opens the series a Spotlight result named, from the library walk.
@@ -384,7 +398,7 @@ extension RootView {
     /// calendar anymore.
     func refreshReminders() async {
         guard reminders.isEnabled else {
-            await reminders.reschedule(announced: [])
+            await reminders.reschedule()
             return
         }
 
@@ -392,13 +406,14 @@ extension RootView {
         // Nil rather than a partial set: a reminder scheduled from half a
         // library is a notification about a series the reader may not track,
         // and silence is the better failure here.
-        guard let mine = walk.wholeLibrarySeriesIDs else { return }
-        let announced = await calendar.mine(seriesIDs: mine)
-        // Followed publishers: once a day per follow, one search each. No
-        // `notify` closure — Abdi's rule (2026-09-13) is two conditions only,
-        // and a publisher follow is neither; the check still runs so
-        // `lastSeenSeriesID` stays current for whenever this list does notify.
-        await publisherFollows.value.check(using: repository)
+        guard walk.wholeLibrarySeriesIDs != nil else { return }
+        // No calendar and no publisher-follow check here since 2026-09-15
+        // (review perf R4/R5): both were fetched — up to six `upcoming`
+        // pages at `.userInitiated` and one *search* request per followed
+        // publisher, on the launch path, ahead of the widget and Spotlight —
+        // for a value `NotificationPolicy.decide` no longer takes. The
+        // Schedule tab asks the calendar when it is opened; the follow check
+        // runs from its own screen.
         // Whatever a prior series-page visit already cached — never a fetch:
         // this reads the six-hour detail cache and nothing else, so the call
         // site still costs zero requests. A series with nothing cached (never
@@ -418,7 +433,6 @@ extension RootView {
         }
         let feeds = await releaseFeeds.cachedFeeds(for: walk.entries) { linksByID[$0] ?? [] }
         await reminders.reschedule(
-            announced: announced,
             library: walk.entries,
             feeds: feeds,
             libraryFailure: walk.failure,

@@ -1,5 +1,6 @@
 import CoreSpotlight
 import Foundation
+import os
 import UniformTypeIdentifiers
 
 /// The reader's library, in iOS search.
@@ -19,6 +20,13 @@ struct SpotlightIndex: Sendable {
     /// remove them all in one call without touching anything else.
     static let domain = "library"
     private static let prefix = "series-"
+
+    /// R20/P20: `deleteSearchableItems`/`indexSearchableItems` were bare
+    /// `try?` — a reader whose library search silently stopped updating had
+    /// no way to tell "Spotlight refused the write" from "nothing changed".
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "reader"
+    )
 
     private let index: @Sendable () -> CSSearchableIndex
 
@@ -45,9 +53,19 @@ struct SpotlightIndex: Sendable {
             let items = Signposts.measure("Spotlight index") {
                 Self.items(from: entries, thumbnail: Self.cachedCover)
             }
-            try? await index().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
+            do {
+                try await index().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
+            } catch {
+                let description = String(describing: error)
+                Self.logger.error("Spotlight delete failed: \(description, privacy: .public)")
+            }
             guard !items.isEmpty else { return }
-            try? await index().indexSearchableItems(items)
+            do {
+                try await index().indexSearchableItems(items)
+            } catch {
+                let description = String(describing: error)
+                Self.logger.error("Spotlight index failed: \(description, privacy: .public)")
+            }
         }.value
     }
 
@@ -56,7 +74,12 @@ struct SpotlightIndex: Sendable {
     /// act on is worse than none.
     func clear() async {
         guard CSSearchableIndex.isIndexingAvailable() else { return }
-        try? await index().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
+        do {
+            try await index().deleteSearchableItems(withDomainIdentifiers: [Self.domain])
+        } catch {
+            let description = String(describing: error)
+            Self.logger.error("Spotlight clear failed: \(description, privacy: .public)")
+        }
     }
 
     /// One searchable item per entry that carries a series. An entry whose

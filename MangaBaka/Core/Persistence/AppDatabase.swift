@@ -199,10 +199,6 @@ struct AppDatabase: Sendable {
             self.database = database
             self.outcome = outcome
         }
-
-        init(database: AppDatabase, wasReset: Bool) {
-            self.init(database: database, outcome: wasReset ? .reset : .opened)
-        }
     }
 
     /// Opens both on-disk files, recovering from a file that exists but
@@ -250,7 +246,17 @@ struct AppDatabase: Sendable {
         // Whether the cache file can be deleted in silence. Before the split
         // has run it may still be the only copy of the shelf; after it, it
         // provably holds none of the reader's rows.
-        let split = (try? splitHasCompleted(library: library.writer)) ?? false
+        let split: Bool
+        do {
+            split = try splitHasCompleted(library: library.writer)
+        } catch {
+            // D1: this used to be `try?` → `false`, the safe direction (it
+            // makes the cache file's corrupt copy kept rather than deleted
+            // outright), but silent — nothing on record said the check
+            // itself had failed rather than genuinely answering "not split".
+            splitLogger.error("splitHasCompleted failed, assuming not split: \(error, privacy: .public)")
+            split = false
+        }
 
         guard let cache = openRecoveringFromCorruption(
             named: name, migrator: migrator,
@@ -396,28 +402,39 @@ struct AppDatabase: Sendable {
     /// `onDiskResettingIfCorrupt` whether the reader lost anything.
     @discardableResult
     private static func salvage(into destination: any DatabaseWriter, from file: URL) -> Bool {
-        let recovered = (try? destination.writeWithoutTransaction { db -> Int in
-            try db.execute(sql: "ATTACH DATABASE ? AS salvage", arguments: [file.path])
-            defer { try? db.execute(sql: "DETACH DATABASE salvage") }
-            var rows = 0
-            // `salvagedTables`, not `readerTables`: the split marker is in the
-            // reader's file too and losing it can re-run the copy (work-list
-            // 55). See that list for why the two are not the same list.
-            for table in salvagedTables {
-                do {
-                    try db.execute(
-                        sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"
-                    )
-                    rows += db.changesCount
-                } catch let error as DatabaseError {
-                    // Expected: the table may not exist in the broken file at
-                    // all (a pre-v2 cache file has no `shelfEntry`), or its
-                    // pages may be the unreadable ones.
-                    splitLogger.debug("Salvage skipped \(table): \(error, privacy: .public)")
+        let recovered: Int
+        do {
+            recovered = try destination.writeWithoutTransaction { db -> Int in
+                try db.execute(sql: "ATTACH DATABASE ? AS salvage", arguments: [file.path])
+                defer { try? db.execute(sql: "DETACH DATABASE salvage") }
+                var rows = 0
+                // `salvagedTables`, not `readerTables`: the split marker is in the
+                // reader's file too and losing it can re-run the copy (work-list
+                // 55). See that list for why the two are not the same list.
+                for table in salvagedTables {
+                    do {
+                        try db.execute(
+                            sql: "INSERT OR IGNORE INTO \(table) SELECT * FROM salvage.\(table)"
+                        )
+                        rows += db.changesCount
+                    } catch let error as DatabaseError {
+                        // Expected: the table may not exist in the broken file at
+                        // all (a pre-v2 cache file has no `shelfEntry`), or its
+                        // pages may be the unreadable ones.
+                        splitLogger.debug("Salvage skipped \(table): \(error, privacy: .public)")
+                    }
                 }
+                return rows
             }
-            return rows
-        }) ?? 0
+        } catch {
+            // D1: this used to be `try?` → `0`, indistinguishable from "the
+            // attach and every table both genuinely had nothing to give back".
+            // A whole-salvage failure (the attach itself, a locked file) is
+            // different from that and worth a line, even though the outcome
+            // to the caller is the same either way.
+            splitLogger.error("salvage failed: \(error, privacy: .public)")
+            recovered = 0
+        }
         return recovered > 0
     }
 

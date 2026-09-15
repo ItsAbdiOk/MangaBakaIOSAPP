@@ -15,13 +15,15 @@ import Testing
 /// each missing `priority: .background`.
 @Suite("The series page's request priorities", .enabled(if: SourceTree.isAvailable))
 struct DetailPagePriorityTests {
-    private static let file = "MangaBaka/Core/Persistence/SeriesRepository.swift"
+    /// The legs moved to `SeriesRepository+Extras.swift` on 2026-09-15 when
+    /// `extras` split into a foreground hero phase and a background tail.
+    private static let file = "MangaBaka/Core/Persistence/SeriesRepository+Extras.swift"
 
     private static func call(for endpoint: String, in source: String) -> String? {
-        // Only the five-way `extras` fetch: `relationships` is also fetched on
-        // its own elsewhere in the file, for a different screen.
-        guard let start = source.range(of: "// Concurrent rather than sequential: five independent reads"),
-              let stop = source.range(of: "let results = await (news, related, full, editions, works)")
+        // Only the tail phase of `fetchExtras`: `refetchMissingLegs` lower in
+        // the file asks for the same endpoints again.
+        guard let start = source.range(of: "await hero(extras)"),
+              let stop = source.range(of: "let tail = TailResults(")
         else { return nil }
         let source = String(source[start.lowerBound..<stop.lowerBound])
         guard let range = source.range(of: "/v1/series/\\(seriesId)/\(endpoint)\"") else { return nil }
@@ -53,10 +55,10 @@ struct DetailPagePriorityTests {
     @Test("the works shelf's first page stays foreground; its last page waits")
     func visibleLegsStayUserInitiated() throws {
         let source = try SourceTree.read("MangaBaka/Core/Persistence/SeriesRepository+Works.swift")
-        let first = "getLossyWithPagination(path, query: Self.worksQuery(page: 1))"
+        let first = "query: Self.worksQuery(page: 1)\n"
         #expect(source.contains(first), "the first-page call, with no priority argument")
-        #expect(!source.contains(first + ", priority: .background"))
-        let last = "Self.worksQuery(page: lastPage), priority: .background"
+        #expect(!source.contains("Self.worksQuery(page: 1), priority: .background"))
+        let last = "Self.worksQuery(page: page), priority: .background"
         #expect(source.contains(last))
     }
 }

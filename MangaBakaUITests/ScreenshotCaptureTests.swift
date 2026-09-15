@@ -180,10 +180,19 @@ final class ScreenshotCaptureTests: XCTestCase {
         // result grid rather than one filled slot over an enabled button
         // (sixth capture, 2026-09-15). The grid is a row of cover buttons;
         // waiting on a second one rules out the seed tile itself.
+        //
+        // Used to wait on `scrollViews.buttons.element(boundBy: 3)` — the
+        // discovery-ui review (2026-09-15) found that index lands on a
+        // filter chip, not a result card, so this could capture the frame
+        // before the blend had actually finished. `MixResults` tags each
+        // result card with `.accessibilityIdentifier("mix.resultCard")`
+        // (added for this); waiting on the *second* one (`boundBy: 1`) keeps
+        // the original intent of ruling out the seed tile.
         let blend = app.buttons["Blend"].firstMatch
         if blend.waitForExistence(timeout: 5), blend.isHittable {
             blend.tap()
-            _ = app.scrollViews.buttons.element(boundBy: 3).waitForExistence(timeout: Self.contentTimeout)
+            let secondResultCard = app.buttons.matching(identifier: "mix.resultCard").element(boundBy: 1)
+            _ = secondResultCard.waitForExistence(timeout: 30)
         }
         waitAndCapture(app, name: "mix", index: 6)
     }

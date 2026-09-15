@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Reads the signed-in reader's library and personalised data.
 ///
@@ -179,6 +180,8 @@ struct PersonalRecommendations: Sendable, Equatable {
 }
 
 actor LibraryService: LibraryProviding {
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "library")
+
     private let client: APIClient
     /// Applied to personalised recommendations too.
     ///
@@ -232,9 +235,20 @@ actor LibraryService: LibraryProviding {
     /// MangaBaka before it is a feature.
     func profileID() async -> String? {
         if let cachedProfileID { return cachedProfileID }
-        let id = await client.profile()?.id
-        cachedProfileID = id
-        return id
+        // `.background`: this runs at t≈0 on every signed-in launch beside
+        // Discover's feeds and the walk, and a foreground throw here used
+        // to disable the Mix's library exclusion for the whole session with
+        // nothing logged (review perf S11, 2026-09-15). Waiting at the gate
+        // costs the blend nothing — it is not on screen yet.
+        do throws(APIError) {
+            let profile: Profile = try await client.get("/v1/my/profile", priority: .background)
+            cachedProfileID = profile.id
+            return profile.id
+        } catch let error {
+            let reason = String(describing: error)
+            Self.logger.notice("profile id unavailable this session: \(reason, privacy: .public)")
+            return nil
+        }
     }
 
     /// Called when the token changes, so a second account cannot inherit the

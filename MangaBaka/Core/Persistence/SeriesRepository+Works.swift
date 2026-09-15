@@ -28,21 +28,52 @@ extension SeriesRepository {
     /// - Returns: the works in sequence order, and `total` — the endpoint's
     ///   own count, so a caller can tell 50 of 50 from 50 of 267.
     func fetchWorks(for seriesId: Int) async throws(APIError) -> (works: [SeriesWork], total: Int?) {
-        let path = "/v1/series/\(seriesId)/works"
+        let first = try await fetchWorksFirstPage(for: seriesId)
+        guard let lastPage = first.lastPage else { return (first.works, first.total) }
+        let last = try await fetchWorksLastPage(for: seriesId, page: lastPage)
+        return (Self.joined(first.works, last), first.total)
+    }
+
+    /// The first page alone — what the shelf draws first. `lastPage` is the
+    /// page the forthcoming volume lives on when there is one past this, so
+    /// the caller can ask for it later at `.background` rather than inside
+    /// the foreground leg (review perf DT11, 2026-09-15: the last page used
+    /// to be awaited sequentially inside `full`'s leg and `try?`-swallowed,
+    /// so a throttle on it silently left the badge at "113 over 50 rows").
+    func fetchWorksFirstPage(for seriesId: Int) async throws(APIError) -> WorksFirstPage {
         let first: (elements: [SeriesWork], pagination: Pagination?) =
-            try await client.getLossyWithPagination(path, query: Self.worksQuery(page: 1))
+            try await client.getLossyWithPagination(
+                "/v1/series/\(seriesId)/works", query: Self.worksQuery(page: 1)
+            )
         guard let total = first.pagination?.count, total > Self.worksPageSize else {
-            return (first.elements, first.pagination?.count ?? first.elements.count)
+            return WorksFirstPage(
+                works: first.elements, total: first.pagination?.count ?? first.elements.count, lastPage: nil
+            )
         }
         let lastPage = (total + Self.worksPageSize - 1) / Self.worksPageSize
-        guard lastPage > 1 else { return (first.elements, total) }
-        let last: [SeriesWork] = (try? await client.getLossy(
-            path, query: Self.worksQuery(page: lastPage), priority: .background
-        )) ?? []
-        // Sequence-sorted so the two pages read as one list; `volumes(from:)`
-        // groups by sequence string and would otherwise keep page order.
-        let firstIDs = Set(first.elements.map(\.id))
-        return (first.elements + last.filter { !firstIDs.contains($0.id) }, total)
+        return WorksFirstPage(works: first.elements, total: total, lastPage: lastPage > 1 ? lastPage : nil)
+    }
+
+    struct WorksFirstPage: Sendable {
+        let works: [SeriesWork]
+        let total: Int?
+        /// Nil when page one is the whole list.
+        let lastPage: Int?
+    }
+
+    /// The last page, `.background`: it waits at the gate rather than
+    /// throwing, and its failure is the caller's to record, not swallow.
+    func fetchWorksLastPage(for seriesId: Int, page: Int) async throws(APIError) -> [SeriesWork] {
+        try await client.getLossy(
+            "/v1/series/\(seriesId)/works", query: Self.worksQuery(page: page), priority: .background
+        )
+    }
+
+    /// Two pages as one list, first page's ids winning; `volumes(from:)`
+    /// groups by sequence string and would otherwise keep page order.
+    nonisolated static func joined(_ first: [SeriesWork], _ last: [SeriesWork]) -> [SeriesWork] {
+        let firstIDs = Set(first.map(\.id))
+        return first + last.filter { !firstIDs.contains($0.id) }
     }
 
     nonisolated static func worksQuery(page: Int) -> [URLQueryItem] {

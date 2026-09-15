@@ -117,7 +117,7 @@ extension SeriesDetailView {
            VolumeShelf.needsGoogle(
              apple: appleVolumes, expected: shown.finalVolume.map { Int(wholeOrClamped: $0) }
            ) {
-            googleVolumes = await googleBooks?.volumes(for: shown, language: language) ?? []
+            googleVolumes = await googleBooks?.volumes(for: shown, language: language, format: format) ?? []
         }
         // The shelf itself is decided the moment Apple and Google have both
         // answered — `isLoadingVolumes` ends here, not after Open Library,
@@ -209,11 +209,15 @@ extension SeriesDetailView {
 
     /// How many coverless volumes one page open will ask Open Library about.
     ///
-    /// A GUESS. Open Library is spaced at one request every 3 s
-    /// (`OpenLibraryCovers.minimumInterval`), so twelve is 36 seconds of
-    /// background asking — about the length of a page a reader actually
-    /// reads — where a 115-volume series uncapped was five and a half
-    /// minutes of requests for a shelf nobody is still looking at.
+    /// A GUESS. Open Library is spaced at one request every 4 s
+    /// (`OpenLibraryCovers.minimumInterval`, raised from a 3 s guess to a
+    /// measured 4 s on 2026-09-14 — see `HostRateGate.openLibrary`), so
+    /// twelve is **48**, not 36, seconds of background asking — longer than
+    /// about the length of a page a reader actually reads, which was this
+    /// comment's own justification and the number that should carry the
+    /// "GUESS" label, not the interval — where a 115-volume series uncapped
+    /// was five and a half minutes of requests for a shelf nobody is still
+    /// looking at.
     static let openLibraryPassLimit = 12
 
     /// "Similar by description": ids ranked by `EmbeddingIndex`, resolved to

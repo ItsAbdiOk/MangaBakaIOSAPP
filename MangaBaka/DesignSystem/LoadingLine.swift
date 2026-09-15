@@ -3,7 +3,7 @@ import SwiftUI
 /// A hairline under the title bar that says "still asking", for a screen
 /// whose sections fill in from several requests.
 ///
-/// Asked for by Abdi (2026-09-15): a series page fires nine requests and the
+/// Asked for by Abdi (2026-09-15): a series page fires eight requests and the
 /// last to answer (Apple's volumes, the cast, a throttled covers leg waiting
 /// out its window) lands seconds after the page reads as done, so a section
 /// that then pops in looks like a glitch rather than an arrival. The line is
@@ -33,7 +33,18 @@ struct LoadingLine: View {
                 if reduceMotion {
                     band(width: proxy.size.width)
                 } else {
-                    TimelineView(.animation) { timeline in
+                    // DT4/S7: `.animation` alone re-evaluates every frame for
+                    // as long as this view is in the tree, whether or not it
+                    // is visible — at `opacity(isActive ? 1 : 0)` that is a
+                    // moving gradient layer holding the display at its top
+                    // refresh rate for the page's whole life after the last
+                    // leg has answered. `paused: !isActive` stops the clock
+                    // the instant it goes inactive; the fade above still
+                    // animates because `.opacity`/`.animation` are unrelated
+                    // to the timeline schedule — the band just freezes
+                    // mid-position while it fades out, which is invisible at
+                    // opacity → 0.
+                    TimelineView(.animation(paused: !isActive)) { timeline in
                         let phase = timeline.date.timeIntervalSinceReferenceDate
                             .truncatingRemainder(dividingBy: Self.loop) / Self.loop
                         band(width: proxy.size.width)

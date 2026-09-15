@@ -95,21 +95,18 @@ enum NotificationPolicy {
     ///   - lastKnownSeason: the highest `ReleaseFeed.endedSeason` seen for a
     ///     series the last time this ran. Same first-seen rule.
     static func decide(
-        announced: [UpcomingWork],
         feeds: [Int: ReleaseFeed] = [:],
         library: [LibraryEntry],
         now: Date,
         previousStatus: [Int: String] = [:],
-        lastKnownEpisode: [Int: Int] = [:],
         lastKnownSeason: [Int: Int] = [:]
     ) -> [PlannedNotification] {
-        let notifiable = Set(
-            library.filter { notifiableStates.contains($0.state) }.map(\.seriesId)
-        )
-        // `announced` and `lastKnownEpisode` are still taken so the callers
-        // and their tests read unchanged; nothing here reads them any more.
-        _ = (announced, lastKnownEpisode, notifiable)
-        return completions(
+        // `announced` and `lastKnownEpisode` were still taken for a day
+        // after 1a/1b were deleted, "so the callers read unchanged" — and
+        // the launch path kept spending up to six calendar requests and one
+        // search per followed publisher to fill a value this discarded
+        // (review perf R3/R4/R5, 2026-09-15). Gone, with the requests.
+        completions(
             library: library, feeds: feeds, now: now,
             previousStatus: previousStatus, lastKnownSeason: lastKnownSeason
         )
@@ -155,7 +152,7 @@ enum NotificationPolicy {
             // Same baseline rule as 2a: a series first seen already back
             // says nothing.
             if let status = series.status, let previous = previousStatus[seriesID],
-               previous == "hiatus", Self.isBack(status) {
+               Self.isHiatus(previous), Self.isBack(status) {
                 planned.append(PlannedNotification(
                     id: "back-\(seriesID)",
                     seriesID: seriesID,
@@ -175,6 +172,21 @@ enum NotificationPolicy {
                     seriesID: seriesID,
                     title: title,
                     body: "\(title): season \(season) has ended",
+                    date: endedOn
+                ))
+            } else if feed.endedSeason == nil, let endedOn = feed.finaleEndedAt,
+                      let previous = previousStatus[seriesID], !Self.isFinished(previous) {
+                // (2b′) A finale with no season number in its title — "Ep.
+                // 120 (Final Episode)" — is still the run ending (review
+                // perf R8, 2026-09-15; `ReleaseSummary` reads the same
+                // field). Keyed on the date, since there is no number, and
+                // gated on the status baseline so it says it once: the
+                // baseline records "completed" after this is sent.
+                planned.append(PlannedNotification(
+                    id: "finale-\(seriesID)-\(Int(endedOn.timeIntervalSince1970))",
+                    seriesID: seriesID,
+                    title: "\(title) has ended",
+                    body: "The series you were reading posted its final episode.",
                     date: endedOn
                 ))
             }
@@ -199,7 +211,18 @@ enum NotificationPolicy {
     /// `SeriesStatus.label`'s to keep and a new word for "ongoing" must not
     /// silently mute this; the two stops are the closed set.
     nonisolated static func isBack(_ status: String) -> Bool {
-        !["hiatus", "completed", "cancelled", "canceled"].contains(status.lowercased())
+        !isHiatus(status) && !["completed", "cancelled", "canceled"].contains(status.lowercased())
+    }
+
+    /// Both spellings the catalogue uses — `SeriesStatus.label` and
+    /// `ReleaseSchedule` accept `on_hiatus` too; this did not until review
+    /// perf R9 (2026-09-15).
+    nonisolated static func isFinished(_ status: String) -> Bool {
+        ["completed", "cancelled", "canceled"].contains(status.lowercased())
+    }
+
+    nonisolated static func isHiatus(_ status: String) -> Bool {
+        ["hiatus", "on_hiatus"].contains(status.lowercased())
     }
 
     private static func title(for seriesID: Int, in library: [LibraryEntry], fallback: String?) -> String {

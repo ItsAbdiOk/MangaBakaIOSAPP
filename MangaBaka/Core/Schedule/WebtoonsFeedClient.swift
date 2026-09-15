@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Fetches a series' Webtoons feed, at most once a week per series.
 ///
@@ -14,6 +15,16 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     static let cacheLife: TimeInterval = 7 * 24 * 3600
 
     nonisolated let source: ReleaseSource = .webtoons
+
+    /// R20/P20: the two `try?`s below turned every failure reason (offline,
+    /// DNS, timeout, a redirect HEAD failing for any cause) into the same
+    /// generic user-facing string, with nothing printed. This does not
+    /// change what the reader sees — that stays deliberately generic per
+    /// `feed(for:seriesID:)`'s own doc comment — it makes the real cause
+    /// findable without attaching a debugger.
+    private static let logger = Logger(
+        subsystem: "dev.abdirahmanmohamed.mangabaka", category: "reader"
+    )
 
     private let session: URLSession
     private let clock: any Clock
@@ -40,7 +51,12 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
     /// `feed(for:seriesID:)` reads, and nothing else — no candidate URL is
     /// even resolved, since resolving one is itself a request.
     func cachedFeed(for series: Series, links: [SeriesLink]) async -> ReleaseFeed? {
-        guard links.contains(where: { $0.safeURL != nil }) else { return nil }
+        // Same guard as `feed(for:seriesID:)` below (R12/P12): any linked
+        // series used to probe the disk here, so `cachedFeeds`' launch pass
+        // paid a failed `Data(contentsOf:)` for every non-Webtoons series
+        // that carried any link at all.
+        guard links.contains(where: { $0.safeURL.map(WebtoonsFeedParser.isWebtoons) ?? false })
+        else { return nil }
         return readCacheIgnoringAge("v4-\(series.id)")?.feed
     }
 
@@ -125,7 +141,16 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
             guard !Task.isCancelled else { return .cancelled }
         }
 
-        guard let (data, response) = try? await session.data(from: url) else {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            // The specific `URLError` (offline vs DNS vs timeout) is dropped
+            // from the user-facing message on purpose (see the type's own
+            // doc comment); logged here so it is not dropped entirely.
+            let description = String(describing: error)
+            Self.logger.error("Webtoons request failed: \(description, privacy: .public)")
             return .failed(
                 .transport(underlying: "Webtoons request failed.", party: .webtoons), isRateLimit: false
             )
@@ -203,10 +228,18 @@ actor WebtoonsFeedClient: ReleaseFeedProvider {
         // `/en/x/y/` path we never intended to read.
         var request = URLRequest(url: lookup)
         request.httpMethod = "HEAD"
-        guard let (_, response) = try? await session.data(for: request),
-              let resolved = response.url,
+        let headResult = try? await session.data(for: request)
+        guard let (_, response) = headResult, let resolved = response.url,
               let landed = WebtoonsFeedParser.feedURL(fromResolved: resolved)
-        else { return [] }
+        else {
+            // "No usable Webtoons feed URL" is one diagnosis for at least
+            // three causes: the HEAD itself failed, it answered but with no
+            // `response.url`, or the landed URL did not parse as a feed —
+            // logged so those three stop being indistinguishable.
+            let reason = headResult == nil ? "HEAD request failed" : "no parseable landing URL"
+            Self.logger.error("Webtoons redirect lookup failed: \(reason, privacy: .public)")
+            return []
+        }
 
         if let english = WebtoonsFeedParser.englishVariant(of: landed) {
             return [english, landed]

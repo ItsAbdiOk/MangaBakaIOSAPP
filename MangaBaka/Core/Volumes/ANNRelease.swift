@@ -90,7 +90,7 @@ enum ANNEncyclopedia {
     ///   decides it lives on the series (`VolumeEditions.role(of:in:)`), and
     ///   this function does not have one.
     nonisolated static func volumes(in entry: ANNEntry, role: EditionLanguageRole) -> [EditionVolume] {
-        let edition = VolumeEdition(
+        let mainEdition = VolumeEdition(
             catalogue: .animeNewsNetwork, language: "en",
             languageRole: role, editionTitle: entry.name
         )
@@ -103,10 +103,57 @@ enum ANNEncyclopedia {
                 releaseDate: PartialDate.parse(release.date),
                 isbn13: release.ean.flatMap(normalisedISBN),
                 format: parts.format,
-                edition: edition,
+                edition: edition(
+                    for: release.text, role: role, seriesName: entry.name, mainEdition: mainEdition
+                ),
                 sourceLink: href
             )
         }
+    }
+
+    /// A spin-off release must not land on the main run's shelf as a second
+    /// "vol. 1" — the exact bug NDL had (`NDLQuery+WorkTitle.swift`), applied
+    /// here (item P4): One Piece's ANN entry carries `One Piece: Ace's
+    /// Story-The Manga (GN 1)` and `One Piece - Romance Dawn (eBook 1)`
+    /// beside the main run's own `One Piece (GN 1)`, all three at "vol. 1".
+    ///
+    /// The title before the trailing format marker is compared, normalised,
+    /// to the series' own ANN name (`AppleBooksMatch.normalise`, already used
+    /// for exactly this kind of comparison). When they agree, the release is
+    /// the main run and gets `mainEdition`. When they disagree, it is a
+    /// different work and gets its own edition — `"<name> · <its own
+    /// prefix>"` — so `VolumeEditions.merge`'s `(edition, format)` grouping
+    /// puts it on a shelf of its own rather than counting it into the main
+    /// run's total.
+    nonisolated private static func edition(
+        for releaseText: String, role: EditionLanguageRole, seriesName: String?, mainEdition: VolumeEdition
+    ) -> VolumeEdition {
+        guard let seriesName else { return mainEdition }
+        // A box set is the main run collected, never a different work —
+        // `Delicious in Dungeon [Complete Box Set] (GN)` and `One Piece -
+        // Wano to Egghead Box Set (GN 91-111)` both carry a prefix that is
+        // not the series name and both belong on its shelf. Without this
+        // the Delicious in Dungeon control fixture split into two editions.
+        guard readMarker(in: releaseText).format != .boxSet else { return mainEdition }
+        let prefix = titlePrefix(in: releaseText)
+        guard !prefix.isEmpty,
+              AppleBooksMatch.normalise(prefix) != AppleBooksMatch.normalise(seriesName)
+        else {
+            return mainEdition
+        }
+        return VolumeEdition(
+            catalogue: .animeNewsNetwork, language: "en", languageRole: role,
+            editionTitle: "\(seriesName) · \(prefix)"
+        )
+    }
+
+    /// Everything before the trailing format marker — "Delicious in Dungeon
+    /// (GN 1)" → "Delicious in Dungeon". The title as a whole when it carries
+    /// no marker at all.
+    nonisolated static func titlePrefix(in title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasSuffix(")"), let open = trimmed.lastIndex(of: "(") else { return trimmed }
+        return String(trimmed[trimmed.startIndex..<open]).trimmingCharacters(in: .whitespaces)
     }
 
     /// The format marker and volume number at the end of an ANN release
@@ -138,8 +185,13 @@ enum ANNEncyclopedia {
         let marker = words.joined(separator: " ").lowercased()
         let collected = (digits?.contains("-") ?? false) || saysBoxSet
         let format: VolumeFormat = switch marker {
-        case "gn", "manga", "novel", "sc", "hc", "omnibus": collected ? .boxSet : .print
+        case "gn", "manga", "sc", "hc", "omnibus": collected ? .boxSet : .print
         case "ebook", "e-book", "digital": collected ? .boxSet : .digital
+        // `.other`, never `.print`: a `(Novel n)` release is prose beside the
+        // comic, the same failure family Apple Books had (`BookEdition.
+        // swift`'s `.unknown` case) — item P9. No mixed ANN entry has been
+        // observed yet; this is the guard for the day one is.
+        case "novel": .other
         default: collected ? .boxSet : .other
         }
         return (format, collected ? nil : digits.flatMap(Int.init))
@@ -162,6 +214,15 @@ enum ANNEncyclopedia {
         var releases: [ANNRelease] = []
         var warning: String?
         var sawRoot = false
+        /// How many `<manga>` elements have been seen. `title=<id>` answers
+        /// exactly one; a name lookup (never used by this client — see
+        /// `ANNClient.encyclopediaID(for:)`) can answer several, and those
+        /// extra records are other series, not more releases of this one.
+        /// `mangaID`/`mangaName` already kept only the first (item P19); this
+        /// is the same rule applied to `releases`, so a caller that ever adds
+        /// a name lookup does not inherit a different series' releases by
+        /// accident.
+        private var mangaCount = 0
 
         /// A `<release>`'s attributes, held while its text is still being
         /// read. A named type rather than a tuple: three members is one past
@@ -186,11 +247,18 @@ enum ANNEncyclopedia {
                 // The first `<manga>` only. `api.xml?title=<id>` returns one,
                 // but a name lookup can return several and the extra records
                 // are other series with similar names, not this one.
+                mangaCount += 1
                 if mangaID == nil {
                     mangaID = attributes["id"].flatMap(Int.init)
                     mangaName = attributes["name"]
                 }
             case "release":
+                // A release past the first `<manga>` never sets `pending`, so
+                // `didEndElement`'s `if let pending` already drops it there —
+                // this guard is what keeps it from being set in the first
+                // place, for the one caller (a hypothetical name lookup) that
+                // could ever see a second `<manga>` at all.
+                guard mangaCount <= 1 else { break }
                 pending = Pending(
                     date: attributes["date"],
                     // Through `SafeLink.web`, the app's one rule about what a

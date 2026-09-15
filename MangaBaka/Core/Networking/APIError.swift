@@ -211,10 +211,18 @@ enum APIError: Error, Equatable {
     /// content may be misleading. A cancellation says nothing about the
     /// content either — the reader simply isn't waiting on this answer
     /// anymore, so whatever is already on screen is still exactly as good.
+    ///
+    /// `.transport` used to sit with `.decoding` here (both `false`), which
+    /// meant a 20 s timeout or a DNS failure on a slow link hid the 6-hour
+    /// cached copy the page was already holding, under "The request didn't
+    /// complete." — indistinguishable from an actual shape change. A
+    /// transport failure says nothing about whether the cache is still
+    /// good; only `.decoding` (the shape itself changed) does (wire review
+    /// W6/P6, 2026-09-15).
     var staleContentRemainsUseful: Bool {
         switch self {
-        case .offline, .rateLimited, .server, .cancelled: true
-        case .decoding, .transport: false
+        case .offline, .rateLimited, .server, .cancelled, .transport: true
+        case .decoding: false
         }
     }
 

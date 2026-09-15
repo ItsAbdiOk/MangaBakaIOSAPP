@@ -30,8 +30,21 @@ private struct ArrivesModifier: ViewModifier {
             .transition(.blurReplace)
             .onAppear {
                 guard !hasArrived else { return }
-                withAnimation(Motion.arrival(index: index)) {
+                // S2/S9J — measure-first, no behaviour change: a Signpost
+                // interval spanning this view's own arrival blur (radius
+                // 6→0 over `Motion.arrival`), so an Instruments run on a
+                // 30-card fling can attribute frame cost to this rather
+                // than guessing between it and the cover pipeline's own
+                // cost (S1/S3/S4, `CoverStore` — outside this agent's
+                // files). Ends via the animation's own completion, not a
+                // timer, so it is exact regardless of `Motion.arrival`'s
+                // duration or Reduce Motion collapsing it to instant.
+                let signpostID = Signposts.signposter.makeSignpostID()
+                let state = Signposts.signposter.beginInterval("row arrival blur", id: signpostID)
+                withAnimation(Motion.arrival(index: index), completionCriteria: .logicallyComplete) {
                     hasArrived = true
+                } completion: {
+                    Signposts.signposter.endInterval("row arrival blur", state)
                 }
             }
     }

@@ -74,9 +74,12 @@ enum ReleaseSummary: Equatable, Sendable {
         }
 
         // Checked first: a finished season is not a gap to estimate over, it
-        // is the reason the gap exists.
-        if let season = feed.endedSeason, let endedOn = feed.lastEpisodeAt {
-            return .seasonEnded(season: season, on: endedOn)
+        // is the reason the gap exists. Keyed on `finaleEndedAt`, not
+        // `endedSeason` (R8/P8): a finale whose title carries no season
+        // number still ended, and used to fall through to the gap-based
+        // estimate below, which called it "overdue" instead.
+        if let endedOn = feed.finaleEndedAt {
+            return .seasonEnded(season: feed.endedSeason, on: endedOn)
         }
 
         guard episodes.count > 1 else {

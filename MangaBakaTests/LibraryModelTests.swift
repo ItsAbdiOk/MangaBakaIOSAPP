@@ -133,13 +133,13 @@ struct LibraryModelTests {
     /// unreachable. Inverted per the batch table: a credentialed reader with
     /// nothing saved gets the real empty state, not "add a token".
     /// Expected to fail before the fix with: `screenState == .noAccount`
-    /// (the assertion this replaced: `#expect(!model.hasAccount)`).
+    /// (the assertion this replaced: `#expect(model.screenState == .noAccount)`).
     @Test("No entries with a credential reads as an empty library, not a missing account")
     func noAccount() async throws {
         let model = LibraryModel(library: StubLibrary(entries: []))
         await model.load()
         #expect(model.screenState == .empty)
-        #expect(model.hasAccount)
+        #expect(model.screenState != .noAccount)
     }
 
     @Test("A library past a thousand entries loads all of it")

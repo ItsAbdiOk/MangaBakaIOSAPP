@@ -28,6 +28,15 @@ actor TasteProfile {
     private var cachedIDs: Set<Int>?
     private var inFlight: Task<Set<String>?, Never>?
     private var inFlightIDs: Task<Set<Int>, Never>?
+    /// The raw `top-genres` answer, shared between `favouredTagNames()` and
+    /// `favouredTagIDs()` so the endpoint is asked once per session instead of
+    /// twice (R6/P6: launch and the first series page each asked it
+    /// separately). Only a *successful* fetch is cached — same rule as
+    /// `favouredTagNames`'s own `cached`, so a 429 or offline moment at launch
+    /// does not lock the genre half of the profile to "nothing" for the rest
+    /// of the session.
+    private var cachedGenres: [TopGenre]?
+    private var inFlightGenres: Task<[TopGenre]?, Never>?
 
     init(
         library: any LibraryProviding,
@@ -49,8 +58,8 @@ actor TasteProfile {
         // Two series pages opened at once must not make two requests.
         if let inFlight { return await inFlight.value ?? [] }
 
-        let task = Task<Set<String>?, Never> { [library] in
-            let genres = await library.topGenres()
+        let task = Task<Set<String>?, Never> { [self] in
+            let genres = await self.fetchTopGenres()
             return genres.map { Set($0.map { $0.tagName.lowercased() }) }
         }
         inFlight = task
@@ -60,6 +69,24 @@ actor TasteProfile {
         if let result { cached = result }
         inFlight = nil
         return result ?? []
+    }
+
+    /// The shared `top-genres` fetch behind `favouredTagNames()` and
+    /// `favouredTagIDs()`/`buildIDs()`. Dedups concurrent callers the same way
+    /// the two public methods already dedup themselves, and — like them —
+    /// only remembers a successful answer.
+    private func fetchTopGenres() async -> [TopGenre]? {
+        if let cachedGenres { return cachedGenres }
+        if let inFlightGenres { return await inFlightGenres.value }
+
+        let task = Task<[TopGenre]?, Never> { [library] in
+            await library.topGenres()
+        }
+        inFlightGenres = task
+        let genres = await task.value
+        if let genres { cachedGenres = genres }
+        inFlightGenres = nil
+        return genres
     }
 
     /// The tags this reader's own reading is actually made of.
@@ -80,8 +107,8 @@ actor TasteProfile {
         // Two series pages opened at once must not both page the library.
         if let inFlightIDs { return await inFlightIDs.value }
 
-        let task = Task<Set<Int>, Never> { [library, ledger, snapshot] in
-            await Self.buildIDs(library: library, ledger: ledger, snapshot: snapshot)
+        let task = Task<Set<Int>, Never> { [self] in
+            await self.buildIDs()
         }
         inFlightIDs = task
         let ids = await task.value
@@ -97,20 +124,35 @@ actor TasteProfile {
     /// tags and nothing is fetched per series. The cap matches `LibraryModel`'s
     /// for the same reason: bounded, but far past any real library. Ten pages
     /// was not — Abdi's library is 937 entries against a 1,000 ceiling.
-    private static func buildIDs(
-        library: any LibraryProviding,
-        ledger: TasteLedger?,
-        snapshot: LibrarySnapshot?
-    ) async -> Set<Int> {
+    private func buildIDs() async -> Set<Int> {
         if let ledger, let snapshot {
             // The whole `Result`, not its entries: `absorb` retracts every
             // source that is missing from what it is given, and a failed walk
             // and an empty library are the same `[]` (work-list 5).
-            try? await ledger.absorb(await snapshot.load())
+            do {
+                try await ledger.absorb(await snapshot.load())
+            } catch {
+                // R20/P20: a throw here used to be silent, and made the
+                // whole profile read as "likes nothing" for the rest of the
+                // session with no way to tell that apart from a reader with
+                // a genuinely empty library.
+                let description = String(describing: error)
+                Self.logger.error("Ledger absorb failed: \(description, privacy: .public)")
+            }
         }
 
-        let local = (try? await ledger?.favouredIDs()) ?? []
-        let genres = Set((await library.topGenres() ?? []).map(\.tagId))
+        let local: Set<Int>
+        do {
+            local = try await ledger?.favouredIDs() ?? []
+        } catch {
+            let description = String(describing: error)
+            Self.logger.error("Ledger favouredIDs failed: \(description, privacy: .public)")
+            local = []
+        }
+        // Shared with `favouredTagNames()` (R6/P6): one `top-genres` request
+        // per session instead of two, and a failure is not cached as "no
+        // genres" — the next caller asks again.
+        let genres = Set((await fetchTopGenres() ?? []).map(\.tagId))
         return local.union(genres)
     }
 
@@ -118,9 +160,21 @@ actor TasteProfile {
     /// much each series shares with what they read. Empty — and so a no-op —
     /// for a reader with no library. Sixty tags rather than the highlight's
     /// thirty: a ranker wants the long tail, a highlight would drown in it.
+    /// **A guess** — reasoned that a ranker wants more tags than a highlight,
+    /// not measured against how a real ranking changes at 60 vs. some other
+    /// number.
     func ranker() async -> TasteRanker {
         _ = await favouredTagIDs()   // fills the ledger from the library first
-        let affinities = (try? await ledger?.favoured(limit: 60)) ?? []
+        let affinities: [TagAffinity]
+        do {
+            affinities = try await ledger?.favoured(limit: 60) ?? []
+        } catch {
+            // R20/P20: an empty ranker reads as "nothing in common with
+            // anything", not as "the read failed" — worth knowing which.
+            let description = String(describing: error)
+            Self.logger.error("Ledger favoured(limit:) failed: \(description, privacy: .public)")
+            affinities = []
+        }
         return TasteRanker(affinities: affinities)
     }
 
@@ -205,8 +259,10 @@ actor TasteProfile {
     func invalidate() {
         cached = nil
         cachedIDs = nil
+        cachedGenres = nil
         inFlight = nil
         inFlightIDs = nil
+        inFlightGenres = nil
     }
 }
 

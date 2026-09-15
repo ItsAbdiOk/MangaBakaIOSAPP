@@ -29,8 +29,10 @@ struct SeriesPager<Content: View>: View {
     let content: (Series) -> Content
 
     /// Seeded in `init`, not in `onAppear`. Assigning it after the first
-    /// layout meant `items[0]`'s `SeriesDetailView.task` fired its nine-request
-    /// `loadCore` at `userInitiated` for a series the reader never opened, and
+    /// layout meant `items[0]`'s `SeriesDetailView.task` fired its
+    /// eight-request `loadCore` (nine on a long series — the number lives in
+    /// four places, corrected here 2026-09-15; see the perf review's detail
+    /// report) at `userInitiated` for a series the reader never opened, and
     /// the jump to the real one animated through every page between — worst
     /// case a 60-item publisher row opened at its 40th card (item 56).
     @State private var position: Series.ID?

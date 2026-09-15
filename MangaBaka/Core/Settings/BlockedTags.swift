@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Tags the reader never wants to see, whatever a series is rated.
 ///
@@ -49,6 +50,7 @@ struct BlockedTags: Equatable, Sendable {
 @Observable
 final class BlockedTagsStore {
     private static let key = "content.blockedTags"
+    private static let logger = Logger(subsystem: "dev.abdirahmanmohamed.mangabaka", category: "settings")
 
     private(set) var blocked: BlockedTags
     private let defaults: UserDefaults
@@ -60,9 +62,20 @@ final class BlockedTagsStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.key),
-           let stored = try? JSONDecoder().decode([BlockedTags.Blocked].self, from: data) {
-            blocked = BlockedTags(tags: stored)
+        if let data = defaults.data(forKey: Self.key) {
+            do {
+                blocked = BlockedTags(tags: try JSONDecoder().decode([BlockedTags.Blocked].self, from: data))
+            } catch {
+                // D1: a corrupt or unreadable stored list used to become
+                // "nothing blocked" with nothing on record — the one
+                // Settings case where silence changes what the reader sees,
+                // not just what they are told about a cache. Same safe
+                // fallback; now logged.
+                Self.logger.error("""
+                    blocked tags decode failed: \(String(describing: error), privacy: .public)
+                    """)
+                blocked = .none
+            }
         } else {
             blocked = .none
         }
@@ -74,8 +87,10 @@ final class BlockedTagsStore {
         guard updated != blocked else { return }
 
         blocked = updated
-        if let data = try? JSONEncoder().encode(updated.tags) {
-            defaults.set(data, forKey: Self.key)
+        do {
+            defaults.set(try JSONEncoder().encode(updated.tags), forKey: Self.key)
+        } catch {
+            Self.logger.error("blocked tags encode failed: \(String(describing: error), privacy: .public)")
         }
         await onChange?(updated.ids)
     }

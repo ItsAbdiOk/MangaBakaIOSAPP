@@ -25,20 +25,30 @@ struct EditionShelf: Sendable, Equatable, Identifiable {
     /// must not call a partial shelf complete: `OwnedSummary.line` drops
     /// "of M" and "missing" on one.
     let isPartial: Bool
+    /// How many records the catalogue holds in total, when it said —
+    /// NDL's `<numberOfRecords>`. Nil when the shelf is complete, or the
+    /// catalogue that answered does not state a total (Open Library's
+    /// `size` is decoded but not carried this far yet). What lets
+    /// `isPartial` read as "still more to come" rather than a bare warning:
+    /// "first 50 of 84 on record" instead of "more volumes on record than
+    /// shown".
+    let totalRecords: Int?
 
     var id: String { "\(edition.id)-\(format.rawValue)" }
 
-    /// `format` and `isPartial` default to the common case — a print shelf
-    /// from a complete page — written out because a `let` with a default is
-    /// left out of the synthesised memberwise init.
+    /// `format`, `isPartial` and `totalRecords` default to the common case —
+    /// a print shelf from a complete page, no total to report — written out
+    /// because a `let` with a default is left out of the synthesised
+    /// memberwise init.
     init(
         edition: VolumeEdition, format: VolumeFormat = .print, volumes: [EditionVolume],
-        isPartial: Bool = false
+        isPartial: Bool = false, totalRecords: Int? = nil
     ) {
         self.edition = edition
         self.format = format
         self.volumes = volumes
         self.isPartial = isPartial
+        self.totalRecords = totalRecords
     }
 
     /// The earliest volume in this edition dated after `now`, or why there

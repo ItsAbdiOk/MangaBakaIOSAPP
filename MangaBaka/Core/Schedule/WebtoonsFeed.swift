@@ -97,19 +97,36 @@ struct ReleaseFeed: Equatable, Sendable, Codable {
             && now.timeIntervalSince(last) > Self.staleDailyPassAge
     }
 
-    /// Whether the run ended rather than stalled.
+    /// The finale entry, when the run ended rather than stalled.
     ///
     /// A season that has finished publishes its finale and then its afterwords,
     /// and stops. A gap-based estimate sees only "nothing for weeks" and calls
     /// that late. Reading the finale marker is what tells the two apart — and
     /// the difference is "Season 1 ended on 28 August" against "overdue since
-    /// August", which are opposite claims to make to a reader.
-    var endedSeason: Int? {
+    /// August", which are opposite claims to make to a reader. Shared by
+    /// `endedSeason` and `finaleEndedAt` so there is one place that decides
+    /// "is this a finale", not two.
+    private var finaleEntry: ReleaseEntry? {
         guard let finale = entries.first(where: { WebtoonsTitle.marksFinale($0.title) }),
               let latest = lastEpisodeAt, finale.published >= latest
         else { return nil }
-        return finale.season
+        return finale
     }
+
+    /// The season the finale's title states, e.g. "Season 2 Finale". Nil both
+    /// when there is no finale and when there is one but its title carries no
+    /// season number — check `finaleEndedAt`, not this, to tell a finale
+    /// apart from no finale at all.
+    var endedSeason: Int? { finaleEntry?.season }
+
+    /// When the run ended — non-nil whenever a finale is detected, even one
+    /// whose title has no season number (R8/P8). Before this, `endedSeason`
+    /// was the only signal a finale had happened, so "Ep. 120 (Final
+    /// Episode)" — a real finale with no "Season N" in its title — fell
+    /// through both here and in `ReleaseSummary.summarise` to a gap-based
+    /// estimate, which read the exact opposite claim: "overdue" instead of
+    /// "ended".
+    var finaleEndedAt: Date? { finaleEntry?.published }
 }
 
 /// Everything specific to reading a Webtoons series feed: turning a stored

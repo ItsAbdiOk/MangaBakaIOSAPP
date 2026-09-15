@@ -53,7 +53,9 @@ actor GoogleBooksClient {
     /// Call this only when Apple Books came back empty for the series — this
     /// is gap-filling, not a second source fired on every page, per Abdi's
     /// scoping (2026-09-12).
-    func volumes(for series: Series, language: String? = nil) async -> [GoogleBooksVolume]? {
+    func volumes(
+        for series: Series, language: String? = nil, format: WikidataFormat? = nil
+    ) async -> [GoogleBooksVolume]? {
         guard let query = series.displayTitle, !query.isEmpty else { return [] }
         // Versioned like Apple's cache key: a matcher change must not be
         // outlived by a week of answers made under the old rule. v2: routed
@@ -65,7 +67,14 @@ actor GoogleBooksClient {
 
         guard let items = await search(query) else { return nil }
         let titles = [series.displayTitle].compactMap { $0 } + (series.titles?.map(\.title) ?? [])
-        let isNovel = series.type?.lowercased().contains("novel") ?? false
+        // `AppleBooksClient.isNovel(series:format:)`, not a second copy of the
+        // same rule (item P16): the old `series.type?.contains("novel")`
+        // check ignored the Wikidata fallback Apple's shelf already
+        // consults, so a series with a nil `type` that Wikidata calls prose
+        // built a comic shelf here and a novel shelf on Apple's — the same
+        // series, disagreeing with itself, then mixed by number at
+        // `ShelfVolume.merge`.
+        let isNovel = AppleBooksClient.isNovel(series: series, format: format)
         let matched = GoogleBooksMatch.volumes(
             in: items, titles: titles, isNovel: isNovel, language: language
         )

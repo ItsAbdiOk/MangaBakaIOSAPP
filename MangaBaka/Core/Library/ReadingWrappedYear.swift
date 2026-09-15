@@ -222,14 +222,13 @@ extension ReadingWrapped {
         tally(readAtAll(entries).compactMap { $0.series?.type?.capitalized })
     }
 
-    /// The decades the reader's library comes from, largest first.
-    static func decades(in entries: [LibraryEntry]) -> [Slice] {
-        tally(readAtAll(entries).compactMap { entry -> String? in
-            guard let year = entry.series?.year, year > 1900 else { return nil }
-            return "\(year / 10 * 10)s"
-        })
-        .sorted { $0.label < $1.label }
-    }
+    // `decades(in:)` (grouped the library by the decade its series were
+    // published in) was deleted here (R17/P17-libraryui): it was tested
+    // (`ReadingWrappedTests`) but `WrappedView` never built a card from it —
+    // either a card was planned and dropped, or it was dead from the start.
+    // No Wrapped card exists in the current mockups for "decades", so this
+    // is deletion, not a missing presenter; a decade card can be reintroduced
+    // from `LibraryEntry.series.year` if a future design asks for one.
 
     /// The people the reader reads most.
     ///
