@@ -420,6 +420,10 @@ struct FeedResult: Sendable {
     /// When the cached copy was written, for a stale result that needs to say
     /// how old it is. Nil for anything that came off the network.
     var cachedAt: Date?
+    /// Per series id, the recommendation envelope's caption ("10 shared
+    /// tags", "86 readers") on the three feeds that carry one; empty on every
+    /// other feed. See `RecommendationNote`.
+    var notes: [Int: RecommendationNote] = [:]
     /// Whether the API itself says another page exists (`pagination.next !=
     /// nil`), not whether this page's `series` count reached the limit.
     ///
@@ -563,7 +567,7 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             // are search-backed against the 30-per-minute family. An empty
             // answer written an hour ago is an answer.
             if age >= 0, age < feed.freshness {
-                return FeedResult(series: existing.series, origin: .cache)
+                return FeedResult(series: existing.series, origin: .cache, notes: existing.notes)
             }
         }
 
@@ -602,11 +606,11 @@ actor SeriesRepository: SeriesRepositoryProtocol {
                 // `.cache` result in this repository carries a `cachedAt`
                 // either.
                 try? touchFeedMetadata(feed)
-                return FeedResult(series: existing.series, origin: .cache)
-            case let .fresh(series, lastModified):
-                let discoverable = series.filter { $0.isDiscoverable && allowsFormat($0) }
-                try? write(discoverable, for: feed, lastModified: lastModified)
-                return FeedResult(series: discoverable, origin: .network)
+                return FeedResult(series: existing.series, origin: .cache, notes: existing.notes)
+            case let .fresh(page, lastModified):
+                let discoverable = page.series.filter { $0.isDiscoverable && allowsFormat($0) }
+                try? write(discoverable, for: feed, lastModified: lastModified, notes: page.notes)
+                return FeedResult(series: discoverable, origin: .network, notes: page.notes)
             }
         } catch {
             // Falling back to stale cache is the whole point of the cache on a
@@ -614,7 +618,8 @@ actor SeriesRepository: SeriesRepositoryProtocol {
             return FeedResult(
                 series: existing.series,
                 origin: .staleAfter(error),
-                cachedAt: existing.cachedAt
+                cachedAt: existing.cachedAt,
+                notes: existing.notes
             )
         }
     }

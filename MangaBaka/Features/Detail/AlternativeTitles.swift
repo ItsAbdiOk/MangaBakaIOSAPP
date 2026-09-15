@@ -20,11 +20,68 @@ struct AlternativeTitlesButton: View {
     let titles: [SeriesTitle]
     /// The one already on screen, which should not be counted or repeated.
     let shown: String?
+    /// `romanized_title` / `native_title` / `secondary_titles` from
+    /// `/v1/series/{id}` — three more places names live, outside the
+    /// `titles` array itself. Optional and defaulted so an existing caller
+    /// that only knows about `titles` keeps compiling; a caller wanting
+    /// these shown passes them explicitly. See `SeriesRecordFieldsTests`.
+    var romanizedTitle: String?
+    var nativeTitle: String?
+    var secondaryTitles: [String: [SecondaryTitle]]?
 
     @State private var isOpen = false
 
     private var others: [SeriesTitle.Alternative] {
-        SeriesTitle.alternatives(in: titles, excluding: shown)
+        SeriesTitle.alternatives(
+            in: Self.merging(
+                romanizedTitle: romanizedTitle, nativeTitle: nativeTitle,
+                secondaryTitles: secondaryTitles, into: titles, shown: shown
+            ),
+            excluding: shown
+        )
+    }
+
+    /// `titles` plus whatever `romanizedTitle`/`nativeTitle`/`secondaryTitles`
+    /// name that is not already in there — case-insensitively, since the
+    /// record measured for this (series 2060, 2026-09-15) has its
+    /// `native_title` and `romanized_title` both duplicating an existing
+    /// `titles` entry verbatim, and every one of its `secondary_titles` also
+    /// duplicating one. Nothing in that fixture actually adds a row; a
+    /// series without that overlap is the case this guards for.
+    nonisolated static func merging(
+        romanizedTitle: String?, nativeTitle: String?,
+        secondaryTitles: [String: [SecondaryTitle]]?,
+        into titles: [SeriesTitle], shown: String?
+    ) -> [SeriesTitle] {
+        var merged = titles
+        var seenLower = Set(titles.map { $0.title.lowercased() })
+        if let shown { seenLower.insert(shown.lowercased()) }
+
+        // The native title's own language, read off whichever existing entry
+        // already carries the "native" trait — the same rule
+        // `Series.nativeLanguage` uses, and excluding `-Latn` for the same
+        // reason: that tag names a romanisation, not the native language.
+        let nativeLanguage = titles.first {
+            $0.traits.contains("native") && !$0.language.hasSuffix("-Latn")
+        }?.language
+
+        func add(_ title: String?, language: String, traits: [String]) {
+            guard let title, !title.isEmpty, !seenLower.contains(title.lowercased()) else { return }
+            merged.append(SeriesTitle(language: language, traits: traits, title: title, isPrimary: nil))
+            seenLower.insert(title.lowercased())
+        }
+
+        // "native"/"romanized"/"alternative" as language tags are a guess for
+        // the (rare, given the dedup above) case where none of the real
+        // titles say what language these are in — `LanguageFlag` shows the
+        // tag itself, upper-cased, for anything it does not recognise,
+        // rather than drawing a wrong flag.
+        add(nativeTitle, language: nativeLanguage ?? "native", traits: ["native"])
+        add(romanizedTitle, language: nativeLanguage.map { "\($0)-Latn" } ?? "romanized", traits: [])
+        for entry in (secondaryTitles ?? [:]).values.flatMap({ $0 }) {
+            add(entry.title, language: entry.type ?? "alternative", traits: [])
+        }
+        return merged
     }
 
     var body: some View {

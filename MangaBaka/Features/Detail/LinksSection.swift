@@ -113,8 +113,58 @@ struct LinksSection: View {
 /// Recent news mentioning the series.
 struct NewsSection: View {
     let items: [NewsItem]
+    /// The series this detail page is showing, so "Also mentions N other
+    /// series" can subtract it out of `mentionedSeries`. Optional because the
+    /// caller may not have it in hand; when nil this view falls back to
+    /// counting every id minus one, which undercounts by exactly one on any
+    /// article that does not mention the current series at all — unsure how
+    /// often that happens, so prefer passing this when possible.
+    var currentSeriesID: Int?
 
     @Environment(\.openURL) private var openURL
+
+    /// "Also mentions 2 other series", or nothing for an article that only
+    /// mentions the one series already on screen. Not `private`: exercised
+    /// directly from `EditionAndNewsFieldsTests`.
+    func otherMentionsLabel(_ item: NewsItem) -> String? {
+        Self.otherMentionsLabel(item, currentSeriesID: currentSeriesID)
+    }
+
+    /// `nonisolated static`, so a test can call it off the main actor — the
+    /// instance form above is main-actor-bound like every SwiftUI view, and
+    /// calling it from a test crashed the whole test host (2026-09-15,
+    /// `dispatch_assert_queue_fail`).
+    nonisolated static func otherMentionsLabel(_ item: NewsItem, currentSeriesID: Int?) -> String? {
+        guard let ids = item.mentionedSeries else { return nil }
+        let others = if let currentSeriesID {
+            ids.filter { $0 != currentSeriesID }.count
+        } else {
+            max(0, ids.count - 1)
+        }
+        guard others > 0 else { return nil }
+        return "Also mentions \(others) other series"
+    }
+
+    /// "ann · Wonhee Cho", "ann", "3 hours ago" — whatever of source, author
+    /// and date the item actually has, verbatim. Source names arrive
+    /// lowercase on the wire ("ann"); shown as received rather than guessing
+    /// at a display form ("ANN") nothing has confirmed for every source.
+    private func newsMetaLine(_ item: NewsItem) -> String {
+        var parts: [String] = []
+        if let sourceName = item.sourceName, !sourceName.isEmpty {
+            if let author = item.author, !author.isEmpty {
+                parts.append("\(sourceName) · \(author)")
+            } else {
+                parts.append(sourceName)
+            }
+        } else if let author = item.author, !author.isEmpty {
+            parts.append(author)
+        }
+        if let date = item.publishedAt {
+            parts.append(date.formatted(.relative(presentation: .named)))
+        }
+        return parts.joined(separator: " · ")
+    }
 
     /// Gap 78: an item whose URL `safeURL` refused (a `javascript:` scheme, an
     /// unparseable string) used to reach the row anyway, drawn identically to
@@ -142,8 +192,13 @@ struct NewsSection: View {
                                 .foregroundStyle(Palette.textPrimary)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
-                            if let date = item.publishedAt {
-                                Text(date.formatted(.relative(presentation: .named)))
+                            if item.publishedAt != nil || item.sourceName != nil || item.author != nil {
+                                Text(newsMetaLine(item))
+                                    .typeSmallMeta()
+                                    .foregroundStyle(Palette.textMuted)
+                            }
+                            if let mentions = otherMentionsLabel(item) {
+                                Text(mentions)
                                     .typeSmallMeta()
                                     .foregroundStyle(Palette.textMuted)
                             }

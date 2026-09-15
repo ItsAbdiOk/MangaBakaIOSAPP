@@ -10,6 +10,11 @@ struct DetailOnwardRows: View {
     let relationships: [SeriesRelationship]
     let similar: [Series]
     let alsoLike: [Series]
+    /// The caption under each card — "10 shared tags", "86 readers" — keyed
+    /// by series id, from `FeedResult.notes`. Empty on a page whose feeds
+    /// were cached before the note column existed.
+    var similarNotes: [Int: RecommendationNote] = [:]
+    var alsoLikeNotes: [Int: RecommendationNote] = [:]
     /// Nearest neighbours over the bundled sentence embeddings — see
     /// `EmbeddingIndex`. Never a `FeedResult`: this never asks a network
     /// that can fail, so there is nothing here to retry. Empty means either
@@ -90,11 +95,15 @@ struct DetailOnwardRows: View {
 
     var body: some View {
         relatedRow
+        // The website's own headings and subtitles (2026-09-15): a row that
+        // says what it is based on is one a reader can weigh.
         onwardRow(
-            "Similar", similar, failure: similarFailure, retry: onRetrySimilar
+            "Similar series", subtitle: "Based on shared tags", similar, notes: similarNotes,
+            failure: similarFailure, retry: onRetrySimilar
         )
         onwardRow(
-            "Readers also like", alsoLike, failure: alsoLikeFailure, retry: onRetryAlsoLike
+            "Readers also like", subtitle: "Based on shared library activity", alsoLike,
+            notes: alsoLikeNotes, failure: alsoLikeFailure, retry: onRetryAlsoLike
         )
         similarByDescriptionRow
     }
@@ -153,7 +162,8 @@ struct DetailOnwardRows: View {
 
     @ViewBuilder
     private func onwardRow(
-        _ title: String, _ rawItems: [Series], failure: APIError?, retry: (() async -> Void)?
+        _ title: String, subtitle: String? = nil, _ rawItems: [Series],
+        notes: [Int: RecommendationNote] = [:], failure: APIError?, retry: (() async -> Void)?
     ) -> some View {
         let items = Self.deduplicated(rawItems)
         let state = Self.onwardRowState(items: items, isLoading: isLoading, failure: failure)
@@ -163,7 +173,7 @@ struct DetailOnwardRows: View {
                 EmptyView()
             case .loading:
                 VStack(alignment: .leading, spacing: 11) {
-                    header(title)
+                    header(title, subtitle: subtitle)
                     HStack(spacing: Metrics.gapCovers) {
                         ForEach(0..<3, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: Metrics.radiusCoverRow, style: .continuous)
@@ -179,39 +189,12 @@ struct DetailOnwardRows: View {
                 .transition(.blurReplace)
             case let .failed(error):
                 VStack(alignment: .leading, spacing: 11) {
-                    header(title)
+                    header(title, subtitle: subtitle)
                     InlineFailure(error: error, retry: retry)
                 }
                 .transition(.blurReplace)
             case .list:
-                VStack(alignment: .leading, spacing: 11) {
-                    header(title)
-                    ScrollView(.horizontal) {
-                        // Lazy, same reasoning as `relatedRow` (item 58).
-                        LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
-                            ForEach(items) { item in
-                                Button {
-                                    zoomRoute?.source = ZoomRoute.id(title, item.id)
-                                    // This row's items (item 122).
-                                    zoomRoute?.neighbours = items
-                                    path.append(item)
-                                } label: {
-                                    CoverCard(series: item, width: Metrics.coverDetailRowWidth)
-                                }
-                                .buttonStyle(.press)
-                                .zoomSource(title, item.id)
-                                .arrives()
-                                .enterScale()
-                            }
-                        }
-                        .padding(.horizontal, Metrics.gutter)
-                        .scrollTargetLayout()
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollTargetBehavior(.viewAligned)
-                }
-                .rowAmbient(items)
-                .transition(.blurReplace)
+                list(title, subtitle: subtitle, items: items, notes: notes)
             }
         }
         .animation(Motion.reduced(Motion.settle), value: state)
@@ -260,10 +243,53 @@ struct DetailOnwardRows: View {
         }
     }
 
-    private func header(_ title: String) -> some View {
-        Text(title)
-            .typeDetailSectionHeader()
-            .foregroundStyle(Palette.textPrimary)
-            .padding(.horizontal, Metrics.gutter)
+    private func list(
+        _ title: String, subtitle: String?, items: [Series], notes: [Int: RecommendationNote]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            header(title, subtitle: subtitle)
+            ScrollView(.horizontal) {
+                // Lazy, same reasoning as `relatedRow` (item 58).
+                LazyHStack(alignment: .top, spacing: Metrics.gapCovers) {
+                    ForEach(items) { item in
+                        Button {
+                            zoomRoute?.source = ZoomRoute.id(title, item.id)
+                            // This row's items (item 122).
+                            zoomRoute?.neighbours = items
+                            path.append(item)
+                        } label: {
+                            CoverCard(
+                                series: item, width: Metrics.coverDetailRowWidth,
+                                meta: notes[item.id]?.line
+                            )
+                        }
+                        .buttonStyle(.press)
+                        .zoomSource(title, item.id)
+                        .arrives()
+                        .enterScale()
+                    }
+                }
+                .padding(.horizontal, Metrics.gutter)
+                .scrollTargetLayout()
+            }
+            .scrollIndicators(.hidden)
+            .scrollTargetBehavior(.viewAligned)
+        }
+        .rowAmbient(items)
+        .transition(.blurReplace)
+    }
+
+    private func header(_ title: String, subtitle: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .typeDetailSectionHeader()
+                .foregroundStyle(Palette.textPrimary)
+            if let subtitle {
+                Text(subtitle)
+                    .typeGridMeta()
+                    .foregroundStyle(Palette.textMuted)
+            }
+        }
+        .padding(.horizontal, Metrics.gutter)
     }
 }

@@ -17,6 +17,9 @@ struct FeedEntry: Codable, FetchableRecord, PersistableRecord, Sendable {
     var feedKey: String
     var position: Int
     var seriesId: Int
+    /// A `RecommendationNote` as JSON, on the three recommendation-shaped
+    /// feeds; nil elsewhere and on every row written before `v15`.
+    var note: Data?
 }
 
 /// A series the reader saved or skipped.

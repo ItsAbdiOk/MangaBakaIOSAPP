@@ -125,6 +125,15 @@ struct NewsItem: Codable, Identifiable, Equatable, Sendable {
     let publishedAt: Date?
     /// Whether the series is the article's main subject rather than a mention.
     let primary: Bool?
+    /// The article's byline, when the source credits one — shown after the
+    /// source name in `NewsSection` ("ANN · Wonhee Cho").
+    let author: String?
+    /// The article's own type tag. Decoded only: the one value seen on
+    /// series 2060's news feed (2026-09-15) is "default", nothing to show yet.
+    let type: String?
+    /// Every series id the article mentions, current series included —
+    /// `NewsSection` counts the others to show "Also mentions N other series".
+    let mentionedSeries: [Int]?
 
     /// The URL only if it is an ordinary web link. Same reasoning as
     /// `SeriesLink.safeURL`: news URLs are contributed data too.
@@ -134,7 +143,7 @@ struct NewsItem: Codable, Identifiable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case newsID = "id"
-        case title, url, sourceName, publishedAt, primary
+        case title, url, sourceName, publishedAt, primary, author, type, mentionedSeries
     }
 }
 

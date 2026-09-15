@@ -21,6 +21,24 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
         let name: String?
     }
 
+    /// The catalogue blurb, wire shape `{"desc": "...", "source": "..."}`.
+    /// Only `desc` is kept — `source` (a publisher/site attribution string,
+    /// e.g. "Ize Press") is not shown anywhere yet and would need its own
+    /// design pass before it is.
+    struct Description: Codable, Sendable, Equatable {
+        let desc: String?
+    }
+
+    /// The physical trim size, in millimetres. Verified against
+    /// `series-2060-works-2026-09-15.json`: every row carries the same
+    /// `146.049…× 209.549…`, i.e. 5.75 × 8.25 inches, a standard manga
+    /// paperback trim — so the two-decimal noise is a unit-conversion
+    /// artifact upstream, not per-volume precision worth keeping.
+    struct Trim: Codable, Sendable, Equatable {
+        let wMm: Double
+        let hMm: Double
+    }
+
     struct Link: Codable, Sendable, Equatable {
         let type: String?
         let link: String?
@@ -31,6 +49,31 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     struct Image: Codable, Sendable, Equatable {
         let image: Cover?
         let type: String?
+    }
+
+    /// `inc_chapters` is `null` in every row of
+    /// `series-2060-works-2026-09-15.json`, and no other live payload has
+    /// been checked (2026-09-15). UNSURE: modeled leniently as a string that
+    /// also accepts a bare number, matching the pattern
+    /// `KeyedDecodingContainer.lenientDouble` in Series.swift uses for the
+    /// same problem elsewhere — a guess at the eventual shape, not a
+    /// verified one. Decoded only; nothing displays it yet.
+    struct IncludedChapters: Codable, Sendable, Equatable {
+        let raw: String
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let string = try? container.decode(String.self) {
+                raw = string
+            } else {
+                raw = String(try container.decode(Double.self))
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(raw)
+        }
     }
 
     let id: String
@@ -45,11 +88,41 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
     let identifiers: [Identifier]?
     let links: [Link]?
     let images: [Image]?
+    /// The catalogue blurb. Absent on old cached rows (pre-2026-09-15).
+    ///
+    /// Defaulted to `nil` — not just optional — so the memberwise
+    /// initializer stays source-compatible with the fixed call sites in
+    /// `VolumeEditionMergeTests`, `DetailFidelityTests` and
+    /// `NextVolumeSnapshotTests`, none of which are in scope for this change
+    /// and none of which pass this field.
+    var description: Description?
+    /// The physical trim size. Absent on old cached rows.
+    var trim: Trim?
+    /// "main" or "extra" — the only two values seen live, in
+    /// `series-2060-works-2026-09-15.json` (every sampled row is "main"; the
+    /// series' own collection metadata puts `count_extra` at 0, so this
+    /// fixture never exercises "extra" — `SeriesWorkFieldsTests` covers it
+    /// with hand-written JSON instead).
+    var countType: String?
+    /// Non-nil when this edition is bound together with another volume
+    /// (an omnibus naming the volume it is *part of*). `null` in the
+    /// fixture; tested with hand-written JSON.
+    var partOfVolume: String?
+    /// See `IncludedChapters` — decoded, shown nowhere.
+    var incChapters: IncludedChapters?
+    /// A catalogue note from the publisher/source, shown verbatim.
+    ///
+    /// These six are `var` with no initial value, not `let … = nil`: a `let`
+    /// with a default is skipped by the synthesised decoder, so every one of
+    /// them decoded as nil on the first run (2026-09-15) and the memberwise
+    /// init still needs them optional-with-default for the older call sites.
+    var note: String?
 
     enum CodingKeys: String, CodingKey {
         case id, sequenceString, sequenceNumeric, subTitle, releaseDate
         case pages, identifiers, links, images
         case prices = "price"
+        case description, trim, countType, partOfVolume, incChapters, note
     }
 
     /// The ISBN, where the publisher registered one. It is also what tells two
@@ -58,19 +131,42 @@ struct SeriesWork: Codable, Identifiable, Sendable, Equatable {
         identifiers?.first { $0.name?.lowercased() == "isbn" }?.id
     }
 
+    /// Which of several prices to show, given the reader's own currency code
+    /// (lowercased ISO, e.g. `"cad"`) — the reader's own currency if the
+    /// publisher listed one in it, otherwise whichever the publisher listed
+    /// first. A pure function of the list, not `Locale.current` itself, so
+    /// `SeriesWorkFieldsTests` can inject a currency without depending on the
+    /// test machine's locale.
+    static func pickPrice(from prices: [Price], preferredCurrencyCode: String?) -> Price? {
+        let priced = prices.filter { $0.value != nil }
+        guard let preferredCurrencyCode else { return priced.first }
+        return priced.first { $0.isoCode?.lowercased() == preferredCurrencyCode.lowercased() }
+            ?? priced.first
+    }
+
     /// The publisher's list price, in one currency, formatted.
     ///
-    /// USD where offered, because every edition in the sample carried it.
-    /// Never converted — this is someone else's shop's price in the currency
-    /// they set it in.
+    /// Prefers the reader's own currency (`Locale.current.currency`), falling
+    /// back to whichever the publisher listed first when theirs is not one of
+    /// the options — see `pickPrice`. Never converted — this is someone
+    /// else's shop's price in the currency they set it in, just picked to
+    /// match the reader rather than always defaulting to USD.
     var price: String? {
-        let priced = (prices ?? []).filter { $0.value != nil }
-        guard let chosen = priced.first(where: { $0.isoCode?.lowercased() == "usd" }) ?? priced.first,
+        let preferred = Locale.current.currency?.identifier.lowercased()
+        guard let chosen = Self.pickPrice(from: prices ?? [], preferredCurrencyCode: preferred),
               let value = chosen.value
         else { return nil }
         var format = FloatingPointFormatStyle<Double>.Currency(code: chosen.isoCode ?? "usd")
         format = format.locale(Locale(identifier: "en_US"))
         return value.formatted(format)
+    }
+
+    /// "146 × 210 mm", rounded to whole millimetres — the fixture's own
+    /// `146.049… × 209.549…` printed to two decimals would read as false
+    /// precision nobody asked for.
+    var trimLine: String? {
+        guard let trim else { return nil }
+        return "\(Int(trim.wMm.rounded())) × \(Int(trim.hMm.rounded())) mm"
     }
 
     var cover: Cover? { images?.compactMap(\.image).first }
@@ -146,6 +242,32 @@ extension SeriesWork {
 
         /// "Vol. 1", or "Other editions" for the numberless.
         var label: String { number.map { "Vol. \($0)" } ?? "Other editions" }
+
+        /// The catalogue blurb, from whichever edition carries one. Whether
+        /// it duplicates the series' own description is not this type's call
+        /// to make — `Volume` has no way to see the series record at all —
+        /// so `VolumeSheet` does that comparison itself, against whatever
+        /// series description its caller gives it (which may be none; see
+        /// `VolumeSheet.seriesDescription`).
+        var blurb: String? { editions.compactMap { $0.description?.desc }.first }
+
+        /// "146 × 210 mm", from whichever edition carries a trim size.
+        var trimLine: String? { editions.compactMap(\.trimLine).first }
+
+        /// True when any edition is flagged `count_type == "extra"`. Values
+        /// seen live: "main" for every sampled row in
+        /// `series-2060-works-2026-09-15.json` — that fixture never
+        /// exercises "extra", so this is covered by hand-written JSON in
+        /// `SeriesWorkFieldsTests`. Checking "any" rather than "all" errs
+        /// toward showing the chip: a volume mixing the two is not expected,
+        /// but there is no reason to hide it if it happens.
+        var isExtra: Bool { editions.contains { $0.countType == "extra" } }
+
+        /// "Part of volume N", from whichever edition names one. `nil` in
+        /// the live fixture; tested with hand-written JSON.
+        var partOfVolumeLabel: String? {
+            editions.compactMap(\.partOfVolume).first.map { "Part of volume \($0)" }
+        }
 
         /// A short, honest label per edition, keyed by `SeriesWork.id`.
         ///

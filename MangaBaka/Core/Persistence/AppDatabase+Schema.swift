@@ -195,6 +195,16 @@ extension AppDatabase {
             }
         }
 
+        migrator.registerMigration("v15_feedEntryNote") { db in
+            // The recommendation envelope's caption ("10 shared tags",
+            // "86 readers") beside the feed row it came with, so a cached
+            // Similar row reads the same as a fresh one. Nullable: every
+            // existing row and every non-recommendation feed leaves it nil.
+            try db.alter(table: "feedEntry") { table in
+                table.add(column: "note", .blob)
+            }
+        }
+
         return migrator
     }
 

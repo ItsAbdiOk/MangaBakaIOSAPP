@@ -15,6 +15,7 @@ struct DetailEditions: View {
     private static let collapsedLimit = 4
 
     @State private var isExpanded = false
+    @Environment(\.openURL) private var openURL
 
     private var visible: [SeriesEdition] {
         isExpanded ? editions : Array(editions.prefix(Self.collapsedLimit))
@@ -64,6 +65,24 @@ struct DetailEditions: View {
                         .typeFootnote()
                         .foregroundStyle(Palette.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                // Verbatim: this is the row's own freeform note, not a label
+                // this view is choosing wording for.
+                if let note = edition.note, !note.isEmpty {
+                    Text(note)
+                        .typeFootnote()
+                        .foregroundStyle(Palette.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let publisherURL = edition.publisherLinkURL {
+                    Button {
+                        openURL(publisherURL)
+                    } label: {
+                        Text("Publisher page")
+                            .typeFootnote()
+                            .foregroundStyle(Palette.accent)
+                    }
+                    .buttonStyle(.press)
                 }
             }
             Spacer(minLength: 0)

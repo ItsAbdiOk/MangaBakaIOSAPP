@@ -33,6 +33,16 @@
       "fixture": "MangaBakaTests/Fixtures/tags-page1.json",
       "url": "https://api.mangabaka.org/v1/tags?limit=500",
       "captured": "2026-09-13 (CatalogueTests:55-60). The fixture is a 24-row slice of that page, so expect 'new fields' notices rather than a match on counts — this check compares shape, not length."
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/similar-2060-2026-09-15.json",
+      "url": "https://api.mangabaka.org/v2/series/2060/similar?limit=3",
+      "captured": "2026-09-15 (RecommendationNoteTests). The envelope's shared_tags_total / matched_* fields drive the 'N shared tags' caption; a shape change here empties the caption silently."
+    },
+    {
+      "fixture": "MangaBakaTests/Fixtures/readers-also-like-2060-2026-09-15.json",
+      "url": "https://api.mangabaka.org/v2/series/2060/readers-also-like?limit=3",
+      "captured": "2026-09-15 (RecommendationNoteTests). shared_users drives the 'N readers' caption."
     }
   ]
 }

@@ -163,6 +163,20 @@ struct CoverGalleryTests {
         #expect(image(id: 3, type: "poster", index: 4, language: "ko").caption == "4 · KO")
     }
 
+    /// `note` and `work_id` were on the wire and never read (2026-09-15).
+    @Test("A cataloguer's note joins the caption; work_id decodes")
+    func noteAndWorkID() throws {
+        let json = #"""
+        {"id": 1, "series_id": 1, "type": "volume", "index": "3", "language": "en",
+         "work_id": "w-3", "note": " textless ", "image": {}}
+        """#
+        let image = try Fixture.decoder().decode(SeriesImage.self, from: Data(json.utf8))
+        #expect(image.workId == "w-3")
+        #expect(image.caption == "Vol. 3 · EN · textless")
+        let blank = #"{"id": 2, "series_id": 1, "type": "volume", "index": "3", "note": "  ", "image": {}}"#
+        #expect(try Fixture.decoder().decode(SeriesImage.self, from: Data(blank.utf8)).caption == "Vol. 3")
+    }
+
     /// A caption is worth having only when it says something. An image with no
     /// volume and no language has nothing to caption.
     @Test("A cover with nothing to say has no caption")

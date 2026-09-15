@@ -44,6 +44,7 @@ extension SeriesDetailView {
                 // answers reads as content changing under the reader.
                 isCheckingStore: isLoadingVolumes,
                 worksTotal: extras.worksTotal,
+                seriesDescription: shown.description,
                 openLibraryCovers: openLibraryCovers,
                 openLibraryStatus: openLibraryStatus
             )

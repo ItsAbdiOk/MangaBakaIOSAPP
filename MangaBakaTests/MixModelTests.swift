@@ -39,7 +39,9 @@ struct MixModelTests {
             sharedTags: sharedTags.map { _ in [Recommendation.Tag(id: 1, name: "Necromancy")] },
             sharedTagsTotal: sharedTags,
             matchedAuthor: false,
-            matchedRelated: false
+            matchedRelated: false,
+            sharedUsers: nil,
+            rank: nil
         )
     }
 

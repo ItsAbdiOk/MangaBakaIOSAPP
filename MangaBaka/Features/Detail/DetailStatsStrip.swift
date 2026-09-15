@@ -60,29 +60,59 @@ struct DetailStatsStrip: View {
         if let volumes = series.finalVolume, volumes > 0 {
             out.append(Stat(id: "Volumes", value: String(Int(wholeOrClamped: volumes))))
         }
-        if let year = year ?? series.year, year > 0 {
+        // `published.rangeLine` ("2020 – ongoing") answers a question the
+        // bare year never could — whether the series has ended — so it wins
+        // whenever the v1 record carries it. `year` is the fallback for
+        // every payload recorded before `published` existed.
+        if let range = series.published?.rangeLine {
+            out.append(Stat(id: "Started", value: range))
+        } else if let year = year ?? series.year, year > 0 {
             out.append(Stat(id: "Started", value: String(year)))
         }
         return out
     }
 
+    /// "#14 overall · #2 among manhwa — was #18 a year ago", from `popularity`.
+    /// Shown as its own line under the number strip rather than folded into
+    /// `stats`: it is a sentence, not a number-over-label column, and forcing
+    /// it into that shape either truncates the words or shrinks every other
+    /// stat down with it. Nil (and so drawn as nothing) when the series
+    /// carries no `popularity` at all — absent on every v2 payload and on
+    /// any row cached before this landed.
+    private var popularityLine: String? { series.popularityTrendLine }
+
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    private var hasFooterLine: Bool {
+        series.isLicensed == true || popularityLine != nil
+    }
+
     var body: some View {
-        if !stats.isEmpty {
-            // One row, always, until the text is so large that shrinking it
-            // stops being legible.
-            //
-            // The first attempt wrapped to a second row as soon as five columns
-            // stopped fitting, which was one notch above the default text size
-            // — so an ordinary reader got a two-row card where the design has a
-            // strip. Scaling the labels instead keeps the strip a strip: they
-            // are five short words and 70% of small is still readable.
-            Group {
-                if typeSize.isAccessibilitySize {
-                    FlowLayout(spacing: 0) { segments(fillsWidth: false) }
-                } else {
-                    HStack(spacing: 0) { segments(fillsWidth: true) }
+        if !stats.isEmpty || hasFooterLine {
+            VStack(alignment: .leading, spacing: 0) {
+                if !stats.isEmpty {
+                    // One row, always, until the text is so large that
+                    // shrinking it stops being legible.
+                    //
+                    // The first attempt wrapped to a second row as soon as
+                    // five columns stopped fitting, which was one notch above
+                    // the default text size — so an ordinary reader got a
+                    // two-row card where the design has a strip. Scaling the
+                    // labels instead keeps the strip a strip: they are five
+                    // short words and 70% of small is still readable.
+                    Group {
+                        if typeSize.isAccessibilitySize {
+                            FlowLayout(spacing: 0) { segments(fillsWidth: false) }
+                        } else {
+                            HStack(spacing: 0) { segments(fillsWidth: true) }
+                        }
+                    }
+                }
+                if hasFooterLine {
+                    if !stats.isEmpty {
+                        Divider().overlay(Palette.hairline)
+                    }
+                    footerLine
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -92,6 +122,32 @@ struct DetailStatsStrip: View {
             .hairlineBorder(Palette.hairline, radius: Metrics.radiusCard)
             .padding(.horizontal, Metrics.gutter)
         }
+    }
+
+    /// The "Licensed" chip and the popularity trend — the two bits of the
+    /// v1 record that read as a sentence or a badge rather than a number, so
+    /// they sit under the strip instead of squeezed into one of its columns.
+    /// Nothing here shows when neither field is present.
+    @ViewBuilder
+    private var footerLine: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if series.isLicensed == true {
+                Text("Licensed")
+                    .typeChip()
+                    .foregroundStyle(Palette.textEmphasis)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Palette.surfaceChip, in: Capsule())
+            }
+            if let popularityLine {
+                Text(popularityLine)
+                    .typeSmallMeta()
+                    .foregroundStyle(Palette.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     private func segments(fillsWidth: Bool) -> some View {
@@ -125,7 +181,7 @@ struct DetailStatsStrip: View {
 
     /// "64.2k" rather than "64,231". The exact count is noise; the order of
     /// magnitude is the whole point of showing it.
-    static func compact(_ count: Int) -> String {
+    nonisolated static func compact(_ count: Int) -> String {
         if count >= 1_000_000 {
             return String(format: "%.1fm", Double(count) / 1_000_000)
         }

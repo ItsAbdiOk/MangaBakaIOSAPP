@@ -24,6 +24,15 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
     /// bug this app has already shipped once, on personalised recommendations.
     let contentRating: String?
     let image: Cover
+    /// The printing this cover belongs to, when the catalogue tied it to one
+    /// — a `SeriesWork.id`. Null on all 75 of series 2060's covers
+    /// (2026-09-15); decoded so the day it is filled the gallery can jump to
+    /// the volume sheet without a second look at the wire.
+    let workId: String?
+    /// The cataloguer's own note on the image ("textless", "anniversary
+    /// edition"). Null across the measured page; shown in the caption when
+    /// it is not.
+    let note: String?
 
     var id: String {
         // `index`/`language` alone collide: two "other" images (no volume
@@ -50,7 +59,7 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case imageID = "id"
-        case seriesId, type, index, indexNumeric, language, contentRating, image
+        case seriesId, type, index, indexNumeric, language, contentRating, image, workId, note
     }
 
     /// "Vol. 3 · EN", or nothing when the API said neither.
@@ -70,7 +79,9 @@ struct SeriesImage: Decodable, Identifiable, Sendable, Equatable {
             default: index
             }
         }
-        let parts = [numbered, language?.uppercased()].compactMap { $0 }
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = [numbered, language?.uppercased(), trimmedNote?.isEmpty == false ? trimmedNote : nil]
+            .compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

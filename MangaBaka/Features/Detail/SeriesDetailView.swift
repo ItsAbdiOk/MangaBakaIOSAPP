@@ -105,6 +105,8 @@ struct SeriesDetailView: View {
     var onOpenSchedule: (() -> Void)?
 
     @State var similar: [Series] = []
+    @State var similarNotes: [Int: RecommendationNote] = [:]
+    @State var alsoLikeNotes: [Int: RecommendationNote] = [:]
     /// Set only when `.similar` asked and failed with nothing to fall back
     /// on. Internal, not private, so `+Releases.swift`-style extensions could
     /// reach it if this screen grows another one; today only this file reads
@@ -232,18 +234,6 @@ struct SeriesDetailView: View {
     /// unchanged. It is the fourth: `/images` failing used to be recorded and
     /// never read anywhere, so a throttled reader saw a series with no fan,
     /// pixel-identical to one that genuinely has no covers (item 25).
-    nonisolated static func pageFailure(
-        extras: SeriesExtras, similarOrigin: FeedResult.Origin, alsoOrigin: FeedResult.Origin,
-        coversFailure: APIError? = nil
-    ) -> APIError? {
-        if let failure = extras.failure { return failure }
-        if let coversFailure { return coversFailure }
-        for origin in [similarOrigin, alsoOrigin] {
-            if case let .staleAfter(error) = origin { return error }
-        }
-        return nil
-    }
-
     @State var similarOrigin: FeedResult.Origin = .network
     @State var alsoOrigin: FeedResult.Origin = .network
     private var pageFailure: APIError? {
@@ -368,6 +358,8 @@ struct SeriesDetailView: View {
                     relationships: extras.relationships,
                     similar: similar,
                     alsoLike: alsoLike,
+                    similarNotes: similarNotes,
+                    alsoLikeNotes: alsoLikeNotes,
                     similarByDescription: similarByDescription,
                     isLoading: isLoading,
                     similarFailure: similarFailure,
@@ -523,7 +515,7 @@ extension SeriesDetailView {
 
     @ViewBuilder
     private var newsSection: some View {
-        NewsSection(items: extras.news)
+        NewsSection(items: extras.news, currentSeriesID: series.id)
     }
 
     /// Descriptions arrive as Markdown and were being printed raw, so a real
@@ -621,10 +613,12 @@ extension SeriesDetailView {
         async let coversLeg: Void = loadCovers()
         let similarAnswer = await similarResult
         similar = similarAnswer.series
+        similarNotes = similarAnswer.notes
         similarOrigin = similarAnswer.origin
         similarFailure = similarAnswer.blockingError
         let alsoAnswer = await alsoResult
         alsoLike = alsoAnswer.series
+        alsoLikeNotes = alsoAnswer.notes
         alsoOrigin = alsoAnswer.origin
         alsoLikeFailure = alsoAnswer.blockingError
         extras = await extrasResult

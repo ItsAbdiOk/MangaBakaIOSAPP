@@ -187,7 +187,7 @@ struct SearchAndMixTests {
         let series = SeriesFactory.make()
         let bare = Recommendation(
             series: series, score: nil, sharedTags: nil, sharedTagsTotal: nil,
-            matchedAuthor: false, matchedRelated: false
+            matchedAuthor: false, matchedRelated: false, sharedUsers: nil, rank: nil
         )
         #expect(bare.reason == nil)
     }

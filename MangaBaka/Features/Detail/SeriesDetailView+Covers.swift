@@ -161,4 +161,18 @@ extension SeriesDetailView {
         guard !late.isEmpty else { return }
         openCoversImages += late
     }
+
+    /// Moved here from the main file for its line ceiling; see the
+    /// doc comment above `pageFailure` there for the four legs it reads.
+    nonisolated static func pageFailure(
+        extras: SeriesExtras, similarOrigin: FeedResult.Origin, alsoOrigin: FeedResult.Origin,
+        coversFailure: APIError? = nil
+    ) -> APIError? {
+        if let failure = extras.failure { return failure }
+        if let coversFailure { return coversFailure }
+        for origin in [similarOrigin, alsoOrigin] {
+            if case let .staleAfter(error) = origin { return error }
+        }
+        return nil
+    }
 }

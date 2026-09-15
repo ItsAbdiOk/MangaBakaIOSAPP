@@ -240,6 +240,7 @@ extension SeriesRepository {
     /// instead of a full re-download — see `SeriesRepository.feed`.
     struct CachedFeed {
         var series: [Series] = []
+        var notes: [Int: RecommendationNote] = [:]
         var cachedAt: Date?
         var lastModified: String?
     }
@@ -292,16 +293,32 @@ extension SeriesRepository {
                     return try decoder.decode(Series.self, from: row.payload)
                 }
                 .filter(allowsFormat)
+            // A note that no longer decodes is dropped alone — a caption,
+            // not a row, so it is not the whole-read miss a series row is.
+            var notes: [Int: RecommendationNote] = [:]
+            for entry in entries {
+                guard let data = entry.note,
+                      let note = try? JSONDecoder().decode(RecommendationNote.self, from: data)
+                else { continue }
+                notes[entry.seriesId] = note
+            }
             return CachedFeed(
-                series: series, cachedAt: metadata?.cachedAt, lastModified: metadata?.lastModified
+                series: series, notes: notes,
+                cachedAt: metadata?.cachedAt, lastModified: metadata?.lastModified
             )
         }
     }
 
-    func write(_ series: [Series], for feed: FeedKind, lastModified: String? = nil) throws {
+    func write(
+        _ series: [Series], for feed: FeedKind, lastModified: String? = nil,
+        notes: [Int: RecommendationNote] = [:]
+    ) throws {
         let now = clock.now
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
+        // Plain JSON, not snake-cased: the note is this app's own type and
+        // is read back with a plain decoder in `readCacheWithDate`.
+        let noteEncoder = JSONEncoder()
 
         try database.cacheWriter.write { db in
             for item in series {
@@ -316,7 +333,8 @@ extension SeriesRepository {
                 .filter(Column("feedKey") == feed.cacheKey)
                 .deleteAll(db)
             for (index, item) in series.enumerated() {
-                try FeedEntry(feedKey: feed.cacheKey, position: index, seriesId: item.id)
+                let note = try notes[item.id].map { try noteEncoder.encode($0) }
+                try FeedEntry(feedKey: feed.cacheKey, position: index, seriesId: item.id, note: note)
                     .insert(db)
             }
             try FeedMetadata(feedKey: feed.cacheKey, cachedAt: now, lastModified: lastModified).save(db)
@@ -333,17 +351,27 @@ extension SeriesRepository {
     /// ceiling on that type's body — this is still feed-fetching, not
     /// cache-reading, but every other seam in this actor was already claimed
     /// by a more specific split (`+Paging`, `+Count`).
+    ///
+    /// The recommendation envelope's caption survives as `FeedPage.notes`
+    /// (2026-09-15): it used to be dropped here, so the series page's
+    /// "Similar" and "Readers also like" rows could not say "10 shared tags"
+    /// or "86 readers" the way the website does.
     func fetchConditionalFeed(
         _ feed: FeedKind,
         query: [URLQueryItem],
         ifModifiedSince: String?,
         priority: RequestPriority = .userInitiated
-    ) async throws(APIError) -> APIClient.Conditional<[Series]> {
+    ) async throws(APIError) -> APIClient.Conditional<FeedPage> {
         guard feed.isRecommendationShaped else {
-            return try await client.getLossyConditional(
+            let plain: APIClient.Conditional<[Series]> = try await client.getLossyConditional(
                 feed.path, query: query, priority: priority,
                 ifModifiedSince: ifModifiedSince, as: Series.self
             )
+            switch plain {
+            case .notModified: return .notModified
+            case let .fresh(series, lastModified):
+                return .fresh(FeedPage(series: series), lastModified: lastModified)
+            }
         }
         let wrapped: APIClient.Conditional<[Recommendation]> = try await client.getLossyConditional(
             feed.path, query: query, priority: priority,
@@ -353,8 +381,19 @@ extension SeriesRepository {
         case .notModified:
             return .notModified
         case let .fresh(recommendations, lastModified):
-            return .fresh(recommendations.map(\.series), lastModified: lastModified)
+            var notes: [Int: RecommendationNote] = [:]
+            for recommendation in recommendations { notes[recommendation.series.id] = recommendation.note }
+            return .fresh(
+                FeedPage(series: recommendations.map(\.series), notes: notes), lastModified: lastModified
+            )
         }
+    }
+
+    /// One page of a feed off the wire: the series, and the caption each
+    /// came with where the feed had one.
+    struct FeedPage: Sendable {
+        var series: [Series]
+        var notes: [Int: RecommendationNote] = [:]
     }
 
     /// Resets a feed's freshness clock without touching a single row.

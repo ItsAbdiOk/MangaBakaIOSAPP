@@ -40,7 +40,9 @@ struct GoogleBooksVolume: Codable, Identifiable, Sendable, Equatable {
             indexNumeric: Double(number),
             language: language,
             contentRating: nil,
-            image: cover
+            image: cover,
+            workId: nil,
+            note: nil
         )
     }
 }

@@ -53,7 +53,9 @@ struct AppleBooksVolume: Codable, Identifiable, Sendable, Equatable {
             indexNumeric: Double(number),
             language: nil,
             contentRating: nil,
-            image: cover
+            image: cover,
+            workId: nil,
+            note: nil
         )
     }
 }

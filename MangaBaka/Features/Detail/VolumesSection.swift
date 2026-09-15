@@ -38,6 +38,10 @@ struct VolumesSection: View {
     /// badge can say "113" for ONE PIECE rather than the "7" that page one
     /// of `/works` grouped to (2026-09-15).
     var worksTotal: Int?
+    /// The series' own blurb, so `VolumeSheet` can drop a volume blurb that
+    /// merely repeats it (measured 2026-09-15: series 2060's volume 1 carries
+    /// the series description verbatim).
+    var seriesDescription: String?
     /// Covers `OpenLibraryCovers` found for a volume with none of its own,
     /// keyed by volume number — see `isbnsNeedingCovers` and
     /// `SeriesDetailView+Store.loadOpenLibraryCovers`. Empty for a page that
@@ -153,7 +157,7 @@ struct VolumesSection: View {
             // deserves the same care its arrival got.
             .animation(Motion.reduced(Motion.settle), value: isCheckingStore)
             .sheet(item: $opened) { volume in
-                VolumeSheet(volume: volume)
+                VolumeSheet(volume: volume, seriesDescription: seriesDescription)
                     .presentationDetents([.medium, .large])
                     .presentationCornerRadius(Metrics.radiusSheet)
             }
@@ -415,156 +419,6 @@ struct MissingVolumeCover: View {
     /// Set by the caller so this view stays store-agnostic — `VolumesSection`
     /// has "Vol. 2"-style labels, `AppleVolumesRow` bare numbers.
     var numberLabel: String = ""
-}
-
-/// One volume, and the editions of it.
-struct VolumeSheet: View {
-    let volume: SeriesWork.Volume
-
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
-    /// Bumped per ISBN copy, for the haptic; see `Haptics`.
-    @State private var copies = 0
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    ForEach(volume.editions) { edition in
-                        editionCard(edition, label: volume.editionLabels[edition.id])
-                    }
-                }
-                .padding(.horizontal, Metrics.gutter)
-                .padding(.top, 12)
-                .padding(.bottom, 40)
-            }
-            .scrollIndicators(.hidden)
-            .background(Palette.ground)
-            .navigationTitle(volume.label)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.foregroundStyle(Palette.accent)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-        .edgeSwipeToDismiss()
-    }
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            CoverImage(
-                cover: volume.cover ?? Cover.empty,
-                width: Metrics.coverSeedWidth,
-                radius: Metrics.radiusSeed,
-                accessibilityText: volume.label
-            )
-            VStack(alignment: .leading, spacing: 6) {
-                if let subTitle = volume.subTitle {
-                    Text(subTitle)
-                        .typeRowTitle()
-                        .foregroundStyle(Palette.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let date = volume.date {
-                    // `.timeZone(.gmt)`: `date` is UTC midnight (S2) — the
-                    // device zone would print 31 December for a 1 January
-                    // release west of UTC.
-                    Text(date.formatted(VolumesSection.utcDayMonthYear))
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                }
-                if let pages = volume.pages {
-                    Text("\(pages.formatted()) pages")
-                        .typeSmallMeta()
-                        .foregroundStyle(Palette.textMuted)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// One edition. The ISBN is shown because it is the only thing that tells
-    /// a paperback from a hardcover when the covers and titles are identical —
-    /// and because it is what a reader takes to a bookshop.
-    ///
-    /// `label` comes from `SeriesWork.Volume.editionLabels`: without a price,
-    /// it replaces the repeated "Price not listed" headline (three identical
-    /// cards for Hunter x Hunter vol. 8 was the bug report); with a price,
-    /// it sits on the meta line instead so the price still leads.
-    /// The price when there is one; otherwise the label that tells this
-    /// edition from its siblings, so three cards never read the same.
-    private func headline(_ edition: SeriesWork, label: String?) -> some View {
-        Text(edition.price ?? label ?? "Price not listed")
-            .typeDetailSectionHeader()
-            .foregroundStyle(edition.price == nil ? Palette.textMuted : Palette.textPrimary)
-    }
-
-    private func editionCard(_ edition: SeriesWork, label: String?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                headline(edition, label: label)
-                Spacer(minLength: 8)
-                if let pages = edition.pages {
-                    Text("\(pages.formatted()) pp")
-                        .typeGridMeta()
-                        .foregroundStyle(Palette.textMuted)
-                }
-            }
-            if edition.price != nil, let label {
-                Text(label)
-                    .typeGridMeta()
-                    .foregroundStyle(Palette.textMuted)
-            }
-
-            if let isbn = edition.isbn {
-                Button {
-                    UIPasteboard.general.string = isbn
-                    copies += 1
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("ISBN \(isbn)")
-                            .typeGridMeta()
-                            .foregroundStyle(Palette.textMuted)
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Palette.textMuted)
-                    }
-                    .frame(minHeight: Metrics.tapTarget, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.press)
-                .haptic(Haptics.copied, onEach: copies)
-                .accessibilityLabel("ISBN \(isbn)")
-                .accessibilityHint("Copies the ISBN")
-            }
-
-            if let link = edition.buyLink {
-                Button { openURL(link) } label: {
-                    HStack(spacing: 6) {
-                        Text("Buy from the publisher")
-                            .typeCTA()
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .foregroundStyle(Palette.accent)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: Metrics.tapTarget)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.press)
-                .accessibilityHint("Opens the publisher's page in the browser")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(15)
-        .background(Palette.surface, in: RoundedRectangle(
-            cornerRadius: Metrics.radiusCard, style: .continuous
-        ))
-        .hairlineBorder(Palette.border, radius: Metrics.radiusCard)
-    }
 }
 
 /// Where the `OpenLibraryCovers` gap-fill pass stands, for the spines that

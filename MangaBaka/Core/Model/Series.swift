@@ -81,6 +81,26 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// throttle card. Same naming rule as `tagsV2`. Absent on v2 and on any
     /// row cached before this landed, which decodes as nil.
     let linksV2: [SeriesLink]?
+    /// Rank leaderboards, from `/v1/series/{id}`. See `Series+Popularity.swift`.
+    let popularity: Popularity?
+    /// Start/end dates and whether either is estimated, from
+    /// `/v1/series/{id}`. See `Series+Popularity.swift`.
+    let published: Published?
+    /// Whether an official license exists for this series, wherever that is.
+    /// `false`/`nil` is not shown as a fact — only `true` earns a chip.
+    let isLicensed: Bool?
+    let romanizedTitle: String?
+    let nativeTitle: String?
+    /// Grouped by a type string ("unknown" on every record measured so far);
+    /// see `Series+Popularity.swift`.
+    let secondaryTitles: [String: [SecondaryTitle]]?
+    /// Plain tag names on `/v1/series/{id}`. `genres_v2` was null on the one
+    /// live record measured (series 2060, 2026-09-15), so only the v1 shape
+    /// is modelled. Decoded, not shown: `richTags`/`tags` already cover this
+    /// ground on screen.
+    let genres: [String]?
+    /// Decode-only; see `RelationshipV2` in `Series+Popularity.swift`.
+    let relationshipsV2: [RelationshipV2]?
 
     struct Publisher: Codable, Equatable, Sendable, Hashable {
         let name: String
@@ -175,6 +195,21 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         // Lossy for the same reason as `tags_v2`: one malformed link should
         // cost one link, not the section.
         linksV2 = try container.decodeIfPresent(LossyArray<SeriesLink>.self, forKey: .linksV2)?.elements
+
+        popularity = try container.decodeIfPresent(Popularity.self, forKey: .popularity)
+        published = try container.decodeIfPresent(Published.self, forKey: .published)
+        isLicensed = try container.decodeIfPresent(Bool.self, forKey: .isLicensed)
+        romanizedTitle = try container.decodeIfPresent(String.self, forKey: .romanizedTitle)
+        nativeTitle = try container.decodeIfPresent(String.self, forKey: .nativeTitle)
+        secondaryTitles = try container.decodeIfPresent(
+            [String: [SecondaryTitle]].self, forKey: .secondaryTitles
+        )
+        genres = try container.decodeIfPresent([String].self, forKey: .genres)
+        // Lossy, same reasoning as `tagsV2`/`linksV2` above: one malformed
+        // relationship should cost one relationship, not the whole list.
+        relationshipsV2 = try container.decodeIfPresent(
+            LossyArray<RelationshipV2>.self, forKey: .relationshipsV2
+        )?.elements
     }
 
     /// Memberwise, because the custom `init(from:)` replaces the synthesised
@@ -190,7 +225,15 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         tags: [String]? = nil,
         tagsV2: [SeriesTag]? = nil,
         hasAnime: Bool? = nil,
-        linksV2: [SeriesLink]? = nil
+        linksV2: [SeriesLink]? = nil,
+        popularity: Popularity? = nil,
+        published: Published? = nil,
+        isLicensed: Bool? = nil,
+        romanizedTitle: String? = nil,
+        nativeTitle: String? = nil,
+        secondaryTitles: [String: [SecondaryTitle]]? = nil,
+        genres: [String]? = nil,
+        relationshipsV2: [RelationshipV2]? = nil
     ) {
         self.id = id
         self.state = state
@@ -215,6 +258,14 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
         self.tags = tags
         self.tagsV2 = tagsV2
         self.linksV2 = linksV2
+        self.popularity = popularity
+        self.published = published
+        self.isLicensed = isLicensed
+        self.romanizedTitle = romanizedTitle
+        self.nativeTitle = nativeTitle
+        self.secondaryTitles = secondaryTitles
+        self.genres = genres
+        self.relationshipsV2 = relationshipsV2
     }
 
     /// The rich tags, or none. See `tagsV2`.
@@ -268,7 +319,16 @@ struct Series: Codable, Identifiable, Equatable, Sendable, Hashable {
             ratingCount: ratingCount ?? other.ratingCount,
             tags: (tags?.isEmpty == false) ? tags : other.tags,
             tagsV2: (tagsV2?.isEmpty == false) ? tagsV2 : other.tagsV2,
-            hasAnime: hasAnime ?? other.hasAnime
+            hasAnime: hasAnime ?? other.hasAnime,
+            linksV2: (linksV2?.isEmpty == false) ? linksV2 : other.linksV2,
+            popularity: popularity ?? other.popularity,
+            published: published ?? other.published,
+            isLicensed: isLicensed ?? other.isLicensed,
+            romanizedTitle: romanizedTitle ?? other.romanizedTitle,
+            nativeTitle: nativeTitle ?? other.nativeTitle,
+            secondaryTitles: (secondaryTitles?.isEmpty == false) ? secondaryTitles : other.secondaryTitles,
+            genres: (genres?.isEmpty == false) ? genres : other.genres,
+            relationshipsV2: (relationshipsV2?.isEmpty == false) ? relationshipsV2 : other.relationshipsV2
         )
     }
 

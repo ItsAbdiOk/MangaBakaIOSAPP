@@ -26,6 +26,7 @@ extension SeriesDetailView {
     func loadSimilar() async {
         let result = await repository.feed(.similar(seriesId: series.id), forceRefresh: true)
         similar = result.series
+        similarNotes = result.notes
         similarOrigin = result.origin
         similarFailure = result.blockingError
     }
@@ -33,6 +34,7 @@ extension SeriesDetailView {
     func loadAlsoLike() async {
         let result = await repository.feed(.readersAlsoLike(seriesId: series.id), forceRefresh: true)
         alsoLike = result.series
+        alsoLikeNotes = result.notes
         alsoOrigin = result.origin
         alsoLikeFailure = result.blockingError
     }
